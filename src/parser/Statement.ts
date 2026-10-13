@@ -11,7 +11,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isObjectPatternExpression } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isObjectPatternExpression, isArrayPatternExpression } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -301,6 +301,41 @@ export class DestructuringAssignmentStatement extends Statement {
         return this.getTargets({ flags: SymbolTypeFlag.runtime }).map(x => x.name);
     }
 
+    /**
+     * Get the names of the temporary variables this statement declares when transpiled (the copy of the source, one per nested pattern,
+     * and one loop counter per array rest element). A source that is a plain variable is assumed to be read directly, but a name that
+     * transpiles to something else (i.e. a const) also needs a temp, so this may be one short in that case
+     */
+    public getTempVariableNames(): string[] {
+        let count = isVariableExpression(this.value) && !this.assignsVariable(this.value.tokens.name.text) ? 0 : 1;
+        const countPattern = (pattern: DestructuringPattern) => {
+            const nestedPatterns = isObjectPatternExpression(pattern)
+                ? pattern.properties.map(x => x.pattern)
+                : pattern.elements.map(x => x.pattern);
+            for (const nestedPattern of nestedPatterns) {
+                if (nestedPattern) {
+                    count++;
+                    countPattern(nestedPattern);
+                }
+            }
+            if (isArrayPatternExpression(pattern) && pattern.rest?.tokens.name) {
+                count++;
+            }
+        };
+        if (this.pattern) {
+            countPattern(this.pattern);
+        }
+        const names: string[] = [];
+        for (let i = 0; i < count; i++) {
+            names.push(DestructuringAssignmentStatement.getTempVariableName(i));
+        }
+        return names;
+    }
+
+    private static getTempVariableName(index: number) {
+        return `__bsDestructure${index}`;
+    }
+
     transpile(state: BrsTranspileState) {
         const result: TranspileResult = [
             ...state.transpileLeadingComments(this.pattern.tokens.open)
@@ -310,7 +345,7 @@ export class DestructuringAssignmentStatement extends Statement {
         const context: DestructuringTranspileContext = {
             state: state,
             result: result,
-            nextTempName: () => `__bsDestructure${tempIndex++}`,
+            nextTempName: () => DestructuringAssignmentStatement.getTempVariableName(tempIndex++),
             startLine: () => {
                 if (isFirstLine) {
                     isFirstLine = false;
@@ -371,7 +406,7 @@ export class DestructuringAssignmentStatement extends Statement {
             }
             const accessor = key.kind === TokenKind.StringLiteral
                 ? `${sourceName}[${key.text}]`
-                : `${sourceName}.${key.text}`;
+                : `${sourceName}.${property.getKeyName()}`;
             if (property.pattern) {
                 const tempName = context.nextTempName();
                 this.transpileTargetAssignment(tempName, key, accessor, property.defaultValue, context);
@@ -392,7 +427,7 @@ export class DestructuringAssignmentStatement extends Statement {
                 if (!key) {
                     continue;
                 }
-                const keyString = key.kind === TokenKind.StringLiteral ? key.text : `"${key.text}"`;
+                const keyString = key.kind === TokenKind.StringLiteral ? key.text : `"${property.getKeyName()}"`;
                 context.startLine();
                 result.push(state.sourceNode(restName, restName.text), `.delete(${keyString})`);
             }

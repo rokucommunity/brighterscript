@@ -3561,7 +3561,8 @@ export class ObjectPatternPropertyExpression extends Expression {
     }
 
     /**
-     * The name of the key to read from the source object (without quotes when the key is a string literal)
+     * The name of the key to read from the source object (without quotes when the key is a string literal).
+     * For a shorthand property the key is the variable name without its type designator, so `{ name$ }` reads the `name` key
      */
     public getKeyName(): string | undefined {
         const key = this.tokens.key;
@@ -3570,6 +3571,9 @@ export class ObjectPatternPropertyExpression extends Expression {
         }
         if (key.kind === TokenKind.StringLiteral) {
             return key.text.substring(1, key.text.length - 1);
+        }
+        if (!this.tokens.colon && /[$%!#&]$/.test(key.text)) {
+            return key.text.substring(0, key.text.length - 1);
         }
         return key.text;
     }

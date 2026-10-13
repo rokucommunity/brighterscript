@@ -1,5 +1,6 @@
 import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import { createIdentifier } from '../../astUtils/creators';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
@@ -651,6 +652,10 @@ export class BrsFileValidator {
             DestructuringAssignmentStatement: (statement) => {
                 for (const name of statement.getTargetNames()) {
                     addVariable(name, statement.location);
+                }
+                //the temp variables the statement transpiles to also count toward the limit
+                for (const tempName of statement.getTempVariableNames()) {
+                    addVariable(createIdentifier(tempName, statement.location), statement.location);
                 }
             },
             IncrementStatement: (statement) => {

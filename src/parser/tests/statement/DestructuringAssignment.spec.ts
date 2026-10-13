@@ -11,6 +11,7 @@ import type { BrsFile } from '../../../files/BrsFile';
 import { util } from '../../../util';
 import { createSandbox } from 'sinon';
 import { TokenKind } from '../../../lexer/TokenKind';
+import { BrsTranspileState } from '../../BrsTranspileState';
 
 const sinon = createSandbox();
 
@@ -431,6 +432,47 @@ describe('DestructuringAssignmentStatement', () => {
                     print callback; items
                 end sub
             `);
+        });
+
+        it('reads the key without its type designator for shorthand properties', async () => {
+            await testTranspile(`
+                sub main(person)
+                    { name$, age%, "first name": first$, id$: userId, ...others } = person
+                    print name$; age%; first$; userId; others
+                end sub
+            `, `
+                sub main(person)
+                    name$ = person.name
+                    age% = person.age
+                    first$ = person["first name"]
+                    userId = person.id$
+                    others = {}
+                    others.append(person)
+                    others.delete("name")
+                    others.delete("age")
+                    others.delete("first name")
+                    others.delete("id$")
+                    print name$; age%; first$; userId; others
+                end sub
+            `);
+        });
+
+        it('declares the same temp variables that it transpiles to', () => {
+            const sources = [
+                `{ a } = person`,
+                `{ a } = getPerson()`,
+                `{ a, b: { c, d: [e, ...f] } } = person`,
+                `[a, [b, { c }], ...rest] = getItems()`,
+                `[a, b] = [b, a]`,
+                `{ person } = person`
+            ];
+            for (const source of sources) {
+                const file = program.setFile<BrsFile>('source/main.bs', `sub main(person)\n${source}\nend sub`);
+                const statement = file.ast.findChild<DestructuringAssignmentStatement>(isDestructuringAssignmentStatement);
+                const transpiled = util.sourceNodeFromTranspileResult(null, null, null, statement.transpile(new BrsTranspileState(file))).toString();
+                const transpiledTemps = [...new Set(transpiled.match(/__bsDestructure\d+/g) ?? [])];
+                expect(statement.getTempVariableNames(), source).to.eql(transpiledTemps);
+            }
         });
 
         it('transpiles an array rest element on its own', async () => {
@@ -899,6 +941,23 @@ describe('DestructuringAssignmentStatement', () => {
                 DiagnosticMessages.cannotFindFunction('len', 'integer.len', 'integer').message
             ]);
             expect(program.getDiagnostics().map(x => x.code)).to.include(DiagnosticMessages.assignmentTypeMismatch('integer', 'string').code);
+        });
+
+        it('flags a shorthand key with a type designator that does not exist on a typed source', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                end interface
+                sub main(person as Person)
+                    { name$, title$ } = person
+                    print name$; title$
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('title', 'person.title', 'Person'),
+                location: { range: util.createRange(5, 29, 5, 35) }
+            }]);
         });
 
         it('uses the type from an interface when destructuring a typed value', () => {

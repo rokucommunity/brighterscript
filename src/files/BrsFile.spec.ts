@@ -7369,11 +7369,25 @@ describe('BrsFile', () => {
                 '{ a: x, nested: { y } } = p0',
                 '[z, ...rest] = p0'
             ];
-            //1 parameter + 248 locals + 4 destructuring targets
-            validateSource(buildFunction({ parameterCount: 1, localCount: 248, extraLines: destructuringLines }), 'source/main.bs');
+            //1 parameter + 247 locals + 4 destructuring targets + 1 temp (`__bsDestructure0`, shared by both statements)
+            validateSource(buildFunction({ parameterCount: 1, localCount: 247, extraLines: destructuringLines }), 'source/main.bs');
             expectZeroDiagnostics(program);
 
-            validateSource(buildFunction({ parameterCount: 1, localCount: 249, extraLines: destructuringLines }), 'source/main.bs');
+            validateSource(buildFunction({ parameterCount: 1, localCount: 248, extraLines: destructuringLines }), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('counts the temp variables used by destructuring toward the limit', () => {
+            const destructuringLines = [
+                '{ a: { b: [c, ...d] } } = p0.getObj()'
+            ];
+            //1 parameter + 246 locals + 2 destructuring targets + 4 temps (the source, the `{ b }` and `[c, ...d]` patterns, and the rest loop counter)
+            validateSource(buildFunction({ parameterCount: 1, localCount: 246, extraLines: destructuringLines }), 'source/main.bs');
+            expectZeroDiagnostics(program);
+
+            validateSource(buildFunction({ parameterCount: 1, localCount: 247, extraLines: destructuringLines }), 'source/main.bs');
             expectDiagnostics(program, [
                 DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
             ]);
