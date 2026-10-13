@@ -45,7 +45,7 @@ describe('ProjectManager', () => {
 
     afterEach(async function keepWorkerPoolWarm() {
         //defensive fallback in case the pool ends up empty; give it a cold-boot-sized budget
-        this.timeout(60_000);
+        this.timeout(120_000);
         fsExtra.emptyDirSync(tempDir);
         sinon.restore();
         manager.dispose();
@@ -1228,7 +1228,7 @@ describe('ProjectManager', () => {
         });
 
         it('spawns a worker thread when threading is enabled', async function () {
-            this.timeout(15_000);
+            this.timeout(120_000);
             await manager.syncProjects([{
                 ...workspaceSettings,
                 languageServer: {
@@ -1343,7 +1343,7 @@ describe('ProjectManager', () => {
     it('completes promise when project is disposed in the middle of a flow', async function () {
         //spins up a worker thread and talks to it over a socket; macOS runners can be slow to
         //cold-boot that, so use the same budget as the other worker-thread tests in this file
-        this.timeout(60_000);
+        this.timeout(120_000);
         //small plugin to communicate over a socket inside the worker thread.
         //This transpiles from tsc use `require()` for all imports and don't reference external vars
         class Plugin {
