@@ -2515,7 +2515,7 @@ describe('parser', () => {
             ]);
         });
 
-        it('has no diagnostics from false blocks', () => {
+        it('keeps the diagnostics from inactive blocks, because validation decides which branches are inactive', () => {
             let { diagnostics } = parse(`
                 sub foo()
                 #if DEBUG
@@ -2527,7 +2527,7 @@ describe('parser', () => {
                 #end if
                 end sub
             `, ParseMode.BrighterScript, { debug: false });
-            expectZeroDiagnostics(diagnostics);
+            expect(diagnostics.map(diagnostic => diagnostic.location.range.start.line)).to.include.members([3, 7]);
         });
 
         it('allows a chain with #else if to end at end of file without a trailing newline', () => {
@@ -2645,13 +2645,12 @@ describe('parser', () => {
                 ]);
             });
 
-            it('has diagnostic if invalid lhs', () => {
-                let { diagnostics } = parse(`
+            it('parses a value that is not true or false without a diagnostic, because the value is validated later', () => {
+                let { ast, diagnostics } = parse(`
                     #const test = 4
                 `, ParseMode.BrighterScript);
-                expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.invalidHashConstValue().message
-                ]);
+                expectZeroDiagnostics(diagnostics);
+                expect(isConditionalCompileConstStatement(ast.statements[0])).to.be.true;
             });
         });
 

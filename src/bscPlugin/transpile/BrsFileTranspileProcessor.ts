@@ -1,7 +1,7 @@
 import { createAssignmentStatement, createBlock, createCall, createDottedSetStatement, createIdentifier, createIfStatement, createIndexedSetStatement, createToken, createVariableExpression } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
-import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
 import type { Identifier, Token } from '../../lexer/Token';
@@ -64,7 +64,9 @@ export class BrsFilePreTranspileProcessor {
                 }
             }
         }
-        const walkMode = WalkMode.visitExpressionsRecursive;
+        //inactive conditional compile branches still ship in the output, so transpile their ternaries to if statements too
+        // eslint-disable-next-line no-bitwise
+        const walkMode = WalkMode.visitExpressionsRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks;
         const visitor = createVisitor({
             TernaryExpression: (ternaryExpression) => {
                 this.processTernaryExpression(ternaryExpression, visitor, walkMode);

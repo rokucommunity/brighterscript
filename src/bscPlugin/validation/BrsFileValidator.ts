@@ -7,7 +7,7 @@ import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, SelectCaseStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -39,9 +39,10 @@ export class BrsFileValidator {
         // It could have potentially changed before this from plugins, after this, it will not change
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].invalidate();
-
-        // make a copy of the bsConsts, because they might be added to
-        const bsConstsBackup = new Map<string, boolean>(this.event.file.ast.getBsConsts());
+        //rebuild the lookups now, because that full walk resolves every `#if` and `#const` (and sets `isActive`) before the walk below,
+        //whose visitors can ask about nodes it has not reached yet (such as the members of a class)
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        this.event.file['_cachedLookups'].rehydrate();
 
         this.walk();
         this.flagTopLevelStatements();
@@ -51,7 +52,6 @@ export class BrsFileValidator {
             this.validateTypecastStatements();
         }
 
-        this.event.file.ast.bsConsts = bsConstsBackup;
         unlinkGlobalSymbolTable();
     }
 
@@ -367,20 +367,11 @@ export class BrsFileValidator {
             PrintStatement: (node) => {
                 this.validatePrintStatementItemCount(node);
             },
-            ConditionalCompileConstStatement: (node) => {
-                const assign = node.assignment;
-                const constNameLower = assign.tokens.name?.text.toLowerCase();
-                const astBsConsts = this.event.file.ast.bsConsts;
-                if (isLiteralExpression(assign.value)) {
-                    astBsConsts.set(constNameLower, assign.value.tokens.value.text.toLowerCase() === 'true');
-                } else if (isVariableExpression(assign.value)) {
-                    if (this.validateConditionalCompileConst(assign.value.tokens.name)) {
-                        astBsConsts.set(constNameLower, astBsConsts.get(assign.value.tokens.name.text.toLowerCase()));
-                    }
-                }
-            },
             ConditionalCompileStatement: (node) => {
-                this.validateConditionalCompileConst(node.tokens.condition);
+                this.validateHashIfCondition(node);
+            },
+            ConditionalCompileConstStatement: (node) => {
+                this.validateHashConst(node);
             },
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
@@ -545,9 +536,20 @@ export class BrsFileValidator {
             return;
         }
 
-        // is this in a top levelconditional compile?
-        if (isConditionalCompileStatement(statement.parent?.parent)) {
-            if (isOkDeclarationLocation(statement.parent.parent.parent)) {
+        // is this in a conditional compile whose outermost statement is at an ok location? Climbs `#else if` chains and nested `#if` statements
+        let conditionalCompile = statement.parent?.parent;
+        if (isConditionalCompileStatement(conditionalCompile)) {
+            while (true) {
+                const parentNode = conditionalCompile.parent;
+                if (isConditionalCompileStatement(parentNode)) {
+                    conditionalCompile = parentNode;
+                } else if (isBlock(parentNode) && isConditionalCompileStatement(parentNode.parent)) {
+                    conditionalCompile = parentNode.parent;
+                } else {
+                    break;
+                }
+            }
+            if (isOkDeclarationLocation(conditionalCompile.parent)) {
                 return;
             }
         }
@@ -753,16 +755,34 @@ export class BrsFileValidator {
     }
 
 
-    private validateConditionalCompileConst(ccConst: Token) {
-        const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
-        if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
+    /**
+     * Validate an active `#const` against the constants in effect at its position in the file (the walk resolved it just before visiting it)
+     */
+    private validateHashConst(statement: ConditionalCompileConstStatement) {
+        const assignment = statement.assignment;
+        if (!isLiteralBoolean(assignment.value)) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.invalidHashConstValue(),
+                location: assignment.value.location
+            });
+        } else if (statement.isDuplicate) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
+                location: assignment.tokens.name.location
+            });
+        }
+    }
+
+    /**
+     * Flag a reached `#if` / `#else if` condition that names an undeclared constant, unless the target firmware evaluates it as false
+     */
+    private validateHashIfCondition(statement: ConditionalCompileStatement) {
+        if (statement.isConditionDeclared === false && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.hashConstDoesNotExist(),
-                location: ccConst.location
+                location: statement.tokens.condition.location
             });
-            return false;
         }
-        return true;
     }
 
     /**

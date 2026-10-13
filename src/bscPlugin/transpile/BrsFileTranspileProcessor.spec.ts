@@ -32,6 +32,33 @@ describe('BrsFileTranspileProcessor', () => {
         await program.build({ outDir: s`${tempDir}/out` });
     });
 
+    it('transpiles ternaries to if statements in every conditional compile branch', async () => {
+        fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=test\nbs_const=DEBUG=true\n');
+        program.dispose();
+        program = new Program({ rootDir: rootDir });
+        const file = program.setFile('source/main.bs', `
+            #const LOGGING = true
+            sub main(x)
+            #if DEBUG
+                a = x = 1 ? "one" : "other"
+            #end if
+            #if LOGGING
+                b = x = 1 ? "one" : "other"
+            #end if
+            #if true
+                c = x = 1 ? "one" : "other"
+            #end if
+            #if false
+                d = x = 1 ? "one" : "other"
+            #end if
+            end sub
+        `);
+        program.validate();
+        const { code } = await program.getTranspiledFileContents(file.srcPath);
+        expect(code).not.to.include('bslib_ternary');
+        expect(code.match(/if x = 1 then/g)).to.have.lengthOf(4);
+    });
+
     it('properly prefixes functions from bslib', async () => {
         program.options.outDir = s`${tempDir}/staging`;
         program.setFile('source/main.bs', `

@@ -1301,12 +1301,13 @@ describe('BrsFile', () => {
                 ]);
             });
 
-            it('detects syntax error in #const', () => {
+            it('detects an invalid #const value', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                         #const someConst = 123
                     end sub
                 `);
+                program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.invalidHashConstValue()
                 ]);
