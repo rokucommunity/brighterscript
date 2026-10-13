@@ -57,7 +57,8 @@ describe('WorkerThreadProject', () => {
     let keepAliveProject: WorkerThreadProject;
 
     before(async function workerThreadWarmup() {
-        this.timeout(60_000);
+        //cold-booting a worker loads brighterscript through ts-node, which can be very slow on macOS CI runners
+        this.timeout(120_000);
         await getWakeWorkerThreadPromise();
 
         workerPool.maxWorkers = 1;
@@ -81,7 +82,7 @@ describe('WorkerThreadProject', () => {
 
     afterEach(async function keepWorkerPoolWarm() {
         //defensive fallback in case keepAliveProject didn't prevent the pool from emptying; give it a cold-boot-sized budget
-        this.timeout(60_000);
+        this.timeout(120_000);
         fsExtra.emptyDirSync(tempDir);
         project?.dispose();
         await preloadAndWaitUntilReady(1);
@@ -89,7 +90,7 @@ describe('WorkerThreadProject', () => {
 
     describe('activate', () => {
         it('shows diagnostics after running', async function () {
-            this.timeout(15_000);
+            this.timeout(120_000);
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
                 sub main()
                     print varNotThere
@@ -149,7 +150,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('allows multiple projects to share a single worker thread when capped', async function () {
-            this.timeout(15_000);
+            this.timeout(120_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -199,7 +200,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('leaves the surviving co-tenant project functional after the other one is disposed', async function () {
-            this.timeout(15_000);
+            this.timeout(120_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
@@ -249,7 +250,7 @@ describe('WorkerThreadProject', () => {
         });
 
         it('leaves the surviving co-tenant project functional even if the other one is disposed twice', async function () {
-            this.timeout(15_000);
+            this.timeout(120_000);
             workerPool.maxWorkers = 1;
 
             fsExtra.outputFileSync(`${rootDir}/source/main.brs`, `
