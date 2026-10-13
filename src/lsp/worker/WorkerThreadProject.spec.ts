@@ -57,7 +57,8 @@ describe('WorkerThreadProject', () => {
     let keepAliveProject: WorkerThreadProject;
 
     before(async function workerThreadWarmup() {
-        this.timeout(60_000);
+        //cold-booting a worker loads brighterscript through ts-node, which can be very slow on macOS CI runners
+        this.timeout(120_000);
         await getWakeWorkerThreadPromise();
 
         workerPool.maxWorkers = 1;
