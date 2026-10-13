@@ -3366,6 +3366,12 @@ function applyDestructuringDefaultType(memberType: BscType, defaultValue: Expres
         //an unresolvable default (i.e. an unknown name) would make the whole variable unresolvable, so ignore it
         !(isAnyReferenceType(defaultType) && !defaultType.isResolvable());
 
+    //a reference (i.e. a member of a type from another file) can act like dynamic during file validation and only resolve to its
+    //real type during scope validation, so merge the default in lazily instead of letting the default's type replace it.
+    //The union is built directly because getUniqueType would resolve the reference (to dynamic) right away
+    if (isAnyReferenceType(memberType)) {
+        return defaultTypeIsUsable ? unionTypeFactory([memberType, defaultType]) : memberType;
+    }
     if (!memberType || isDynamicType(memberType) || isInvalidType(memberType) || isVoidType(memberType)) {
         return defaultTypeIsUsable ? defaultType : DynamicType.instance;
     }

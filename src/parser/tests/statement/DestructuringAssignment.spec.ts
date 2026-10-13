@@ -1099,6 +1099,82 @@ describe('DestructuringAssignmentStatement', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('does not flag a field that shares its name with a built-in method', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    data = {}
+                    data.items = [1, 2]
+                    data.keys = [3]
+                    data.count = { a: 1 }
+                    [first, second] = data.items
+                    [k] = data.keys
+                    { a, ...rest } = data.count
+                    print first; second; k; a; rest
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('merges a default value with a member type from another file', () => {
+            program.setFile('source/thing.bs', `
+                interface Thing
+                    age as string
+                    items as string[]
+                end interface
+                function getThing() as Thing
+                    return { age: "1", items: ["a"] }
+                end function
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    { age = 0 } = getThing()
+                    [firstItem = 0] = getThing().items
+                    print age; firstItem
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            const typeOf = (name: string) => table.getSymbolType(name, { flags: SymbolTypeFlag.runtime }).toString();
+            expect(typeOf('age')).to.eql('string or integer');
+            expect(typeOf('firstItem')).to.eql('string or integer');
+        });
+
+        it('flags a typed use of a defaulted target whose member type is from another file', () => {
+            program.setFile('source/thing.bs', `
+                interface Thing
+                    age as string
+                end interface
+                function getThing() as Thing
+                    return { age: "1" }
+                end function
+            `);
+            program.setFile('source/main.bs', `
+                sub main()
+                    { age = 0 } = getThing()
+                    x as integer = age
+                    print x
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.assignmentTypeMismatch('string or integer', 'integer').message
+            );
+        });
+
+        it('does not flag a defaulted target from an unknown source', () => {
+            program.setFile('source/main.bs', `
+                sub main(data)
+                    { age = 0 } = data
+                    [first = ""] = data.items
+                    print age + 1; first.len()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('uses the type from an interface when destructuring a typed value', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 interface Person

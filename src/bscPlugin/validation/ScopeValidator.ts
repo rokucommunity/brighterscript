@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isDestructuringAssignmentStatement, isObjectPatternExpression, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope, isPrimitiveTypeLike, isTypedFunctionTypeLike, isFunctionTypeLike } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isDestructuringAssignmentStatement, isObjectPatternExpression, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -1015,8 +1015,14 @@ export class ScopeValidator {
         if (!this.isTypeKnown(sourceType) || isDynamicType(sourceType)) {
             return;
         }
+        if (isCallableType(sourceType)) {
+            //an AA member that shares a name with a built-in method (`m.items`, `m.count`) resolves to that method's
+            //type even though it is almost certainly a field, so a function type says nothing about the destructured value
+            return;
+        }
         if (isObjectPatternExpression(pattern)) {
-            if (pattern.rest && this.isKnownNonAssociativeArrayType(sourceType)) {
+            if (pattern.rest && !this.canSpreadIntoAA(sourceType)) {
+                //an object rest is built with `.append(source)`, the same as spreading the source into an AA
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.cannotCollectObjectRest(sourceType.toString()),
                     location: pattern.rest.location
@@ -1042,7 +1048,7 @@ export class ScopeValidator {
                 }
             }
         } else {
-            if (this.isKnownNonArrayType(sourceType)) {
+            if (!this.canIndexByPosition(sourceType)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.cannotDestructureAsArray(sourceType.toString()),
                     location: pattern.location
@@ -1058,38 +1064,6 @@ export class ScopeValidator {
                 index++;
             }
         }
-    }
-
-    /**
-     * Is this type known to not support positional indexing (i.e. `value[0]`)? Only types that are certain to fail are included,
-     * so dynamic, object, and user-declared interface types are never flagged. A union is only flagged when every member is
-     */
-    private isKnownNonArrayType(type: BscType): boolean {
-        if (isUnionType(type)) {
-            return type.types.every(x => this.isKnownNonArrayType(x));
-        }
-        return isPrimitiveTypeLike(type) ||
-            isAssociativeArrayTypeLike(type) ||
-            isClassType(type) ||
-            isComponentType(type) ||
-            isTypedFunctionTypeLike(type) ||
-            isFunctionTypeLike(type);
-    }
-
-    /**
-     * Is this type known to not be an associative array (so it cannot be passed to `roAssociativeArray.append()`)? Only types that are
-     * certain to fail are included, so dynamic, object, class, and user-declared interface types are never flagged. A union is only flagged when every member is
-     */
-    private isKnownNonAssociativeArrayType(type: BscType): boolean {
-        if (isUnionType(type)) {
-            return type.types.every(x => this.isKnownNonAssociativeArrayType(x));
-        }
-        return isPrimitiveTypeLike(type) ||
-            isArrayTypeLike(type) ||
-            isComponentType(type) ||
-            isTypedFunctionTypeLike(type) ||
-            isFunctionTypeLike(type) ||
-            (isInterfaceType(type) && type.isBuiltIn && !isAssociativeArrayTypeLike(type));
     }
 
     /**
@@ -1217,6 +1191,14 @@ export class ScopeValidator {
 
     private canSpreadIntoArray(type: BscType): boolean {
         return this.isSpreadTypeAllowed(type, t => isArrayTypeLike(t) || isBuiltInType(t, 'roList'));
+    }
+
+    /**
+     * Can a value of this type be read by position (i.e. `value[0]`), as an array destructuring pattern does?
+     * Built-in interfaces other than roAssociativeArray are allowed since many of them (roList, roByteArray, roXMLList, ...) support it
+     */
+    private canIndexByPosition(type: BscType): boolean {
+        return this.isSpreadTypeAllowed(type, t => isArrayTypeLike(t) || (isInterfaceType(t) && !isAssociativeArrayTypeLike(t)));
     }
 
     private canSpreadIntoAA(type: BscType): boolean {
