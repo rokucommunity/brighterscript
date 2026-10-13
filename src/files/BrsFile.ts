@@ -639,13 +639,13 @@ export class BrsFile implements BscFile {
                 statement.findAncestor<FunctionExpression>(isFunctionExpression)
             );
             if (scope) {
-                for (const target of statement.getTargets({ flags: SymbolTypeFlag.runtime })) {
+                for (const name of statement.getTargetNames()) {
                     scope.variableDeclarations.push({
-                        nameRange: target.name.location?.range,
-                        lineIndex: target.name.location?.range?.start.line,
-                        name: target.name.text,
+                        nameRange: name.location?.range,
+                        lineIndex: name.location?.range?.start.line,
+                        name: name.text,
                         getType: () => {
-                            return statement.getTargets({ flags: SymbolTypeFlag.runtime }).find(x => x.name === target.name)?.type ?? DynamicType.instance;
+                            return statement.getTargetType(name, { flags: SymbolTypeFlag.runtime }) ?? DynamicType.instance;
                         }
                     });
                 }

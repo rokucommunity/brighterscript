@@ -972,7 +972,7 @@ export class ScopeValidator {
     }
 
     /**
-     * Detect when declared type does not match rhs type
+     * Detect when a typed destructuring target does not match the type of the value it receives, and flag keys missing from the source type
      */
     private validateDestructuringAssignmentStatement(file: BrsFile, destructuringStmt: DestructuringAssignmentStatement) {
         const sourceType = this.getNodeTypeWrapper(file, destructuringStmt.value, { flags: SymbolTypeFlag.runtime });
@@ -1044,6 +1044,9 @@ export class ScopeValidator {
         }
     }
 
+    /**
+     * Detect when declared type does not match rhs type
+     */
     private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
         if (!assignStmt?.typeExpression) {
             // nothing to check

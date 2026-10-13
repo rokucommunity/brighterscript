@@ -295,10 +295,19 @@ export class DestructuringAssignmentStatement extends Statement {
     }
 
     /**
-     * Get the identifier tokens of every variable assigned by this statement
+     * Get the type of a single variable assigned by this statement, without resolving the types of the other targets
+     * @param name the identifier token of the target (as returned by `getTargetNames`)
+     */
+    public getTargetType(name: Identifier, options: GetTypeOptions): BscType | undefined {
+        const valueType = this.value?.getType({ ...options, typeChain: undefined });
+        return this.pattern?.getTargets(valueType, options, name)[0]?.type;
+    }
+
+    /**
+     * Get the identifier tokens of every variable assigned by this statement, without resolving any types
      */
     public getTargetNames(): Identifier[] {
-        return this.getTargets({ flags: SymbolTypeFlag.runtime }).map(x => x.name);
+        return this.pattern?.getTargetNames() ?? [];
     }
 
     /**

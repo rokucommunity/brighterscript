@@ -12,6 +12,7 @@ import { util } from '../../../util';
 import { createSandbox } from 'sinon';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { BrsTranspileState } from '../../BrsTranspileState';
+import { createIdentifier } from '../../../astUtils/creators';
 
 const sinon = createSandbox();
 
@@ -958,6 +959,40 @@ describe('DestructuringAssignmentStatement', () => {
                 ...DiagnosticMessages.cannotFindName('title', 'person.title', 'Person'),
                 location: { range: util.createRange(5, 29, 5, 35) }
             }]);
+        });
+
+        it('gets target names without resolving any types', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(person)
+                    { a, b: renamed, c: { d, e: [f, , g = 1, ...h] }, ...i } = person
+                end sub
+            `);
+            const statement = file.ast.findChild<DestructuringAssignmentStatement>(isDestructuringAssignmentStatement);
+            const getTypeSpy = sinon.spy(statement.value, 'getType');
+            const names = statement.getTargetNames();
+            expect(getTypeSpy.called).to.be.false;
+            expect(names.map(x => x.text)).to.eql(['a', 'renamed', 'd', 'f', 'g', 'h', 'i']);
+            expect(names).to.eql(statement.getTargets({ flags: SymbolTypeFlag.runtime }).map(x => x.name));
+        });
+
+        it('gets the type of a single target the same as getTargets', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    person = { name: "bob", address: { city: "nyc", zips: [1, 2] } }
+                    { name, address: { city, zips: [firstZip, ...otherZips] }, missing = 1.5 as float, ...others } = person
+                    print name; city; firstZip; otherZips; missing; others
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const statement = file.ast.findChild<DestructuringAssignmentStatement>(isDestructuringAssignmentStatement);
+            const options = { flags: SymbolTypeFlag.runtime };
+            const targets = statement.getTargets(options);
+            expect(targets).to.have.lengthOf(6);
+            for (const target of targets) {
+                expect(statement.getTargetType(target.name, options)?.toString(), target.name.text).to.eql(target.type.toString());
+            }
+            expect(statement.getTargetType(createIdentifier('notATarget'), options)).to.be.undefined;
         });
 
         it('uses the type from an interface when destructuring a typed value', () => {

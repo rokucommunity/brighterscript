@@ -3423,10 +3423,14 @@ export class ObjectPatternExpression extends Expression {
     /**
      * Get every variable declared by this pattern (recursively), along with the type each receives
      * when the pattern is applied to a value of type `sourceType`
+     * @param onlyTarget only resolve this target (by identity), skipping the types of every other property
      */
-    public getTargets(sourceType: BscType | undefined, options: GetTypeOptions): DestructuringTarget[] {
+    public getTargets(sourceType: BscType | undefined, options: GetTypeOptions, onlyTarget?: Identifier): DestructuringTarget[] {
         const results: DestructuringTarget[] = [];
         for (const property of this.properties) {
+            if (onlyTarget && property.targetName !== onlyTarget && !property.pattern?.getTargetNames().includes(onlyTarget)) {
+                continue;
+            }
             const keyName = property.getKeyName();
             let memberType: BscType;
             if (sourceType && keyName) {
@@ -3434,14 +3438,32 @@ export class ObjectPatternExpression extends Expression {
             }
             memberType = applyDestructuringDefaultType(memberType, property.defaultValue, options);
             if (property.pattern) {
-                results.push(...property.pattern.getTargets(memberType, options));
+                results.push(...property.pattern.getTargets(memberType, options, onlyTarget));
             } else if (property.targetName) {
                 results.push(createDestructuringTarget(property.targetName, memberType, property.typeExpression, property, options));
             }
         }
-        if (this.rest?.tokens.name) {
+        if (this.rest?.tokens.name && (!onlyTarget || this.rest.tokens.name === onlyTarget)) {
             const restType = new AssociativeArrayType();
             results.push({ name: this.rest.tokens.name, type: restType, valueType: restType, node: this.rest });
+        }
+        return results;
+    }
+
+    /**
+     * Get the identifier tokens of every variable declared by this pattern (recursively), in the same order as `getTargets`, without resolving any types
+     */
+    public getTargetNames(): Identifier[] {
+        const results: Identifier[] = [];
+        for (const property of this.properties) {
+            if (property.pattern) {
+                results.push(...property.pattern.getTargetNames());
+            } else if (property.targetName) {
+                results.push(property.targetName);
+            }
+        }
+        if (this.rest?.tokens.name) {
+            results.push(this.rest.tokens.name);
         }
         return results;
     }
@@ -3659,8 +3681,9 @@ export class ArrayPatternExpression extends Expression {
     /**
      * Get every variable declared by this pattern (recursively), along with the type each receives
      * when the pattern is applied to a value of type `sourceType`
+     * @param onlyTarget only resolve this target (by identity), skipping the types of every other element
      */
-    public getTargets(sourceType: BscType | undefined, options: GetTypeOptions): DestructuringTarget[] {
+    public getTargets(sourceType: BscType | undefined, options: GetTypeOptions, onlyTarget?: Identifier): DestructuringTarget[] {
         const results: DestructuringTarget[] = [];
         let itemType: BscType = DynamicType.instance;
         if (isArrayType(sourceType)) {
@@ -3673,16 +3696,37 @@ export class ArrayPatternExpression extends Expression {
             if (element.isHole) {
                 continue;
             }
+            if (onlyTarget && element.tokens.name !== onlyTarget && !element.pattern?.getTargetNames().includes(onlyTarget)) {
+                continue;
+            }
             const elementType = applyDestructuringDefaultType(itemType, element.defaultValue, options);
             if (element.pattern) {
-                results.push(...element.pattern.getTargets(elementType, options));
+                results.push(...element.pattern.getTargets(elementType, options, onlyTarget));
             } else if (element.tokens.name) {
                 results.push(createDestructuringTarget(element.tokens.name, elementType, element.typeExpression, element, options));
             }
         }
-        if (this.rest?.tokens.name) {
+        if (this.rest?.tokens.name && (!onlyTarget || this.rest.tokens.name === onlyTarget)) {
             const restType = new ArrayType(itemType);
             results.push({ name: this.rest.tokens.name, type: restType, valueType: restType, node: this.rest });
+        }
+        return results;
+    }
+
+    /**
+     * Get the identifier tokens of every variable declared by this pattern (recursively), in the same order as `getTargets`, without resolving any types
+     */
+    public getTargetNames(): Identifier[] {
+        const results: Identifier[] = [];
+        for (const element of this.elements) {
+            if (element.pattern) {
+                results.push(...element.pattern.getTargetNames());
+            } else if (element.tokens.name) {
+                results.push(element.tokens.name);
+            }
+        }
+        if (this.rest?.tokens.name) {
+            results.push(this.rest.tokens.name);
         }
         return results;
     }
