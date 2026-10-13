@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.7](https://github.com/rokucommunity/brighterscript/compare/0.73.6...v0.73.7) - 2026-10-13
+### Added
+ - Add component-scope coverage for recursive const resolution ([#1904](https://github.com/rokucommunity/brighterscript/pull/1904))
+ - Add `bsc --init` to create a new bsconfig.json ([#1892](https://github.com/rokucommunity/brighterscript/pull/1892))
+### Changed
+ - Allow a namespaced const to reference an outer symbol with the same name ([#1905](https://github.com/rokucommunity/brighterscript/pull/1905))
+
+
+
 ## [0.73.6](https://github.com/rokucommunity/brighterscript/compare/0.73.5...v0.73.6) - 2026-10-09
 ### Added
  - Add `...` (DotDotDot) token to the lexer ([#1896](https://github.com/rokucommunity/brighterscript/pull/1896))
