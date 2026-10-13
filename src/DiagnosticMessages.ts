@@ -601,6 +601,16 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'destructuring-type-not-allowed'
     }),
+    cannotDestructureAsArray: (typeName: string) => ({
+        message: `Cannot use an array destructuring pattern on a value of type '${typeName}'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'cannot-destructure-as-array'
+    }),
+    cannotCollectObjectRest: (typeName: string) => ({
+        message: `Cannot collect the remaining properties of a value of type '${typeName}' into a rest element. Only associative arrays can be copied this way`,
+        severity: DiagnosticSeverity.Error,
+        code: 'cannot-collect-object-rest'
+    }),
     /**
      * Used in the lexer anytime we encounter an unsupported character
      */

@@ -41,6 +41,23 @@ userName = person.name
 userAge = person.age
 ```
 
+### Type designators
+
+A shorthand property may use a variable name with a type designator (`$`, `%`, `!`, `#`, `&`). The designator belongs to the variable, so the key that is read does not include it:
+
+```brighterscript
+{ name$, age% } = person
+```
+
+transpiles to
+
+```brightscript
+name$ = person.name
+age% = person.age
+```
+
+An explicit key is read exactly as written, so `{ id$: userId }` reads `person.id$`.
+
 ### String literal keys
 
 Keys that are not valid identifiers can be written as string literals. These must always be given a target variable name:
@@ -85,9 +102,13 @@ transpiles to
 
 ```brightscript
 name = person.name
-if name = invalid then name = "unknown"
+if name = invalid then
+    name = "unknown"
+end if
 age = person.age
-if age = invalid then age = getDefaultAge()
+if age = invalid then
+    age = getDefaultAge()
+end if
 ```
 
 ### Rest properties
@@ -108,6 +129,8 @@ others.delete("name")
 ```
 
 The rest element must be the last item in the pattern. Like the [spread operator](spread-operator.md), whitespace is allowed between the `...` and the variable name (`[... rest]`), but a newline is not.
+
+Since the rest element is built with `roAssociativeArray.append()`, the source must be an associative array (or a class instance or interface, which are associative arrays at runtime). Using a rest element on a value known to be something else, such as a SceneGraph node, an array, or a string, is an error.
 
 ## Array destructuring
 
@@ -137,6 +160,14 @@ second = items[1]
 fourth = items[3]
 ```
 
+Items may be separated by commas, newlines, or both. A comma at the start of a line is the separator for the item before it, so leading-comma style works as expected. Use an extra comma to leave a hole:
+
+```brighterscript
+[first
+    , second
+    , , fourth] = items
+```
+
 ### Default values
 
 ```brighterscript
@@ -148,7 +179,9 @@ transpiles to
 ```brightscript
 first = items[0]
 second = items[1]
-if second = invalid then second = 2
+if second = invalid then
+    second = 2
+end if
 ```
 
 ### Rest elements
@@ -234,7 +267,7 @@ sub greet(person as Person)
 end sub
 ```
 
-A key that does not exist on a known source type is reported at the key, the same as `person.nmae` would be.
+A key that does not exist on a known source type is reported at the key, the same as `person.nmae` would be. An array pattern used on a value known to not be indexable by position (a string, number, associative array, class instance, or node) is also an error.
 
 ## Type annotations
 

@@ -995,6 +995,110 @@ describe('DestructuringAssignmentStatement', () => {
             expect(statement.getTargetType(createIdentifier('notATarget'), options)).to.be.undefined;
         });
 
+        it('flags an array pattern on a value that cannot be indexed by position', () => {
+            program.setFile('source/main.bs', `
+                class Person
+                    name as string
+                end class
+                sub main(user as Person, count as integer)
+                    [a] = "abc"
+                    [b] = { x: 1 }
+                    [c] = user
+                    [d] = count
+                    { items: [e] } = { items: "abc" }
+                    print a; b; c; d; e
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotDestructureAsArray('string'),
+                location: { range: util.createRange(5, 20, 5, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('roAssociativeArray'),
+                location: { range: util.createRange(6, 20, 6, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('Person'),
+                location: { range: util.createRange(7, 20, 7, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('integer'),
+                location: { range: util.createRange(8, 20, 8, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('string'),
+                location: { range: util.createRange(9, 29, 9, 32) }
+            }]);
+        });
+
+        it('does not flag an array pattern on an array, dynamic, object, or unresolved source', () => {
+            program.setFile('source/main.bs', `
+                interface HasItems
+                    items as object
+                end interface
+                sub main(data, obj as object, typed as HasItems)
+                    [a] = [1, 2]
+                    [b] = data
+                    [c] = obj
+                    [d] = typed.items
+                    [e] = createObject("roList")
+                    [f] = getItems()
+                    print a; b; c; d; e; f
+                end sub
+                function getItems() as integer[]
+                    return [1]
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags an object rest element on a value that is not an associative array', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    node = createObject("roSGNode", "Group")
+                    { id, ...nodeRest } = node
+                    { ...arrayRest } = [1, 2]
+                    { ...stringRest } = "abc"
+                    { ...dateRest } = createObject("roDateTime")
+                    print id; nodeRest; arrayRest; stringRest; dateRest
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotCollectObjectRest('roSGNodeGroup'),
+                location: { range: util.createRange(3, 26, 3, 37) }
+            }, {
+                ...DiagnosticMessages.cannotCollectObjectRest('Array<integer>'),
+                location: { range: util.createRange(4, 22, 4, 34) }
+            }, {
+                ...DiagnosticMessages.cannotCollectObjectRest('string'),
+                location: { range: util.createRange(5, 22, 5, 35) }
+            }, {
+                ...DiagnosticMessages.cannotCollectObjectRest('roDateTime'),
+                location: { range: util.createRange(6, 22, 6, 33) }
+            }]);
+        });
+
+        it('does not flag an object rest element on an associative array, class, interface, dynamic, or object source', () => {
+            program.setFile('source/main.bs', `
+                class Person
+                    name as string
+                end class
+                interface Named
+                    name as string
+                end interface
+                sub main(data, obj as object, user as Person, named as Named)
+                    { ...a } = { x: 1 }
+                    { ...b } = data
+                    { ...c } = obj
+                    { name, ...d } = user
+                    { name: n, ...e } = named
+                    { ...f } = createObject("roAssociativeArray")
+                    print a; b; c; d; e; f; name; n
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('uses the type from an interface when destructuring a typed value', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
                 interface Person

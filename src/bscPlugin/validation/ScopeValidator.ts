@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isDestructuringAssignmentStatement, isObjectPatternExpression, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isDestructuringAssignmentStatement, isObjectPatternExpression, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope, isPrimitiveTypeLike, isTypedFunctionTypeLike, isFunctionTypeLike } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -979,7 +979,7 @@ export class ScopeValidator {
         const sourceName = isVariableExpression(destructuringStmt.value) || isDottedGetExpression(destructuringStmt.value)
             ? util.getAllDottedGetPartsAsString(destructuringStmt.value)
             : undefined;
-        this.validateDestructuringPatternKeys(file, destructuringStmt.pattern, sourceType, sourceName);
+        this.validateDestructuringPattern(file, destructuringStmt.pattern, sourceType, sourceName);
 
         for (const target of destructuringStmt.getTargets({ flags: SymbolTypeFlag.runtime })) {
             //a typed target (`{ name as string }`) is checked the same as `name as string = source.name`
@@ -1006,13 +1006,22 @@ export class ScopeValidator {
     }
 
     /**
-     * Flag object pattern keys that do not exist on a known source type, the same way `source.key` would be flagged
+     * Validate a destructuring pattern against a known source type:
+     *  - object pattern keys that do not exist on the source are flagged the same way `source.key` would be
+     *  - an object rest element requires a source that `roAssociativeArray.append()` accepts
+     *  - an array pattern requires a source that can be indexed by position
      */
-    private validateDestructuringPatternKeys(file: BrsFile, pattern: DestructuringPattern, sourceType: BscType, sourceName: string | undefined) {
+    private validateDestructuringPattern(file: BrsFile, pattern: DestructuringPattern, sourceType: BscType, sourceName: string | undefined) {
         if (!this.isTypeKnown(sourceType) || isDynamicType(sourceType)) {
             return;
         }
         if (isObjectPatternExpression(pattern)) {
+            if (pattern.rest && this.isKnownNonAssociativeArrayType(sourceType)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotCollectObjectRest(sourceType.toString()),
+                    location: pattern.rest.location
+                });
+            }
             for (const property of pattern.properties) {
                 const keyName = property.getKeyName();
                 if (!keyName) {
@@ -1029,19 +1038,58 @@ export class ScopeValidator {
                         location: property.tokens.key.location
                     });
                 } else if (property.pattern) {
-                    this.validateDestructuringPatternKeys(file, property.pattern, memberType, fullName);
+                    this.validateDestructuringPattern(file, property.pattern, memberType, fullName);
                 }
             }
         } else {
+            if (this.isKnownNonArrayType(sourceType)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotDestructureAsArray(sourceType.toString()),
+                    location: pattern.location
+                });
+                return;
+            }
             const itemType = isArrayType(sourceType) ? sourceType.defaultType : DynamicType.instance;
             let index = 0;
             for (const element of pattern.elements) {
                 if (element.pattern) {
-                    this.validateDestructuringPatternKeys(file, element.pattern, itemType, sourceName ? `${sourceName}[${index}]` : undefined);
+                    this.validateDestructuringPattern(file, element.pattern, itemType, sourceName ? `${sourceName}[${index}]` : undefined);
                 }
                 index++;
             }
         }
+    }
+
+    /**
+     * Is this type known to not support positional indexing (i.e. `value[0]`)? Only types that are certain to fail are included,
+     * so dynamic, object, and user-declared interface types are never flagged. A union is only flagged when every member is
+     */
+    private isKnownNonArrayType(type: BscType): boolean {
+        if (isUnionType(type)) {
+            return type.types.every(x => this.isKnownNonArrayType(x));
+        }
+        return isPrimitiveTypeLike(type) ||
+            isAssociativeArrayTypeLike(type) ||
+            isClassType(type) ||
+            isComponentType(type) ||
+            isTypedFunctionTypeLike(type) ||
+            isFunctionTypeLike(type);
+    }
+
+    /**
+     * Is this type known to not be an associative array (so it cannot be passed to `roAssociativeArray.append()`)? Only types that are
+     * certain to fail are included, so dynamic, object, class, and user-declared interface types are never flagged. A union is only flagged when every member is
+     */
+    private isKnownNonAssociativeArrayType(type: BscType): boolean {
+        if (isUnionType(type)) {
+            return type.types.every(x => this.isKnownNonAssociativeArrayType(x));
+        }
+        return isPrimitiveTypeLike(type) ||
+            isArrayTypeLike(type) ||
+            isComponentType(type) ||
+            isTypedFunctionTypeLike(type) ||
+            isFunctionTypeLike(type) ||
+            (isInterfaceType(type) && type.isBuiltIn && !isAssociativeArrayTypeLike(type));
     }
 
     /**
