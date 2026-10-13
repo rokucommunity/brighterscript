@@ -1663,6 +1663,14 @@ export class Parser {
     private restElement(): RestElementExpression {
         const dotDotDot = this.advance();
         const name = this.destructuringTargetIdentifier();
+        //the rest target is always an array or associative array, so it cannot have a type designator (i.e. `...rest$`) either
+        const lastChar = name.text[name.text.length - 1];
+        if (['$', '%', '!', '#', '&'].includes(lastChar)) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.invalidIdentifier(name.text, lastChar),
+                location: name.location
+            });
+        }
         if (this.check(TokenKind.As)) {
             //the rest target is always an array or associative array, so it cannot be typed
             const [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();

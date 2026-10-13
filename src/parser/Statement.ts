@@ -2,7 +2,7 @@
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import { SourceNode } from 'source-map';
-import type { DottedGetExpression, LiteralExpression, TypecastExpression, DestructuringPattern, DestructuringTarget, ObjectPatternExpression, ArrayPatternExpression } from './Expression';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression, DestructuringPattern, DestructuringTarget, ObjectPatternExpression, ArrayPatternExpression, ObjectPatternPropertyExpression, ArrayPatternElementExpression } from './Expression';
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
@@ -11,7 +11,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isObjectPatternExpression, isArrayPatternExpression } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isObjectPatternExpression, isArrayPatternExpression, isObjectPatternPropertyExpression } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -308,6 +308,45 @@ export class DestructuringAssignmentStatement extends Statement {
      */
     public getTargetNames(): Identifier[] {
         return this.pattern?.getTargetNames() ?? [];
+    }
+
+    /**
+     * Get the targets that this statement has already assigned when `node` is evaluated, following the transpiled order:
+     * the source is evaluated first, then each item is read in order, with an item's default evaluated right after its own value is read
+     * (and before any nested pattern inside it is unpacked)
+     * @returns the assigned targets, or undefined when `node` is not inside this statement's source or default values
+     */
+    public getTargetNamesAssignedBefore(node: AstNode): Identifier[] | undefined {
+        const isWithin = (container: AstNode | undefined) => !!container && (node === container || !!node.findAncestor(x => x === container));
+        if (isWithin(this.value)) {
+            return [];
+        }
+        const assigned: Identifier[] = [];
+        const visit = (pattern: DestructuringPattern): boolean => {
+            const items: Array<ObjectPatternPropertyExpression | ArrayPatternElementExpression> = isObjectPatternExpression(pattern) ? pattern.properties : pattern.elements;
+            for (const item of items) {
+                const targetName = isObjectPatternPropertyExpression(item) ? item.targetName : item.tokens.name;
+                if (isWithin(item.defaultValue)) {
+                    //the item's own value is read before its default is evaluated
+                    if (targetName && !item.pattern) {
+                        assigned.push(targetName);
+                    }
+                    return true;
+                }
+                if (item.pattern) {
+                    if (visit(item.pattern)) {
+                        return true;
+                    }
+                } else if (targetName) {
+                    assigned.push(targetName);
+                }
+            }
+            if (pattern.rest?.tokens.name) {
+                assigned.push(pattern.rest.tokens.name);
+            }
+            return false;
+        };
+        return this.pattern && visit(this.pattern) ? assigned : undefined;
     }
 
     /**

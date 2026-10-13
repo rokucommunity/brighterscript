@@ -601,6 +601,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'destructuring-type-not-allowed'
     }),
+    destructuringTargetUsedBeforeAssignment: (name: string) => ({
+        message: `'${name}' is read before this destructuring assignment assigns it`,
+        severity: DiagnosticSeverity.Error,
+        code: 'destructuring-target-used-before-assignment'
+    }),
     cannotDestructureAsArray: (typeName: string) => ({
         message: `Cannot use an array destructuring pattern on a value of type '${typeName}'`,
         severity: DiagnosticSeverity.Error,

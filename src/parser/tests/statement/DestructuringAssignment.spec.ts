@@ -169,6 +169,20 @@ describe('DestructuringAssignmentStatement', () => {
                 rest } = person`).diagnostics).not.to.be.empty;
         });
 
+        it('flags a type designator on a rest element', () => {
+            const parser = parse(`
+                [a, ...rest$] = items
+                { b, ...others% } = obj
+            `);
+            expectDiagnostics(parser, [{
+                ...DiagnosticMessages.invalidIdentifier('rest$', '$'),
+                location: { range: util.createRange(1, 23, 1, 28) }
+            }, {
+                ...DiagnosticMessages.invalidIdentifier('others%', '%'),
+                location: { range: util.createRange(2, 24, 2, 31) }
+            }]);
+        });
+
         it('flags a string literal key without a target', () => {
             expectDiagnosticsIncludes(parse(`{ "first name" } = person`), [
                 DiagnosticMessages.expectedToken(TokenKind.Colon).message
@@ -1169,6 +1183,50 @@ describe('DestructuringAssignmentStatement', () => {
                     { age = 0 } = data
                     [first = ""] = data.items
                     print age + 1; first.len()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a target that is read before the statement assigns it', () => {
+            program.setFile('source/main.bs', `
+                sub main(obj)
+                    { b = a, a } = obj
+                    [x = y, y] = obj
+                    { n: { m } = m } = obj
+                    { q } = q
+                    print a; b; x; y; m; q
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment('a'),
+                location: { range: util.createRange(2, 26, 2, 27) }
+            }, {
+                ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment('y'),
+                location: { range: util.createRange(3, 25, 3, 26) }
+            }, {
+                ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment('m'),
+                location: { range: util.createRange(4, 33, 4, 34) }
+            }, {
+                //a target read by the source is already flagged the same way as `q = q + 1`
+                ...DiagnosticMessages.cannotFindName('q'),
+                location: { range: util.createRange(5, 28, 5, 29) }
+            }]);
+        });
+
+        it('does not flag a target read after it is assigned or declared earlier', () => {
+            program.setFile('source/main.bs', `
+                sub main(obj, p)
+                    { a, b = a } = obj
+                    { c = c } = obj
+                    [first, second = first, ...rest] = obj
+                    x = 1
+                    y = 2
+                    [x, y] = [y, x]
+                    { p = 0 } = p
+                    print a; b; c; first; second; rest; x; y; p
                 end sub
             `);
             program.validate();

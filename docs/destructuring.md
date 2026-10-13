@@ -111,6 +111,8 @@ if age = invalid then
 end if
 ```
 
+A default may read a variable assigned earlier in the same pattern (`{ width, height = width } = size`). Reading one that is assigned later in the pattern (`{ height = width, width } = size`) is an error, since it has not been assigned yet when the default is evaluated.
+
 ### Rest properties
 
 A rest element collects every property that was not explicitly named into a new associative array:
@@ -282,7 +284,7 @@ end sub
 
 The declared type is used in place of the inferred one, and is checked the same way as a typed assignment (`name as string = data.name`), so a value or default value that does not match the declared type is an error. The annotations are removed when transpiling.
 
-A cast in a default value must be wrapped in parentheses (`{ age = (value as integer) as integer }`), since `as` after the default is read as the variable's type. Nested patterns and rest elements cannot be typed.
+A cast in a default value must be wrapped in parentheses (`{ age = (value as integer) as integer }`), since `as` after the default is read as the variable's type. Nested patterns and rest elements cannot be typed, and a rest element cannot use a type designator (`...rest$`) since it always holds an array or associative array.
 
 ## Limitations
 

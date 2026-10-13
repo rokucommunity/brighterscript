@@ -980,6 +980,7 @@ export class ScopeValidator {
             ? util.getAllDottedGetPartsAsString(destructuringStmt.value)
             : undefined;
         this.validateDestructuringPattern(file, destructuringStmt.pattern, sourceType, sourceName);
+        this.validateDestructuringReadsBeforeAssignment(file, destructuringStmt);
 
         for (const target of destructuringStmt.getTargets({ flags: SymbolTypeFlag.runtime })) {
             //a typed target (`{ name as string }`) is checked the same as `name as string = source.name`
@@ -1003,6 +1004,54 @@ export class ScopeValidator {
                 nameRange: target.name.location?.range
             });
         }
+    }
+
+    /**
+     * Flag a target that is read by a default value of the same statement before the statement assigns it
+     * (i.e. `{ b = a, a } = obj`), which is a use of an uninitialized variable at runtime. Names that are declared earlier
+     * in the function are fine, since they already hold a value. A target read by the source (i.e. `{ a } = a`) is
+     * already flagged as `cannot-find-name`, the same as `a = a + 1`
+     */
+    private validateDestructuringReadsBeforeAssignment(file: BrsFile, destructuringStmt: DestructuringAssignmentStatement) {
+        const targetNames = new Set(destructuringStmt.getTargetNames().map(x => x.text.toLowerCase()));
+        const func = destructuringStmt.findAncestor<FunctionExpression>(isFunctionExpression);
+        let declaredBefore: Set<string>;
+        destructuringStmt.walk(createVisitor({
+            VariableExpression: (variable) => {
+                const lowerName = variable.tokens.name.text.toLowerCase();
+                //variables inside a nested function (i.e. a function used as a default value) belong to that function's scope
+                if (!targetNames.has(lowerName) || variable.findAncestor(isFunctionExpression) !== func || util.isInTypeExpression(variable)) {
+                    return;
+                }
+                const assignedBefore = destructuringStmt.getTargetNamesAssignedBefore(variable);
+                const isInSource = variable === destructuringStmt.value || !!variable.findAncestor(x => x === destructuringStmt.value);
+                if (!assignedBefore || isInSource || assignedBefore.some(x => x.text.toLowerCase() === lowerName)) {
+                    return;
+                }
+                declaredBefore ??= this.getVariableNamesDeclaredBefore(file, func, destructuringStmt);
+                if (!declaredBefore.has(lowerName)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment(variable.tokens.name.text),
+                        location: variable.location
+                    });
+                }
+            }
+        }), { walkMode: WalkMode.visitExpressionsRecursive });
+    }
+
+    /**
+     * Get the (lower case) names of the variables declared in `func` (including its parameters) that start before `node`
+     */
+    private getVariableNamesDeclaredBefore(file: BrsFile, func: FunctionExpression, node: AstNode) {
+        const names = new Set<string>();
+        const start = node.location?.range?.start;
+        const functionScope = file.functionScopes.find(x => x.func === func);
+        for (const declaration of functionScope?.variableDeclarations ?? []) {
+            if (util.comparePosition(declaration.nameRange?.start, start) < 0) {
+                names.add(declaration.name.toLowerCase());
+            }
+        }
+        return names;
     }
 
     /**
