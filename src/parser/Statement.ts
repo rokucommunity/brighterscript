@@ -6,7 +6,7 @@ import type { DottedGetExpression, LiteralExpression, TypecastExpression, Destru
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
-import type { Location, Position, Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
@@ -707,7 +707,8 @@ export class Block extends Statement {
     public readonly kind = AstNodeKind.Block;
 
     private buildLocation(): Location {
-        if (this.statements?.length > 0) {
+        //a conditional compile branch always spans its directives below, so it covers blank lines, comments and code that did not parse too
+        if (this.statements?.length > 0 && !isConditionalCompileStatement(this.parent)) {
             return util.createBoundingLocation(...this.statements ?? []);
         }
         let lastBitBefore: Location;
@@ -807,14 +808,23 @@ export class Block extends Statement {
                 lastBitBefore.uri ?? firstBitAfter.uri
             );
         }
+        //a conditional compile branch whose directives have no location (such as one built from synthesized tokens) falls back to its statements
+        if (this.statements?.length > 0) {
+            return util.createBoundingLocation(...this.statements);
+        }
     }
 
     public get location() {
-        if (!this._location) {
-            //this needs to be a getter because the body has its statements pushed to it after being constructed
-            this._location = this.buildLocation();
+        if (this._location) {
+            return this._location;
         }
-        return this._location;
+        //this needs to be a getter because the body has its statements pushed to it after being constructed.
+        //the location can depend on the parent, so it is only kept once the block has one
+        const location = this.buildLocation();
+        if (this.parent) {
+            this._location = location;
+        }
+        return location;
     }
     public set location(value) {
         this._location = value;
@@ -5242,37 +5252,6 @@ export class ConditionalCompileStatement extends Statement {
             value = bsConsts.get(constNameLower) === true;
         }
         this.isConditionTrue = this.tokens.not ? !value : value;
-    }
-
-    /**
-     * The ranges of the code in this statement's branches that is not compiled. The `#if` / `#else if` / `#else` / `#end if` lines themselves are never inside a branch.
-     * An `#else if` statement describes its own branches. Empty when the statement has not been walked yet, since its activity is unknown.
-     */
-    public getInactiveBranchRanges(): Range[] {
-        const ranges: Range[] = [];
-        if (this.isActive === undefined) {
-            return ranges;
-        }
-        const tokens = this.tokens;
-        const isReached = this.isActive;
-        const elseStatement = isConditionalCompileStatement(this.elseBranch) ? this.elseBranch : undefined;
-        const addRange = (directiveRange: Range | undefined, end: Position | undefined) => {
-            if (directiveRange) {
-                ranges.push({
-                    //the branch starts on the line after the directive
-                    start: { line: directiveRange.end.line + 1, character: 0 },
-                    //a missing terminator means the branch runs to the end of the file
-                    end: end ?? { line: Number.MAX_SAFE_INTEGER, character: Number.MAX_SAFE_INTEGER }
-                });
-            }
-        };
-        if (!isReached || !this.isConditionTrue) {
-            addRange(tokens.condition?.location?.range ?? tokens.hashIf?.location?.range, (tokens.hashElse ?? elseStatement?.tokens.hashIf ?? tokens.hashEndIf)?.location?.range?.start);
-        }
-        if ((!isReached || this.isConditionTrue) && tokens.hashElse) {
-            addRange(tokens.hashElse.location?.range, tokens.hashEndIf?.location?.range?.start);
-        }
-        return ranges;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {

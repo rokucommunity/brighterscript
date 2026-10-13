@@ -3,7 +3,7 @@ import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
+import { isBlock, isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
 import type { DiagnosticRelatedInformation, Location, Range } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
@@ -230,7 +230,7 @@ export class DiagnosticManager {
 
     /**
      * Create a function that tells whether a diagnostic is a lexer or parser diagnostic about code the device does not compile (an inactive `#if` / `#else if` / `#else` branch).
-     * Other diagnostics are never about inactive branches because the validators skip them. Each file's inactive ranges are computed at most once per call.
+     * Other diagnostics are never about inactive branches because the validators skip them. Each file's inactive branches are collected at most once per call.
      */
     private createInactiveBranchDetector() {
         const inactiveRangesByUri = new Map<string, Range[]>();
@@ -247,12 +247,18 @@ export class DiagnosticManager {
                 inactiveRanges = [];
                 if (isBrsFile(file)) {
                     // eslint-disable-next-line @typescript-eslint/dot-notation
-                    const statements = file['_cachedLookups'].conditionalCompileStatements;
-                    inactiveRanges = statements.flatMap(statement => statement.getInactiveBranchRanges());
+                    for (const statement of file['_cachedLookups'].conditionalCompileStatements) {
+                        for (const branch of [statement.thenBranch, statement.elseBranch]) {
+                            if (isBlock(branch) && branch.isActive === false && branch.location) {
+                                inactiveRanges.push(branch.location.range);
+                            }
+                        }
+                    }
                 }
                 inactiveRangesByUri.set(uriLower, inactiveRanges);
             }
-            return inactiveRanges.some(range => util.comparePosition(range.start, start) <= 0 && util.comparePosition(start, range.end) < 0);
+            //a branch runs from the end of its opening directive to the start of its closing directive, so only the lines strictly between them are inactive
+            return inactiveRanges.some(range => range.start.line < start.line && start.line < range.end.line);
         };
     }
 

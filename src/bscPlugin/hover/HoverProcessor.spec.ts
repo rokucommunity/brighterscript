@@ -2,7 +2,8 @@ import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';
-import { expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { HoverProcessor } from './HoverProcessor';
 import { createIdentifier, createIntegerLiteral } from '../../astUtils/creators';
 import type { BrsFile } from '../../files/BrsFile';
@@ -64,7 +65,9 @@ describe('HoverProcessor', () => {
                 end sub
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(7, 0, 9, 0) } }
+            ]);
             expect(
                 program.getHover(file.srcPath, util.createPosition(7, 22))[0]?.contents
             ).to.eql([fence('inactiveVar as dynamic')]);

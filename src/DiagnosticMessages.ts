@@ -1,5 +1,5 @@
 import type { Position } from 'vscode-languageserver';
-import { DiagnosticSeverity } from 'vscode-languageserver';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
@@ -1339,6 +1339,46 @@ export let DiagnosticMessages = {
         message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
+    }),
+    labelInTryBlock: (name = '') => ({
+        message: `Label '${name}' cannot be declared inside a 'try' block`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-in-try'
+    }),
+    duplicateLabel: (name = '') => ({
+        message: `Label '${name}' is already declared in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-label'
+    }),
+    labelNotFound: (name = '') => ({
+        message: `Cannot find label '${name}' in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-not-found'
+    }),
+    gotoIntoForLoop: (name = '') => ({
+        message: `'goto ${name}' jumps into a 'for' loop from outside it, which skips the loop setup`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'goto-into-for-loop'
+    }),
+    /**
+     * The body of an `#if` / `#else if` / `#else` branch that is not compiled with the current constants.
+     * Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     */
+    inactiveConditionalCompileBranch: () => ({
+        message: 'Inactive conditional compile branch: this code is not compiled with the current constants',
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'inactive-conditional-compile-branch'
+    }),
+    /**
+     * Code that control flow can never reach. Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     * @param message the complete message, which names why the code is unreachable
+     */
+    unreachableCode: (message = 'Unreachable code') => ({
+        message: message,
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'unreachable-code'
     })
 };
 export const defaultMaximumTruncationLength = 160;

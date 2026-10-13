@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { createIdentifier } from '../../astUtils/creators';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -8,17 +8,18 @@ import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { DestructuringAssignmentStatement, getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
-import type { Location, Range } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import type { Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
+import { findUnreachableRegions } from './ControlFlowReachability';
 import * as semver from 'semver';
 import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
@@ -30,6 +31,32 @@ export class BrsFileValidator {
     ) {
     }
 
+
+    /**
+     * Labels and gotos collected during `walk()`, grouped by their enclosing function.
+     * Collected from the main walk so that `#if` branches are evaluated against the live `bsConsts`.
+     */
+    private labelsAndGotosByFunction = new Map<FunctionExpression, LabelsAndGotos>();
+
+    /**
+     * Statements inside a run already reported as unreachable by control flow. Anything inside one is covered by that report.
+     */
+    private controlFlowUnreachableNodes = new Set<AstNode>();
+
+    /**
+     * Conditional compile chains whose inactive branches are covered by a run reported by control flow
+     */
+    private controlFlowCoveredChains = new Set<AstNode>();
+
+    /**
+     * Conditional compile chains that a run reported by control flow ends inside, mapped to that run's location
+     */
+    private controlFlowPartiallyCoveredChains = new Map<AstNode, Location>();
+
+    /**
+     * Parser diagnostics sorted by start position. Each entry also holds the furthest end among the entries up to and including it.
+     */
+    private parseDiagnosticIndex: Array<{ start: Position; furthestEnd: Position }> | undefined;
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
@@ -46,6 +73,7 @@ export class BrsFileValidator {
         this.event.file['_cachedLookups'].rehydrate();
 
         this.walk();
+        this.validateGotosAndLabels();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
@@ -54,6 +82,98 @@ export class BrsFileValidator {
         }
 
         unlinkGlobalSymbolTable();
+    }
+
+    private getLabelsAndGotos(node: LabelStatement | GotoStatement): LabelsAndGotos | undefined {
+        const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+        if (!func) {
+            return undefined;
+        }
+        let record = this.labelsAndGotosByFunction.get(func);
+        if (!record) {
+            record = { labels: [], gotos: [] };
+            this.labelsAndGotosByFunction.set(func, record);
+        }
+        return record;
+    }
+
+    /**
+     * Report duplicate labels, labels inside `try` blocks, gotos with no matching label,
+     * and gotos that jump into a `for` / `for each` loop from outside it.
+     */
+    private validateGotosAndLabels() {
+        for (const [func, { labels, gotos }] of this.labelsAndGotosByFunction) {
+            const firstLabelByName = new Map<string, LabelStatement>();
+            for (const label of labels) {
+                const labelName = label.tokens.name.text;
+                const lowerName = labelName.toLowerCase();
+                if (firstLabelByName.has(lowerName)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.duplicateLabel(labelName),
+                        location: label.tokens.name.location
+                    });
+                } else {
+                    firstLabelByName.set(lowerName, label);
+                }
+                if (this.isInsideTryBranch(label, func)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.labelInTryBlock(labelName),
+                        location: label.tokens.name.location
+                    });
+                }
+            }
+
+            for (const gotoStatement of gotos) {
+                const labelToken = gotoStatement.tokens.label;
+                if (!labelToken?.text) {
+                    continue;
+                }
+                const targetLabel = firstLabelByName.get(labelToken.text.toLowerCase());
+                if (!targetLabel) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.labelNotFound(labelToken.text),
+                        location: labelToken.location
+                    });
+                } else if (this.jumpsIntoForLoop(gotoStatement, targetLabel, func)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.gotoIntoForLoop(labelToken.text),
+                        location: labelToken.location
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Is the label inside the `try` branch of any try/catch within the function, at any depth? A `catch` between the label and an outer `try` does not exempt it. A label in a `catch` with no enclosing `try` is allowed.
+     */
+    private isInsideTryBranch(label: LabelStatement, func: FunctionExpression) {
+        let child: AstNode = label;
+        let parent = label.parent;
+        while (parent && parent !== func) {
+            if (isTryCatchStatement(parent) && parent.tryBranch === child) {
+                return true;
+            }
+            child = parent;
+            parent = parent.parent;
+        }
+        return false;
+    }
+
+    /**
+     * Does the goto land inside a `for` / `for each` loop that does not also contain the goto?
+     */
+    private jumpsIntoForLoop(gotoStatement: GotoStatement, targetLabel: LabelStatement, func: FunctionExpression) {
+        const gotoAncestors = new Set<AstNode>();
+        for (let ancestor = gotoStatement.parent; ancestor && ancestor !== func; ancestor = ancestor.parent) {
+            gotoAncestors.add(ancestor);
+        }
+        for (let ancestor = targetLabel.parent; ancestor && ancestor !== func; ancestor = ancestor.parent) {
+            if ((isForStatement(ancestor) || isForEachStatement(ancestor)) && !gotoAncestors.has(ancestor)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -246,6 +366,7 @@ export class BrsFileValidator {
                 }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
+                this.flagControlFlowUnreachableCode(node);
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -364,8 +485,15 @@ export class BrsFileValidator {
             PrintStatement: (node) => {
                 this.validatePrintStatementItemCount(node);
             },
+            LabelStatement: (node) => {
+                this.getLabelsAndGotos(node)?.labels.push(node);
+            },
+            GotoStatement: (node) => {
+                this.getLabelsAndGotos(node)?.gotos.push(node);
+            },
             ConditionalCompileStatement: (node) => {
                 this.validateHashIfCondition(node);
+                this.flagInactiveConditionalCompileBranches(node);
             },
             ConditionalCompileConstStatement: (node) => {
                 this.validateHashConst(node);
@@ -771,6 +899,131 @@ export class BrsFileValidator {
                 ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
                 location: assignment.tokens.name.location
             });
+        }
+    }
+
+    /**
+     * Report the statements of a function that control flow can never reach, one diagnostic per run.
+     * Functions inside an already reported run are skipped, since the outer report covers them,
+     * and so are functions that overlap a parse error, since the AST there does not reflect what the author meant.
+     */
+    private flagControlFlowUnreachableCode(func: FunctionExpression) {
+        if (func.isActive === false || this.isInsideControlFlowUnreachableRun(func) || this.hasParseDiagnosticWithin(func)) {
+            return;
+        }
+        const analysis = findUnreachableRegions(func);
+        for (const node of analysis.unreachableNodes) {
+            this.controlFlowUnreachableNodes.add(node);
+        }
+        for (const chain of analysis.coveredConditionalCompileChains) {
+            this.controlFlowCoveredChains.add(chain);
+        }
+        for (const [chain, runLocation] of analysis.partiallyCoveredConditionalCompileChains) {
+            this.controlFlowPartiallyCoveredChains.set(chain, runLocation);
+        }
+        for (const region of analysis.regions) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.unreachableCode(region.message),
+                location: region.location
+            });
+        }
+    }
+
+    /**
+     * Is the node, or any ancestor of it, a statement inside a run that control flow already reported?
+     */
+    private isInsideControlFlowUnreachableRun(node: AstNode) {
+        for (let ancestor = node; ancestor; ancestor = ancestor.parent) {
+            if (this.controlFlowUnreachableNodes.has(ancestor)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Does any parser diagnostic intersect the function's range?
+     * The diagnostics are indexed once per validator, so each call is a binary search instead of a scan.
+     */
+    private hasParseDiagnosticWithin(func: FunctionExpression) {
+        const functionRange = func.location?.range;
+        if (!functionRange) {
+            return false;
+        }
+        const index = this.getParseDiagnosticIndex();
+        let low = 0;
+        let high = index.length;
+        while (low < high) {
+            const middle = Math.floor((low + high) / 2);
+            if (util.comparePosition(index[middle].start, functionRange.end) < 0) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        return low > 0 && util.comparePosition(index[low - 1].furthestEnd, functionRange.start) > 0;
+    }
+
+    private getParseDiagnosticIndex() {
+        if (!this.parseDiagnosticIndex) {
+            const ranges = this.event.file.parser.diagnostics
+                .map(diagnostic => diagnostic.location?.range)
+                .filter(range => !!range)
+                .sort((rangeA, rangeB) => util.comparePosition(rangeA.start, rangeB.start));
+            let furthestEnd: Position;
+            this.parseDiagnosticIndex = ranges.map(range => {
+                if (!furthestEnd || util.comparePosition(range.end, furthestEnd) > 0) {
+                    furthestEnd = range.end;
+                }
+                return { start: range.start, furthestEnd: furthestEnd };
+            });
+        }
+        return this.parseDiagnosticIndex;
+    }
+
+    /**
+     * Fade each inactive branch of a reached `#if` / `#else if`: the lines between its directives, so the directive lines themselves stay unfaded.
+     * An `#if` inside an inactive branch is never visited, and the outer branch already covers it. A branch with no lines between its directives is not reported.
+     * A branch already covered by a control flow unreachable run is not reported either.
+     */
+    private flagInactiveConditionalCompileBranches(statement: ConditionalCompileStatement) {
+        //the control flow analysis records coverage on the first `#if` of the chain, and an active `#else if` is visited on its own
+        let chainStart = statement;
+        while (isConditionalCompileStatement(chainStart.parent) && chainStart.parent.elseBranch === chainStart) {
+            chainStart = chainStart.parent;
+        }
+        if (this.controlFlowCoveredChains.has(chainStart) || this.isInsideControlFlowUnreachableRun(chainStart)) {
+            return;
+        }
+        this.flagInactiveBranchBodies(statement, this.controlFlowPartiallyCoveredChains.get(chainStart));
+    }
+
+    /**
+     * @param statement the `#if` / `#else if` whose inactive branches to fade
+     * @param overlappingRunLocation a run reported by control flow that ends inside the chain. A branch it overlaps is already reported by it.
+     */
+    private flagInactiveBranchBodies(statement: ConditionalCompileStatement, overlappingRunLocation: Location | undefined) {
+        for (const branch of [statement.thenBranch, statement.elseBranch]) {
+            if (isConditionalCompileStatement(branch)) {
+                //an `#else if` is stored as this statement's `elseBranch`. Once the chain has taken an earlier branch, the walk skips it
+                //and it is inactive, so fade its branches here. When the chain reaches it, it is active and the walk visits it on its own
+                if (branch.isActive === false) {
+                    this.flagInactiveBranchBodies(branch, overlappingRunLocation);
+                }
+            } else if (branch?.isActive === false && branch.location) {
+                //the branch runs from the end of its opening directive to the start of its closing directive
+                const { start, end } = branch.location.range;
+                if (end.line - start.line > 1) {
+                    const location = util.createLocation(start.line + 1, 0, end.line, 0, this.event.file.srcPath);
+                    if (overlappingRunLocation && util.rangesIntersect(location.range, overlappingRunLocation.range)) {
+                        continue;
+                    }
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.inactiveConditionalCompileBranch(),
+                        location: location
+                    });
+                }
+            }
         }
     }
 
@@ -1266,4 +1519,9 @@ export class BrsFileValidator {
         }
         return undefined;
     }
+}
+
+interface LabelsAndGotos {
+    labels: LabelStatement[];
+    gotos: GotoStatement[];
 }

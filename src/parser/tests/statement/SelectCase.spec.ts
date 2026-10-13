@@ -908,6 +908,9 @@ describe('select case statement', () => {
             }, {
                 ...DiagnosticMessages.exitSelectOutsideSelectCase(),
                 location: { range: util.createRange(9, 32, 9, 43) }
+            }, {
+                ...DiagnosticMessages.unreachableCode('Unreachable code after an infinite loop'),
+                location: { range: util.createRange(6, 20, 12, 30) }
             }]);
         });
 
