@@ -242,9 +242,8 @@ export class BrsFilePreTranspileProcessor {
         // Try to resolve as const first
         const constStatement = scope?.getConstFileLink(entityName, containingNamespace, referencingConst)?.item;
         if (constStatement) {
-            // Prevent infinite recursion by tracking visited constants
             if (visited.has(constStatement)) {
-                return { value: value, isCircular: true }; // Return the original value to avoid infinite loop
+                return { value: value, isCircular: true };
             }
             visited.add(constStatement);
             // Recursively resolve the const value (relative to the const's own namespace)
@@ -294,7 +293,7 @@ export class BrsFilePreTranspileProcessor {
             let constStatement = scope?.getConstFileLink(entityName, containingNamespace, referencingConst)?.item;
             if (constStatement) {
                 // Recursively resolve the const value to its final form
-                const resolved = this.resolveConstValue(constStatement.value, scope, this.getConstNamespace(constStatement), constStatement);
+                const resolved = this.resolveConstValue(constStatement.value, scope, this.getConstNamespace(constStatement), constStatement, new Set([constStatement]));
                 value = resolved.value;
                 isCircular = resolved.isCircular;
             } else {
