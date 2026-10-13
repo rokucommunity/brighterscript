@@ -433,7 +433,8 @@ export class DestructuringAssignmentStatement extends Statement {
     }
 
     /**
-     * Emit `target = accessor`, followed by `if target = invalid then target = <default>` when a default value is present
+     * Emit `target = accessor`, followed by an `if target = invalid` block that assigns the default when a default value is present.
+     * A block `if` is used (rather than a single-line `if`) because the default may span multiple lines (i.e. an inline function)
      */
     private transpileTargetAssignment(targetName: string, locatable: Token, accessor: string, defaultValue: Expression | undefined, context: DestructuringTranspileContext) {
         const { state, result } = context;
@@ -441,9 +442,19 @@ export class DestructuringAssignmentStatement extends Statement {
         result.push(state.sourceNode(locatable, targetName), ' = ', accessor);
         if (defaultValue) {
             context.startLine();
+            result.push(state.sourceNode(defaultValue, `if ${targetName} = invalid then`));
+            state.blockDepth++;
             result.push(
-                state.sourceNode(defaultValue, `if ${targetName} = invalid then ${targetName} = `),
+                state.newline,
+                state.indent(),
+                state.sourceNode(defaultValue, `${targetName} = `),
                 ...defaultValue.transpile(state)
+            );
+            state.blockDepth--;
+            result.push(
+                state.newline,
+                state.indent(),
+                state.sourceNode(defaultValue, 'end if')
             );
         }
     }

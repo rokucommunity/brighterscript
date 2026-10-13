@@ -1485,6 +1485,11 @@ export class Parser {
                 if (!this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
                     break;
                 }
+                if (this.checkPrevious(TokenKind.Newline)) {
+                    //a comma at the start of the next line is this item's separator (leading-comma style), not a hole
+                    this.skipNewlines();
+                    this.match(TokenKind.Comma);
+                }
                 if (this.checkPrevious(TokenKind.Comma)) {
                     const last = rest ?? properties[properties.length - 1];
                     (last as DeepWriteable<ObjectPatternPropertyExpression | RestElementExpression>).tokens.comma = this.previous();
@@ -1569,6 +1574,11 @@ export class Parser {
                 }
                 if (!this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
                     break;
+                }
+                if (this.checkPrevious(TokenKind.Newline)) {
+                    //a comma at the start of the next line is this item's separator (leading-comma style), not a hole
+                    this.skipNewlines();
+                    this.match(TokenKind.Comma);
                 }
                 if (this.checkPrevious(TokenKind.Comma)) {
                     const last = rest ?? elements[elements.length - 1];

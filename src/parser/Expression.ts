@@ -23,7 +23,7 @@ import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
 import { StringType } from '../types/StringType';
-import { TypePropertyReferenceType } from '../types/ReferenceType';
+import { ArrayDefaultTypeReferenceType, TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType, unionTypeFactory } from '../types/UnionType';
 import { getUniqueType } from '../types/helpers';
 import { isAnyReferenceType, isDynamicType, isUnionType } from '../astUtils/reflection';
@@ -3658,7 +3658,13 @@ export class ArrayPatternExpression extends Expression {
      */
     public getTargets(sourceType: BscType | undefined, options: GetTypeOptions): DestructuringTarget[] {
         const results: DestructuringTarget[] = [];
-        const itemType: BscType = isArrayType(sourceType) ? sourceType.defaultType : DynamicType.instance;
+        let itemType: BscType = DynamicType.instance;
+        if (isArrayType(sourceType)) {
+            itemType = sourceType.defaultType;
+        } else if (isAnyReferenceType(sourceType)) {
+            //the source type may not be resolved yet (i.e. during file validation), so look up its item type lazily, same as `for each`
+            itemType = new ArrayDefaultTypeReferenceType(sourceType);
+        }
         for (const element of this.elements) {
             if (element.isHole) {
                 continue;

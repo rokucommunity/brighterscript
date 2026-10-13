@@ -106,6 +106,25 @@ describe('DestructuringAssignmentStatement', () => {
             expect(arrayStatement.getTargetNames().map(x => x.text)).to.eql(['first', 'second']);
         });
 
+        it('treats a comma at the start of a line as the separator rather than a hole', () => {
+            const statement = parseStatement(`
+                [first
+                    , second
+                    , , fourth
+                ] = items
+            `);
+            const pattern = statement.pattern as ArrayPatternExpression;
+            expect(pattern.elements.map(x => (x.isHole ? '<hole>' : x.tokens.name.text))).to.eql(['first', 'second', '<hole>', 'fourth']);
+            expect(pattern.elements[0].tokens.comma).to.exist;
+
+            const objectStatement = parseStatement(`
+                { name
+                    , age
+                } = person
+            `);
+            expect(objectStatement.getTargetNames().map(x => x.text)).to.eql(['name', 'age']);
+        });
+
         it('parses an object pattern as the value of a destructuring assignment', () => {
             const statement = parseStatement(`{ a } = { a: 1 }`);
             expect(statement.getTargetNames().map(x => x.text)).to.eql(['a']);
@@ -313,9 +332,13 @@ describe('DestructuringAssignmentStatement', () => {
             `, `
                 sub main(person)
                     name = person.name
-                    if name = invalid then name = "unknown"
+                    if name = invalid then
+                        name = "unknown"
+                    end if
                     __bsDestructure0 = person.address
-                    if __bsDestructure0 = invalid then __bsDestructure0 = {}
+                    if __bsDestructure0 = invalid then
+                        __bsDestructure0 = {}
+                    end if
                     city = __bsDestructure0.city
                     print name; city
                 end sub
@@ -351,12 +374,61 @@ describe('DestructuringAssignmentStatement', () => {
                 sub main(items)
                     first = items[0]
                     third = items[2]
-                    if third = invalid then third = 3
+                    if third = invalid then
+                        third = 3
+                    end if
                     rest = []
                     for __bsDestructure0 = 3 to items.count() - 1
                         rest.push(items[__bsDestructure0])
                     end for
                     print first; third; rest
+                end sub
+            `);
+        });
+
+        it('uses the correct index for leading-comma array patterns', async () => {
+            await testTranspile(`
+                sub main(items)
+                    [first
+                        , second] = items
+                    print first; second
+                end sub
+            `, `
+                sub main(items)
+                    first = items[0]
+                    second = items[1]
+                    print first; second
+                end sub
+            `);
+        });
+
+        it('transpiles multi-line default values inside a block if', async () => {
+            await testTranspile(`
+                sub main(data)
+                    { callback = function()
+                        print "default"
+                    end function, items = [
+                        1,
+                        2
+                    ] } = data
+                    print callback; items
+                end sub
+            `, `
+                sub main(data)
+                    callback = data.callback
+                    if callback = invalid then
+                        callback = function()
+                            print "default"
+                        end function
+                    end if
+                    items = data.items
+                    if items = invalid then
+                        items = [
+                            1
+                            2
+                        ]
+                    end if
+                    print callback; items
                 end sub
             `);
         });
@@ -545,7 +617,9 @@ describe('DestructuringAssignmentStatement', () => {
                 sub main(data)
                     name = data.name
                     age = data.age
-                    if age = invalid then age = 0
+                    if age = invalid then
+                        age = 0
+                    end if
                     userId = data.id
                     __bsDestructure0 = data.items
                     first = __bsDestructure0[0]
@@ -786,6 +860,45 @@ describe('DestructuringAssignmentStatement', () => {
             const table = getMainBodyTable(file);
             expect(table.getSymbolType('name', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('dynamic');
             expect(table.getSymbolType('first', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('dynamic');
+        });
+
+        it('infers element types from an array source whose type is not resolved yet', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    [n, ...others] = getNums()
+                    nums = getNums()
+                    [n2] = nums
+                    print n; others; n2
+                end sub
+                function getNums() as integer[]
+                    return [1, 2]
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            const typeOf = (name: string) => table.getSymbolType(name, { flags: SymbolTypeFlag.runtime }).toString();
+            expect(typeOf('n')).to.eql('integer');
+            expect(typeOf('others')).to.eql('Array<integer>');
+            expect(typeOf('n2')).to.eql('integer');
+        });
+
+        it('validates usage of targets from an array source whose type is not resolved yet', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    [n] = getNums()
+                    [s as string] = getNums()
+                    print n.len(); s
+                end sub
+                function getNums() as integer[]
+                    return [1, 2]
+                end function
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.cannotFindFunction('len', 'integer.len', 'integer').message
+            ]);
+            expect(program.getDiagnostics().map(x => x.code)).to.include(DiagnosticMessages.assignmentTypeMismatch('integer', 'string').code);
         });
 
         it('uses the type from an interface when destructuring a typed value', () => {
