@@ -242,8 +242,9 @@ export class BrsFilePreTranspileProcessor {
         // Try to resolve as const first
         const constStatement = scope?.getConstFileLink(entityName, containingNamespace, referencingConst)?.item;
         if (constStatement) {
+            // Prevent infinite recursion by tracking visited constants
             if (visited.has(constStatement)) {
-                return { value: value, isCircular: true };
+                return { value: value, isCircular: true }; // Return the original value to avoid an infinite loop
             }
             visited.add(constStatement);
             // Recursively resolve the const value (relative to the const's own namespace)
