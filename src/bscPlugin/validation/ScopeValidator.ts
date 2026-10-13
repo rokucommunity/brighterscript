@@ -100,7 +100,7 @@ export class ScopeValidator {
                 // Check const — follow the chain to find the root literal type
                 const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
                 if (constLink) {
-                    if (!this.constResolvesToString(constLink.item.value, enclosingNamespace, scope)) {
+                    if (!this.constResolvesToString(constLink.item.value, this.getConstNamespace(constLink.item), scope, constLink.item)) {
                         this.addMultiScopeDiagnostic({
                             file: file,
                             ...DiagnosticMessages.computedAAKeyMustBeStringExpression(),
@@ -121,8 +121,9 @@ export class ScopeValidator {
     /**
      * Recursively resolve a const/enum reference to determine if its ultimate value is a string.
      * Returns true only if the value is confirmed to be a string.
+     * `enclosingNamespace` is the namespace that `value` lives in, and `referencingConst` is the const whose initializer is `value` (if any).
      */
-    private constResolvesToString(value: Expression, enclosingNamespace: string, scope: Scope, visited = new Set<string>()): boolean {
+    private constResolvesToString(value: Expression, enclosingNamespace: string, scope: Scope, referencingConst?: ConstStatement, visited = new Set<ConstStatement>()): boolean {
         if (isLiteralExpression(value)) {
             return value.token.kind === TokenKind.StringLiteral;
         }
@@ -131,19 +132,23 @@ export class ScopeValidator {
             return false;
         }
         const entityName = parts.map(p => p.name.text.toLowerCase()).join('.');
-        if (visited.has(entityName)) {
-            return false; // circular reference — cannot confirm string
-        }
-        visited.add(entityName);
-        const constLink = scope.getConstFileLink(entityName, enclosingNamespace);
+        const constLink = scope.getConstFileLink(entityName, enclosingNamespace, referencingConst);
         if (constLink) {
-            return this.constResolvesToString(constLink.item.value, enclosingNamespace, scope, visited);
+            if (visited.has(constLink.item)) {
+                return false; // circular reference — cannot confirm string
+            }
+            visited.add(constLink.item);
+            return this.constResolvesToString(constLink.item.value, this.getConstNamespace(constLink.item), scope, constLink.item, visited);
         }
         const memberLink = scope.getEnumMemberFileLink(entityName, enclosingNamespace);
         if (memberLink) {
-            return this.constResolvesToString(memberLink.item.value, enclosingNamespace, scope, visited);
+            return this.constResolvesToString(memberLink.item.value, enclosingNamespace, scope, undefined, visited);
         }
         return false;
+    }
+
+    private getConstNamespace(constStatement: ConstStatement) {
+        return constStatement.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
     }
 
     private expressionsByFile = new Cache<BrsFile, Readonly<ExpressionInfo>[]>();
@@ -378,7 +383,7 @@ export class ScopeValidator {
                     return;
                 }
                 processedNames.push(part.name?.text?.toLowerCase());
-                const link = scope.getConstFileLink(processedNames.join('.'), namespace);
+                const link = scope.getConstFileLink(processedNames.join('.'), namespace, chain[chain.length - 1]);
                 if (link) {
                     walkConst(link.item, link.file, chain);
                     return;
@@ -402,7 +407,7 @@ export class ScopeValidator {
                 return;
             }
             chain.push(constStatement);
-            const innerNamespace = constStatement.findAncestor(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+            const innerNamespace = this.getConstNamespace(constStatement);
             const value = constStatement.value;
             if (value) {
                 if (isVariableExpression(value) || isDottedGetExpression(value)) {
