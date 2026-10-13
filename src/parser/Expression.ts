@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isAnyReferenceType, isDynamicType, isUnionType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -26,7 +26,6 @@ import { StringType } from '../types/StringType';
 import { ArrayDefaultTypeReferenceType, TypePropertyReferenceType } from '../types/ReferenceType';
 import { UnionType, unionTypeFactory } from '../types/UnionType';
 import { getUniqueType } from '../types/helpers';
-import { isAnyReferenceType, isDynamicType, isUnionType } from '../astUtils/reflection';
 import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
@@ -3429,6 +3428,8 @@ export class ObjectPatternExpression extends Expression {
     /**
      * Get every variable declared by this pattern (recursively), along with the type each receives
      * when the pattern is applied to a value of type `sourceType`
+     * @param sourceType the type of the value being destructured
+     * @param options the options used to resolve each type
      * @param onlyTarget only resolve this target (by identity), skipping the types of every other property
      */
     public getTargets(sourceType: BscType | undefined, options: GetTypeOptions, onlyTarget?: Identifier): DestructuringTarget[] {
@@ -3687,6 +3688,8 @@ export class ArrayPatternExpression extends Expression {
     /**
      * Get every variable declared by this pattern (recursively), along with the type each receives
      * when the pattern is applied to a value of type `sourceType`
+     * @param sourceType the type of the value being destructured
+     * @param options the options used to resolve each type
      * @param onlyTarget only resolve this target (by identity), skipping the types of every other element
      */
     public getTargets(sourceType: BscType | undefined, options: GetTypeOptions, onlyTarget?: Identifier): DestructuringTarget[] {

@@ -304,6 +304,17 @@ export class DestructuringAssignmentStatement extends Statement {
     }
 
     /**
+     * Get the type a target is registered with as a variable. A target whose value is `invalid` (or has no type) is registered as dynamic,
+     * since the variable is expected to hold a real value at some point
+     */
+    public static getTargetSymbolType(type: BscType | undefined): BscType {
+        if (!type || isInvalidType(type) || isVoidType(type)) {
+            return DynamicType.instance;
+        }
+        return type;
+    }
+
+    /**
      * Get the identifier tokens of every variable assigned by this statement, without resolving any types
      */
     public getTargetNames(): Identifier[] {
@@ -390,6 +401,7 @@ export class DestructuringAssignmentStatement extends Statement {
         ];
         let tempIndex = 0;
         let isFirstLine = true;
+        let pendingComments: TranspileResult = [];
         const context: DestructuringTranspileContext = {
             state: state,
             result: result,
@@ -399,6 +411,21 @@ export class DestructuringAssignmentStatement extends Statement {
                     isFirstLine = false;
                 } else {
                     result.push(state.newline, state.indent());
+                }
+                result.push(...pendingComments);
+                pendingComments = [];
+            },
+            queueComments: (node) => {
+                pendingComments.push(...state.transpileLeadingCommentsForAstNode(node));
+            },
+            flushComments: () => {
+                //drop the trailing newline and indent that prepare for the next line, since nothing follows these comments
+                while (pendingComments.length > 0 && typeof pendingComments[pendingComments.length - 1] === 'string' && (pendingComments[pendingComments.length - 1] as string).trim() === '') {
+                    pendingComments.pop();
+                }
+                if (pendingComments.length > 0) {
+                    result.push(state.newline, state.indent(), ...pendingComments);
+                    pendingComments = [];
                 }
             }
         };
@@ -426,6 +453,8 @@ export class DestructuringAssignmentStatement extends Statement {
             );
         }
         this.transpilePattern(this.pattern, sourceName, context);
+        //comments that come after the last item (i.e. right before the closing bracket) go on their own lines at the end
+        context.flushComments();
         return result;
     }
 
@@ -443,6 +472,7 @@ export class DestructuringAssignmentStatement extends Statement {
         } else {
             this.transpileArrayPattern(pattern, sourceName, context);
         }
+        context.queueComments({ leadingTrivia: pattern.tokens.close?.leadingTrivia });
     }
 
     private transpileObjectPattern(pattern: ObjectPatternExpression, sourceName: string, context: DestructuringTranspileContext) {
@@ -452,6 +482,7 @@ export class DestructuringAssignmentStatement extends Statement {
             if (!key) {
                 continue;
             }
+            context.queueComments(property);
             const accessor = key.kind === TokenKind.StringLiteral
                 ? `${sourceName}[${key.text}]`
                 : `${sourceName}.${property.getKeyName()}`;
@@ -462,10 +493,13 @@ export class DestructuringAssignmentStatement extends Statement {
             } else if (property.targetName) {
                 this.transpileTargetAssignment(property.targetName.text, property.targetName, accessor, property.defaultValue, context);
             }
+            //comments before the separator (i.e. leading-comma style) belong with the next item
+            context.queueComments({ leadingTrivia: property.tokens.comma?.leadingTrivia });
         }
         if (pattern.rest?.tokens.name) {
             //`rest = {}` + `rest.append(source)` + one `rest.delete("key")` per named property
             const restName = pattern.rest.tokens.name;
+            context.queueComments(pattern.rest);
             context.startLine();
             result.push(state.sourceNode(restName, restName.text), ' = {}');
             context.startLine();
@@ -486,10 +520,7 @@ export class DestructuringAssignmentStatement extends Statement {
         const { state, result } = context;
         let index = 0;
         for (const element of pattern.elements) {
-            if (element.isHole) {
-                index++;
-                continue;
-            }
+            context.queueComments(element);
             const accessor = `${sourceName}[${index}]`;
             if (element.pattern) {
                 const tempName = context.nextTempName();
@@ -498,11 +529,14 @@ export class DestructuringAssignmentStatement extends Statement {
             } else if (element.tokens.name) {
                 this.transpileTargetAssignment(element.tokens.name.text, element.tokens.name, accessor, element.defaultValue, context);
             }
+            //comments before the separator (i.e. leading-comma style) or before a hole's comma belong with the next item
+            context.queueComments({ leadingTrivia: element.tokens.comma?.leadingTrivia });
             index++;
         }
         if (pattern.rest?.tokens.name) {
             //`rest = []` + a loop that pushes every remaining item. (roArray.slice() is not available on older firmware)
             const restName = pattern.rest.tokens.name;
+            context.queueComments(pattern.rest);
             const loopVar = context.nextTempName();
             context.startLine();
             result.push(state.sourceNode(restName, restName.text), ' = []');
@@ -573,9 +607,18 @@ interface DestructuringTranspileContext {
      */
     nextTempName: () => string;
     /**
-     * Prepare `result` for a new line of output (adds a newline and indent for every line except the first)
+     * Prepare `result` for a new line of output (adds a newline and indent for every line except the first),
+     * followed by any queued comments
      */
     startLine: () => void;
+    /**
+     * Queue the leading comments of a pattern item so they are emitted at the start of the next line of output
+     */
+    queueComments: (node: { leadingTrivia?: Token[] }) => void;
+    /**
+     * Emit any queued comments that were not followed by another line of output
+     */
+    flushComments: () => void;
 }
 
 export class AugmentedAssignmentStatement extends Statement {

@@ -663,6 +663,52 @@ describe('DestructuringAssignmentStatement', () => {
             `);
         });
 
+        it('keeps comments inside multi-line patterns', async () => {
+            await testTranspile(`
+                sub main(obj)
+                    {
+                        a, ' after a
+                        ' about b
+                        b
+                        ' about rest
+                        ...rest
+                        ' at the end
+                    } = obj
+                    [
+                        ' about x
+                        x
+                        ' about the separator
+                        , ' after the separator
+                        ' about the hole
+                        ,
+                        z
+                    ] = obj.items
+                    print a; b; rest; x; z
+                end sub
+            `, `
+                sub main(obj)
+                    a = obj.a
+                    ' after a
+                    ' about b
+                    b = obj.b
+                    ' about rest
+                    rest = {}
+                    rest.append(obj)
+                    rest.delete("a")
+                    rest.delete("b")
+                    ' at the end
+                    __bsDestructure0 = obj.items
+                    ' about x
+                    x = __bsDestructure0[0]
+                    ' about the separator
+                    ' after the separator
+                    ' about the hole
+                    z = __bsDestructure0[2]
+                    print a; b; rest; x; z
+                end sub
+            `);
+        });
+
         it('removes `as <type>` from targets', async () => {
             await testTranspile(`
                 sub main(data)

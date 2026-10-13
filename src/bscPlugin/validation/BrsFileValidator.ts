@@ -9,7 +9,7 @@ import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement } from '../../parser/Statement';
-import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
+import { DestructuringAssignmentStatement, getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
@@ -165,11 +165,7 @@ export class BrsFileValidator {
                 }
                 //register every variable declared by the pattern
                 for (const target of node.getTargets({ flags: SymbolTypeFlag.runtime })) {
-                    let targetType = target.type;
-                    if (!targetType || isInvalidType(targetType) || isVoidType(targetType)) {
-                        targetType = DynamicType.instance;
-                    }
-                    symbolTable.addSymbol(target.name.text, { definingNode: node, isInstance: true }, targetType, SymbolTypeFlag.runtime);
+                    symbolTable.addSymbol(target.name.text, { definingNode: node, isInstance: true }, DestructuringAssignmentStatement.getTargetSymbolType(target.type), SymbolTypeFlag.runtime);
                 }
             },
             DottedSetStatement: (node) => {

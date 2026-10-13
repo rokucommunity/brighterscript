@@ -1477,24 +1477,17 @@ export class Parser {
         try {
             this.skipNewlines();
             while (!this.check(TokenKind.RightCurlyBrace) && !this.isAtEnd()) {
+                let item: ObjectPatternPropertyExpression | RestElementExpression;
                 if (this.check(TokenKind.DotDotDot)) {
                     rest = this.restElement();
+                    item = rest;
                 } else {
-                    properties.push(this.objectPatternProperty());
+                    item = this.objectPatternProperty();
+                    properties.push(item);
                 }
-                if (!this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
+                if (!this.consumePatternSeparator(item)) {
                     break;
                 }
-                if (this.checkPrevious(TokenKind.Newline)) {
-                    //a comma at the start of the next line is this item's separator (leading-comma style), not a hole
-                    this.skipNewlines();
-                    this.match(TokenKind.Comma);
-                }
-                if (this.checkPrevious(TokenKind.Comma)) {
-                    const last = rest ?? properties[properties.length - 1];
-                    (last as DeepWriteable<ObjectPatternPropertyExpression | RestElementExpression>).tokens.comma = this.previous();
-                }
-                this.skipNewlines();
                 restIsLast = restIsLast && this.validateRestElementIsLast(rest, TokenKind.RightCurlyBrace);
             }
         } catch (error: any) {
@@ -1567,24 +1560,17 @@ export class Parser {
                     restIsLast = restIsLast && this.validateRestElementIsLast(rest, TokenKind.RightSquareBracket);
                     continue;
                 }
+                let item: ArrayPatternElementExpression | RestElementExpression;
                 if (this.check(TokenKind.DotDotDot)) {
                     rest = this.restElement();
+                    item = rest;
                 } else {
-                    elements.push(this.arrayPatternElement());
+                    item = this.arrayPatternElement();
+                    elements.push(item);
                 }
-                if (!this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
+                if (!this.consumePatternSeparator(item)) {
                     break;
                 }
-                if (this.checkPrevious(TokenKind.Newline)) {
-                    //a comma at the start of the next line is this item's separator (leading-comma style), not a hole
-                    this.skipNewlines();
-                    this.match(TokenKind.Comma);
-                }
-                if (this.checkPrevious(TokenKind.Comma)) {
-                    const last = rest ?? elements[elements.length - 1];
-                    (last as DeepWriteable<ArrayPatternElementExpression | RestElementExpression>).tokens.comma = this.previous();
-                }
-                this.skipNewlines();
                 restIsLast = restIsLast && this.validateRestElementIsLast(rest, TokenKind.RightSquareBracket);
             }
         } catch (error: any) {
@@ -1683,6 +1669,27 @@ export class Parser {
             dotDotDot: dotDotDot,
             name: name
         });
+    }
+
+    /**
+     * Consume the separator after a destructuring pattern item: a comma, a newline, or a newline followed by a comma at the start
+     * of the next line (leading-comma style, which is this item's separator rather than a hole). A comma is attached to the item,
+     * and any newlines after the separator are skipped
+     * @returns false when there is no separator, meaning the pattern has ended
+     */
+    private consumePatternSeparator(item: ObjectPatternPropertyExpression | ArrayPatternElementExpression | RestElementExpression): boolean {
+        if (!this.matchAny(TokenKind.Comma, TokenKind.Newline)) {
+            return false;
+        }
+        if (this.checkPrevious(TokenKind.Newline)) {
+            this.skipNewlines();
+            this.match(TokenKind.Comma);
+        }
+        if (this.checkPrevious(TokenKind.Comma)) {
+            (item as DeepWriteable<typeof item>).tokens.comma = this.previous();
+        }
+        this.skipNewlines();
+        return true;
     }
 
     /**

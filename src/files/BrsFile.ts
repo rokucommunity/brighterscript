@@ -20,7 +20,7 @@ import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatemen
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
-import { DynamicType } from '../types/DynamicType';
+import { DestructuringAssignmentStatement } from '../parser/Statement';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
@@ -645,7 +645,7 @@ export class BrsFile implements BscFile {
                         lineIndex: name.location?.range?.start.line,
                         name: name.text,
                         getType: () => {
-                            return statement.getTargetType(name, { flags: SymbolTypeFlag.runtime }) ?? DynamicType.instance;
+                            return DestructuringAssignmentStatement.getTargetSymbolType(statement.getTargetType(name, { flags: SymbolTypeFlag.runtime }));
                         }
                     });
                 }
