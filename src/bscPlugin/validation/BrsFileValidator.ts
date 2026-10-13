@@ -756,22 +756,24 @@ export class BrsFileValidator {
     }
 
     /**
-     * Report each inactive branch body of a `#if` chain as unreachable code. Only the first `#if` of a chain is handled here, and it covers the chain's `#else if` statements,
-     * since the walk only visits an `#else if` when it is reached. An `#if` inside an inactive branch is never visited, and its outer branch already covers it.
-     * The ranges come from `ConditionalCompileStatement.getInactiveBranchRanges()`, the same ones that hide parse diagnostics there.
-     * A branch with no lines between its directives is not reported, and neither is one missing its closing directive,
-     * which is already a parse error and whose range runs to the end of the file.
+     * Fade each inactive branch of a reached `#if` / `#else if`: the lines between its directives, so the directive lines themselves stay unfaded.
+     * The walk never visits an `#else if` after the branch the chain took, so this follows the chain into it. An `#if` inside an inactive branch
+     * is never visited either, and the outer branch already covers it. A branch with no lines between its directives is not reported.
      */
-    private flagInactiveConditionalCompileBranches(chainStart: ConditionalCompileStatement) {
-        if (isConditionalCompileStatement(chainStart.parent)) {
-            return;
-        }
-        for (let statement = chainStart; statement; statement = isConditionalCompileStatement(statement.elseBranch) ? statement.elseBranch : undefined) {
-            for (const range of statement.getInactiveBranchRanges()) {
-                if (range.start.line < range.end.line && range.end.line !== Number.MAX_SAFE_INTEGER) {
+    private flagInactiveConditionalCompileBranches(statement: ConditionalCompileStatement) {
+        for (const branch of [statement.thenBranch, statement.elseBranch]) {
+            if (isConditionalCompileStatement(branch)) {
+                //an active `#else if` is visited by the walk, which flags its branches then
+                if (branch.isActive === false) {
+                    this.flagInactiveConditionalCompileBranches(branch);
+                }
+            } else if (branch?.isActive === false && branch.location) {
+                //the branch runs from the end of its opening directive to the start of its closing directive
+                const { start, end } = branch.location.range;
+                if (end.line - start.line > 1) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.inactiveConditionalCompileBranch(),
-                        location: util.createLocationFromRange(this.event.file.srcPath, range)
+                        location: util.createLocation(start.line + 1, 0, end.line, 0, this.event.file.srcPath)
                     });
                 }
             }

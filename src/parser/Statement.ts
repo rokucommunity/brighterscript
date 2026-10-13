@@ -5,7 +5,7 @@ import type { DottedGetExpression, LiteralExpression, TypecastExpression } from 
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
-import type { Location, Range } from 'vscode-languageserver';
+import type { Location } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
@@ -4900,50 +4900,6 @@ export class ConditionalCompileStatement extends Statement {
             value = bsConsts.get(constNameLower) === true;
         }
         this.isConditionTrue = this.tokens.not ? !value : value;
-    }
-
-    /**
-     * The branches of this statement that are not compiled: the then branch, and the `#else` branch when there is one.
-     * An `#else if` statement describes its own branches. Empty when the statement has not been walked yet, since its activity is unknown.
-     */
-    public getInactiveBranches(): Block[] {
-        if (this.isActive === undefined) {
-            return [];
-        }
-        const branches: Block[] = [];
-        if (!this.isActive || !this.isConditionTrue) {
-            branches.push(this.thenBranch);
-        }
-        if ((!this.isActive || this.isConditionTrue) && isBlock(this.elseBranch)) {
-            branches.push(this.elseBranch);
-        }
-        return branches.filter(branch => !!branch);
-    }
-
-    /**
-     * The ranges of the code in this statement's inactive branches, as whole lines: from the start of the line after the opening directive
-     * to the start of the closing directive's line, so the `#if` / `#else if` / `#else` / `#end if` lines themselves are never inside one.
-     * A branch without a closing directive runs to the end of the file.
-     */
-    public getInactiveBranchRanges(): Range[] {
-        const ranges: Range[] = [];
-        for (const branch of this.getInactiveBranches()) {
-            const { opening, closing } = this.getBranchDirectives(branch);
-            if (closing?.location && branch.location) {
-                //the branch's location runs from the end of its opening directive to the start of its closing directive
-                ranges.push({
-                    start: { line: branch.location.range.start.line + 1, character: 0 },
-                    end: { line: branch.location.range.end.line, character: 0 }
-                });
-            } else if (opening?.location) {
-                //without a closing directive, the branch runs to the end of the file
-                ranges.push({
-                    start: { line: opening.location.range.end.line + 1, character: 0 },
-                    end: { line: Number.MAX_SAFE_INTEGER, character: Number.MAX_SAFE_INTEGER }
-                });
-            }
-        }
-        return ranges;
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
