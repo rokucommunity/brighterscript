@@ -757,13 +757,13 @@ export class BrsFileValidator {
 
     /**
      * Fade each inactive branch of a reached `#if` / `#else if`: the lines between its directives, so the directive lines themselves stay unfaded.
-     * The walk never visits an `#else if` after the branch the chain took, so this follows the chain into it. An `#if` inside an inactive branch
-     * is never visited either, and the outer branch already covers it. A branch with no lines between its directives is not reported.
+     * An `#if` inside an inactive branch is never visited, and the outer branch already covers it. A branch with no lines between its directives is not reported.
      */
     private flagInactiveConditionalCompileBranches(statement: ConditionalCompileStatement) {
         for (const branch of [statement.thenBranch, statement.elseBranch]) {
             if (isConditionalCompileStatement(branch)) {
-                //an active `#else if` is visited by the walk, which flags its branches then
+                //an `#else if` is stored as this statement's `elseBranch`. Once the chain has taken an earlier branch, the walk skips it
+                //and it is inactive, so fade its branches here. When the chain reaches it, it is active and the walk visits it on its own
                 if (branch.isActive === false) {
                     this.flagInactiveConditionalCompileBranches(branch);
                 }
