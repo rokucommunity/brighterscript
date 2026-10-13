@@ -587,6 +587,81 @@ describe('ConstStatement', () => {
             `, 'trim', 'source/main.bs', false);
         });
 
+        it('does not infinite-loop on scalar three-cycle const references', function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                const a = b
+                const b = c
+                const c = a
+            `);
+            testTranspile(`
+                sub main()
+                    print a
+                end sub
+            `, `
+                sub main()
+                    print a
+                end sub
+            `, 'trim', 'source/main.bs', false);
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['a', 'b', 'c', 'a'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['b', 'c', 'a', 'b'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['c', 'a', 'b', 'c'], 'source').message
+            ]);
+        });
+
+        it('does not infinite-loop on namespaced three-cycle using relative names', function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    const a = b
+                    const b = c
+                    const c = a
+                end namespace
+            `);
+            testTranspile(`
+                namespace ns
+                    sub doWork()
+                        print a
+                    end sub
+                end namespace
+            `, `
+                sub ns_doWork()
+                    print a
+                end sub
+            `, 'trim', 'source/main.bs', false);
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.a', 'ns.b', 'ns.c', 'ns.a'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.b', 'ns.c', 'ns.a', 'ns.b'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.c', 'ns.a', 'ns.b', 'ns.c'], 'source').message
+            ]);
+        });
+
+        it('does not infinite-loop on a relative-name cycle back to a const (self-exclusion only skips the referencing const)', function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                function chain()
+                end function
+                namespace ns
+                    const chain = other
+                    const other = chain
+                end namespace
+            `);
+            testTranspile(`
+                sub main()
+                    print ns.chain
+                end sub
+            `, `
+                sub main()
+                    print ns_chain
+                end sub
+            `, 'trim', 'source/main.bs', false);
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.chain', 'ns.other', 'ns.chain'], 'source').message,
+                DiagnosticMessages.circularReferenceDetected(['ns.other', 'ns.chain', 'ns.other'], 'source').message
+            ]);
+        });
+
         it('flags scalar circular const reference', () => {
             program.setFile('source/main.bs', `
                 const A = B
@@ -629,6 +704,347 @@ describe('ConstStatement', () => {
                 DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B'], 'source').message,
                 DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C'], 'source').message
             ]);
+        });
+
+        describe('const values resolve relative to the const namespace', () => {
+            it('ignores a same-named const in the usage namespace', () => {
+                program.setFile('source/consts.bs', `
+                    namespace alpha
+                        const BASE = "alpha"
+                        const KEY = BASE
+                    end namespace
+                    namespace beta
+                        const BASE = "beta"
+                    end namespace
+                `);
+                testTranspile(`
+                    namespace beta
+                        sub doWork()
+                            print alpha.KEY
+                        end sub
+                    end namespace
+                `, `
+                    sub beta_doWork()
+                        print "alpha"
+                    end sub
+                `);
+            });
+
+            it('resolves a relative enum reference when used outside the namespace', () => {
+                program.setFile('source/consts.bs', `
+                    namespace alpha
+                        enum Direction
+                            up = "up"
+                        end enum
+                        const DEFAULT = Direction.up
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print alpha.DEFAULT
+                    end sub
+                `, `
+                    sub main()
+                        print "up"
+                    end sub
+                `);
+            });
+
+            it('resolves a multi-hop relative chain when used from another namespace', () => {
+                program.setFile('source/consts.bs', `
+                    namespace alpha
+                        const A = B
+                        const B = C
+                        const C = "c"
+                    end namespace
+                `);
+                testTranspile(`
+                    namespace beta
+                        sub doWork()
+                            print alpha.A
+                        end sub
+                    end namespace
+                `, `
+                    sub beta_doWork()
+                        print "c"
+                    end sub
+                `);
+            });
+        });
+
+        describe('const that shares its name with what it references', () => {
+            it('does not flag a namespaced const referencing a global function with the same name', () => {
+                program.setFile('source/main.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('inlines the global function when used outside the namespace', () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('inlines the global function when used inside the namespace', () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                testTranspile(`
+                    namespace promises
+                        sub doWork()
+                            print chain
+                            print promises.chain
+                        end sub
+                    end namespace
+                `, `
+                    sub promises_doWork()
+                        print (chain)
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('inlines the global function from a nested namespace', () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace alpha.beta
+                        const chain = chain
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print alpha.beta.chain
+                    end sub
+                    namespace alpha.beta
+                        sub doWork()
+                            print chain
+                        end sub
+                    end namespace
+                `, `
+                    sub main()
+                        print (chain)
+                    end sub
+                    sub alpha_beta_doWork()
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('inlines the global function when referenced from inside an aa', () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = { "fn": chain }
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print ({
+                            "fn": chain
+                        })
+                    end sub
+                `);
+            });
+
+            it('resolves to a global const with the same name', () => {
+                program.setFile('source/consts.bs', `
+                    const chain = "global"
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                    namespace promises
+                        sub doWork()
+                            print chain
+                        end sub
+                    end namespace
+                `, `
+                    sub main()
+                        print "global"
+                    end sub
+                    sub promises_doWork()
+                        print "global"
+                    end sub
+                `);
+            });
+
+            it('resolves to a function in another namespace with the same name', () => {
+                program.setFile('source/promises.bs', `
+                    namespace utils
+                        function chain()
+                        end function
+                    end namespace
+
+                    namespace promises
+                        const chain = utils.chain
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print (utils_chain)
+                    end sub
+                `);
+            });
+
+            it('only skips the referencing const, so sibling consts still resolve', () => {
+                program.setFile('source/consts.bs', `
+                    namespace promises
+                        const chain = other
+                        const other = "other"
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print "other"
+                    end sub
+                `);
+            });
+
+            it('still prefers a namespaced const over a global const of the same name when it is not the referencing const', () => {
+                program.setFile('source/consts.bs', `
+                    const value = "global"
+                    namespace promises
+                        const value = "namespaced"
+                        const alias = value
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print promises.alias
+                    end sub
+                `, `
+                    sub main()
+                        print "namespaced"
+                    end sub
+                `);
+            });
+
+            it('follows a chain through a self-named const in another namespace', () => {
+                program.setFile('source/consts.bs', `
+                    function chain()
+                    end function
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                    namespace other
+                        const chain = promises.chain
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print other.chain
+                    end sub
+                `, `
+                    sub main()
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('resolves sibling refs inside an aa alongside the self-named ref', () => {
+                program.setFile('source/consts.bs', `
+                    function chain()
+                    end function
+                    namespace promises
+                        const chain = { "fn": chain, "other": other }
+                        const other = "other"
+                    end namespace
+                `);
+                testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print ({
+                            "fn": chain
+                            "other": "other"
+                        })
+                    end sub
+                `);
+            });
+
+            it('still flags a namespaced const that references itself by its full name', () => {
+                program.setFile('source/main.bs', `
+                    namespace promises
+                        const chain = promises.chain
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.circularReferenceDetected(['promises.chain', 'promises.chain'], 'source').message
+                ]);
+            });
+
+            it('still flags a global const that references itself', () => {
+                program.setFile('source/main.bs', `
+                    const chain = chain
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.circularReferenceDetected(['chain', 'chain'], 'source').message
+                ]);
+            });
+
+            it('still flags a cycle that passes back through the namespaced const', () => {
+                program.setFile('source/main.bs', `
+                    namespace promises
+                        const chain = { "next": promises.other }
+                        const other = { "prev": chain }
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.circularReferenceDetected(['promises.chain', 'promises.other', 'promises.chain'], 'source').message,
+                    DiagnosticMessages.circularReferenceDetected(['promises.other', 'promises.chain', 'promises.other'], 'source').message
+                ]);
+            });
         });
 
         it('does not flag diamond const reference graph', () => {

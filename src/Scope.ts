@@ -192,14 +192,19 @@ export class Scope {
      * Get a constant and its containing file by the constant name
      * @param constName - The constant name, including the namespace of the constant if possible
      * @param containingNamespace - The namespace used to resolve relative constant names. (i.e. the namespace around the current statement trying to find a constant)
+     * @param referencingConst - The const whose initializer contains this reference. A const can't refer to itself by its namespace-relative
+     * name (i.e. `namespace promises: const chain = chain`), so that match is skipped in favor of the global name.
      */
-    public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
+    public getConstFileLink(constName: string, containingNamespace?: string, referencingConst?: ConstStatement): FileLink<ConstStatement> {
         const lowerName = constName?.toLowerCase();
         const constMap = this.getConstMap();
 
         let result = constMap.get(
             util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
         );
+        if (referencingConst && result?.item === referencingConst) {
+            result = undefined;
+        }
         //if we couldn't find the constant by its full namespaced name, look for a global constant with that name
         if (!result) {
             result = constMap.get(lowerName);
