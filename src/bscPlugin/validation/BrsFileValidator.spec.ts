@@ -4616,6 +4616,22 @@ describe('BrsFileValidator', () => {
                 `);
             });
 
+            it('allows jumping into a select case body', () => {
+                validate(trim`
+                    sub main()
+                        x = 1
+                        goto foo
+                        select case x
+                            case 1
+                                foo:
+                            case else
+                                print 2
+                        end select
+                    end sub
+                `, 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
             it('allows jumping out of a loop', () => {
                 expectNoDiagnostics(trim`
                     sub main()

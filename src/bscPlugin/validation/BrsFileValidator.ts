@@ -50,7 +50,6 @@ export class BrsFileValidator {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].rehydrate();
 
-        this.labelsAndGotosByFunction = new Map();
         this.walk();
         this.validateGotosAndLabels();
         this.flagTopLevelStatements();
