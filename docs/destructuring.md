@@ -247,6 +247,8 @@ others.delete("name")
 
 When the right-hand side is a plain local variable or parameter, its members are read directly from that variable. Any other expression (a function call, a property access, a literal, a const, etc.) is evaluated exactly once into a temporary variable named `__bsDestructure<n>`, so functions with side effects are never called more than once. A temporary variable is also used when the source variable is itself one of the targets (i.e. `[items, other] = items`).
 
+Nested patterns and array rest elements use temporary variables too (see the examples above). These count toward the device's limit of 253 variables per function, the same as the destructured variables themselves. Each statement starts again at `__bsDestructure0`, so a function only uses as many temporaries as its largest destructuring statement needs.
+
 ## Type inference
 
 BrighterScript infers a type for every destructured variable:
@@ -254,7 +256,7 @@ BrighterScript infers a type for every destructured variable:
 - Object pattern properties receive the type of that member on the source (from an interface, class, or associative array literal).
 - Array pattern elements receive the element type of the source array (i.e. `string` for `Array<string>`).
 - A rest element is typed as `roAssociativeArray` for object patterns and `Array<T>` for array patterns.
-- When a default value is present, `invalid` is removed from the inferred type and the type of the default value is merged in.
+- When a default value is present, the type of the default value is merged in, and `invalid` is removed from the inferred type. When the member's type comes from another file (i.e. an interface declared elsewhere), `invalid` is kept, so a `string or invalid` member with a default of `0` is `string or invalid or integer`.
 - When the source type is unknown, the variables are `dynamic`.
 
 ```brighterscript
@@ -269,7 +271,7 @@ sub greet(person as Person)
 end sub
 ```
 
-A key that does not exist on a known source type is reported at the key, the same as `person.nmae` would be. An array pattern used on a value known to not be indexable by position (a string, number, associative array, class instance, or node) is also an error.
+A key that does not exist on a known source type is reported at the key, the same as `person.nmae` would be. An array pattern used on a value known to not be indexable by position (a string, number, associative array, class instance, or node) is also an error. A source whose type is a function is not checked at all: a field that shares its name with a built-in method (i.e. `m.items` or `data.count`) is typed as that method, even though it almost always holds a value.
 
 ## Type annotations
 
