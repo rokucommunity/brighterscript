@@ -334,7 +334,8 @@ export class Block extends Statement {
     public readonly kind = AstNodeKind.Block;
 
     private buildLocation(): Location {
-        if (this.statements?.length > 0) {
+        //a conditional compile branch always spans its directives below, so it covers blank lines, comments and code that did not parse too
+        if (this.statements?.length > 0 && !isConditionalCompileStatement(this.parent)) {
             return util.createBoundingLocation(...this.statements ?? []);
         }
         let lastBitBefore: Location;
@@ -434,14 +435,23 @@ export class Block extends Statement {
                 lastBitBefore.uri ?? firstBitAfter.uri
             );
         }
+        //a conditional compile branch whose directives have no location (such as one built from synthesized tokens) falls back to its statements
+        if (this.statements?.length > 0) {
+            return util.createBoundingLocation(...this.statements);
+        }
     }
 
     public get location() {
-        if (!this._location) {
-            //this needs to be a getter because the body has its statements pushed to it after being constructed
-            this._location = this.buildLocation();
+        if (this._location) {
+            return this._location;
         }
-        return this._location;
+        //this needs to be a getter because the body has its statements pushed to it after being constructed.
+        //the location can depend on the parent, so it is only kept once the block has one
+        const location = this.buildLocation();
+        if (this.parent) {
+            this._location = location;
+        }
+        return location;
     }
     public set location(value) {
         this._location = value;
@@ -4748,42 +4758,11 @@ export class ConditionalCompileStatement extends Statement {
             hashEndIf: options.hashEndIf
         };
 
-        //each branch covers its whole body, including blank lines, comments and code that did not parse
-        for (const branch of [this.thenBranch, this.elseBranch]) {
-            if (isBlock(branch)) {
-                const { opening, closing } = this.getBranchDirectives(branch);
-                if (opening?.location && closing?.location) {
-                    branch.location = util.createLocation(
-                        opening.location.range.end.line,
-                        opening.location.range.end.character,
-                        closing.location.range.start.line,
-                        closing.location.range.start.character,
-                        opening.location.uri ?? closing.location.uri
-                    );
-                }
-            }
-        }
-
         this.location = util.createBoundingLocation(
             util.createBoundingLocationFromTokens(this.tokens),
             this.thenBranch,
             this.elseBranch
         );
-    }
-
-    /**
-     * The directive tokens around one of this statement's branches. The then branch opens at its condition and closes at the `#else`,
-     * the `#else if` that continues the chain, or the `#end if`. The `#else` branch opens at `#else` and closes at `#end if`.
-     * `closing` is undefined when the closing directive is missing.
-     */
-    private getBranchDirectives(branch: Block): { opening: Token | undefined; closing: Token | undefined } {
-        if (branch === this.thenBranch) {
-            return {
-                opening: this.tokens.condition ?? this.tokens.not ?? this.tokens.hashIf,
-                closing: this.tokens.hashElse ?? (isConditionalCompileStatement(this.elseBranch) ? this.elseBranch.tokens.hashIf : undefined) ?? this.tokens.hashEndIf
-            };
-        }
-        return { opening: this.tokens.hashElse, closing: this.tokens.hashEndIf };
     }
 
     readonly tokens: {
