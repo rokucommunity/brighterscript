@@ -1,11 +1,11 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
-import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
-import { DiagnosticMessages } from '../../DiagnosticMessages';
+import type { AssignmentStatement, ClassStatement, ConditionalCompileStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import { DiagnosticCodeMap, DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
-import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
+import { isAssignmentStatement, isClassStatement, isConditionalCompileStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import { util, standardizePath as s } from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -17,14 +17,16 @@ import { StringType } from '../../types/StringType';
 import { ArrayType } from '../../types/ArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import { TypedFunctionType } from '../../types/TypedFunctionType';
-import { ParseMode } from '../../parser/Parser';
-import type { ExtraSymbolData } from '../../interfaces';
+import { ParseMode, Parser } from '../../parser/Parser';
+import type { BsDiagnostic, ExtraSymbolData } from '../../interfaces';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as fsExtra from 'fs-extra';
-import { DiagnosticSeverity } from 'vscode-languageserver';
 import type { Range } from 'vscode-languageserver';
+import { createToken } from '../../astUtils/creators';
+import { TokenKind } from '../../lexer/TokenKind';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -1127,7 +1129,1551 @@ describe('BrsFileValidator', () => {
                 end function
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            //no #error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(4, 0, 5, 0) } }
+            ]);
+        });
+
+        describe('evaluation', () => {
+            let evaluationProgram: Program;
+            afterEach(() => {
+                evaluationProgram?.dispose();
+                fsExtra.removeSync(`${rootDir}/manifest`);
+            });
+
+            /**
+             * Load a file into a new program, validate it and return its diagnostics, except the hints that fade inactive branches.
+             * These specs are about which branches are evaluated, and the `inactive conditional compile branches` specs below cover the hints
+             */
+            function validate(source: string, options?: { bsConsts?: Record<string, boolean>; minFirmwareVersion?: string; destPath?: string }) {
+                evaluationProgram?.dispose();
+                fsExtra.removeSync(`${rootDir}/manifest`);
+                if (options?.bsConsts) {
+                    const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
+                    fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
+                }
+                evaluationProgram = new Program({
+                    rootDir: rootDir,
+                    minFirmwareVersion: options?.minFirmwareVersion
+                });
+                const file = evaluationProgram.setFile<BrsFile>(options?.destPath ?? 'source/main.brs', source);
+                evaluationProgram.validate();
+                return {
+                    file: file,
+                    diagnostics: evaluationProgram.getDiagnostics().filter(diagnostic => diagnostic.code !== DiagnosticCodeMap.inactiveConditionalCompileBranch)
+                };
+            }
+
+            function collectPrintedText(file: BrsFile) {
+                const printed: string[] = [];
+                file.ast.walk(createVisitor({
+                    PrintStatement: (statement) => {
+                        printed.push(statement.expressions.map(expression => (expression as any).tokens?.value?.text).join(''));
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+                return printed;
+            }
+
+            it('uses a file-level #const when walking the active branch', () => {
+                const { diagnostics } = validate(`
+                    #const LOGGING = true
+                    sub main()
+                    #if LOGGING
+                        activeVar = 1
+                        print activeVar
+                    #else
+                        inactiveVar = 2
+                        print inactiveVar
+                    #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('lets plugins walk the active branch and not the inactive branch', () => {
+                const { file, diagnostics } = validate(`
+                    #const LOGGING = true
+                    sub main()
+                        print "start"
+                    #if LOGGING
+                        print "active"
+                        notAFunctionActive()
+                    #else
+                        print "inactive"
+                        notAFunctionInactive()
+                    #end if
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(6, 24, 6, 42) } }
+                ]);
+                expect(collectPrintedText(file)).to.eql(['"start"', '"active"']);
+            });
+
+            it('treats #if true as true', () => {
+                const { diagnostics } = validate(`
+                    #if true
+                    #error active-true-error
+                    #else
+                    #error inactive-else-error
+                    #end if
+                    sub main()
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(2, 20, 2, 26) } }
+                ]);
+            });
+
+            it('treats #if not true as false', () => {
+                const { diagnostics } = validate(`
+                    #if not true
+                    #error inactive-error
+                    #else
+                    #error active-error
+                    #end if
+                    sub main()
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(4, 20, 4, 26) } }
+                ]);
+            });
+
+            it('treats #if false as false and #if not false as true', () => {
+                const { diagnostics } = validate(`
+                    #if false
+                    #error inactive-error
+                    #end if
+                    #if not false
+                    #error active-error
+                    #end if
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(5, 20, 5, 26) } }
+                ]);
+            });
+
+            it('validates the active branch of a literal #if inside a function', () => {
+                const { file, diagnostics } = validate(`
+                    sub main()
+                    #if true
+                        print "active"
+                        notAFunctionActive()
+                    #else
+                        print "inactive"
+                        notAFunctionInactive()
+                    #end if
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(4, 24, 4, 42) } }
+                ]);
+                expect(collectPrintedText(file)).to.eql(['"active"']);
+            });
+
+            describe('parse diagnostics', () => {
+                it('keeps syntax errors in the active branch of a literal #if', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if true
+                            x = = 1
+                        #end if
+                        end sub
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
+                });
+
+                it('drops syntax errors in the inactive else of an active #if DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if DEBUG
+                            print "active"
+                        #else
+                            y = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('keeps syntax errors in an active #if not DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if not DEBUG
+                            z = = 3
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
+                });
+
+                it('keeps syntax errors in a branch enabled by a file-level #const', () => {
+                    const { diagnostics } = validate(`
+                        #const LOGGING = true
+                        sub main()
+                        #if LOGGING
+                            w = = 4
+                        #end if
+                        end sub
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(4, 32, 4, 33) } }
+                    ]);
+                });
+
+                it('keeps the syntax error of text after the condition of an inactive #if', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if DEBUG +
+                            print 1
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(2, 34, 2, 35) } }
+                    ]);
+                });
+
+                it('drops syntax errors in an inactive #if not DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if not DEBUG
+                            v = = 5
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('drops syntax errors in the inactive tail of an #else if chain', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if true
+                            print "active"
+                        #else if DEBUG
+                            a = = 1
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('drops syntax errors in an inactive #if false / #else if DEBUG / #else chain', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if false
+                            a = = 1
+                        #else if DEBUG
+                            print "active"
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('keeps syntax errors in the final #else when every earlier condition is false', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if false
+                            a = = 1
+                        #else if DEBUG
+                            print "inactive"
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(7, 32, 7, 33) } }
+                    ]);
+                });
+            });
+
+            describe('changes after parsing', () => {
+                const source = `
+                    sub main()
+                    #if DEBUG
+                        x = = 1
+                    #else
+                        y = = 2
+                    #end if
+                    end sub
+                `;
+
+                function createHashConst(name: string, value: boolean) {
+                    return Parser.parse(`#const ${name} = ${value}\n`).ast.statements[0];
+                }
+
+                /**
+                 * Validate the source after a plugin has edited the parsed file
+                 */
+                function validateAfterEdit(edit: (file: BrsFile) => void) {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            edit(event.file as BrsFile);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', source);
+                    evaluationProgram.validate();
+                    return evaluationProgram.getDiagnostics();
+                }
+
+                const inactiveThenBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
+                const inactiveElseBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(5, 0, 6, 0) } };
+
+                it('reports the diagnostics of the branch that the parsed constants select', () => {
+                    const diagnostics = validateAfterEdit(() => { });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by changing the constants', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by editing the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition.location);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the else branch when a plugin negates the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
+                    ]);
+                });
+
+                it('does not validate the code of a branch a plugin deactivates', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            (event.file as BrsFile).ast.bsConsts = new Map([['debug', false]]);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', `
+                        #if DEBUG
+                        sub main()
+                            notAFunction()
+                        end sub
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    //notAFunction() is not validated, and the whole function is faded
+                    expectDiagnostics(evaluationProgram, [
+                        { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 5, 0) } }
+                    ]);
+                });
+
+                it('reflects an injected #const in the parse diagnostics after the next full walk, without validating again', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.brs', `
+                        sub main()
+                        #if DEBUG
+                            x = = 1
+                        #end if
+                        end sub
+                    `);
+                    const inactiveBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
+                    file.ast.statements.unshift(createHashConst('DEBUG', false));
+                    evaluationProgram.validate();
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
+
+                    file.ast.statements[0] = createHashConst('DEBUG', true);
+                    file.ast.link();
+                    //the parse error follows the walk right away. The fading hint comes from validation, so it stays until the file validates again
+                    expectDiagnostics(evaluationProgram, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } },
+                        inactiveBranch
+                    ]);
+
+                    file.ast.statements[0] = createHashConst('DEBUG', false);
+                    file.ast.link();
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
+                });
+
+                it('reflects an injected #const in scope lookups after the file validates again', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.bs', `
+                        #if DEBUG
+                        class Foo
+                            sub debugMethod()
+                            end sub
+                        end class
+                        #else
+                        class Foo
+                            sub releaseMethod()
+                            end sub
+                        end class
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    const scope = evaluationProgram.getScopeByName('source');
+                    expect(scope.getClass('Foo').memberMap['releasemethod']).to.exist;
+                    file.ast.statements.unshift(createHashConst('DEBUG', true));
+                    file.isValidated = false;
+                    scope.invalidate();
+                    evaluationProgram.validate();
+                    expect(scope.getClass('Foo').memberMap['debugmethod']).to.exist;
+                    expect(file['_cachedLookups'].classStatementMap.get('foo').memberMap['debugmethod']).to.exist;
+                });
+            });
+
+            describe('duplicate #const', () => {
+                it('flags an active #const that redeclares an active #const', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const A = false
+                        sub main()
+                        end sub
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(2, 31, 2, 32) } }
+                    ]);
+                });
+
+                it('flags a #const that redeclares a bs_const', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(1, 31, 1, 36) } }
+                    ]);
+                });
+
+                it('allows a duplicate #const inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #if false
+                        #const A = false
+                        #end if
+                        sub main()
+                        end sub
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('reports only the invalid value when a #const alias reuses a declared name', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const A = B
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
+                });
+
+                it('reports only the invalid value when an invalid #const reuses a bs_const name', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = NOPE
+                    `, { bsConsts: { DEBUG: true } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 39, 1, 43) } }
+                    ]);
+                });
+
+                it('does not apply a #const declared in an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #const A = true
+                        #end if
+                        #if A
+                        #error inactive-error
+                        #end if
+                        #const A = true
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('applies a #const declared in the active branch in source order', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        #if DEBUG
+                        #const LOGGING = true
+                        #else
+                        #const LOGGING = false
+                        #end if
+                        #if LOGGING
+                        #error logging-on
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+            });
+
+            describe('undeclared #const', () => {
+                const source = `
+                    sub main()
+                    #if NOPE
+                        print "a"
+                    #end if
+                    #if LATER
+                        print "b"
+                    #end if
+                    #if INACTIVEONLY
+                        print "c"
+                    #end if
+                    end sub
+                    #const LATER = true
+                    #if false
+                    #const INACTIVEONLY = true
+                    #end if
+                `;
+
+                it('reports undeclared constants before firmware 16', () => {
+                    const { diagnostics } = validate(source, { minFirmwareVersion: '15.3.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
+                    ]);
+                });
+
+                it('reports undeclared constants with the default firmware', () => {
+                    const { diagnostics } = validate(source);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
+                    ]);
+                });
+
+                it('evaluates undeclared constants as false on firmware 16 and up', () => {
+                    const { diagnostics } = validate(source, { minFirmwareVersion: '16.0.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('reports an undeclared constant in an evaluated #else if before firmware 16', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #else if NOPE
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 33, 2, 37) } }
+                    ]);
+                });
+
+                it('does not report an undeclared constant in an #else if that is never reached', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #else if NOPE
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('does not report an undeclared constant inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #if NOPE
+                        #end if
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+            });
+
+            describe('duplicate functions', () => {
+                it('allows the same function in mutually exclusive branches', () => {
+                    const { diagnostics } = validate(`
+                        #if DEBUG
+                        sub logit()
+                            print "active"
+                        end sub
+                        #else
+                        sub logit()
+                            print "inactive"
+                        end sub
+                        #end if
+                        sub main()
+                            logit()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('allows the same function in branches chosen by a file-level #const', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        #if DEBUG
+                        #const LOGGING = true
+                        #else
+                        #const LOGGING = false
+                        #end if
+                        #if LOGGING
+                        sub logit()
+                            print "log-on"
+                        end sub
+                        #else
+                        sub logit()
+                            print "log-off"
+                        end sub
+                        #end if
+                        sub Main()
+                            logit()
+                        end sub
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('still reports a function duplicated within the active branch', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        sub logit()
+                        end sub
+                        sub logit()
+                        end sub
+                        #end if
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-function', location: { range: util.createRange(2, 28, 2, 33) } },
+                        { code: 'duplicate-function', location: { range: util.createRange(4, 28, 4, 33) } }
+                    ]);
+                });
+            });
+
+            describe('invalid #const value', () => {
+                it('rejects an alias of a declared constant at every firmware level', () => {
+                    for (const minFirmwareVersion of ['15.3.0', '16.0.0']) {
+                        const { diagnostics } = validate(`
+                            #const A = true
+                            #const B = A
+                        `, { minFirmwareVersion: minFirmwareVersion });
+                        expectDiagnostics(diagnostics, [
+                            { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 39, 2, 40) } }
+                        ]);
+                    }
+                });
+
+                it('rejects a value that is not a boolean', () => {
+                    const { diagnostics } = validate(`
+                        #const test = 4
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 38, 1, 39) } }
+                    ]);
+                });
+
+                it('rejects an alias of an undeclared name', () => {
+                    const { diagnostics } = validate(`
+                        #const B = NOPE
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 35, 1, 39) } }
+                    ]);
+                });
+
+                it('treats a later #if on the alias as undeclared before firmware 16', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const B = A
+                        #if B
+                        #error alias-resolved
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(3, 28, 3, 29) } }
+                    ]);
+                });
+
+                it('treats a later #if on the alias as false on firmware 16 and up', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const B = A
+                        #if B
+                        #error alias-resolved
+                        #end if
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
+                });
+
+                it('does not report an alias inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #if false
+                        #const B = A
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+            });
+
+            describe('declarations in inactive branches', () => {
+                async function transpile(source: string, options?: { bsConsts?: Record<string, boolean> }) {
+                    const { file, diagnostics } = validate(source, { ...options, destPath: 'source/main.bs' });
+                    const { code } = await evaluationProgram.getTranspiledFileContents(file.srcPath);
+                    return { code: code, diagnostics: diagnostics };
+                }
+
+                it('uses the active const when the inactive #else declares the same name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 1');
+                    expect(code).not.to.include('print 2');
+                });
+
+                it('uses the active enum member when the inactive #else declares the same enum', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        enum Color
+                            red = "active-red"
+                        end enum
+                        #else
+                        enum Color
+                            red = "inactive-red"
+                        end enum
+                        #end if
+                        sub main()
+                            print Color.red
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('active-red');
+                    expect(code).not.to.include('inactive-red');
+                });
+
+                it('uses the active class and interface without duplicate-name diagnostics', () => {
+                    const { file, diagnostics } = validate(`
+                        #if DEBUG
+                        class Widget
+                            activeField = 1
+                        end class
+                        interface Shape
+                            activeMember as integer
+                        end interface
+                        #else
+                        class Widget
+                            inactiveField = 2
+                        end class
+                        interface Shape
+                            inactiveMember as integer
+                        end interface
+                        #end if
+                        sub main()
+                            w = new Widget()
+                            print w.activeField
+                        end sub
+                        function describeShape(item as Shape) as integer
+                            return item.activeMember
+                        end function
+                    `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                    const scope = evaluationProgram.getScopesForFile(file)[0];
+                    const widget = scope.getClassMap().get('widget').item;
+                    expect(widget.fields.map(field => field.tokens.name.text)).to.eql(['activeField']);
+                    const shape = scope.getInterfaceMap().get('shape').item;
+                    expect(shape.fields.map(field => field.tokens.name.text)).to.eql(['activeMember']);
+                });
+
+                it('inlines an inactive enum and const used in the inactive branch that declares them', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub debugOnly()
+                            print Color.red
+                            print LEVEL
+                        end sub
+                        #end if
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                    expect(code).not.to.include('Color.red');
+                    expect(code).not.to.include('print LEVEL');
+                });
+
+                it('inlines an active enum and const used in an inactive branch', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub main()
+                        #if not DEBUG
+                            print Color.red
+                            print LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                });
+
+                it('inlines a namespaced inactive enum and const used in an inactive branch', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            enum Color
+                                red = "r"
+                            end enum
+                            const LEVEL = 3
+                            sub inside()
+                                print Color.red
+                                print LEVEL
+                            end sub
+                        #end if
+                        end namespace
+                        sub main()
+                        #if not DEBUG
+                            print alpha.Color.red
+                            print alpha.LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                    expect(code).not.to.include('alpha_Color_red');
+                    expect(code).not.to.include('alpha_LEVEL');
+                });
+
+                it('links an inactive class to its inactive parent when transpiling', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        class Parent
+                            sub new()
+                            end sub
+                        end class
+                        class Child extends Parent
+                            sub new()
+                                super()
+                            end sub
+                        end class
+                        #end if
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('instance = __Parent_builder()');
+                    expect(code).to.include('instance.super0_new = instance.new');
+                    expect(code).to.include('m.super0_new()');
+                });
+
+                it('qualifies an inactive class instantiated by a namespace-relative name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            class Widget
+                            end class
+                            sub make()
+                                widget = new Widget()
+                            end sub
+                        #end if
+                        end namespace
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('widget = alpha_Widget()');
+                });
+
+                it('does not capture an inactive enum or const as a ternary closure parameter', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub debugOnly(flag)
+                            print {k: flag ? Color.red : LEVEL}
+                        end sub
+                        #end if
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('(function(__bsCondition)');
+                    expect(code).to.include('return "r"');
+                    expect(code).to.include('return 3');
+                });
+
+                it('resolves a namespace-relative name to the active global declaration over an inactive namespaced one', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        class Foo
+                        end class
+                        enum Color
+                            red = "active-global"
+                        end enum
+                        const LEVEL = 1
+                        namespace NS
+                            sub main()
+                                f = new Foo()
+                                print Color.red
+                                print LEVEL
+                            end sub
+                        end namespace
+                        #if false
+                        namespace NS
+                            class Foo
+                            end class
+                            enum Color
+                                red = "inactive-ns"
+                            end enum
+                            const LEVEL = 2
+                        end namespace
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('f = Foo()');
+                    expect(code).not.to.include('f = NS_Foo()');
+                    expect(code).to.include('print "active-global"');
+                    expect(code).not.to.include('inactive-ns');
+                    expect(code).to.include('print 1');
+                });
+
+                it('keeps resolving to the inactive namespaced declaration when no active global one exists', async () => {
+                    const { code } = await transpile(`
+                        #if false
+                        namespace NS
+                            enum Color
+                                red = "inactive-ns"
+                            end enum
+                            sub inside()
+                                print Color.red
+                            end sub
+                        end namespace
+                        #end if
+                        sub main()
+                        end sub
+                    `);
+                    expect(code).to.include('print "inactive-ns"');
+                });
+
+                it('does not report a local variable shadowed by an inactive class', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        class Foo
+                        end class
+                        #end if
+                        sub main()
+                            foo = 1
+                            print foo
+                        end sub
+                    `, { destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('still reports a local variable shadowed by an active class', () => {
+                    const { diagnostics } = validate(`
+                        class Foo
+                        end class
+                        sub main()
+                            foo = 1
+                            print foo
+                        end sub
+                    `, { destPath: 'source/main.bs' });
+                    expectDiagnostics(diagnostics, ['var-shadows-function']);
+                });
+
+                it('inlines the active enum in both branches when both branches declare it', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        enum Color
+                            red = "active-red"
+                        end enum
+                        #else
+                        enum Color
+                            red = "inactive-red"
+                        end enum
+                        #end if
+                        sub main()
+                        #if DEBUG
+                            print Color.red
+                        #else
+                            print Color.red
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code.match(/print "active-red"/g)).to.have.lengthOf(2);
+                    expect(code).not.to.include('inactive-red');
+                });
+
+                it('inlines the active const in both branches when both branches declare it', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                        #if DEBUG
+                            print LEVEL
+                        #else
+                            print LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code.match(/print 1/g)).to.have.lengthOf(2);
+                    expect(code).not.to.include('print 2');
+                });
+
+                it('does not report circular consts declared in an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if not DEBUG
+                        const A = B
+                        const B = A
+                        #end if
+                    `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('picks the declaration using a file-level #const', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #const LOGGING = false
+                        #if LOGGING
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 2');
+                    expect(code).not.to.include('print 1');
+                });
+
+                it('picks the declaration from an #else if chain', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if A
+                        const LEVEL = 1
+                        #else if B
+                        const LEVEL = 2
+                        #else
+                        const LEVEL = 3
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { A: false, B: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 2');
+                    expect(code).not.to.include('print 1');
+                    expect(code).not.to.include('print 3');
+                });
+
+                it('picks the final #else declaration when every earlier condition is false', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if A
+                        const LEVEL = 1
+                        #else if B
+                        const LEVEL = 2
+                        #else
+                        const LEVEL = 3
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { A: false, B: false } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 3');
+                });
+            });
+
+            describe('declaration location', () => {
+                const chainBranchCases: Array<{ description: string; bsConsts: Record<string, boolean> }> = [
+                    { description: 'the #if branch is active', bsConsts: { A: true, B: false } },
+                    { description: 'the #else if branch is active', bsConsts: { A: false, B: true } },
+                    { description: 'the #else branch is active', bsConsts: { A: false, B: false } }
+                ];
+                for (const chainBranchCase of chainBranchCases) {
+                    it(`allows a function in every branch of a top-level #else if chain when ${chainBranchCase.description}`, () => {
+                        const { diagnostics } = validate(`
+                            #if A
+                            sub one()
+                            end sub
+                            #else if B
+                            sub two()
+                            end sub
+                            #else
+                            sub three()
+                            end sub
+                            #end if
+                        `, { bsConsts: chainBranchCase.bsConsts });
+                        expectZeroDiagnostics(diagnostics);
+                    });
+                }
+
+                it('allows a function in a nested #if at the top level', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #if true
+                        sub inner()
+                        end sub
+                        #end if
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('allows a function in the #else of a nested #if at the top level', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #if false
+                        #else
+                        sub inner()
+                        end sub
+                        #end if
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('allows a function in a nested #if inside a namespace', () => {
+                    const { diagnostics } = validate(`
+                        namespace alpha
+                            #if true
+                            #if true
+                            sub inner()
+                            end sub
+                            #end if
+                            #end if
+                        end namespace
+                    `, { destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('still rejects a namespace in a nested #if inside a function', () => {
+                    const { diagnostics } = validate(`
+                        function f()
+                        #if true
+                        #if true
+                            namespace alpha
+                            end namespace
+                        #end if
+                        #end if
+                        end function
+                    `, { destPath: 'source/main.bs' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
+                });
+
+                it('still rejects a namespace inside an #else if chain within a function', () => {
+                    const { diagnostics } = validate(`
+                        function f()
+                        #if A
+                        #else if B
+                            namespace alpha
+                            end namespace
+                        #end if
+                        end function
+                    `, { bsConsts: { A: false, B: true }, destPath: 'source/main.bs' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
+                });
+            });
+        });
+    });
+
+    describe('inactive conditional compile branches', () => {
+        afterEach(() => {
+            fsExtra.removeSync(`${rootDir}/manifest`);
+        });
+
+        /**
+         * Validate the given lines in a fresh program and return the `inactive-conditional-compile-branch` diagnostics plus every diagnostic code that was found
+         */
+        function validateLines(lines: string[], options?: { destPath?: string; bsConsts?: Record<string, boolean>; programOptions?: Partial<ConstructorParameters<typeof Program>[0]> }) {
+            fsExtra.removeSync(`${rootDir}/manifest`);
+            if (options?.bsConsts) {
+                const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
+                fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
+            }
+            const branchProgram = new Program({ rootDir: rootDir, ...options?.programOptions });
+            branchProgram.setFile(options?.destPath ?? 'source/main.bs', lines.join('\n'));
+            branchProgram.validate();
+            const diagnostics = branchProgram.getDiagnostics();
+            return {
+                program: branchProgram,
+                allCodes: diagnostics.map(diagnostic => diagnostic.code),
+                inactive: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.inactiveConditionalCompileBranch)
+            };
+        }
+
+        function getRanges(diagnostics: BsDiagnostic[]) {
+            return diagnostics.map(diagnostic => diagnostic.location.range);
+        }
+
+        it('defines the diagnostic as a hint tagged unnecessary', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(inactive).to.have.lengthOf(1);
+            expect(inactive[0].severity).to.eql(DiagnosticSeverity.Hint);
+            expect(inactive[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+            expect(inactive[0].message).to.eql(DiagnosticMessages.inactiveConditionalCompileBranch().message);
+        });
+
+        it('carries the tags through to the LSP diagnostic', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(util.toDiagnostic(inactive[0], 'file:///source/main.bs').tags).to.eql([DiagnosticTag.Unnecessary]);
+        });
+
+        it('covers exactly the body lines of an inactive #if', () => {
+            const { inactive, allCodes } = validateLines([
+                'sub main()',
+                'end sub',
+                '#if false',
+                '    print "a"',
+                '    print "bb"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers only the #else body when the #if is active', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
+        });
+
+        it('covers only the #if body when the #else is active', () => {
+            const { inactive } = validateLines([
+                '#if not true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('covers the first and last bodies of an #else if chain when the middle branch is active', () => {
+            const { inactive } = validateLines([
+                '#const A = false',
+                '#const B = true',
+                '#if A',
+                'print "a"',
+                '#else if B',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([
+                util.createRange(3, 0, 4, 0),
+                util.createRange(7, 0, 8, 0)
+            ]);
+        });
+
+        it('covers every later body of an #else if chain once an earlier branch is active', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else if true',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([
+                util.createRange(3, 0, 4, 0),
+                util.createRange(5, 0, 6, 0)
+            ]);
+        });
+
+        it('covers the last body of an #else if chain when every condition is false', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#else if false',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([
+                util.createRange(1, 0, 2, 0),
+                util.createRange(3, 0, 4, 0)
+            ]);
+        });
+
+        it('ignores a comment on the directive line when the body is empty', () => {
+            const { inactive } = validateLines([
+                '#if false \' note',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
+        });
+
+        it('fades a blank body without the comment on the directive line', () => {
+            const { inactive } = validateLines([
+                '#if false \' note',
+                '',
+                '    ',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
+        });
+
+        it('reports the normal range when a directive line comment is followed by real content', () => {
+            const { inactive } = validateLines([
+                '#if false \' note',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('ignores a comment on an #else line when the body is empty', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else \' note',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
+        });
+
+        it('supports single-word #elseif and #endif directives', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#elseif true',
+                'print "b"',
+                '#endif'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('does not report nested conditional compile statements inside an inactive branch', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                '#if true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 6, 0)]);
+        });
+
+        it('reports an inactive branch nested inside an active branch', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                '#if false',
+                'print "a"',
+                '#end if',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+        });
+
+        it('reports one range for an inactive body that does not parse', () => {
+            const { inactive, allCodes } = validateLines([
+                '#if false',
+                'x = = 1',
+                'if then',
+                'print "a" +',
+                'y = (',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers an inactive branch inside a function', () => {
+            const { inactive, allCodes } = validateLines([
+                'sub main()',
+                '    #if false',
+                '        print "a"',
+                '    #end if',
+                'end sub'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers an inactive branch in a class body', () => {
+            const { inactive, allCodes } = validateLines([
+                'class Foo',
+                '    #if false',
+                '        sub hidden()',
+                '        end sub',
+                '    #else',
+                '        sub shown()',
+                '        end sub',
+                '    #end if',
+                'end class'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers an inactive branch in a namespace body', () => {
+            const { inactive, allCodes } = validateLines([
+                'namespace alpha',
+                '    #if false',
+                '        sub hidden()',
+                '        end sub',
+                '    #end if',
+                'end namespace'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('does not report an inactive body with no lines, but fades one with only blank lines', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                '#end if',
+                '#if true',
+                'print "a"',
+                '#else',
+                '#end if',
+                '#if false',
+                '',
+                '    ',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(7, 0, 9, 0)]);
+        });
+
+        it('covers a body that only contains a comment', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                '\' just a comment',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('handles windows line endings', () => {
+            const { inactive } = validateLines(['#if false\r\nprint "a"\r\nprint "bb"\r\n#end if']);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
+        });
+
+        it('uses a manifest bs_const to decide the branch', () => {
+            const source = [
+                '#if FLAG',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ];
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: true } }).inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: false } }).inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('uses a file #const to decide the branch', () => {
+            const { inactive } = validateLines([
+                '#const FLAG = false',
+                '#if FLAG',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+        });
+
+        it('honors diagnosticSeverityOverrides', () => {
+            const { program: overrideProgram } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ], { programOptions: { diagnosticSeverityOverrides: { 'inactive-conditional-compile-branch': 'error' } } });
+            const diagnostics = overrideProgram.getDiagnostics();
+            expect(diagnostics.map(diagnostic => diagnostic.severity)).to.eql([DiagnosticSeverity.Error]);
+            expect(diagnostics[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+        });
+
+        it('honors diagnosticFilters', () => {
+            const { program: filteredProgram } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ], { programOptions: { diagnosticFilters: ['inactive-conditional-compile-branch'] } });
+            expect(filteredProgram.getDiagnostics()).to.eql([]);
+        });
+
+        it('honors bs:disable-line on the first line of the body', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a" \' bs:disable-line: inactive-conditional-compile-branch',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
+        });
+
+        it('honors a file-level bs:disable', () => {
+            const { inactive } = validateLines([
+                '\' bs:disable: inactive-conditional-compile-branch',
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
         });
     });
 
@@ -2591,7 +4137,9 @@ describe('BrsFileValidator', () => {
                         #end if
                     end sub
                 `);
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 6, 0) } }
+                ]);
             });
 
             it('flags a label in a try inside an anonymous function', () => {
@@ -2759,7 +4307,9 @@ describe('BrsFileValidator', () => {
                         #end if
                     end sub
                 `);
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(5, 0, 6, 0) } }
+                ]);
             });
         });
 
@@ -2840,10 +4390,13 @@ describe('BrsFileValidator', () => {
                         #end if
                     end sub
                 `);
-                expectDiagnostics(program, [{
-                    ...DiagnosticMessages.labelNotFound('foo'),
-                    location: { range: util.createRange(1, 9, 1, 12) }
-                }]);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.labelNotFound('foo'),
+                        location: { range: util.createRange(1, 9, 1, 12) }
+                    },
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
+                ]);
             });
 
             it('finds a label active through a file-level #const', () => {
@@ -2852,6 +4405,18 @@ describe('BrsFileValidator', () => {
                     sub main()
                         goto foo
                         #if flag
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label inside a literal #if true', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if true
                             foo:
                         #end if
                     end sub
@@ -2895,7 +4460,9 @@ describe('BrsFileValidator', () => {
                         #end if
                     end sub
                 `);
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 3, 0) } }
+                ]);
             });
 
             it('flags a single-line if with goto to a missing label', () => {

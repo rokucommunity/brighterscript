@@ -1,14 +1,14 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralExpression, isMethodStatement, isNamespaceStatement, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type LiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import { PrintStatement } from '../../parser/Statement';
-import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
+import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
@@ -45,9 +45,10 @@ export class BrsFileValidator {
         // It could have potentially changed before this from plugins, after this, it will not change
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].invalidate();
-
-        // make a copy of the bsConsts, because they might be added to
-        const bsConstsBackup = new Map<string, boolean>(this.event.file.ast.getBsConsts());
+        //rebuild the lookups now, because that full walk resolves every `#if` and `#const` (and sets `isActive`) before the walk below,
+        //whose visitors can ask about nodes it has not reached yet (such as the members of a class)
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        this.event.file['_cachedLookups'].rehydrate();
 
         this.labelsAndGotosByFunction = new Map();
         this.walk();
@@ -59,7 +60,6 @@ export class BrsFileValidator {
             this.validateTypecastStatements();
         }
 
-        this.event.file.ast.bsConsts = bsConstsBackup;
         unlinkGlobalSymbolTable();
     }
 
@@ -263,6 +263,12 @@ export class BrsFileValidator {
             IndexedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
             },
+            ArrayLiteralExpression: (node) => {
+                this.validateSpreadPosition(node);
+            },
+            AALiteralExpression: (node) => {
+                this.validateSpreadPosition(node);
+            },
             ForEachStatement: (node) => {
                 //registering the for loop variable happens in the visitor for Block, since the loop variable is scoped to the loop body
             },
@@ -453,20 +459,12 @@ export class BrsFileValidator {
             GotoStatement: (node) => {
                 this.getLabelsAndGotos(node)?.gotos.push(node);
             },
-            ConditionalCompileConstStatement: (node) => {
-                const assign = node.assignment;
-                const constNameLower = assign.tokens.name?.text.toLowerCase();
-                const astBsConsts = this.event.file.ast.bsConsts;
-                if (isLiteralExpression(assign.value)) {
-                    astBsConsts.set(constNameLower, assign.value.tokens.value.text.toLowerCase() === 'true');
-                } else if (isVariableExpression(assign.value)) {
-                    if (this.validateConditionalCompileConst(assign.value.tokens.name)) {
-                        astBsConsts.set(constNameLower, astBsConsts.get(assign.value.tokens.name.text.toLowerCase()));
-                    }
-                }
-            },
             ConditionalCompileStatement: (node) => {
-                this.validateConditionalCompileConst(node.tokens.condition);
+                this.validateHashIfCondition(node);
+                this.flagInactiveConditionalCompileBranches(node);
+            },
+            ConditionalCompileConstStatement: (node) => {
+                this.validateHashConst(node);
             },
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
@@ -492,6 +490,30 @@ export class BrsFileValidator {
             IfStatement: (node) => {
                 this.setUpComplementSymbolTables(node, isIfStatement);
             },
+            ExitStatement: (node) => {
+                if (isExitSelectStatement(node)) {
+                    const target = getExitSelectTarget(node);
+                    if (!target || target.isInLoop) {
+                        this.event.program.diagnostics.register({
+                            ...(target ? DiagnosticMessages.exitSelectInLoop() : DiagnosticMessages.exitSelectOutsideSelectCase()),
+                            location: node.location
+                        });
+                    }
+                }
+            },
+            SelectCaseStatement: (node) => {
+                //a variable assigned in every case (including `case else`) is known to exist after the `select case`.
+                //But if any case might `exit select` part way through, the rest of that case might not run
+                const elseCase = node.elseCase;
+                if (elseCase?.body && !node.cases.some(x => x.canExitEarly)) {
+                    for (const caseStatement of node.cases) {
+                        if (caseStatement !== elseCase && caseStatement.body) {
+                            elseCase.body.symbolTable.complementOtherTable(caseStatement.body.symbolTable);
+                        }
+                    }
+                }
+                this.validateSelectCaseStatement(node);
+            },
             Block: (node) => {
                 const blockSymbolTable = node.symbolTable;
                 if (node.findAncestor<Block>(isFunctionExpression)) {
@@ -505,7 +527,7 @@ export class BrsFileValidator {
                         index: node.parent.statementIndex,
                         table: blockSymbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
-                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent)
+                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || this.isAlwaysExecutedCase(node.parent)
                     });
 
                     if (isForStatement(node.parent)) {
@@ -607,9 +629,20 @@ export class BrsFileValidator {
             return;
         }
 
-        // is this in a top levelconditional compile?
-        if (isConditionalCompileStatement(statement.parent?.parent)) {
-            if (isOkDeclarationLocation(statement.parent.parent.parent)) {
+        // is this in a conditional compile whose outermost statement is at an ok location? Climbs `#else if` chains and nested `#if` statements
+        let conditionalCompile = statement.parent?.parent;
+        if (isConditionalCompileStatement(conditionalCompile)) {
+            while (true) {
+                const parentNode = conditionalCompile.parent;
+                if (isConditionalCompileStatement(parentNode)) {
+                    conditionalCompile = parentNode;
+                } else if (isBlock(parentNode) && isConditionalCompileStatement(parentNode.parent)) {
+                    conditionalCompile = parentNode.parent;
+                } else {
+                    break;
+                }
+            }
+            if (isOkDeclarationLocation(conditionalCompile.parent)) {
                 return;
             }
         }
@@ -810,16 +843,59 @@ export class BrsFileValidator {
     }
 
 
-    private validateConditionalCompileConst(ccConst: Token) {
-        const isBool = ccConst.kind === TokenKind.True || ccConst.kind === TokenKind.False;
-        if (!isBool && !this.event.file.ast.bsConsts.has(ccConst.text.toLowerCase())) {
+    /**
+     * Validate an active `#const` against the constants in effect at its position in the file (the walk resolved it just before visiting it)
+     */
+    private validateHashConst(statement: ConditionalCompileConstStatement) {
+        const assignment = statement.assignment;
+        if (!isLiteralBoolean(assignment.value)) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.invalidHashConstValue(),
+                location: assignment.value.location
+            });
+        } else if (statement.isDuplicate) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
+                location: assignment.tokens.name.location
+            });
+        }
+    }
+
+    /**
+     * Fade each inactive branch of a reached `#if` / `#else if`: the lines between its directives, so the directive lines themselves stay unfaded.
+     * An `#if` inside an inactive branch is never visited, and the outer branch already covers it. A branch with no lines between its directives is not reported.
+     */
+    private flagInactiveConditionalCompileBranches(statement: ConditionalCompileStatement) {
+        for (const branch of [statement.thenBranch, statement.elseBranch]) {
+            if (isConditionalCompileStatement(branch)) {
+                //an `#else if` is stored as this statement's `elseBranch`. Once the chain has taken an earlier branch, the walk skips it
+                //and it is inactive, so fade its branches here. When the chain reaches it, it is active and the walk visits it on its own
+                if (branch.isActive === false) {
+                    this.flagInactiveConditionalCompileBranches(branch);
+                }
+            } else if (branch?.isActive === false && branch.location) {
+                //the branch runs from the end of its opening directive to the start of its closing directive
+                const { start, end } = branch.location.range;
+                if (end.line - start.line > 1) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.inactiveConditionalCompileBranch(),
+                        location: util.createLocation(start.line + 1, 0, end.line, 0, this.event.file.srcPath)
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Flag a reached `#if` / `#else if` condition that names an undeclared constant, unless the target firmware evaluates it as false
+     */
+    private validateHashIfCondition(statement: ConditionalCompileStatement) {
+        if (statement.isConditionDeclared === false && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.hashConstDoesNotExist(),
-                location: ccConst.location
+                location: statement.tokens.condition.location
             });
-            return false;
         }
-        return true;
     }
 
     /**
@@ -961,6 +1037,139 @@ export class BrsFileValidator {
         }
     }
 
+    private validateSelectCaseStatement(statement: SelectCaseStatement) {
+        const headerLocation = util.createBoundingLocation(statement.tokens.select, statement.tokens.case);
+        if (statement.cases.length === 0) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.selectCaseHasNoCases(),
+                location: headerLocation
+            });
+            return;
+        }
+
+        //`case else` must be the last case, and there can only be one of them.
+        //(A missing `case else` depends on the subject's type, so the ScopeValidator checks for that)
+        const elseCases = statement.cases.filter(x => x.isElse);
+        if (elseCases.length > 0) {
+            for (const elseCase of elseCases.slice(1)) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.duplicateCaseElse(),
+                    location: util.createBoundingLocation(elseCase.tokens.case, elseCase.tokens.else)
+                });
+            }
+            //only flag the first one. Any others were already flagged as duplicates
+            if (statement.cases.indexOf(elseCases[0]) < statement.cases.length - elseCases.length) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.caseElseMustBeLast(),
+                    location: util.createBoundingLocation(elseCases[0].tokens.case, elseCases[0].tokens.else)
+                });
+            }
+        }
+
+        //people coming from C-style languages might expect an empty case to fall through to the next one. It doesn't.
+        //A case containing only a comment (or `exit select`) is treated as intentionally empty. (Comments are trivia, so they live on the next `case` keyword)
+        for (let i = 0; i < statement.cases.length - 1; i++) {
+            const caseStatement = statement.cases[i];
+            if (
+                !caseStatement.isElse &&
+                !(caseStatement.body?.statements.length > 0) &&
+                !util.hasLeadingComments(statement.cases[i + 1].tokens.case)
+            ) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
+                    location: caseStatement.tokens.case.location
+                });
+            }
+        }
+
+        this.validateCaseValues(statement);
+    }
+
+    /**
+     * Flag duplicate case values, and literal values whose type can't be compared against the others
+     */
+    private validateCaseValues(statement: SelectCaseStatement) {
+        //the type of every literal case value should match the subject (or, when the subject isn't a literal, the first literal case value)
+        let expectedType = this.getCaseLiteralType(statement.subject);
+        const seenValues = new Map<string, Expression>();
+
+        for (const caseStatement of statement.cases) {
+            for (const value of caseStatement.values) {
+                const key = this.getCaseValueKey(value);
+                if (key) {
+                    const firstValue = seenValues.get(key);
+                    if (firstValue) {
+                        this.event.program.diagnostics.register({
+                            ...DiagnosticMessages.duplicateCaseValue(
+                                util.getTextForRange(this.event.file.fileContents, value.location?.range) ?? key,
+                                firstValue.location?.range.start.line + 1
+                            ),
+                            location: value.location
+                        });
+                    } else {
+                        seenValues.set(key, value);
+                    }
+                }
+
+                const valueType = this.getCaseLiteralType(value);
+                if (valueType) {
+                    if (!expectedType) {
+                        expectedType = valueType;
+                    } else if (valueType !== expectedType) {
+                        this.event.program.diagnostics.register({
+                            ...DiagnosticMessages.caseValueTypeMismatch(valueType, expectedType),
+                            location: value.location
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Get the comparison type of a literal case value (or `select case` subject). `invalid` and non-literals return undefined,
+     * because we can't know what they'll be compared against
+     */
+    private getCaseLiteralType(expression: Expression | undefined): 'string' | 'number' | 'boolean' | undefined {
+        //negative numbers like `-1` are unary expressions
+        if (isUnaryExpression(expression) && expression.tokens.operator.kind === TokenKind.Minus) {
+            return isLiteralNumber(expression.right) ? 'number' : undefined;
+        }
+        if (isLiteralString(expression)) {
+            return 'string';
+        } else if (isLiteralNumber(expression)) {
+            return 'number';
+        } else if (isLiteralBoolean(expression)) {
+            return 'boolean';
+        }
+    }
+
+    /**
+     * Get a key that identifies a case value, so that exact duplicates can be found. Only literals and variable names
+     * (including enums and constants like `Direction.up`) produce a key, since anything else could produce a different value each time
+     */
+    private getCaseValueKey(expression: Expression): string | undefined {
+        if (isUnaryExpression(expression) && expression.tokens.operator.kind === TokenKind.Minus && isLiteralNumber(expression.right)) {
+            return `literal:-${expression.right.tokens.value.text.toLowerCase()}`;
+        }
+        if (isLiteralExpression(expression)) {
+            //string comparisons are case sensitive, but everything else (`true`, `&HFF`, etc) is not
+            const text = expression.tokens.value.text;
+            return `literal:` + (isLiteralString(expression) ? text : text.toLowerCase());
+        }
+        //only plain dotted names like `a.b.c` (not `getObject().value`)
+        let root = expression;
+        while (isDottedGetExpression(root)) {
+            root = root.obj;
+        }
+        if (isVariableExpression(root)) {
+            const parts = util.getAllDottedGetParts(expression);
+            if (parts) {
+                return 'name:' + parts.map(x => x.text.toLowerCase()).join('.');
+            }
+        }
+    }
+
     private validateContinueStatement(statement: ContinueStatement) {
         const validateLoopTypeMatch = (expectedLoopType: TokenKind) => {
             //coerce ForEach to For
@@ -1022,6 +1231,20 @@ export class BrsFileValidator {
     /**
      * Validate that there are no optional chaining operators on the left-hand-side of an assignment, indexed set, or dotted get
      */
+    private validateSpreadPosition(node: ArrayLiteralExpression | AALiteralExpression) {
+        if (util.getSpreadLiteralOwnerStatement(node)) {
+            return;
+        }
+        for (const element of node.elements) {
+            if (isSpreadExpression(element)) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.spreadOperatorNotAllowedHere(),
+                    location: element.tokens.dotDotDot.location
+                });
+            }
+        }
+    }
+
     private validateNoOptionalChainingInVarSet(parent: AstNode, children: AstNode[]) {
         const nodes = [...children, parent];
         //flag optional chaining anywhere in the left of this statement
@@ -1057,6 +1280,17 @@ export class BrsFileValidator {
                 nodes.push(node.parent);
             }
         }
+    }
+
+    /**
+     * A `case else` that is the only case in its `select case` always runs all the way through (unless it can `exit select` early)
+     */
+    private isAlwaysExecutedCase(node: AstNode) {
+        return isCaseStatement(node) &&
+            node.isElse &&
+            isSelectCaseStatement(node.parent) &&
+            node.parent.cases.length === 1 &&
+            !node.canExitEarly;
     }
 
     private setUpComplementSymbolTables(node: IfStatement | ConditionalCompileStatement, predicate: (node: AstNode) => boolean) {

@@ -1,6 +1,7 @@
 import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
+import { util } from '../../util';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
 import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
@@ -5979,7 +5980,10 @@ describe('ScopeValidator', () => {
                 #end if
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                //the `#else` in main.bs
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+            ]);
         });
     });
 

@@ -263,7 +263,8 @@ describe('parser print statements', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql([]);
+            //only the hint that fades the branch
+            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql([DiagnosticCodeMap.inactiveConditionalCompileBranch]);
         });
 
         it('does not flag a long print statement inside a disabled #else block', () => {
@@ -278,7 +279,8 @@ describe('parser print statements', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql([]);
+            //only the hint that fades the branch
+            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql([DiagnosticCodeMap.inactiveConditionalCompileBranch]);
         });
 
         it('flags a long print statement inside an enabled #if block', () => {

@@ -1,5 +1,5 @@
 import type { Position } from 'vscode-languageserver';
-import { DiagnosticSeverity } from 'vscode-languageserver';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
@@ -632,7 +632,7 @@ export let DiagnosticMessages = {
         code: 'const-alias-does-not-exist'
     }),
     invalidHashConstValue: () => ({
-        message: '#const declarations can only have values of `true`, `false`, or other #const names',
+        message: '#const value must be `true` or `false`',
         legacyCode: 1089,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-hash-const-value'
@@ -644,7 +644,7 @@ export let DiagnosticMessages = {
         code: 'hash-const-does-not-exist'
     }),
     invalidHashIfValue: () => ({
-        message: `#if conditionals can only be 'true', 'false', or other #const names`,
+        message: '#if and #else if conditions must be `true`, `false`, or a #const name, optionally preceded by `not`',
         legacyCode: 1091,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-hash-if-value'
@@ -1202,6 +1202,100 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'class-constructor-in-conditional-compile'
     }),
+    spreadOperatorNotAllowedHere: () => ({
+        message: `Spread operator is only supported in array and associative array literals assigned directly to a variable, property, or index`,
+        severity: DiagnosticSeverity.Error,
+        code: 'spread-operator-not-allowed-here'
+    }),
+    spreadValueTypeMismatch: (valueType: string, literalKind: 'array' | 'associative array') => ({
+        message: `Cannot spread '${valueType}' into an ${literalKind} literal`,
+        severity: DiagnosticSeverity.Error,
+        code: 'spread-value-type-mismatch'
+    }),
+    selectCaseMissingCaseElse: () => ({
+        message: `'select case' statement has no 'case else' branch, so values that match no case are silently ignored`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-missing-case-else'
+    }),
+    expectedExpressionAfterSelectCase: () => ({
+        message: `Expected expression after 'select case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-select-case-expression'
+    }),
+    expectedCaseValue: (after: string) => ({
+        message: `Expected a case value after '${after}'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-case-value'
+    }),
+    statementBeforeFirstCase: () => ({
+        message: `Statements are not allowed between 'select case' and the first 'case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'statement-before-first-case'
+    }),
+    caseElseMustBeLast: () => ({
+        message: `'case else' must be the last case in a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'case-else-must-be-last'
+    }),
+    duplicateCaseElse: () => ({
+        message: `A 'select case' statement may only have one 'case else'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-case-else'
+    }),
+    caseOutsideSelectCase: () => ({
+        message: `'case' can only be used inside a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'case-outside-select-case'
+    }),
+    endSelectWithoutSelectCase: () => ({
+        message: `Found 'end select' without a matching 'select case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'end-select-without-select-case'
+    }),
+    duplicateCaseValue: (value: string, line: number) => ({
+        message: `Duplicate case value '${value}'. The case on line ${line} always matches first, so this value is unreachable`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'duplicate-case-value'
+    }),
+    caseValueTypeMismatch: (actualType: string, expectedType: string) => ({
+        message: `Case value is a ${actualType} but this 'select case' compares against a ${expectedType}. Comparing mismatched types with '=' causes a 'Type Mismatch' crash at runtime`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'case-value-type-mismatch'
+    }),
+    emptyCaseDoesNotFallThrough: () => ({
+        message: `Empty case does nothing: cases do not fall through to the next case. To share one body, list the values together (i.e. 'case 1, 2'), or add 'exit select' if doing nothing is intended`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'empty-case-does-not-fall-through'
+    }),
+    selectCaseHasNoCases: () => ({
+        message: `'select case' statement has no cases`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-has-no-cases'
+    }),
+    /**
+     * @param enumName the name of the enum the `select case` subject belongs to
+     * @param missingMembers the names of the enum members that no case handles
+     */
+    selectCaseMissingEnumMembers: (enumName: string, missingMembers: string[]) => ({
+        message: `'select case' on '${enumName}' does not handle: ${[].concat(missingMembers ?? []).join(', ')}`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-missing-enum-members'
+    }),
+    caseValueEnumMismatch: (actualEnumName: string, expectedEnumName: string) => ({
+        message: `Case value is a member of enum '${actualEnumName}' but this 'select case' compares against enum '${expectedEnumName}'`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'case-value-enum-mismatch'
+    }),
+    exitSelectOutsideSelectCase: () => ({
+        message: `'exit select' can only be used inside a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exit-select-outside-select-case'
+    }),
+    exitSelectInLoop: () => ({
+        message: `'exit select' cannot be used inside a loop within a case. Use 'exit for' or 'exit while' to leave the loop first`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exit-select-in-loop'
+    }),
     tooManyPrintItems: (count: number, max: number) => ({
         message: `Print statement has ${count} expressions (commas count too), max is ${max}.`,
         severity: DiagnosticSeverity.Error,
@@ -1235,6 +1329,16 @@ export let DiagnosticMessages = {
         message: `'goto ${name}' jumps into a 'for' loop from outside it, which skips the loop setup`,
         severity: DiagnosticSeverity.Warning,
         code: 'goto-into-for-loop'
+    }),
+    /**
+     * The body of an `#if` / `#else if` / `#else` branch that is not compiled with the current constants.
+     * Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     */
+    inactiveConditionalCompileBranch: () => ({
+        message: 'Inactive conditional compile branch: this code is not compiled with the current constants',
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'inactive-conditional-compile-branch'
     })
 };
 export const defaultMaximumTruncationLength = 160;
