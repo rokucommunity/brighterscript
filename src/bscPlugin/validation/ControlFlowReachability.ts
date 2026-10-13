@@ -1,8 +1,8 @@
-import { isBinaryExpression, isConditionalCompileStatement, isEndStatement, isExitStatement, isForEachStatement, isForStatement, isGotoStatement, isGroupingExpression, isIfStatement, isLabelStatement, isLiteralExpression, isReturnStatement, isThrowStatement, isContinueStatement, isTryCatchStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isBinaryExpression, isConditionalCompileStatement, isEndStatement, isExitStatement, isForEachStatement, isForStatement, isGotoStatement, isGroupingExpression, isIfStatement, isLabelStatement, isLiteralExpression, isReturnStatement, isSelectCaseStatement, isThrowStatement, isContinueStatement, isTryCatchStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { FunctionExpression } from '../../parser/Expression';
-import type { Block, ConditionalCompileStatement, ForEachStatement, ForStatement, IfStatement, WhileStatement } from '../../parser/Statement';
+import type { Block, ConditionalCompileStatement, ForEachStatement, ForStatement, IfStatement, SelectCaseStatement, WhileStatement } from '../../parser/Statement';
 import util from '../../util';
 import type { Location } from 'vscode-languageserver';
 
@@ -35,27 +35,6 @@ export function findUnreachableRegions(func: FunctionExpression): ControlFlowAna
         coveredConditionalCompileChains: analysis.coveredConditionalCompileChains,
         partiallyCoveredConditionalCompileChains: analysis.partiallyCoveredConditionalCompileChains
     };
-}
-
-/**
- * Is the node inside a branch of a conditional compile statement that the device never compiles?
- */
-export function isInsideInactiveConditionalCompileBranch(node: AstNode): boolean {
-    let child: AstNode = node;
-    let parent = node.parent;
-    while (parent) {
-        if (isConditionalCompileStatement(parent) && parent.resolution) {
-            if (child === parent.thenBranch && !(parent.resolution.isReached && parent.resolution.isConditionTrue)) {
-                return true;
-            }
-            if (child === parent.elseBranch && !isConditionalCompileStatement(child) && !(parent.resolution.isReached && !parent.resolution.isConditionTrue)) {
-                return true;
-            }
-        }
-        child = parent;
-        parent = parent.parent;
-    }
-    return false;
 }
 
 /**
@@ -98,10 +77,12 @@ const reasons = {
     goto: 'Unreachable code after goto',
     exitFor: 'Unreachable code after exit for',
     exitWhile: 'Unreachable code after exit while',
+    exitSelect: 'Unreachable code after exit select',
     exit: 'Unreachable code after exit',
     continue: 'Unreachable code after continue',
     ifBranchesExit: 'Unreachable code after an if statement whose branches all exit',
     tryCatchExit: 'Unreachable code after a try/catch whose blocks both exit',
+    selectCasesExit: 'Unreachable code after a select case whose cases all exit',
     infiniteLoop: 'Unreachable code after an infinite loop',
     conditionAlwaysFalse: 'Unreachable code: condition is always false',
     earlierConditionAlwaysTrue: 'Unreachable code: an earlier condition is always true'
@@ -189,8 +170,11 @@ class ReachabilityAnalysis {
             this.exitReason = reasons.goto;
         } else if (isExitStatement(statement)) {
             const loopKind = statement.tokens.loopType?.kind;
-            this.recordLoopJump(loopKind, 'hasExit');
-            if (loopKind === TokenKind.For) {
+            const hasTarget = this.recordLoopJump(loopKind, 'hasExit');
+            if (loopKind === TokenKind.Select) {
+                //an `exit select` outside of a `select case` is a compile error, not an exit
+                this.exitReason = hasTarget ? reasons.exitSelect : undefined;
+            } else if (loopKind === TokenKind.For) {
                 this.exitReason = reasons.exitFor;
             } else if (loopKind === TokenKind.While) {
                 this.exitReason = reasons.exitWhile;
@@ -208,7 +192,25 @@ class ReachabilityAnalysis {
             this.exitReason = this.mergeBranchEnds(entryReason, [tryEnd, catchEnd], reasons.tryCatchExit, false);
         } else if (isWhileStatement(statement) || isForStatement(statement) || isForEachStatement(statement)) {
             this.exitReason = this.analyzeLoop(statement, entryReason);
+        } else if (isSelectCaseStatement(statement)) {
+            this.exitReason = this.analyzeSelectCase(statement, entryReason);
         }
+    }
+
+    /**
+     * Each case body runs from the reachability before the `select`. Control falls through past the `select` when no case matches
+     * (there is no `case else`), when a case body ends normally, or when an `exit select` leaves it.
+     */
+    private analyzeSelectCase(selectCase: SelectCaseStatement, entryReason: string | undefined): string | undefined {
+        const select: LoopState = { kind: TokenKind.Select, hasExit: false, hasContinue: false };
+        this.loops.push(select);
+        const caseEnds = selectCase.cases.map(caseStatement => this.analyzeBlock(caseStatement.body, entryReason));
+        this.loops.pop();
+        if (select.hasExit) {
+            return undefined;
+        }
+        const hasCaseElse = selectCase.cases.some(caseStatement => !!caseStatement.tokens.else);
+        return this.mergeBranchEnds(entryReason, caseEnds, reasons.selectCasesExit, !hasCaseElse);
     }
 
     private analyzeIf(ifStatement: IfStatement, entryReason: string | undefined): string | undefined {
@@ -325,6 +327,10 @@ class ReachabilityAnalysis {
             this.skipBlock(statement.body, nestedWhileDepth + 1, nestedForDepth);
         } else if (isForStatement(statement) || isForEachStatement(statement)) {
             this.skipBlock(statement.body, nestedWhileDepth, nestedForDepth + 1);
+        } else if (isSelectCaseStatement(statement)) {
+            for (const caseStatement of statement.cases) {
+                this.skipBlock(caseStatement.body, nestedWhileDepth, nestedForDepth);
+            }
         } else if (isConditionalCompileStatement(statement)) {
             this.skipBlock(getActiveConditionalCompileBranch(statement), nestedWhileDepth, nestedForDepth);
         }
@@ -337,16 +343,21 @@ class ReachabilityAnalysis {
     }
 
     /**
-     * Note an `exit` or `continue` on the innermost loop of the kind it targets
+     * Note an `exit` or `continue` on the innermost loop (or `select case`, for `exit select`) of the kind it targets
+     * @returns true when there was a target to note it on
      */
     private recordLoopJump(loopKind: TokenKind | undefined, flag: 'hasExit' | 'hasContinue') {
-        const targetKind = loopKind === TokenKind.For ? TokenKind.For : TokenKind.While;
+        let targetKind: LoopState['kind'] = TokenKind.While;
+        if (loopKind === TokenKind.For || loopKind === TokenKind.Select) {
+            targetKind = loopKind;
+        }
         for (let index = this.loops.length - 1; index >= 0; index--) {
             if (this.loops[index].kind === targetKind) {
                 this.loops[index][flag] = true;
-                return;
+                return true;
             }
         }
+        return false;
     }
 
     private extendRun(statement: Statement, reason: string) {
@@ -421,6 +432,11 @@ class ReachabilityAnalysis {
             hasLabel = this.markLabelContainersInBlock(statement.catchStatement?.catchBranch) || hasLabel;
         } else if (isWhileStatement(statement) || isForStatement(statement) || isForEachStatement(statement)) {
             hasLabel = this.markLabelContainersInBlock(statement.body);
+        } else if (isSelectCaseStatement(statement)) {
+            hasLabel = this.markLabelContainersInBlock(statement.leadingStatements);
+            for (const caseStatement of statement.cases) {
+                hasLabel = this.markLabelContainersInBlock(caseStatement.body) || hasLabel;
+            }
         } else if (isConditionalCompileStatement(statement)) {
             hasLabel = this.markLabelContainersInBlock(getActiveConditionalCompileBranch(statement));
         }
@@ -436,16 +452,15 @@ class ReachabilityAnalysis {
  */
 function getActiveConditionalCompileBranch(chainStart: ConditionalCompileStatement): Block | undefined {
     let statement = chainStart;
-    while (statement?.resolution) {
-        const resolution = statement.resolution;
-        if (resolution.isReached && resolution.isConditionTrue) {
+    while (statement?.isConditionTrue !== undefined) {
+        if (statement.isConditionTrue) {
             return statement.thenBranch;
         }
         const elseBranch = statement.elseBranch;
         if (isConditionalCompileStatement(elseBranch)) {
             statement = elseBranch;
         } else {
-            return elseBranch && resolution.isReached ? elseBranch : undefined;
+            return elseBranch;
         }
     }
     return undefined;
@@ -491,7 +506,10 @@ interface UnreachableRun {
 }
 
 interface LoopState {
-    kind: TokenKind.For | TokenKind.While;
+    /**
+     * `Select` for a `select case`, which only `exit select` targets
+     */
+    kind: TokenKind.For | TokenKind.While | TokenKind.Select;
     /**
      * Does an `exit` target this loop?
      */

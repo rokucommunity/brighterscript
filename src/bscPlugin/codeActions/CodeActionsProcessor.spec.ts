@@ -1183,7 +1183,7 @@ describe('CodeActionsProcessor', () => {
             expect(edits[0].range).to.eql(util.createRange(2, 0, 2, 0));
         });
 
-        it('does not offer to disable unreachable-code', () => {
+        it('does not offer to disable inactive-conditional-compile-branch', () => {
             const file = program.setFile('source/main.bs', `
                 sub init()
                     #if false
@@ -1192,14 +1192,14 @@ describe('CodeActionsProcessor', () => {
                 end sub
             `);
             program.validate();
-            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql(['unreachable-code']);
+            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql(['inactive-conditional-compile-branch']);
             const actions = program.getCodeActions(file.srcPath, util.createRange(3, 0, 3, 30));
-            expect(findLineAction(actions, 'unreachable-code')).to.be.undefined;
-            expect(findFileAction(actions, 'unreachable-code')).to.be.undefined;
-            expect(actions.filter(action => action.title.includes('unreachable'))).to.eql([]);
+            expect(findLineAction(actions, 'inactive-conditional-compile-branch')).to.be.undefined;
+            expect(findFileAction(actions, 'inactive-conditional-compile-branch')).to.be.undefined;
+            expect(actions.filter(action => action.title.includes('inactive-conditional-compile-branch'))).to.eql([]);
         });
 
-        it('still offers to disable a plugin diagnostic that shares the unreachable-code code', () => {
+        it('still offers to disable a plugin unreachable-code diagnostic', () => {
             const file = program.setFile('source/main.bs', `
                 sub init()
                     return

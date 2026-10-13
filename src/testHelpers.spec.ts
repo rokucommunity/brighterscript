@@ -231,14 +231,6 @@ export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: P
 }
 
 /**
- * Get the diagnostics of the given object without the `unreachable-code` hints that fade inactive conditional compile branches.
- * Use this when a spec contains inactive branches but is not about the fading itself.
- */
-export function withoutUnreachableCode(arg: DiagnosticCollection): BsDiagnostic[] {
-    return getDiagnostics(arg).filter(diagnostic => diagnostic.code !== 'unreachable-code');
-}
-
-/**
  * Test that the given object has zero diagnostics. If diagnostics are found, they are printed to the console in a pretty fashion.
  */
 export function expectZeroDiagnostics(arg: DiagnosticCollection) {
@@ -358,7 +350,8 @@ function getTestFileAction(
         }
         program.validate();
         if (failOnDiagnostic !== false) {
-            expectZeroDiagnostics(withoutUnreachableCode(program));
+            //transpile tests often have inactive `#if` branches or unreachable code, whose hints only fade code and say nothing about the output
+            expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== 'inactive-conditional-compile-branch' && diagnostic.code !== 'unreachable-code'));
         }
         let codeWithMap = await action(file);
 

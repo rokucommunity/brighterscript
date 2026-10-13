@@ -22,11 +22,11 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { AALiteralExpression, ArrayLiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
+import { isAnyReferenceType, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -47,7 +47,7 @@ import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromVa
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
-import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
+import type { AssignmentStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from './parser/Statement';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
@@ -2237,6 +2237,21 @@ export class Util {
     }
 
     /**
+     * Spread is only supported when the literal is the direct value of an assignment, dotted set, or indexed set
+     * that lives in a statement list. Returns that statement, or undefined when the literal is anywhere else.
+     */
+    public getSpreadLiteralOwnerStatement(literal: ArrayLiteralExpression | AALiteralExpression): AssignmentStatement | DottedSetStatement | IndexedSetStatement | undefined {
+        const parent = literal.parent;
+        if (
+            (isAssignmentStatement(parent) || isDottedSetStatement(parent) || isIndexedSetStatement(parent)) &&
+            parent.value === literal &&
+            (isBlock(parent.parent) || isBody(parent.parent))
+        ) {
+            return parent;
+        }
+    }
+
+    /**
      * Given an expression, return all the DottedGet name parts as a string.
      * Mostly used to convert namespaced item full names to a strings
      */
@@ -2600,43 +2615,6 @@ export class Util {
         return [...circularReferenceInfo.referenceChainNames, circularReferenceInfo.referenceChainNames[0]];
     }
 
-
-    /**
-     * Evaluate the condition of a `#if` / `#else if`. The literals `true` and `false` are handled directly,
-     * anything else is looked up (case-insensitively) in `bsConsts`. An undeclared constant evaluates to false.
-     * @param condition the token following `#if` (and the optional `not`)
-     * @param notToken the `not` token, when the condition is negated
-     */
-    public evaluateConditionalCompileCondition(condition: Token, notToken: Token | undefined, bsConsts: Map<string, boolean> | undefined): ConditionalCompileEvaluation {
-        let isConstantDeclared = true;
-        let constantValue: boolean;
-        if (condition.kind === TokenKind.True) {
-            constantValue = true;
-        } else if (condition.kind === TokenKind.False) {
-            constantValue = false;
-        } else {
-            const constantName = condition.text.toLowerCase();
-            isConstantDeclared = !!bsConsts?.has(constantName);
-            constantValue = bsConsts?.get(constantName) === true;
-        }
-        return {
-            isConditionTrue: notToken ? !constantValue : constantValue,
-            isConstantDeclared: isConstantDeclared
-        };
-    }
-
-    /**
-     * Add a declaration to a name map where active declarations win over inactive ones. Among declarations of the same activity the last one wins.
-     * `activeKeys` tracks the keys that already hold an active declaration and is updated as active declarations are added.
-     */
-    public setActiveDeclarationWins<T>(map: Map<string, T>, activeKeys: Set<string>, key: string, value: T, isActive: boolean) {
-        if (isActive) {
-            activeKeys.add(key);
-            map.set(key, value);
-        } else if (!activeKeys.has(key)) {
-            map.set(key, value);
-        }
-    }
 
     public isInTypeExpression(expression: AstNode): boolean {
         //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
@@ -3248,20 +3226,6 @@ export function standardizePath(stringParts: TemplateStringsArray | string, ...e
  * An item that can be coerced into a `Range`
  */
 export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
-
-/**
- * The outcome of evaluating a `#if` condition
- */
-export interface ConditionalCompileEvaluation {
-    /**
-     * Whether the condition, including any `not`, is true
-     */
-    isConditionTrue: boolean;
-    /**
-     * Whether the condition is a boolean literal or names a declared constant
-     */
-    isConstantDeclared: boolean;
-}
 
 export let util = new Util();
 export default util;

@@ -1,11 +1,11 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
-import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import type { AssignmentStatement, ClassStatement, ConditionalCompileStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
 import { DiagnosticCodeMap, DiagnosticMessages } from '../../DiagnosticMessages';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim, withoutUnreachableCode } from '../../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
-import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
+import { isAssignmentStatement, isClassStatement, isConditionalCompileStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import { util, standardizePath as s } from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -17,13 +17,16 @@ import { StringType } from '../../types/StringType';
 import { ArrayType } from '../../types/ArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import { TypedFunctionType } from '../../types/TypedFunctionType';
-import { ParseMode } from '../../parser/Parser';
+import { ParseMode, Parser } from '../../parser/Parser';
 import type { BsDiagnostic, ExtraSymbolData } from '../../interfaces';
 import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as fsExtra from 'fs-extra';
+import type { Range } from 'vscode-languageserver';
+import { createToken } from '../../astUtils/creators';
+import { TokenKind } from '../../lexer/TokenKind';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -1126,7 +1129,10 @@ describe('BrsFileValidator', () => {
                 end function
             `);
             program.validate();
-            expectZeroDiagnostics(withoutUnreachableCode(program));
+            //no #error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(4, 0, 5, 0) } }
+            ]);
         });
 
         describe('evaluation', () => {
@@ -1137,7 +1143,8 @@ describe('BrsFileValidator', () => {
             });
 
             /**
-             * Load a file into a new program and return `code@line` (zero-based) for every diagnostic
+             * Load a file into a new program, validate it and return its diagnostics, except the hints that fade inactive branches.
+             * These specs are about which branches are evaluated, and the `inactive conditional compile branches` specs below cover the hints
              */
             function validate(source: string, options?: { bsConsts?: Record<string, boolean>; minFirmwareVersion?: string; destPath?: string }) {
                 evaluationProgram?.dispose();
@@ -1154,7 +1161,7 @@ describe('BrsFileValidator', () => {
                 evaluationProgram.validate();
                 return {
                     file: file,
-                    diagnostics: withoutUnreachableCode(evaluationProgram).map(diagnostic => `${diagnostic.code}@${diagnostic.location.range.start.line}`)
+                    diagnostics: evaluationProgram.getDiagnostics().filter(diagnostic => diagnostic.code !== DiagnosticCodeMap.inactiveConditionalCompileBranch)
                 };
             }
 
@@ -1181,7 +1188,7 @@ describe('BrsFileValidator', () => {
                     #end if
                     end sub
                 `);
-                expect(diagnostics).to.eql([]);
+                expectZeroDiagnostics(diagnostics);
             });
 
             it('lets plugins walk the active branch and not the inactive branch', () => {
@@ -1198,7 +1205,9 @@ describe('BrsFileValidator', () => {
                     #end if
                     end sub
                 `);
-                expect(diagnostics).to.eql(['cannot-find-function@6']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(6, 24, 6, 42) } }
+                ]);
                 expect(collectPrintedText(file)).to.eql(['"start"', '"active"']);
             });
 
@@ -1212,7 +1221,9 @@ describe('BrsFileValidator', () => {
                     sub main()
                     end sub
                 `);
-                expect(diagnostics).to.eql(['hash-error@2']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(2, 20, 2, 26) } }
+                ]);
             });
 
             it('treats #if not true as false', () => {
@@ -1225,7 +1236,9 @@ describe('BrsFileValidator', () => {
                     sub main()
                     end sub
                 `);
-                expect(diagnostics).to.eql(['hash-error@4']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(4, 20, 4, 26) } }
+                ]);
             });
 
             it('treats #if false as false and #if not false as true', () => {
@@ -1237,7 +1250,9 @@ describe('BrsFileValidator', () => {
                     #error active-error
                     #end if
                 `);
-                expect(diagnostics).to.eql(['hash-error@5']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(5, 20, 5, 26) } }
+                ]);
             });
 
             it('validates the active branch of a literal #if inside a function', () => {
@@ -1252,12 +1267,14 @@ describe('BrsFileValidator', () => {
                     #end if
                     end sub
                 `);
-                expect(diagnostics).to.eql(['cannot-find-function@4']);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(4, 24, 4, 42) } }
+                ]);
                 expect(collectPrintedText(file)).to.eql(['"active"']);
             });
 
             describe('parse diagnostics', () => {
-                it('keeps syntax errors in a literal true branch', () => {
+                it('keeps syntax errors in the active branch of a literal #if', () => {
                     const { diagnostics } = validate(`
                         sub main()
                         #if true
@@ -1265,7 +1282,9 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `);
-                    expect(diagnostics).to.eql(['unexpected-token@3']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
                 });
 
                 it('drops syntax errors in the inactive else of an active #if DEBUG', () => {
@@ -1278,7 +1297,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('keeps syntax errors in an active #if not DEBUG', () => {
@@ -1289,7 +1308,9 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: false } });
-                    expect(diagnostics).to.eql(['unexpected-token@3']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
                 });
 
                 it('keeps syntax errors in a branch enabled by a file-level #const', () => {
@@ -1301,7 +1322,22 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `);
-                    expect(diagnostics).to.eql(['unexpected-token@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(4, 32, 4, 33) } }
+                    ]);
+                });
+
+                it('keeps the syntax error of text after the condition of an inactive #if', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if DEBUG +
+                            print 1
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(2, 34, 2, 35) } }
+                    ]);
                 });
 
                 it('drops syntax errors in an inactive #if not DEBUG', () => {
@@ -1312,7 +1348,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('drops syntax errors in the inactive tail of an #else if chain', () => {
@@ -1327,7 +1363,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('drops syntax errors in an inactive #if false / #else if DEBUG / #else chain', () => {
@@ -1342,7 +1378,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('keeps syntax errors in the final #else when every earlier condition is false', () => {
@@ -1357,7 +1393,164 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: false } });
-                    expect(diagnostics).to.eql(['unexpected-token@7']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(7, 32, 7, 33) } }
+                    ]);
+                });
+            });
+
+            describe('changes after parsing', () => {
+                const source = `
+                    sub main()
+                    #if DEBUG
+                        x = = 1
+                    #else
+                        y = = 2
+                    #end if
+                    end sub
+                `;
+
+                function createHashConst(name: string, value: boolean) {
+                    return Parser.parse(`#const ${name} = ${value}\n`).ast.statements[0];
+                }
+
+                /**
+                 * Validate the source after a plugin has edited the parsed file
+                 */
+                function validateAfterEdit(edit: (file: BrsFile) => void) {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            edit(event.file as BrsFile);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', source);
+                    evaluationProgram.validate();
+                    return evaluationProgram.getDiagnostics();
+                }
+
+                const inactiveThenBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
+                const inactiveElseBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(5, 0, 6, 0) } };
+
+                it('reports the diagnostics of the branch that the parsed constants select', () => {
+                    const diagnostics = validateAfterEdit(() => { });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by changing the constants', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by editing the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition.location);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the else branch when a plugin negates the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
+                    ]);
+                });
+
+                it('does not validate the code of a branch a plugin deactivates', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            (event.file as BrsFile).ast.bsConsts = new Map([['debug', false]]);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', `
+                        #if DEBUG
+                        sub main()
+                            notAFunction()
+                        end sub
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    //notAFunction() is not validated, and the whole function is faded
+                    expectDiagnostics(evaluationProgram, [
+                        { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 5, 0) } }
+                    ]);
+                });
+
+                it('reflects an injected #const in the parse diagnostics after the next full walk, without validating again', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.brs', `
+                        sub main()
+                        #if DEBUG
+                            x = = 1
+                        #end if
+                        end sub
+                    `);
+                    const inactiveBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
+                    file.ast.statements.unshift(createHashConst('DEBUG', false));
+                    evaluationProgram.validate();
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
+
+                    file.ast.statements[0] = createHashConst('DEBUG', true);
+                    file.ast.link();
+                    //the parse error follows the walk right away. The fading hint comes from validation, so it stays until the file validates again
+                    expectDiagnostics(evaluationProgram, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } },
+                        inactiveBranch
+                    ]);
+
+                    file.ast.statements[0] = createHashConst('DEBUG', false);
+                    file.ast.link();
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
+                });
+
+                it('reflects an injected #const in scope lookups after the file validates again', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.bs', `
+                        #if DEBUG
+                        class Foo
+                            sub debugMethod()
+                            end sub
+                        end class
+                        #else
+                        class Foo
+                            sub releaseMethod()
+                            end sub
+                        end class
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    const scope = evaluationProgram.getScopeByName('source');
+                    expect(scope.getClass('Foo').memberMap['releasemethod']).to.exist;
+                    file.ast.statements.unshift(createHashConst('DEBUG', true));
+                    file.isValidated = false;
+                    scope.invalidate();
+                    evaluationProgram.validate();
+                    expect(scope.getClass('Foo').memberMap['debugmethod']).to.exist;
+                    expect(file['_cachedLookups'].classStatementMap.get('foo').memberMap['debugmethod']).to.exist;
                 });
             });
 
@@ -1369,7 +1562,9 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `);
-                    expect(diagnostics).to.eql(['duplicate-const-declaration@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(2, 31, 2, 32) } }
+                    ]);
                 });
 
                 it('flags a #const that redeclares a bs_const', () => {
@@ -1378,7 +1573,9 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql(['duplicate-const-declaration@1']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(1, 31, 1, 36) } }
+                    ]);
                 });
 
                 it('allows a duplicate #const inside an inactive branch', () => {
@@ -1390,7 +1587,7 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('reports only the invalid value when a #const alias reuses a declared name', () => {
@@ -1398,14 +1595,18 @@ describe('BrsFileValidator', () => {
                         #const A = true
                         #const A = B
                     `);
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
                 });
 
                 it('reports only the invalid value when an invalid #const reuses a bs_const name', () => {
                     const { diagnostics } = validate(`
                         #const DEBUG = NOPE
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@1']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 39, 1, 43) } }
+                    ]);
                 });
 
                 it('does not apply a #const declared in an inactive branch', () => {
@@ -1418,7 +1619,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #const A = true
                     `, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('applies a #const declared in the active branch in source order', () => {
@@ -1433,7 +1634,7 @@ describe('BrsFileValidator', () => {
                         #error logging-on
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
             });
 
@@ -1458,25 +1659,25 @@ describe('BrsFileValidator', () => {
 
                 it('reports undeclared constants before firmware 16', () => {
                     const { diagnostics } = validate(source, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql([
-                        'hash-const-does-not-exist@2',
-                        'hash-const-does-not-exist@5',
-                        'hash-const-does-not-exist@8'
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
                     ]);
                 });
 
                 it('reports undeclared constants with the default firmware', () => {
                     const { diagnostics } = validate(source);
-                    expect(diagnostics).to.eql([
-                        'hash-const-does-not-exist@2',
-                        'hash-const-does-not-exist@5',
-                        'hash-const-does-not-exist@8'
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
                     ]);
                 });
 
                 it('evaluates undeclared constants as false on firmware 16 and up', () => {
                     const { diagnostics } = validate(source, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('reports an undeclared constant in an evaluated #else if before firmware 16', () => {
@@ -1485,7 +1686,9 @@ describe('BrsFileValidator', () => {
                         #else if NOPE
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql(['hash-const-does-not-exist@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 33, 2, 37) } }
+                    ]);
                 });
 
                 it('does not report an undeclared constant in an #else if that is never reached', () => {
@@ -1494,7 +1697,7 @@ describe('BrsFileValidator', () => {
                         #else if NOPE
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('does not report an undeclared constant inside an inactive branch', () => {
@@ -1504,7 +1707,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
             });
 
@@ -1524,7 +1727,7 @@ describe('BrsFileValidator', () => {
                             logit()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('allows the same function in branches chosen by a file-level #const', () => {
@@ -1548,7 +1751,7 @@ describe('BrsFileValidator', () => {
                             logit()
                         end sub
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('still reports a function duplicated within the active branch', () => {
@@ -1560,7 +1763,10 @@ describe('BrsFileValidator', () => {
                         end sub
                         #end if
                     `);
-                    expect(diagnostics).to.eql(['duplicate-function@2', 'duplicate-function@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-function', location: { range: util.createRange(2, 28, 2, 33) } },
+                        { code: 'duplicate-function', location: { range: util.createRange(4, 28, 4, 33) } }
+                    ]);
                 });
             });
 
@@ -1571,15 +1777,28 @@ describe('BrsFileValidator', () => {
                             #const A = true
                             #const B = A
                         `, { minFirmwareVersion: minFirmwareVersion });
-                        expect(diagnostics, minFirmwareVersion).to.eql(['invalid-hash-const-value@2']);
+                        expectDiagnostics(diagnostics, [
+                            { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 39, 2, 40) } }
+                        ]);
                     }
+                });
+
+                it('rejects a value that is not a boolean', () => {
+                    const { diagnostics } = validate(`
+                        #const test = 4
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 38, 1, 39) } }
+                    ]);
                 });
 
                 it('rejects an alias of an undeclared name', () => {
                     const { diagnostics } = validate(`
                         #const B = NOPE
                     `, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@1']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 35, 1, 39) } }
+                    ]);
                 });
 
                 it('treats a later #if on the alias as undeclared before firmware 16', () => {
@@ -1590,7 +1809,10 @@ describe('BrsFileValidator', () => {
                         #error alias-resolved
                         #end if
                     `, { minFirmwareVersion: '15.3.0' });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@2', 'hash-const-does-not-exist@3']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(3, 28, 3, 29) } }
+                    ]);
                 });
 
                 it('treats a later #if on the alias as false on firmware 16 and up', () => {
@@ -1601,7 +1823,9 @@ describe('BrsFileValidator', () => {
                         #error alias-resolved
                         #end if
                     `, { minFirmwareVersion: '16.0.0' });
-                    expect(diagnostics).to.eql(['invalid-hash-const-value@2']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
                 });
 
                 it('does not report an alias inside an inactive branch', () => {
@@ -1611,7 +1835,7 @@ describe('BrsFileValidator', () => {
                         #const B = A
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
             });
 
@@ -1633,7 +1857,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 1');
                     expect(code).not.to.include('print 2');
                 });
@@ -1653,7 +1877,7 @@ describe('BrsFileValidator', () => {
                             print Color.red
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('active-red');
                     expect(code).not.to.include('inactive-red');
                 });
@@ -1683,7 +1907,7 @@ describe('BrsFileValidator', () => {
                             return item.activeMember
                         end function
                     `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     const scope = evaluationProgram.getScopesForFile(file)[0];
                     const widget = scope.getClassMap().get('widget').item;
                     expect(widget.fields.map(field => field.tokens.name.text)).to.eql(['activeField']);
@@ -1706,7 +1930,7 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print "r"');
                     expect(code).to.include('print 3');
                     expect(code).not.to.include('Color.red');
@@ -1726,7 +1950,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print "r"');
                     expect(code).to.include('print 3');
                 });
@@ -1752,7 +1976,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print "r"');
                     expect(code).to.include('print 3');
                     expect(code).not.to.include('alpha_Color_red');
@@ -1775,7 +1999,7 @@ describe('BrsFileValidator', () => {
                         sub main()
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('instance = __Parent_builder()');
                     expect(code).to.include('instance.super0_new = instance.new');
                     expect(code).to.include('m.super0_new()');
@@ -1793,7 +2017,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end namespace
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('widget = alpha_Widget()');
                 });
 
@@ -1809,7 +2033,7 @@ describe('BrsFileValidator', () => {
                         end sub
                         #end if
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('(function(__bsCondition)');
                     expect(code).to.include('return "r"');
                     expect(code).to.include('return 3');
@@ -1841,7 +2065,7 @@ describe('BrsFileValidator', () => {
                         end namespace
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('f = Foo()');
                     expect(code).not.to.include('f = NS_Foo()');
                     expect(code).to.include('print "active-global"');
@@ -1878,7 +2102,7 @@ describe('BrsFileValidator', () => {
                             print foo
                         end sub
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('still reports a local variable shadowed by an active class', () => {
@@ -1890,7 +2114,7 @@ describe('BrsFileValidator', () => {
                             print foo
                         end sub
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.have.lengthOf(1);
+                    expectDiagnostics(diagnostics, ['var-shadows-function']);
                 });
 
                 it('inlines the active enum in both branches when both branches declare it', async () => {
@@ -1912,7 +2136,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code.match(/print "active-red"/g)).to.have.lengthOf(2);
                     expect(code).not.to.include('inactive-red');
                 });
@@ -1932,7 +2156,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         end sub
                     `, { bsConsts: { DEBUG: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code.match(/print 1/g)).to.have.lengthOf(2);
                     expect(code).not.to.include('print 2');
                 });
@@ -1944,7 +2168,7 @@ describe('BrsFileValidator', () => {
                         const B = A
                         #end if
                     `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('picks the declaration using a file-level #const', async () => {
@@ -1959,7 +2183,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 2');
                     expect(code).not.to.include('print 1');
                 });
@@ -1977,7 +2201,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `, { bsConsts: { A: false, B: true } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 2');
                     expect(code).not.to.include('print 1');
                     expect(code).not.to.include('print 3');
@@ -1996,7 +2220,7 @@ describe('BrsFileValidator', () => {
                             print LEVEL
                         end sub
                     `, { bsConsts: { A: false, B: false } });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                     expect(code).to.include('print 3');
                 });
             });
@@ -2021,7 +2245,7 @@ describe('BrsFileValidator', () => {
                             end sub
                             #end if
                         `, { bsConsts: chainBranchCase.bsConsts });
-                        expect(diagnostics).to.eql([]);
+                        expectZeroDiagnostics(diagnostics);
                     });
                 }
 
@@ -2034,7 +2258,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('allows a function in the #else of a nested #if at the top level', () => {
@@ -2047,7 +2271,7 @@ describe('BrsFileValidator', () => {
                         #end if
                         #end if
                     `);
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('allows a function in a nested #if inside a namespace', () => {
@@ -2061,7 +2285,7 @@ describe('BrsFileValidator', () => {
                             #end if
                         end namespace
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql([]);
+                    expectZeroDiagnostics(diagnostics);
                 });
 
                 it('still rejects a namespace in a nested #if inside a function', () => {
@@ -2075,7 +2299,9 @@ describe('BrsFileValidator', () => {
                         #end if
                         end function
                     `, { destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql(['invalid-declaration-location@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
                 });
 
                 it('still rejects a namespace inside an #else if chain within a function', () => {
@@ -2088,19 +2314,21 @@ describe('BrsFileValidator', () => {
                         #end if
                         end function
                     `, { bsConsts: { A: false, B: true }, destPath: 'source/main.bs' });
-                    expect(diagnostics).to.eql(['invalid-declaration-location@4']);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
                 });
             });
         });
     });
 
-    describe('unreachable code', () => {
+    describe('inactive conditional compile branches', () => {
         afterEach(() => {
             fsExtra.removeSync(`${rootDir}/manifest`);
         });
 
         /**
-         * Validate the given lines in a fresh program and return the `unreachable-code` diagnostics plus every diagnostic code that was found
+         * Validate the given lines in a fresh program and return the `inactive-conditional-compile-branch` diagnostics, those plus the `unreachable-code` ones, and every diagnostic code that was found
          */
         function validateLines(lines: string[], options?: { destPath?: string; bsConsts?: Record<string, boolean>; programOptions?: Partial<ConstructorParameters<typeof Program>[0]> }) {
             fsExtra.removeSync(`${rootDir}/manifest`);
@@ -2108,14 +2336,15 @@ describe('BrsFileValidator', () => {
                 const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
                 fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
             }
-            const unreachableProgram = new Program({ rootDir: rootDir, ...options?.programOptions });
-            unreachableProgram.setFile(options?.destPath ?? 'source/main.bs', lines.join('\n'));
-            unreachableProgram.validate();
-            const diagnostics = unreachableProgram.getDiagnostics();
+            const branchProgram = new Program({ rootDir: rootDir, ...options?.programOptions });
+            branchProgram.setFile(options?.destPath ?? 'source/main.bs', lines.join('\n'));
+            branchProgram.validate();
+            const diagnostics = branchProgram.getDiagnostics();
             return {
-                program: unreachableProgram,
+                program: branchProgram,
                 allCodes: diagnostics.map(diagnostic => diagnostic.code),
-                unreachable: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.unreachableCode)
+                inactive: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.inactiveConditionalCompileBranch),
+                unreachable: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.inactiveConditionalCompileBranch || diagnostic.code === DiagnosticCodeMap.unreachableCode)
             };
         }
 
@@ -2124,28 +2353,28 @@ describe('BrsFileValidator', () => {
         }
 
         it('defines the diagnostic as a hint tagged unnecessary', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#end if'
             ]);
-            expect(unreachable).to.have.lengthOf(1);
-            expect(unreachable[0].severity).to.eql(DiagnosticSeverity.Hint);
-            expect(unreachable[0].tags).to.eql([DiagnosticTag.Unnecessary]);
-            expect(unreachable[0].message).to.eql(DiagnosticMessages.unreachableCode().message);
+            expect(inactive).to.have.lengthOf(1);
+            expect(inactive[0].severity).to.eql(DiagnosticSeverity.Hint);
+            expect(inactive[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+            expect(inactive[0].message).to.eql(DiagnosticMessages.inactiveConditionalCompileBranch().message);
         });
 
         it('carries the tags through to the LSP diagnostic', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#end if'
             ]);
-            expect(util.toDiagnostic(unreachable[0], 'file:///source/main.bs').tags).to.eql([DiagnosticTag.Unnecessary]);
+            expect(util.toDiagnostic(inactive[0], 'file:///source/main.bs').tags).to.eql([DiagnosticTag.Unnecessary]);
         });
 
         it('covers exactly the body lines of an inactive #if', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'sub main()',
                 'end sub',
                 '#if false',
@@ -2153,34 +2382,34 @@ describe('BrsFileValidator', () => {
                 '    print "bb"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(3, 0, 5, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers only the #else body when the #if is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 'print "a"',
                 '#else',
                 'print "b"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(3, 0, 4, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
         });
 
         it('covers only the #if body when the #else is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if not true',
                 'print "a"',
                 '#else',
                 'print "b"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('covers the first and last bodies of an #else if chain when the middle branch is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#const A = false',
                 '#const B = true',
                 '#if A',
@@ -2191,14 +2420,14 @@ describe('BrsFileValidator', () => {
                 'print "c"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([
+            expect(getRanges(inactive)).to.eql([
                 util.createRange(3, 0, 4, 0),
                 util.createRange(7, 0, 8, 0)
             ]);
         });
 
         it('covers every later body of an #else if chain once an earlier branch is active', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 'print "a"',
                 '#else if true',
@@ -2207,14 +2436,14 @@ describe('BrsFileValidator', () => {
                 'print "c"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([
+            expect(getRanges(inactive)).to.eql([
                 util.createRange(3, 0, 4, 0),
                 util.createRange(5, 0, 6, 0)
             ]);
         });
 
         it('covers the last body of an #else if chain when every condition is false', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#else if false',
@@ -2223,62 +2452,62 @@ describe('BrsFileValidator', () => {
                 'print "c"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([
+            expect(getRanges(inactive)).to.eql([
                 util.createRange(1, 0, 2, 0),
                 util.createRange(3, 0, 4, 0)
             ]);
         });
 
         it('ignores a comment on the directive line when the body is empty', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false \' note',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
-        it('ignores a comment on the directive line when the body is blank', () => {
-            const { unreachable } = validateLines([
+        it('fades a blank body without the comment on the directive line', () => {
+            const { inactive } = validateLines([
                 '#if false \' note',
                 '',
                 '    ',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
         });
 
         it('reports the normal range when a directive line comment is followed by real content', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false \' note',
                 'print "a"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('ignores a comment on an #else line when the body is empty', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 'print "a"',
                 '#else \' note',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         it('supports single-word #elseif and #endif directives', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 'print "a"',
                 '#elseif true',
                 'print "b"',
                 '#endif'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('does not report nested conditional compile statements inside an inactive branch', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 '#if true',
                 'print "a"',
@@ -2287,22 +2516,22 @@ describe('BrsFileValidator', () => {
                 '#end if',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 6, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 6, 0)]);
         });
 
         it('reports an inactive branch nested inside an active branch', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if true',
                 '#if false',
                 'print "a"',
                 '#end if',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
         });
 
         it('reports one range for an inactive body that does not parse', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 '#if false',
                 'x = = 1',
                 'if then',
@@ -2310,24 +2539,24 @@ describe('BrsFileValidator', () => {
                 'y = (',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 5, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers an inactive branch inside a function', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'sub main()',
                 '    #if false',
                 '        print "a"',
                 '    #end if',
                 'end sub'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers an inactive branch in a class body', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'class Foo',
                 '    #if false',
                 '        sub hidden()',
@@ -2338,12 +2567,12 @@ describe('BrsFileValidator', () => {
                 '    #end if',
                 'end class'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 4, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
         it('covers an inactive branch in a namespace body', () => {
-            const { unreachable, allCodes } = validateLines([
+            const { inactive, allCodes } = validateLines([
                 'namespace alpha',
                 '    #if false',
                 '        sub hidden()',
@@ -2351,12 +2580,12 @@ describe('BrsFileValidator', () => {
                 '    #end if',
                 'end namespace'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 4, 0)]);
-            expect(allCodes).to.eql(['unreachable-code']);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
         });
 
-        it('does not report empty inactive bodies', () => {
-            const { unreachable } = validateLines([
+        it('does not report an inactive body with no lines, but fades one with only blank lines', () => {
+            const { inactive } = validateLines([
                 '#if false',
                 '#end if',
                 '#if true',
@@ -2368,21 +2597,21 @@ describe('BrsFileValidator', () => {
                 '    ',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(getRanges(inactive)).to.eql([util.createRange(7, 0, 9, 0)]);
         });
 
         it('covers a body that only contains a comment', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
                 '\' just a comment',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('handles windows line endings', () => {
-            const { unreachable } = validateLines(['#if false\r\nprint "a"\r\nprint "bb"\r\n#end if']);
-            expect(getRanges(unreachable)).to.eql([util.createRange(1, 0, 3, 0)]);
+            const { inactive } = validateLines(['#if false\r\nprint "a"\r\nprint "bb"\r\n#end if']);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
         });
 
         it('uses a manifest bs_const to decide the branch', () => {
@@ -2393,12 +2622,12 @@ describe('BrsFileValidator', () => {
                 'print "b"',
                 '#end if'
             ];
-            expect(getRanges(validateLines(source, { bsConsts: { FLAG: true } }).unreachable)).to.eql([util.createRange(3, 0, 4, 0)]);
-            expect(getRanges(validateLines(source, { bsConsts: { FLAG: false } }).unreachable)).to.eql([util.createRange(1, 0, 2, 0)]);
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: true } }).inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: false } }).inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
         });
 
         it('uses a file #const to decide the branch', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#const FLAG = false',
                 '#if FLAG',
                 'print "a"',
@@ -2406,7 +2635,7 @@ describe('BrsFileValidator', () => {
                 'print "b"',
                 '#end if'
             ]);
-            expect(getRanges(unreachable)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
         });
 
         it('honors diagnosticSeverityOverrides', () => {
@@ -2414,7 +2643,7 @@ describe('BrsFileValidator', () => {
                 '#if false',
                 'print "a"',
                 '#end if'
-            ], { programOptions: { diagnosticSeverityOverrides: { 'unreachable-code': 'error' } } });
+            ], { programOptions: { diagnosticSeverityOverrides: { 'inactive-conditional-compile-branch': 'error' } } });
             const diagnostics = overrideProgram.getDiagnostics();
             expect(diagnostics.map(diagnostic => diagnostic.severity)).to.eql([DiagnosticSeverity.Error]);
             expect(diagnostics[0].tags).to.eql([DiagnosticTag.Unnecessary]);
@@ -2425,27 +2654,27 @@ describe('BrsFileValidator', () => {
                 '#if false',
                 'print "a"',
                 '#end if'
-            ], { programOptions: { diagnosticFilters: ['unreachable-code'] } });
+            ], { programOptions: { diagnosticFilters: ['inactive-conditional-compile-branch'] } });
             expect(filteredProgram.getDiagnostics()).to.eql([]);
         });
 
         it('honors bs:disable-line on the first line of the body', () => {
-            const { unreachable } = validateLines([
+            const { inactive } = validateLines([
                 '#if false',
-                'print "a" \' bs:disable-line: unreachable-code',
+                'print "a" \' bs:disable-line: inactive-conditional-compile-branch',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         it('honors a file-level bs:disable', () => {
-            const { unreachable } = validateLines([
-                '\' bs:disable: unreachable-code',
+            const { inactive } = validateLines([
+                '\' bs:disable: inactive-conditional-compile-branch',
                 '#if false',
                 'print "a"',
                 '#end if'
             ]);
-            expect(unreachable).to.eql([]);
+            expect(inactive).to.eql([]);
         });
 
         describe('control flow', () => {
@@ -2477,6 +2706,128 @@ describe('BrsFileValidator', () => {
                     '    print "a"',
                     'end sub'
                 ])).to.eql(['2:4-2:13 Unreachable code after throw']);
+            });
+
+            describe('select case', () => {
+                it('reports code after exit select within the case', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            exit select',
+                        '            print "a"',
+                        '    end select',
+                        '    print "b"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['4:12-4:21 Unreachable code after exit select']);
+                });
+
+                it('reports code after a select whose cases all exit, including case else', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            return',
+                        '        case else',
+                        '            throw "e"',
+                        '    end select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['7:4-7:13 Unreachable code after a select case whose cases all exit']);
+                });
+
+                it('does not report code after a select with no case else', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            return',
+                        '    end select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('does not report code after a select that an exit select leaves', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            if x then',
+                        '                exit select',
+                        '            end if',
+                        '            return',
+                        '        case else',
+                        '            return',
+                        '    end select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('does not let exit select end an infinite while loop', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    while true',
+                        '        select case x',
+                        '            case 1',
+                        '                exit select',
+                        '        end select',
+                        '    end while',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['7:4-7:13 Unreachable code after an infinite loop']);
+                });
+
+                it('lets exit while inside a case end an infinite while loop', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    while true',
+                        '        select case x',
+                        '            case 1',
+                        '                exit while',
+                        '        end select',
+                        '    end while',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('treats a label inside a case as a goto target', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto inside',
+                        '    print "a"',
+                        '    select case x',
+                        '        case 1',
+                        '            inside:',
+                        '            print "b"',
+                        '    end select',
+                        '    print "c"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['2:4-2:13 Unreachable code after goto']);
+                });
+
+                it('does not treat exit select outside of a select as an exit', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    exit select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('reports the case bodies of an unreachable select as part of one run', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    return',
+                        '    select case x',
+                        '        case 1',
+                        '            print "a"',
+                        '    end select',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['2:4-5:14 Unreachable code after return']);
+                });
             });
 
             it('reports Unreachable code after end', () => {
@@ -2986,7 +3337,7 @@ describe('BrsFileValidator', () => {
                     '    #end if',
                     '    print "a"',
                     'end sub'
-                ])).to.eql(['2:0-3:0 Unreachable code: inactive conditional compile branch']);
+                ])).to.eql(['2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants']);
             });
 
             it('does not report an inactive branch separately inside a run that began before it', () => {
@@ -3012,7 +3363,7 @@ describe('BrsFileValidator', () => {
                     '    print 1',
                     'end sub'
                 ])).to.eql([
-                    '3:0-4:0 Unreachable code: inactive conditional compile branch',
+                    '3:0-4:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                     '5:4-5:11 Unreachable code after return'
                 ]);
             });
@@ -3103,7 +3454,7 @@ describe('BrsFileValidator', () => {
                     'end sub'
                 ])).to.eql([
                     '3:8-3:15 Unreachable code after return',
-                    '5:0-6:0 Unreachable code: inactive conditional compile branch',
+                    '5:0-6:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                     '7:4-7:11 Unreachable code after return'
                 ]);
             });
@@ -3130,7 +3481,7 @@ describe('BrsFileValidator', () => {
                     '    print "a"',
                     'end sub'
                 ])).to.eql([
-                    '2:0-3:0 Unreachable code: inactive conditional compile branch',
+                    '2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                     '6:4-6:13 Unreachable code after return'
                 ]);
             });
@@ -3145,7 +3496,7 @@ describe('BrsFileValidator', () => {
                     'end sub'
                 ];
                 expect(getRegions(source, undefined, { DEBUG: true })).to.eql(['4:4-4:13 Unreachable code after return']);
-                expect(getRegions(source, undefined, { DEBUG: false })).to.eql(['2:0-3:0 Unreachable code: inactive conditional compile branch']);
+                expect(getRegions(source, undefined, { DEBUG: false })).to.eql(['2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants']);
             });
 
             it('ignores a goto inside an inactive branch', () => {
@@ -3157,7 +3508,7 @@ describe('BrsFileValidator', () => {
                     '    print "a"',
                     'done:',
                     'end sub'
-                ])).to.eql(['2:0-3:0 Unreachable code: inactive conditional compile branch']);
+                ])).to.eql(['2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants']);
             });
 
             it('treats while true as infinite when its only exit while is in an inactive branch', () => {
@@ -3171,7 +3522,7 @@ describe('BrsFileValidator', () => {
                     '    print "a"',
                     'end sub'
                 ])).to.eql([
-                    '3:0-4:0 Unreachable code: inactive conditional compile branch',
+                    '3:0-4:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                     '6:4-6:13 Unreachable code after an infinite loop'
                 ]);
             });
@@ -3460,7 +3811,7 @@ describe('BrsFileValidator', () => {
                         'end sub'
                     ], undefined, bsConsts)).to.eql([
                         '2:4-2:11 Unreachable code after return',
-                        '4:0-5:0 Unreachable code: inactive conditional compile branch'
+                        '4:0-5:0 Inactive conditional compile branch: this code is not compiled with the current constants'
                     ]);
                 });
 
@@ -3477,7 +3828,7 @@ describe('BrsFileValidator', () => {
                         'end sub'
                     ], undefined, bsConsts)).to.eql([
                         '2:4-2:11 Unreachable code after return',
-                        '4:0-5:0 Unreachable code: inactive conditional compile branch'
+                        '4:0-5:0 Inactive conditional compile branch: this code is not compiled with the current constants'
                     ]);
                 });
 
@@ -3495,7 +3846,7 @@ describe('BrsFileValidator', () => {
                         'end sub'
                     ], undefined, bsConsts)).to.eql([
                         '2:4-2:11 Unreachable code after return',
-                        '7:0-8:0 Unreachable code: inactive conditional compile branch'
+                        '7:0-8:0 Inactive conditional compile branch: this code is not compiled with the current constants'
                     ]);
                 });
 
@@ -3559,7 +3910,7 @@ describe('BrsFileValidator', () => {
                     expect(getRegions(lines, undefined, bsConsts)).to.eql([
                         '2:4-4:11 Unreachable code after return',
                         '7:4-7:11 Unreachable code after return',
-                        '9:0-10:0 Unreachable code: inactive conditional compile branch',
+                        '9:0-10:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                         '11:4-11:11 Unreachable code after return'
                     ]);
                     expectNoOverlap(lines);
@@ -3588,7 +3939,7 @@ describe('BrsFileValidator', () => {
                     expect(getRegions(lines, undefined, bsConsts)).to.eql([
                         '2:4-4:11 Unreachable code after return',
                         '9:4-11:11 Unreachable code after return',
-                        '13:0-14:0 Unreachable code: inactive conditional compile branch',
+                        '13:0-14:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                         '15:4-15:11 Unreachable code after return'
                     ]);
                     expectNoOverlap(lines);
@@ -3615,7 +3966,7 @@ describe('BrsFileValidator', () => {
                     expect(getRegions(lines, undefined, bsConsts)).to.eql([
                         '2:4-4:11 Unreachable code after return',
                         '9:4-9:11 Unreachable code after return',
-                        '11:0-12:0 Unreachable code: inactive conditional compile branch',
+                        '11:0-12:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                         '13:4-13:11 Unreachable code after return'
                     ]);
                     expectNoOverlap(lines);
@@ -3646,9 +3997,9 @@ describe('BrsFileValidator', () => {
                     expect(getRegions(lines, undefined, bsConsts)).to.eql([
                         '2:4-6:15 Unreachable code after return',
                         '9:8-9:15 Unreachable code after return',
-                        '11:0-12:0 Unreachable code: inactive conditional compile branch',
+                        '11:0-12:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                         '13:4-13:11 Unreachable code after return',
-                        '15:0-16:0 Unreachable code: inactive conditional compile branch',
+                        '15:0-16:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                         '17:4-17:11 Unreachable code after return'
                     ]);
                     expectNoOverlap(lines);
@@ -3673,7 +4024,7 @@ describe('BrsFileValidator', () => {
                     expect(getRegions(lines, undefined, bsConsts)).to.eql([
                         '2:4-4:11 Unreachable code after return',
                         '7:4-7:11 Unreachable code after return',
-                        '9:0-10:0 Unreachable code: inactive conditional compile branch',
+                        '9:0-10:0 Inactive conditional compile branch: this code is not compiled with the current constants',
                         '11:4-11:11 Unreachable code after return'
                     ]);
                     expectNoOverlap(lines);
@@ -5081,6 +5432,660 @@ describe('BrsFileValidator', () => {
             program.setFile('source/main.brs', `sub a()\neval("print 1")\nend sub`);
             program.validate();
             expectNotFlagged();
+        });
+    });
+
+    describe('goto and labels', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(tempDir);
+            fsExtra.emptyDirSync(tempDir);
+        });
+        afterEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+        });
+
+        function validate(code: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, code);
+            program.validate();
+        }
+
+        describe('label-in-try', () => {
+            it('flags a label inside a try block', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            foo:
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(2, 8, 2, 11) }
+                }]);
+            });
+
+            it('allows a label inside a catch block', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            print 1
+                        catch e
+                            foo:
+                        end try
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a label in a catch nested inside a try', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            try
+                                print 2
+                            catch e2
+                                foo:
+                            end try
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(5, 12, 5, 15) }
+                }]);
+            });
+
+            it('flags a label in a try nested inside a catch', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            print 1
+                        catch e
+                            try
+                                foo:
+                            catch e2
+                            end try
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(5, 12, 5, 15) }
+                }]);
+            });
+
+            it('flags a label in a try inside an active #if', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        #if flag
+                            try
+                                foo:
+                            catch e
+                            end try
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(4, 12, 4, 15) }
+                }]);
+            });
+
+            it('does not flag a label in a try inside an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        #if false
+                            try
+                                foo:
+                            catch e
+                            end try
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 6, 0) } }
+                ]);
+            });
+
+            it('flags a label in a try inside an anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        cb = sub()
+                            try
+                                foo:
+                            catch e
+                            end try
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(3, 12, 3, 15) }
+                }]);
+            });
+        });
+
+        describe('edge cases', () => {
+            it('produces no label diagnostics for a goto outside any function', () => {
+                validate('goto foo');
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
+                        location: { range: util.createRange(0, 0, 0, 8) }
+                    }
+                ]);
+            });
+
+            it('reports only expected-label for a goto with no label', () => {
+                validate(trim`
+                    sub main()
+                        goto
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.expectedLabelIdentifierAfterGotoKeyword()
+                ]);
+            });
+
+            it('reports only label-in-try for a goto targeting a label inside a try', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        try
+                            foo:
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(3, 8, 3, 11) }
+                }]);
+            });
+        });
+
+        describe('duplicate-label', () => {
+            it('flags two labels at the top level of a function', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        foo:
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.duplicateLabel('foo'),
+                    location: { range: util.createRange(2, 4, 2, 7) }
+                }]);
+            });
+
+            it('flags nested labels that duplicate a top-level one', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        if true then
+                            foo:
+                        end if
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(3, 8, 3, 11) }
+                    },
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(6, 8, 6, 11) }
+                    }
+                ]);
+            });
+
+            it('is case insensitive', () => {
+                validate(trim`
+                    sub main()
+                        Foo:
+                        FOO:
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.duplicateLabel('FOO'),
+                        location: { range: util.createRange(2, 4, 2, 7) }
+                    }
+                ]);
+            });
+
+            it('reports each later occurrence', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        foo:
+                        foo:
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(2, 4, 2, 7) }
+                    },
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(3, 4, 3, 7) }
+                    }
+                ]);
+            });
+
+            it('allows the same name in different functions', () => {
+                validate(trim`
+                    sub a()
+                        foo:
+                    end sub
+                    sub b()
+                        foo:
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows the same name in an outer and an anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        cb = sub()
+                            foo:
+                        end sub
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows the same name in #if and #else branches', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        #if flag
+                            foo:
+                        #else
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(5, 0, 6, 0) } }
+                ]);
+            });
+        });
+
+        describe('label-not-found', () => {
+            it('flags a goto with no matching label', () => {
+                validate(trim`
+                    sub main()
+                        goto missing
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 9, 1, 16) }
+                }]);
+            });
+
+            it('matches labels case insensitively', () => {
+                validate(trim`
+                    sub main()
+                        goto Done
+                        done:
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a label that only exists in another function', () => {
+                validate(trim`
+                    sub a()
+                        foo:
+                    end sub
+                    sub b()
+                        goto foo
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(4, 9, 4, 12) }
+                }]);
+            });
+
+            it('flags a label that only exists in a nested anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        cb = sub()
+                            foo:
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(1, 9, 1, 12) }
+                }, {
+                    ...DiagnosticMessages.unreachableCode('Unreachable code after goto'),
+                    location: { range: util.createRange(2, 4, 4, 11) }
+                }]);
+            });
+
+            it('flags a goto in an anonymous function targeting an outer label', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        cb = sub()
+                            goto foo
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(3, 13, 3, 16) }
+                }]);
+            });
+
+            it('flags a label that is only in an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if false
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.labelNotFound('foo'),
+                        location: { range: util.createRange(1, 9, 1, 12) }
+                    },
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
+                ]);
+            });
+
+            it('finds a label active through a file-level #const', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        goto foo
+                        #if flag
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label inside a literal #if true', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if true
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label active through a #const inside the function', () => {
+                validate(trim`
+                    sub main()
+                        #const flag = true
+                        goto foo
+                        #if flag
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label active through a manifest bs_const', () => {
+                fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=t\nbs_const=FLAG=true');
+                program.dispose();
+                program = new Program({ rootDir: rootDir });
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if FLAG
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not flag a goto inside an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        #if false
+                            goto missing
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 3, 0) } }
+                ]);
+            });
+
+            it('flags a single-line if with goto to a missing label', () => {
+                validate(trim`
+                    sub main()
+                        if true then goto missing
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 22, 1, 29) }
+                }]);
+            });
+
+            it('works in brighterscript files', () => {
+                validate(trim`
+                    sub main()
+                        goto missing
+                    end sub
+                `, 'source/main.bs');
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 9, 1, 16) }
+                }]);
+            });
+        });
+
+        describe('goto-into-for-loop', () => {
+            function expectIntoFor(code: string, range: Range) {
+                validate(code);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.gotoIntoForLoop('foo'),
+                    location: { range: range }
+                }]);
+            }
+
+            function expectNoDiagnostics(code: string) {
+                validate(code);
+                //code after a `goto` is faded, which says nothing about the jump itself
+                expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== DiagnosticCodeMap.unreachableCode));
+            }
+
+            it('warns when jumping from before a for loop into its body', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('warns when jumping into a for each body', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for each i in [1]
+                            foo:
+                        end for
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('warns when jumping into a for each nested in a while', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        while true
+                            for each i in [1]
+                                foo:
+                            end for
+                        end while
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('allows a jump within the same loop', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                            foo:
+                        end for
+                    end sub
+                `);
+            });
+
+            it('allows a jump from an inner loop to the outer loop body', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            foo:
+                            for j = 0 to 1
+                                goto foo
+                            end for
+                        end for
+                    end sub
+                `);
+            });
+
+            it('warns when jumping from an outer loop body into a nested inner loop', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                            for j = 0 to 1
+                                foo:
+                            end for
+                        end for
+                    end sub
+                `, util.createRange(2, 13, 2, 16));
+            });
+
+            it('warns when jumping from one loop into a sibling loop', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                        end for
+                        for j = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `, util.createRange(2, 13, 2, 16));
+            });
+
+            it('allows jumping into if, else, while and catch bodies', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        goto foo
+                        if true then
+                            foo:
+                        end if
+                        goto bar
+                        if false then
+                            print 1
+                        else
+                            bar:
+                        end if
+                        goto baz
+                        while false
+                            baz:
+                        end while
+                        goto qux
+                        try
+                            print 1
+                        catch e
+                            qux:
+                        end try
+                    end sub
+                `);
+            });
+
+            it('allows jumping into a select case body', () => {
+                validate(trim`
+                    sub main()
+                        x = 1
+                        goto foo
+                        select case x
+                            case 1
+                                foo:
+                            case else
+                                print 2
+                        end select
+                    end sub
+                `, 'source/main.bs');
+                //only the `case else` body is unreachable. The `select` itself is not, since the label makes `case 1` reachable
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unreachableCode('Unreachable code after goto'),
+                    location: { range: util.createRange(7, 12, 7, 19) }
+                }]);
+            });
+
+            it('allows jumping out of a loop', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                        end for
+                        foo:
+                    end sub
+                `);
+            });
+
+            it('warns for a label in a while inside a for when the goto is outside the for', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            while true
+                                foo:
+                            end while
+                        end for
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('reports the diagnostic as a warning at the goto label', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+                const diagnostics = program.getDiagnostics().filter(x => x.code === 'goto-into-for-loop');
+                expect(diagnostics).to.have.lengthOf(1);
+                expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
+                expect(diagnostics[0].location.range).to.eql(util.createRange(1, 9, 1, 12));
+            });
         });
     });
 });

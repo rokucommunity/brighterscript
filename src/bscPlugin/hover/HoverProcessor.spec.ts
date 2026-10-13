@@ -2,7 +2,8 @@ import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';
-import { expectZeroDiagnostics, rootDir, trim, withoutUnreachableCode } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { HoverProcessor } from './HoverProcessor';
 import { createIdentifier, createIntegerLiteral } from '../../astUtils/creators';
 import type { BrsFile } from '../../files/BrsFile';
@@ -64,13 +65,43 @@ describe('HoverProcessor', () => {
                 end sub
             `);
             program.validate();
-            expectZeroDiagnostics(withoutUnreachableCode(program));
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(7, 0, 9, 0) } }
+            ]);
             expect(
                 program.getHover(file.srcPath, util.createPosition(7, 22))[0]?.contents
             ).to.eql([fence('inactiveVar as dynamic')]);
             expect(
                 program.getHover(file.srcPath, util.createPosition(4, 22))[0]?.contents
             ).to.eql([fence('activeVar as integer')]);
+        });
+
+        it('shows the member of the active branch and not a member that only an inactive branch declares', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                #const DEBUG = true
+                class Foo
+                    #if DEBUG
+                        name as string
+                    #else
+                        name as integer
+                        releaseOnly as integer
+                    #end if
+                end class
+                sub main()
+                    f = new Foo()
+                    print f.name
+                    print f.releaseOnly
+                end sub
+            `);
+            program.validate();
+            //print f.na|me
+            expect(
+                program.getHover(file.srcPath, util.createPosition(12, 30))[0]?.contents
+            ).to.eql([fence('Foo.name as string')]);
+            //print f.release|Only
+            expect(
+                program.getHover(file.srcPath, util.createPosition(13, 34))[0]?.contents
+            ).to.eql([fence('Foo.releaseOnly as invalid')]);
         });
 
         it('works for param types', () => {
