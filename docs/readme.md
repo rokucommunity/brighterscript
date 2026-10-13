@@ -58,6 +58,17 @@ sub main()
 end sub
 ```
 
+## [Destructuring Assignment](destructuring.md)
+
+```brighterscript
+sub main()
+    person = { name: "bob", age: 12, address: { city: "nyc" } }
+    { name, age, address: { city } } = person
+    [first, second, ...others] = [1, 2, 3, 4]
+    print name; age; city; first; second; others
+end sub
+```
+
 ## [Enums](enums.md)
 
 ```brighterscript

@@ -31,6 +31,11 @@ export class BrsFileSemanticTokensProcessor {
             AssignmentStatement: (node) => {
                 this.addToken(node.tokens.name, SemanticTokenTypes.variable);
             },
+            DestructuringAssignmentStatement: (node) => {
+                for (const name of node.getTargetNames()) {
+                    this.addToken(name, SemanticTokenTypes.variable);
+                }
+            },
             DottedGetExpression: (node) => {
                 this.tryAddToken(node, node.tokens.name);
             },

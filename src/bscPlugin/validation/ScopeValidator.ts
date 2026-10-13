@@ -1,12 +1,12 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isDestructuringAssignmentStatement, isObjectPatternExpression, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DestructuringAssignmentStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -14,7 +14,7 @@ import type { Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression, DestructuringPattern } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -250,6 +250,11 @@ export class ScopeValidator {
                                 type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: assignStmt.tokens.name.location?.range
                             });
+                        });
+                    },
+                    DestructuringAssignmentStatement: (destructuringStmt) => {
+                        this.addValidationKindMetric('DestructuringAssignmentStatement', () => {
+                            this.validateDestructuringAssignmentStatement(file, destructuringStmt);
                         });
                     },
                     AugmentedAssignmentStatement: (binaryExpr) => {
@@ -505,6 +510,10 @@ export class ScopeValidator {
         } else if (isFunctionParameterExpression(definingNode)) {
             // this symbol was defined in a function param
             return true;
+        } else if (isDestructuringAssignmentStatement(definingNode)) {
+            // this symbol is one of the targets of a destructuring assignment (an unknown key is flagged at the key itself)
+            const lowerName = expression.tokens.name?.text.toLowerCase();
+            return definingNode.getTargetNames().some(x => x.text?.toLowerCase() === lowerName);
         } else {
             assignmentAncestor = expression?.findAncestor(isAssignmentStatement);
         }
@@ -963,6 +972,150 @@ export class ScopeValidator {
     }
 
     /**
+     * Detect when a typed destructuring target does not match the type of the value it receives, and flag keys missing from the source type
+     */
+    private validateDestructuringAssignmentStatement(file: BrsFile, destructuringStmt: DestructuringAssignmentStatement) {
+        const sourceType = this.getNodeTypeWrapper(file, destructuringStmt.value, { flags: SymbolTypeFlag.runtime });
+        const sourceName = isVariableExpression(destructuringStmt.value) || isDottedGetExpression(destructuringStmt.value)
+            ? util.getAllDottedGetPartsAsString(destructuringStmt.value)
+            : undefined;
+        this.validateDestructuringPattern(file, destructuringStmt.pattern, sourceType, sourceName);
+        this.validateDestructuringReadsBeforeAssignment(file, destructuringStmt);
+
+        for (const target of destructuringStmt.getTargets({ flags: SymbolTypeFlag.runtime })) {
+            //a typed target (`{ name as string }`) is checked the same as `name as string = source.name`
+            if (target.typeExpression) {
+                const declaredType = this.getNodeTypeWrapper(file, target.typeExpression, { flags: SymbolTypeFlag.runtime, data: {} });
+                const compatibilityData: TypeCompatibilityData = {};
+                if (!declaredType?.isResolvable()) {
+                    // the declared type is not resolvable... handled elsewhere
+                } else if (!declaredType.isTypeCompatible(target.valueType, compatibilityData)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.assignmentTypeMismatch(target.valueType.toString(), declaredType.toString(), compatibilityData),
+                        location: target.node.location
+                    });
+                }
+            }
+            //each target is a local variable declaration, same as `name = source.key`
+            this.detectShadowedLocalVar(file, {
+                expr: destructuringStmt,
+                name: target.name.text,
+                type: target.type,
+                nameRange: target.name.location?.range
+            });
+        }
+    }
+
+    /**
+     * Flag a target that is read by a default value of the same statement before the statement assigns it
+     * (i.e. `{ b = a, a } = obj`), which is a use of an uninitialized variable at runtime. Names that are declared earlier
+     * in the function are fine, since they already hold a value. A target read by the source (i.e. `{ a } = a`) is
+     * already flagged as `cannot-find-name`, the same as `a = a + 1`
+     */
+    private validateDestructuringReadsBeforeAssignment(file: BrsFile, destructuringStmt: DestructuringAssignmentStatement) {
+        const targetNames = new Set(destructuringStmt.getTargetNames().map(x => x.text.toLowerCase()));
+        const func = destructuringStmt.findAncestor<FunctionExpression>(isFunctionExpression);
+        let declaredBefore: Set<string>;
+        destructuringStmt.walk(createVisitor({
+            VariableExpression: (variable) => {
+                const lowerName = variable.tokens.name.text.toLowerCase();
+                //variables inside a nested function (i.e. a function used as a default value) belong to that function's scope
+                if (!targetNames.has(lowerName) || variable.findAncestor(isFunctionExpression) !== func || util.isInTypeExpression(variable)) {
+                    return;
+                }
+                const assignedBefore = destructuringStmt.getTargetNamesAssignedBefore(variable);
+                const isInSource = variable === destructuringStmt.value || !!variable.findAncestor(x => x === destructuringStmt.value);
+                if (!assignedBefore || isInSource || assignedBefore.some(x => x.text.toLowerCase() === lowerName)) {
+                    return;
+                }
+                declaredBefore ??= this.getVariableNamesDeclaredBefore(file, func, destructuringStmt);
+                if (!declaredBefore.has(lowerName)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment(variable.tokens.name.text),
+                        location: variable.location
+                    });
+                }
+            }
+        }), { walkMode: WalkMode.visitExpressionsRecursive });
+    }
+
+    /**
+     * Get the (lower case) names of the variables declared in `func` (including its parameters) that start before `node`
+     */
+    private getVariableNamesDeclaredBefore(file: BrsFile, func: FunctionExpression, node: AstNode) {
+        const names = new Set<string>();
+        const start = node.location?.range?.start;
+        const functionScope = file.functionScopes.find(x => x.func === func);
+        for (const declaration of functionScope?.variableDeclarations ?? []) {
+            if (util.comparePosition(declaration.nameRange?.start, start) < 0) {
+                names.add(declaration.name.toLowerCase());
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Validate a destructuring pattern against a known source type:
+     *  - object pattern keys that do not exist on the source are flagged the same way `source.key` would be
+     *  - an object rest element requires a source that `roAssociativeArray.append()` accepts
+     *  - an array pattern requires a source that can be indexed by position
+     */
+    private validateDestructuringPattern(file: BrsFile, pattern: DestructuringPattern, sourceType: BscType, sourceName: string | undefined) {
+        if (!this.isTypeKnown(sourceType) || isDynamicType(sourceType)) {
+            return;
+        }
+        if (isCallableType(sourceType)) {
+            //an AA member that shares a name with a built-in method (`m.items`, `m.count`) resolves to that method's
+            //type even though it is almost certainly a field, so a function type says nothing about the destructured value
+            return;
+        }
+        if (isObjectPatternExpression(pattern)) {
+            if (pattern.rest && !this.canSpreadIntoAA(sourceType)) {
+                //an object rest is built with `.append(source)`, the same as spreading the source into an AA
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotCollectObjectRest(sourceType.toString()),
+                    location: pattern.rest.location
+                });
+            }
+            for (const property of pattern.properties) {
+                const keyName = property.getKeyName();
+                if (!keyName) {
+                    continue;
+                }
+                const fullName = sourceName ? `${sourceName}.${keyName}` : keyName;
+                const memberType = sourceType.getMemberType(keyName, {
+                    flags: SymbolTypeFlag.runtime,
+                    changeUnknownNodeMemberToDynamic: file.parseMode === ParseMode.BrightScript || !this.event.program.options.strictNodeMembers
+                });
+                if (!this.isTypeKnown(memberType)) {
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.cannotFindName(keyName, fullName, sourceType.toString(), isNamespaceType(sourceType) ? 'namespace' : 'type'),
+                        location: property.tokens.key.location
+                    });
+                } else if (property.pattern) {
+                    this.validateDestructuringPattern(file, property.pattern, memberType, fullName);
+                }
+            }
+        } else {
+            if (!this.canIndexByPosition(sourceType)) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.cannotDestructureAsArray(sourceType.toString()),
+                    location: pattern.location
+                });
+                return;
+            }
+            const itemType = isArrayType(sourceType) ? sourceType.defaultType : DynamicType.instance;
+            let index = 0;
+            for (const element of pattern.elements) {
+                if (element.pattern) {
+                    this.validateDestructuringPattern(file, element.pattern, itemType, sourceName ? `${sourceName}[${index}]` : undefined);
+                }
+                index++;
+            }
+        }
+    }
+
+    /**
      * Detect when declared type does not match rhs type
      */
     private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
@@ -1087,6 +1240,14 @@ export class ScopeValidator {
 
     private canSpreadIntoArray(type: BscType): boolean {
         return this.isSpreadTypeAllowed(type, t => isArrayTypeLike(t) || isBuiltInType(t, 'roList'));
+    }
+
+    /**
+     * Can a value of this type be read by position (i.e. `value[0]`), as an array destructuring pattern does?
+     * Built-in interfaces other than roAssociativeArray are allowed since many of them (roList, roByteArray, roXMLList, ...) support it
+     */
+    private canIndexByPosition(type: BscType): boolean {
+        return this.isSpreadTypeAllowed(type, t => isArrayTypeLike(t) || (isInterfaceType(t) && !isAssociativeArrayTypeLike(t)));
     }
 
     private canSpreadIntoAA(type: BscType): boolean {

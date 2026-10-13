@@ -20,6 +20,7 @@ import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatemen
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
+import { DestructuringAssignmentStatement } from '../parser/Statement';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
@@ -629,6 +630,25 @@ export class BrsFile implements BscFile {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
                     }
                 });
+            }
+        }
+
+        //find every destructuring assignment in the whole file
+        for (let statement of this._cachedLookups.destructuringAssignmentStatements) {
+            let scope = this.scopesByFunc.get(
+                statement.findAncestor<FunctionExpression>(isFunctionExpression)
+            );
+            if (scope) {
+                for (const name of statement.getTargetNames()) {
+                    scope.variableDeclarations.push({
+                        nameRange: name.location?.range,
+                        lineIndex: name.location?.range?.start.line,
+                        name: name.text,
+                        getType: () => {
+                            return DestructuringAssignmentStatement.getTargetSymbolType(statement.getTargetType(name, { flags: SymbolTypeFlag.runtime }));
+                        }
+                    });
+                }
             }
         }
     }

@@ -1,5 +1,6 @@
 import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import { createIdentifier } from '../../astUtils/creators';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
@@ -8,7 +9,7 @@ import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
-import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
+import { DestructuringAssignmentStatement, getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
@@ -276,6 +277,16 @@ export class BrsFileValidator {
                     nodeType = DynamicType.instance;
                 }
                 node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment, isFromCallFunc: data.isFromCallFunc }, nodeType, SymbolTypeFlag.runtime);
+            },
+            DestructuringAssignmentStatement: (node) => {
+                const symbolTable = node.parent?.getSymbolTable();
+                if (!symbolTable) {
+                    return;
+                }
+                //register every variable declared by the pattern
+                for (const target of node.getTargets({ flags: SymbolTypeFlag.runtime })) {
+                    symbolTable.addSymbol(target.name.text, { definingNode: node, isInstance: true }, DestructuringAssignmentStatement.getTargetSymbolType(target.type), SymbolTypeFlag.runtime);
+                }
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -761,6 +772,15 @@ export class BrsFileValidator {
             },
             DimStatement: (statement) => {
                 addVariable(statement.tokens.name, statement.location);
+            },
+            DestructuringAssignmentStatement: (statement) => {
+                for (const name of statement.getTargetNames()) {
+                    addVariable(name, statement.location);
+                }
+                //the temp variables the statement transpiles to also count toward the limit
+                for (const tempName of statement.getTempVariableNames()) {
+                    addVariable(createIdentifier(tempName, statement.location), statement.location);
+                }
             },
             IncrementStatement: (statement) => {
                 if (isVariableExpression(statement.value)) {

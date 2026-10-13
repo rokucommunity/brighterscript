@@ -219,6 +219,12 @@ export class AstValidationSegmenter {
                     assignedSymbolsNames.add(stmt.tokens.name.text.toLowerCase());
                 }
             },
+            DestructuringAssignmentStatement: (stmt) => {
+                for (const name of stmt.getTargetNames()) {
+                    assignedSymbols.add({ token: name, node: stmt });
+                    assignedSymbolsNames.add(name.text.toLowerCase());
+                }
+            },
             FunctionParameterExpression: (expr) => {
                 assignedSymbols.add({ token: expr.tokens.name, node: expr });
                 assignedSymbolsNames.add(expr.tokens.name.text.toLowerCase());

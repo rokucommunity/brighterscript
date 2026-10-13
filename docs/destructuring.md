@@ -1,0 +1,294 @@
+# Destructuring Assignment
+
+Destructuring assignment unpacks values from arrays, or properties from associative arrays and objects, into distinct variables in a single statement. It follows the same shape as [destructuring in JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Destructuring), and transpiles to plain BrightScript assignments.
+
+## Object destructuring
+
+```brighterscript
+sub main()
+    person = { name: "bob", age: 12 }
+    { name, age } = person
+    print name; age
+end sub
+```
+
+transpiles to
+
+```brightscript
+sub main()
+    person = {
+        name: "bob"
+        age: 12
+    }
+    name = person.name
+    age = person.age
+    print name; age
+end sub
+```
+
+### Assigning to a different variable name
+
+Use `key: variable` to store a property in a variable with a different name:
+
+```brighterscript
+{ name: userName, age: userAge } = person
+```
+
+transpiles to
+
+```brightscript
+userName = person.name
+userAge = person.age
+```
+
+### Type designators
+
+A shorthand property may use a variable name with a type designator (`$`, `%`, `!`, `#`, `&`). The designator belongs to the variable, so the key that is read does not include it:
+
+```brighterscript
+{ name$, age% } = person
+```
+
+transpiles to
+
+```brightscript
+name$ = person.name
+age% = person.age
+```
+
+An explicit key is read exactly as written, so `{ id$: userId }` reads `person.id$`.
+
+### String literal keys
+
+Keys that are not valid identifiers can be written as string literals. These must always be given a target variable name:
+
+```brighterscript
+{ "first name": firstName } = person
+```
+
+transpiles to
+
+```brightscript
+firstName = person["first name"]
+```
+
+### Nested patterns
+
+Patterns can be nested to any depth. Each nested level is read exactly once into a temporary variable:
+
+```brighterscript
+{ address: { city, geo: [lat, lng] } } = person
+```
+
+transpiles to
+
+```brightscript
+__bsDestructure0 = person.address
+city = __bsDestructure0.city
+__bsDestructure1 = __bsDestructure0.geo
+lat = __bsDestructure1[0]
+lng = __bsDestructure1[1]
+```
+
+### Default values
+
+A default value is used when the destructured value is `invalid` (a missing key, or an index beyond the end of an array). The default expression is only evaluated when it is needed:
+
+```brighterscript
+{ name = "unknown", age = getDefaultAge() } = person
+```
+
+transpiles to
+
+```brightscript
+name = person.name
+if name = invalid then
+    name = "unknown"
+end if
+age = person.age
+if age = invalid then
+    age = getDefaultAge()
+end if
+```
+
+A default may read a variable assigned earlier in the same pattern (`{ width, height = width } = size`). Reading one that is assigned later in the pattern (`{ height = width, width } = size`) is an error, since it has not been assigned yet when the default is evaluated.
+
+### Rest properties
+
+A rest element collects every property that was not explicitly named into a new associative array:
+
+```brighterscript
+{ name, ...others } = person
+```
+
+transpiles to
+
+```brightscript
+name = person.name
+others = {}
+others.append(person)
+others.delete("name")
+```
+
+The rest element must be the last item in the pattern. Like the [spread operator](spread-operator.md), whitespace is allowed between the `...` and the variable name (`[... rest]`), but a newline is not.
+
+Since the rest element is built with `roAssociativeArray.append()`, the source must be an associative array (or a class instance or interface, which are associative arrays at runtime). Using a rest element on a value known to be something else, such as a SceneGraph node, an array, or a string, is an error.
+
+## Array destructuring
+
+```brighterscript
+[first, second] = items
+```
+
+transpiles to
+
+```brightscript
+first = items[0]
+second = items[1]
+```
+
+### Skipping elements
+
+Leave a slot empty to skip an index:
+
+```brighterscript
+[, second, , fourth] = items
+```
+
+transpiles to
+
+```brightscript
+second = items[1]
+fourth = items[3]
+```
+
+Items may be separated by commas, newlines, or both. A comma at the start of a line is the separator for the item before it, so leading-comma style works as expected. Use an extra comma to leave a hole:
+
+```brighterscript
+[first
+    , second
+    , , fourth] = items
+```
+
+### Default values
+
+```brighterscript
+[first, second = 2] = items
+```
+
+transpiles to
+
+```brightscript
+first = items[0]
+second = items[1]
+if second = invalid then
+    second = 2
+end if
+```
+
+### Rest elements
+
+A rest element collects the remaining items into a new array:
+
+```brighterscript
+[first, ...rest] = items
+```
+
+transpiles to
+
+```brightscript
+first = items[0]
+rest = []
+for __bsDestructure0 = 1 to items.count() - 1
+    rest.push(items[__bsDestructure0])
+end for
+```
+
+### Swapping variables
+
+Because the right-hand side is fully evaluated before any assignment happens, destructuring can swap variables in one statement:
+
+```brighterscript
+[a, b] = [b, a]
+```
+
+transpiles to
+
+```brightscript
+__bsDestructure0 = [
+    b
+    a
+]
+a = __bsDestructure0[0]
+b = __bsDestructure0[1]
+```
+
+## Combining with the spread operator
+
+The right-hand side may use the [spread operator](spread-operator.md). The spread literal is built first, then destructured:
+
+```brighterscript
+{ name, ...others } = { ...defaults, name: "bob" }
+```
+
+transpiles to
+
+```brightscript
+__bsc_tmp_spread = {}
+__bsc_tmp_spread.append(defaults)
+__bsc_tmp_spread.name = "bob"
+name = __bsc_tmp_spread.name
+others = {}
+others.append(__bsc_tmp_spread)
+others.delete("name")
+```
+
+## Evaluation of the right-hand side
+
+When the right-hand side is a plain local variable or parameter, its members are read directly from that variable. Any other expression (a function call, a property access, a literal, a const, etc.) is evaluated exactly once into a temporary variable named `__bsDestructure<n>`, so functions with side effects are never called more than once. A temporary variable is also used when the source variable is itself one of the targets (i.e. `[items, other] = items`).
+
+Nested patterns and array rest elements use temporary variables too (see the examples above). These count toward the device's limit of 253 variables per function, the same as the destructured variables themselves. Each statement starts again at `__bsDestructure0`, so a function only uses as many temporaries as its largest destructuring statement needs.
+
+## Type inference
+
+BrighterScript infers a type for every destructured variable:
+
+- Object pattern properties receive the type of that member on the source (from an interface, class, or associative array literal).
+- Array pattern elements receive the element type of the source array (i.e. `string` for `Array<string>`).
+- A rest element is typed as `roAssociativeArray` for object patterns and `Array<T>` for array patterns.
+- When a default value is present, the type of the default value is merged in, and `invalid` is removed from the inferred type. When the member's type comes from another file (i.e. an interface declared elsewhere), `invalid` is kept, so a `string or invalid` member with a default of `0` is `string or invalid or integer`.
+- When the source type is unknown, the variables are `dynamic`.
+
+```brighterscript
+interface Person
+    name as string
+    age as integer
+end interface
+
+sub greet(person as Person)
+    { name, age } = person ' name is a string, age is an integer
+    print ucase(name); age + 1
+end sub
+```
+
+A key that does not exist on a known source type is reported at the key, the same as `person.nmae` would be. An array pattern used on a value known to not be indexable by position (a string, number, associative array, class instance, or node) is also an error. A source whose type is a function is not checked at all: a field that shares its name with a built-in method (i.e. `m.items` or `data.count`) is typed as that method, even though it almost always holds a value.
+
+## Type annotations
+
+Any variable in a pattern can be given a type with `as <type>`, which is useful when the source is untyped (i.e. the result of `parseJson()`). The syntax matches function parameters: the default value (if any) comes first, then the type.
+
+```brighterscript
+sub main(data)
+    { name as string, age = 0 as integer, id: userId as string } = data
+    [first as string] = data.items
+end sub
+```
+
+The declared type is used in place of the inferred one, and is checked the same way as a typed assignment (`name as string = data.name`), so a value or default value that does not match the declared type is an error. The annotations are removed when transpiling.
+
+A cast in a default value must be wrapped in parentheses (`{ age = (value as integer) as integer }`), since `as` after the default is read as the variable's type. Nested patterns and rest elements cannot be typed, and a rest element cannot use a type designator (`...rest$`) since it always holds an array or associative array.
+
+## Limitations
+
+- Targets must be plain variable names. Assigning into properties (`{ name: m.name } = person`) or indexes (`[arr[0]] = items`) is not supported.
+- Destructuring is only available as a statement. It cannot be used in function parameters or `for each` loops.

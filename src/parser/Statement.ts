@@ -1,7 +1,8 @@
 /* eslint-disable no-bitwise */
 import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
-import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
+import { SourceNode } from 'source-map';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression, DestructuringPattern, DestructuringTarget, ObjectPatternExpression, ArrayPatternExpression, ObjectPatternPropertyExpression, ArrayPatternElementExpression } from './Expression';
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
 import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
@@ -10,7 +11,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isObjectPatternExpression, isArrayPatternExpression, isObjectPatternPropertyExpression } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -246,6 +247,378 @@ export class AssignmentStatement extends Statement {
             ['value', 'typeExpression']
         );
     }
+}
+
+/**
+ * A destructuring assignment, i.e. `{ name, age } = person` or `[first, second] = items`.
+ * Transpiles to a series of plain BrightScript assignments (evaluating the right-hand side exactly once).
+ */
+export class DestructuringAssignmentStatement extends Statement {
+    constructor(options: {
+        pattern: DestructuringPattern;
+        equals?: Token;
+        value: Expression;
+    }) {
+        super();
+        this.pattern = options.pattern;
+        this.tokens = {
+            equals: options.equals
+        };
+        this.value = options.value;
+        this.location = util.createBoundingLocation(this.pattern, util.createBoundingLocationFromTokens(this.tokens), this.value);
+    }
+
+    public readonly tokens: {
+        readonly equals?: Token;
+    };
+
+    /**
+     * The object or array pattern on the left-hand side of the `=`
+     */
+    public readonly pattern: DestructuringPattern;
+
+    /**
+     * The expression on the right-hand side of the `=` whose value is destructured
+     */
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.DestructuringAssignmentStatement;
+
+    public readonly location: Location | undefined;
+
+    /**
+     * Get every variable assigned by this statement, along with the type it receives
+     */
+    public getTargets(options: GetTypeOptions): DestructuringTarget[] {
+        const valueType = this.value?.getType({ ...options, typeChain: undefined });
+        return this.pattern?.getTargets(valueType, options) ?? [];
+    }
+
+    /**
+     * Get the type of a single variable assigned by this statement, without resolving the types of the other targets
+     * @param name the identifier token of the target (as returned by `getTargetNames`)
+     */
+    public getTargetType(name: Identifier, options: GetTypeOptions): BscType | undefined {
+        const valueType = this.value?.getType({ ...options, typeChain: undefined });
+        return this.pattern?.getTargets(valueType, options, name)[0]?.type;
+    }
+
+    /**
+     * Get the type a target is registered with as a variable. A target whose value is `invalid` (or has no type) is registered as dynamic,
+     * since the variable is expected to hold a real value at some point
+     */
+    public static getTargetSymbolType(type: BscType | undefined): BscType {
+        if (!type || isInvalidType(type) || isVoidType(type)) {
+            return DynamicType.instance;
+        }
+        return type;
+    }
+
+    /**
+     * Get the identifier tokens of every variable assigned by this statement, without resolving any types
+     */
+    public getTargetNames(): Identifier[] {
+        return this.pattern?.getTargetNames() ?? [];
+    }
+
+    /**
+     * Get the targets that this statement has already assigned when `node` is evaluated, following the transpiled order:
+     * the source is evaluated first, then each item is read in order, with an item's default evaluated right after its own value is read
+     * (and before any nested pattern inside it is unpacked)
+     * @returns the assigned targets, or undefined when `node` is not inside this statement's source or default values
+     */
+    public getTargetNamesAssignedBefore(node: AstNode): Identifier[] | undefined {
+        const isWithin = (container: AstNode | undefined) => !!container && (node === container || !!node.findAncestor(x => x === container));
+        if (isWithin(this.value)) {
+            return [];
+        }
+        const assigned: Identifier[] = [];
+        const visit = (pattern: DestructuringPattern): boolean => {
+            const items: Array<ObjectPatternPropertyExpression | ArrayPatternElementExpression> = isObjectPatternExpression(pattern) ? pattern.properties : pattern.elements;
+            for (const item of items) {
+                const targetName = isObjectPatternPropertyExpression(item) ? item.targetName : item.tokens.name;
+                if (isWithin(item.defaultValue)) {
+                    //the item's own value is read before its default is evaluated
+                    if (targetName && !item.pattern) {
+                        assigned.push(targetName);
+                    }
+                    return true;
+                }
+                if (item.pattern) {
+                    if (visit(item.pattern)) {
+                        return true;
+                    }
+                } else if (targetName) {
+                    assigned.push(targetName);
+                }
+            }
+            if (pattern.rest?.tokens.name) {
+                assigned.push(pattern.rest.tokens.name);
+            }
+            return false;
+        };
+        return this.pattern && visit(this.pattern) ? assigned : undefined;
+    }
+
+    /**
+     * Get the names of the temporary variables this statement declares when transpiled (the copy of the source, one per nested pattern,
+     * and one loop counter per array rest element). A source that is a plain variable is assumed to be read directly, but a name that
+     * transpiles to something else (i.e. a const) also needs a temp, so this may be one short in that case
+     */
+    public getTempVariableNames(): string[] {
+        let count = isVariableExpression(this.value) && !this.assignsVariable(this.value.tokens.name.text) ? 0 : 1;
+        const countPattern = (pattern: DestructuringPattern) => {
+            const nestedPatterns = isObjectPatternExpression(pattern)
+                ? pattern.properties.map(x => x.pattern)
+                : pattern.elements.map(x => x.pattern);
+            for (const nestedPattern of nestedPatterns) {
+                if (nestedPattern) {
+                    count++;
+                    countPattern(nestedPattern);
+                }
+            }
+            if (isArrayPatternExpression(pattern) && pattern.rest?.tokens.name) {
+                count++;
+            }
+        };
+        if (this.pattern) {
+            countPattern(this.pattern);
+        }
+        const names: string[] = [];
+        for (let i = 0; i < count; i++) {
+            names.push(DestructuringAssignmentStatement.getTempVariableName(i));
+        }
+        return names;
+    }
+
+    private static getTempVariableName(index: number) {
+        return `__bsDestructure${index}`;
+    }
+
+    transpile(state: BrsTranspileState) {
+        const result: TranspileResult = [
+            ...state.transpileLeadingComments(this.pattern.tokens.open)
+        ];
+        let tempIndex = 0;
+        let isFirstLine = true;
+        let pendingComments: TranspileResult = [];
+        const context: DestructuringTranspileContext = {
+            state: state,
+            result: result,
+            nextTempName: () => DestructuringAssignmentStatement.getTempVariableName(tempIndex++),
+            startLine: () => {
+                if (isFirstLine) {
+                    isFirstLine = false;
+                } else {
+                    result.push(state.newline, state.indent());
+                }
+                result.push(...pendingComments);
+                pendingComments = [];
+            },
+            queueComments: (node) => {
+                pendingComments.push(...state.transpileLeadingCommentsForAstNode(node));
+            },
+            flushComments: () => {
+                //drop the trailing newline and indent that prepare for the next line, since nothing follows these comments
+                while (pendingComments.length > 0 && typeof pendingComments[pendingComments.length - 1] === 'string' && (pendingComments[pendingComments.length - 1] as string).trim() === '') {
+                    pendingComments.pop();
+                }
+                if (pendingComments.length > 0) {
+                    result.push(state.newline, state.indent(), ...pendingComments);
+                    pendingComments = [];
+                }
+            }
+        };
+
+        //when the right-hand side is a plain local variable that is not reassigned by this pattern, read from it directly.
+        //Otherwise evaluate it exactly once into a temp variable. Names that transpile to something else
+        //(consts, namespace-relative references, etc.) are not plain locals, so they also go through the temp
+        const valueResult = this.value.transpile(state);
+        let sourceName: string;
+        if (
+            isVariableExpression(this.value) &&
+            new SourceNode(null, null, null, valueResult as Array<string | SourceNode>).toString() === this.value.tokens.name.text &&
+            !this.assignsVariable(this.value.tokens.name.text)
+        ) {
+            sourceName = this.value.tokens.name.text;
+        } else {
+            sourceName = context.nextTempName();
+            context.startLine();
+            result.push(
+                state.sourceNode(this.pattern.tokens.open, sourceName),
+                ' ',
+                state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal), '='),
+                ' ',
+                ...valueResult
+            );
+        }
+        this.transpilePattern(this.pattern, sourceName, context);
+        //comments that come after the last item (i.e. right before the closing bracket) go on their own lines at the end
+        context.flushComments();
+        return result;
+    }
+
+    /**
+     * Does this statement assign to a variable with the given name?
+     */
+    private assignsVariable(name: string) {
+        const lowerName = name?.toLowerCase();
+        return this.getTargetNames().some(x => x.text?.toLowerCase() === lowerName);
+    }
+
+    private transpilePattern(pattern: DestructuringPattern, sourceName: string, context: DestructuringTranspileContext) {
+        if (isObjectPatternExpression(pattern)) {
+            this.transpileObjectPattern(pattern, sourceName, context);
+        } else {
+            this.transpileArrayPattern(pattern, sourceName, context);
+        }
+        context.queueComments({ leadingTrivia: pattern.tokens.close?.leadingTrivia });
+    }
+
+    private transpileObjectPattern(pattern: ObjectPatternExpression, sourceName: string, context: DestructuringTranspileContext) {
+        const { state, result } = context;
+        for (const property of pattern.properties) {
+            const key = property.tokens.key;
+            if (!key) {
+                continue;
+            }
+            context.queueComments(property);
+            const accessor = key.kind === TokenKind.StringLiteral
+                ? `${sourceName}[${key.text}]`
+                : `${sourceName}.${property.getKeyName()}`;
+            if (property.pattern) {
+                const tempName = context.nextTempName();
+                this.transpileTargetAssignment(tempName, key, accessor, property.defaultValue, context);
+                this.transpilePattern(property.pattern, tempName, context);
+            } else if (property.targetName) {
+                this.transpileTargetAssignment(property.targetName.text, property.targetName, accessor, property.defaultValue, context);
+            }
+            //comments before the separator (i.e. leading-comma style) belong with the next item
+            context.queueComments({ leadingTrivia: property.tokens.comma?.leadingTrivia });
+        }
+        if (pattern.rest?.tokens.name) {
+            //`rest = {}` + `rest.append(source)` + one `rest.delete("key")` per named property
+            const restName = pattern.rest.tokens.name;
+            context.queueComments(pattern.rest);
+            context.startLine();
+            result.push(state.sourceNode(restName, restName.text), ' = {}');
+            context.startLine();
+            result.push(state.sourceNode(restName, restName.text), `.append(${sourceName})`);
+            for (const property of pattern.properties) {
+                const key = property.tokens.key;
+                if (!key) {
+                    continue;
+                }
+                const keyString = key.kind === TokenKind.StringLiteral ? key.text : `"${property.getKeyName()}"`;
+                context.startLine();
+                result.push(state.sourceNode(restName, restName.text), `.delete(${keyString})`);
+            }
+        }
+    }
+
+    private transpileArrayPattern(pattern: ArrayPatternExpression, sourceName: string, context: DestructuringTranspileContext) {
+        const { state, result } = context;
+        let index = 0;
+        for (const element of pattern.elements) {
+            context.queueComments(element);
+            const accessor = `${sourceName}[${index}]`;
+            if (element.pattern) {
+                const tempName = context.nextTempName();
+                this.transpileTargetAssignment(tempName, element.pattern.tokens.open, accessor, element.defaultValue, context);
+                this.transpilePattern(element.pattern, tempName, context);
+            } else if (element.tokens.name) {
+                this.transpileTargetAssignment(element.tokens.name.text, element.tokens.name, accessor, element.defaultValue, context);
+            }
+            //comments before the separator (i.e. leading-comma style) or before a hole's comma belong with the next item
+            context.queueComments({ leadingTrivia: element.tokens.comma?.leadingTrivia });
+            index++;
+        }
+        if (pattern.rest?.tokens.name) {
+            //`rest = []` + a loop that pushes every remaining item. (roArray.slice() is not available on older firmware)
+            const restName = pattern.rest.tokens.name;
+            context.queueComments(pattern.rest);
+            const loopVar = context.nextTempName();
+            context.startLine();
+            result.push(state.sourceNode(restName, restName.text), ' = []');
+            context.startLine();
+            result.push(state.sourceNode(pattern.rest.tokens.dotDotDot, `for ${loopVar} = ${index} to ${sourceName}.count() - 1`));
+            result.push(state.newline, state.indent(1));
+            result.push(state.sourceNode(restName, restName.text), `.push(${sourceName}[${loopVar}])`);
+            result.push(state.newline, state.indent(-1));
+            result.push(state.sourceNode(pattern.rest.tokens.dotDotDot, 'end for'));
+        }
+    }
+
+    /**
+     * Emit `target = accessor`, followed by an `if target = invalid` block that assigns the default when a default value is present.
+     * A block `if` is used (rather than a single-line `if`) because the default may span multiple lines (i.e. an inline function)
+     */
+    private transpileTargetAssignment(targetName: string, locatable: Token, accessor: string, defaultValue: Expression | undefined, context: DestructuringTranspileContext) {
+        const { state, result } = context;
+        context.startLine();
+        result.push(state.sourceNode(locatable, targetName), ' = ', accessor);
+        if (defaultValue) {
+            context.startLine();
+            result.push(state.sourceNode(defaultValue, `if ${targetName} = invalid then`));
+            state.blockDepth++;
+            result.push(
+                state.newline,
+                state.indent(),
+                state.sourceNode(defaultValue, `${targetName} = `),
+                ...defaultValue.transpile(state)
+            );
+            state.blockDepth--;
+            result.push(
+                state.newline,
+                state.indent(),
+                state.sourceNode(defaultValue, 'end if')
+            );
+        }
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'pattern', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.pattern?.tokens.open?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new DestructuringAssignmentStatement({
+                pattern: this.pattern?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['pattern', 'value']
+        );
+    }
+}
+
+interface DestructuringTranspileContext {
+    state: BrsTranspileState;
+    result: TranspileResult;
+    /**
+     * Get the name for the next temporary variable
+     */
+    nextTempName: () => string;
+    /**
+     * Prepare `result` for a new line of output (adds a newline and indent for every line except the first),
+     * followed by any queued comments
+     */
+    startLine: () => void;
+    /**
+     * Queue the leading comments of a pattern item so they are emitted at the start of the next line of output
+     */
+    queueComments: (node: { leadingTrivia?: Token[] }) => void;
+    /**
+     * Emit any queued comments that were not followed by another line of output
+     */
+    flushComments: () => void;
 }
 
 export class AugmentedAssignmentStatement extends Statement {

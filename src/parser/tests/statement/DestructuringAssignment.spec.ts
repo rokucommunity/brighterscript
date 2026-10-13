@@ -1,0 +1,1380 @@
+import { expect } from '../../../chai-config.spec';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { Parser, ParseMode } from '../../Parser';
+import { Program } from '../../../Program';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, rootDir } from '../../../testHelpers.spec';
+import type { DestructuringAssignmentStatement } from '../../Statement';
+import type { ArrayPatternExpression, ObjectPatternExpression } from '../../Expression';
+import { isArrayPatternExpression, isDestructuringAssignmentStatement, isLiteralExpression, isObjectPatternExpression, isVariableExpression } from '../../../astUtils/reflection';
+import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
+import type { BrsFile } from '../../../files/BrsFile';
+import { util } from '../../../util';
+import { createSandbox } from 'sinon';
+import { TokenKind } from '../../../lexer/TokenKind';
+import { BrsTranspileState } from '../../BrsTranspileState';
+import { createIdentifier } from '../../../astUtils/creators';
+
+const sinon = createSandbox();
+
+describe('DestructuringAssignmentStatement', () => {
+    let program: Program;
+    const testTranspile = getTestTranspile(() => [program, rootDir]);
+
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir, sourceMap: true });
+    });
+    afterEach(() => {
+        sinon.restore();
+        program.dispose();
+    });
+
+    function parse(text: string, mode = ParseMode.BrighterScript) {
+        return Parser.parse(text, { mode: mode });
+    }
+
+    function parseStatement(text: string) {
+        const parser = parse(text);
+        expectZeroDiagnostics(parser);
+        const statement = parser.ast.statements[0] as DestructuringAssignmentStatement;
+        expect(isDestructuringAssignmentStatement(statement)).to.be.true;
+        return statement;
+    }
+
+    describe('parse', () => {
+        it('parses an object pattern with shorthand properties', () => {
+            const statement = parseStatement(`{ name, age } = person`);
+            const pattern = statement.pattern as ObjectPatternExpression;
+            expect(isObjectPatternExpression(pattern)).to.be.true;
+            expect(pattern.properties.map(x => x.getKeyName())).to.eql(['name', 'age']);
+            expect(pattern.properties.map(x => x.targetName.text)).to.eql(['name', 'age']);
+            expect(pattern.rest).to.be.undefined;
+            expect(isVariableExpression(statement.value)).to.be.true;
+            expect(statement.getTargetNames().map(x => x.text)).to.eql(['name', 'age']);
+        });
+
+        it('parses renamed, nested, defaulted, string-keyed and rest properties', () => {
+            const statement = parseStatement(`{ name: userName, address: { city }, age = 21, "first name": firstName, ...others } = person`);
+            const pattern = statement.pattern as ObjectPatternExpression;
+            expect(pattern.properties.map(x => x.getKeyName())).to.eql(['name', 'address', 'age', 'first name']);
+            expect(pattern.properties[0].tokens.name.text).to.eql('userName');
+            expect(pattern.properties[0].targetName.text).to.eql('userName');
+            expect(isObjectPatternExpression(pattern.properties[1].pattern)).to.be.true;
+            expect(pattern.properties[1].targetName).to.be.undefined;
+            expect(pattern.properties[2].defaultValue).to.exist;
+            expect(pattern.properties[3].tokens.key.kind).to.eql(TokenKind.StringLiteral);
+            expect(pattern.rest.tokens.dotDotDot.kind).to.eql(TokenKind.DotDotDot);
+            expect(pattern.rest.tokens.name.text).to.eql('others');
+            expect(statement.getTargetNames().map(x => x.text)).to.eql(['userName', 'city', 'age', 'firstName', 'others']);
+        });
+
+        it('parses an array pattern with holes, defaults, nested patterns and rest', () => {
+            const statement = parseStatement(`[first, , third = 3, [nestedA, nestedB], { name }, ...rest] = items`);
+            const pattern = statement.pattern as ArrayPatternExpression;
+            expect(isArrayPatternExpression(pattern)).to.be.true;
+            expect(pattern.elements).to.have.lengthOf(5);
+            expect(pattern.elements[0].tokens.name.text).to.eql('first');
+            expect(pattern.elements[1].isHole).to.be.true;
+            expect(pattern.elements[2].tokens.name.text).to.eql('third');
+            expect(pattern.elements[2].defaultValue).to.exist;
+            expect(isArrayPatternExpression(pattern.elements[3].pattern)).to.be.true;
+            expect(isObjectPatternExpression(pattern.elements[4].pattern)).to.be.true;
+            expect(pattern.rest.tokens.name.text).to.eql('rest');
+            expect(statement.getTargetNames().map(x => x.text)).to.eql(['first', 'third', 'nestedA', 'nestedB', 'name', 'rest']);
+        });
+
+        it('parses a leading hole', () => {
+            const statement = parseStatement(`[, second] = items`);
+            const pattern = statement.pattern as ArrayPatternExpression;
+            expect(pattern.elements[0].isHole).to.be.true;
+            expect(pattern.elements[1].tokens.name.text).to.eql('second');
+        });
+
+        it('parses patterns that span multiple lines and have trailing commas', () => {
+            const statement = parseStatement(`
+                {
+                    name,
+                    age,
+                } = person
+            `);
+            expect(statement.getTargetNames().map(x => x.text)).to.eql(['name', 'age']);
+            expect((statement.pattern as ObjectPatternExpression).properties[1].tokens.comma).to.exist;
+
+            const arrayStatement = parseStatement(`
+                [
+                    first,
+                    second,
+                ] = items
+            `);
+            expect(arrayStatement.getTargetNames().map(x => x.text)).to.eql(['first', 'second']);
+        });
+
+        it('treats a comma at the start of a line as the separator rather than a hole', () => {
+            const statement = parseStatement(`
+                [first
+                    , second
+                    , , fourth
+                ] = items
+            `);
+            const pattern = statement.pattern as ArrayPatternExpression;
+            expect(pattern.elements.map(x => (x.isHole ? '<hole>' : x.tokens.name.text))).to.eql(['first', 'second', '<hole>', 'fourth']);
+            expect(pattern.elements[0].tokens.comma).to.exist;
+
+            const objectStatement = parseStatement(`
+                { name
+                    , age
+                } = person
+            `);
+            expect(objectStatement.getTargetNames().map(x => x.text)).to.eql(['name', 'age']);
+        });
+
+        it('parses an object pattern as the value of a destructuring assignment', () => {
+            const statement = parseStatement(`{ a } = { a: 1 }`);
+            expect(statement.getTargetNames().map(x => x.text)).to.eql(['a']);
+        });
+
+        it('parses a default value that contains brackets', () => {
+            const statement = parseStatement(`{ a = items[0], b = getValue() } = obj`);
+            expect(statement.getTargetNames().map(x => x.text)).to.eql(['a', 'b']);
+        });
+
+        it('parses inside a single-line if statement', () => {
+            const parser = parse(`if true then [a, b] = items`);
+            expectZeroDiagnostics(parser);
+        });
+
+        it('flags the feature when used in plain brightscript', () => {
+            const parser = parse(`{ name } = person`, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(parser, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('destructuring assignment').message
+            ]);
+        });
+
+        it('flags a rest element that is not last', () => {
+            expectDiagnostics(parse(`{ ...rest, name } = person`), [
+                DiagnosticMessages.restElementMustBeLast().message
+            ]);
+            expectDiagnostics(parse(`[...rest, first] = items`), [
+                DiagnosticMessages.restElementMustBeLast().message
+            ]);
+            expectDiagnostics(parse(`[...rest, , first] = items`), [
+                DiagnosticMessages.restElementMustBeLast().message
+            ]);
+        });
+
+        it('allows whitespace but not a newline between the `...` and the rest element name', () => {
+            expectZeroDiagnostics(parse(`[... rest] = items`));
+            expectZeroDiagnostics(parse(`{ name, ... rest } = person`));
+            expectZeroDiagnostics(parse(`[...rest] = items`));
+            expect(parse(`{ ...
+                rest } = person`).diagnostics).not.to.be.empty;
+        });
+
+        it('flags a type designator on a rest element', () => {
+            const parser = parse(`
+                [a, ...rest$] = items
+                { b, ...others% } = obj
+            `);
+            expectDiagnostics(parser, [{
+                ...DiagnosticMessages.invalidIdentifier('rest$', '$'),
+                location: { range: util.createRange(1, 23, 1, 28) }
+            }, {
+                ...DiagnosticMessages.invalidIdentifier('others%', '%'),
+                location: { range: util.createRange(2, 24, 2, 31) }
+            }]);
+        });
+
+        it('flags a string literal key without a target', () => {
+            expectDiagnosticsIncludes(parse(`{ "first name" } = person`), [
+                DiagnosticMessages.expectedToken(TokenKind.Colon).message
+            ]);
+        });
+
+        it('flags reserved words used as targets', () => {
+            expectDiagnosticsIncludes(parse(`{ run } = person`), [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('run').message
+            ]);
+            expectDiagnosticsIncludes(parse(`{ name: run } = person`), [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('run').message
+            ]);
+            expectDiagnosticsIncludes(parse(`[run] = items`), [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('run').message
+            ]);
+        });
+
+        it('flags an invalid array element', () => {
+            expectDiagnosticsIncludes(parse(`[1] = items`), [
+                DiagnosticMessages.expectedDestructuringTarget().message
+            ]);
+        });
+
+        it('does not treat brackets that are not followed by `=` as destructuring', () => {
+            const parser = parse(`[1, 2].push(3)`);
+            expect(parser.ast.statements.some(x => isDestructuringAssignmentStatement(x))).to.be.false;
+        });
+
+        it('clones the statement', () => {
+            const statement = parseStatement(`{ name: userName, address: { city }, age = 21, ...others } = person`);
+            const clone = statement.clone();
+            expect(clone).not.to.equal(statement);
+            expect(clone.getTargetNames().map(x => x.text)).to.eql(['userName', 'city', 'age', 'others']);
+            expect(clone.pattern.rest.parent).to.equal(clone.pattern);
+            expect(clone.pattern.parent).to.equal(clone);
+            expect(clone.value.parent).to.equal(clone);
+            expect(clone.location).to.eql(statement.location);
+            const arrayStatement = parseStatement(`[first, , third = 3, ...rest] = items`);
+            const arrayClone = arrayStatement.clone();
+            expect(arrayClone.getTargetNames().map(x => x.text)).to.eql(['first', 'third', 'rest']);
+        });
+
+        it('parses `as <type>` on shorthand, renamed, defaulted, and array targets', () => {
+            const statement = parseStatement(`{ name as string, age = 0 as integer, id: userId as string } = data`);
+            const pattern = statement.pattern as ObjectPatternExpression;
+            expect(pattern.properties.map(x => x.typeExpression?.getName())).to.eql(['string', 'integer', 'string']);
+            expect(pattern.properties.map(x => x.tokens.as?.text)).to.eql(['as', 'as', 'as']);
+            //the `as` belongs to the target, not to a cast on the default value
+            expect(isLiteralExpression(pattern.properties[1].defaultValue)).to.be.true;
+            expect(pattern.properties[2].targetName.text).to.eql('userId');
+
+            const arrayStatement = parseStatement(`[first as string, second = 1 as integer, ...rest] = items`);
+            const arrayPattern = arrayStatement.pattern as ArrayPatternExpression;
+            expect(arrayPattern.elements.map(x => x.typeExpression?.getName())).to.eql(['string', 'integer']);
+            expect(isLiteralExpression(arrayPattern.elements[1].defaultValue)).to.be.true;
+        });
+
+        it('allows a cast in a default value when it is wrapped in parens', () => {
+            const statement = parseStatement(`{ age = (value as integer) as integer } = data`);
+            const property = (statement.pattern as ObjectPatternExpression).properties[0];
+            expect(property.typeExpression.getName()).to.eql('integer');
+            expect(property.defaultValue.kind).to.eql('GroupingExpression');
+        });
+
+        it('flags `as <type>` on a nested pattern or a rest element', () => {
+            expectDiagnostics(parse(`{ address: { city } as Address } = person`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('nested pattern').message
+            ]);
+            expectDiagnostics(parse(`[[a, b] as integer[]] = items`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('nested pattern').message
+            ]);
+            expectDiagnostics(parse(`{ name, ...others as object } = person`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('rest element').message
+            ]);
+            expectDiagnostics(parse(`[first, ...rest as string[]] = items`), [
+                DiagnosticMessages.destructuringTypeNotAllowed('rest element').message
+            ]);
+        });
+    });
+
+    describe('transpile', () => {
+        it('reads directly from a plain variable source', async () => {
+            await testTranspile(`
+                sub main(person)
+                    { name, age } = person
+                    print name; age
+                end sub
+            `, `
+                sub main(person)
+                    name = person.name
+                    age = person.age
+                    print name; age
+                end sub
+            `);
+        });
+
+        it('evaluates a non-variable source exactly once', async () => {
+            await testTranspile(`
+                sub main()
+                    { name, age } = getPerson()
+                    print name; age
+                end sub
+                function getPerson()
+                    return { name: "bob", age: 12 }
+                end function
+            `, `
+                sub main()
+                    __bsDestructure0 = getPerson()
+                    name = __bsDestructure0.name
+                    age = __bsDestructure0.age
+                    print name; age
+                end sub
+
+                function getPerson()
+                    return {
+                        name: "bob"
+                        age: 12
+                    }
+                end function
+            `);
+        });
+
+        it('transpiles renamed properties and string literal keys', async () => {
+            await testTranspile(`
+                sub main(person)
+                    { name: userName, "first name": firstName } = person
+                    print userName; firstName
+                end sub
+            `, `
+                sub main(person)
+                    userName = person.name
+                    firstName = person["first name"]
+                    print userName; firstName
+                end sub
+            `);
+        });
+
+        it('transpiles nested patterns', async () => {
+            await testTranspile(`
+                sub main(person)
+                    { address: { city, geo: [lat, lng] } } = person
+                    print city; lat; lng
+                end sub
+            `, `
+                sub main(person)
+                    __bsDestructure0 = person.address
+                    city = __bsDestructure0.city
+                    __bsDestructure1 = __bsDestructure0.geo
+                    lat = __bsDestructure1[0]
+                    lng = __bsDestructure1[1]
+                    print city; lat; lng
+                end sub
+            `);
+        });
+
+        it('transpiles default values as a fallback when the value is invalid', async () => {
+            await testTranspile(`
+                sub main(person)
+                    { name = "unknown", address: { city } = {} } = person
+                    print name; city
+                end sub
+            `, `
+                sub main(person)
+                    name = person.name
+                    if name = invalid then
+                        name = "unknown"
+                    end if
+                    __bsDestructure0 = person.address
+                    if __bsDestructure0 = invalid then
+                        __bsDestructure0 = {}
+                    end if
+                    city = __bsDestructure0.city
+                    print name; city
+                end sub
+            `);
+        });
+
+        it('transpiles an object rest element', async () => {
+            await testTranspile(`
+                sub main(person)
+                    { name, "first name": firstName, ...others } = person
+                    print name; firstName; others
+                end sub
+            `, `
+                sub main(person)
+                    name = person.name
+                    firstName = person["first name"]
+                    others = {}
+                    others.append(person)
+                    others.delete("name")
+                    others.delete("first name")
+                    print name; firstName; others
+                end sub
+            `);
+        });
+
+        it('transpiles array patterns with holes, defaults and rest', async () => {
+            await testTranspile(`
+                sub main(items)
+                    [first, , third = 3, ...rest] = items
+                    print first; third; rest
+                end sub
+            `, `
+                sub main(items)
+                    first = items[0]
+                    third = items[2]
+                    if third = invalid then
+                        third = 3
+                    end if
+                    rest = []
+                    for __bsDestructure0 = 3 to items.count() - 1
+                        rest.push(items[__bsDestructure0])
+                    end for
+                    print first; third; rest
+                end sub
+            `);
+        });
+
+        it('uses the correct index for leading-comma array patterns', async () => {
+            await testTranspile(`
+                sub main(items)
+                    [first
+                        , second] = items
+                    print first; second
+                end sub
+            `, `
+                sub main(items)
+                    first = items[0]
+                    second = items[1]
+                    print first; second
+                end sub
+            `);
+        });
+
+        it('transpiles multi-line default values inside a block if', async () => {
+            await testTranspile(`
+                sub main(data)
+                    { callback = function()
+                        print "default"
+                    end function, items = [
+                        1,
+                        2
+                    ] } = data
+                    print callback; items
+                end sub
+            `, `
+                sub main(data)
+                    callback = data.callback
+                    if callback = invalid then
+                        callback = function()
+                            print "default"
+                        end function
+                    end if
+                    items = data.items
+                    if items = invalid then
+                        items = [
+                            1
+                            2
+                        ]
+                    end if
+                    print callback; items
+                end sub
+            `);
+        });
+
+        it('reads the key without its type designator for shorthand properties', async () => {
+            await testTranspile(`
+                sub main(person)
+                    { name$, age%, "first name": first$, id$: userId, ...others } = person
+                    print name$; age%; first$; userId; others
+                end sub
+            `, `
+                sub main(person)
+                    name$ = person.name
+                    age% = person.age
+                    first$ = person["first name"]
+                    userId = person.id$
+                    others = {}
+                    others.append(person)
+                    others.delete("name")
+                    others.delete("age")
+                    others.delete("first name")
+                    others.delete("id$")
+                    print name$; age%; first$; userId; others
+                end sub
+            `);
+        });
+
+        it('declares the same temp variables that it transpiles to', () => {
+            const sources = [
+                `{ a } = person`,
+                `{ a } = getPerson()`,
+                `{ a, b: { c, d: [e, ...f] } } = person`,
+                `[a, [b, { c }], ...rest] = getItems()`,
+                `[a, b] = [b, a]`,
+                `{ person } = person`
+            ];
+            for (const source of sources) {
+                const file = program.setFile<BrsFile>('source/main.bs', `sub main(person)\n${source}\nend sub`);
+                const statement = file.ast.findChild<DestructuringAssignmentStatement>(isDestructuringAssignmentStatement);
+                const transpiled = util.sourceNodeFromTranspileResult(null, null, null, statement.transpile(new BrsTranspileState(file))).toString();
+                const transpiledTemps = [...new Set(transpiled.match(/__bsDestructure\d+/g) ?? [])];
+                expect(statement.getTempVariableNames(), source).to.eql(transpiledTemps);
+            }
+        });
+
+        it('transpiles an array rest element on its own', async () => {
+            await testTranspile(`
+                sub main(items)
+                    [...copy] = items
+                    print copy
+                end sub
+            `, `
+                sub main(items)
+                    copy = []
+                    for __bsDestructure0 = 0 to items.count() - 1
+                        copy.push(items[__bsDestructure0])
+                    end for
+                    print copy
+                end sub
+            `);
+        });
+
+        it('destructures a spread literal on the right-hand side', async () => {
+            await testTranspile(`
+                sub main(defaults, items)
+                    { name, ...others } = { ...defaults, name: "bob" }
+                    [first, ...rest] = [...items, 9]
+                    print name; others; first; rest
+                end sub
+            `, `
+                sub main(defaults, items)
+                    __bsc_tmp_spread = {}
+                    __bsc_tmp_spread.append(defaults)
+                    __bsc_tmp_spread.name = "bob"
+                    name = __bsc_tmp_spread.name
+                    others = {}
+                    others.append(__bsc_tmp_spread)
+                    others.delete("name")
+                    __bsc_tmp_spread = []
+                    __bsc_tmp_spread.append(items)
+                    __bsc_tmp_spread.push(9)
+                    first = __bsc_tmp_spread[0]
+                    rest = []
+                    for __bsDestructure0 = 1 to __bsc_tmp_spread.count() - 1
+                        rest.push(__bsc_tmp_spread[__bsDestructure0])
+                    end for
+                    print name; others; first; rest
+                end sub
+            `);
+        });
+
+        it('transpiles a const source instead of reading it by name', async () => {
+            await testTranspile(`
+                const DEFAULTS = { a: 1 }
+                sub main()
+                    { a } = DEFAULTS
+                    print a
+                end sub
+            `, `
+                sub main()
+                    __bsDestructure0 = ({
+                        a: 1
+                    })
+                    a = __bsDestructure0.a
+                    print a
+                end sub
+            `);
+        });
+
+        it('transpiles a namespace-relative const source instead of reading it by name', async () => {
+            await testTranspile(`
+                namespace alpha
+                    const CFG = { a: 1 }
+                    sub main()
+                        { a } = CFG
+                        print a
+                    end sub
+                end namespace
+            `, `
+                sub alpha_main()
+                    __bsDestructure0 = ({
+                        a: 1
+                    })
+                    a = __bsDestructure0.a
+                    print a
+                end sub
+            `);
+        });
+
+        it('swaps variables through a temp', async () => {
+            await testTranspile(`
+                sub main()
+                    a = 1
+                    b = 2
+                    [a, b] = [b, a]
+                    print a; b
+                end sub
+            `, `
+                sub main()
+                    a = 1
+                    b = 2
+                    __bsDestructure0 = [
+                        b
+                        a
+                    ]
+                    a = __bsDestructure0[0]
+                    b = __bsDestructure0[1]
+                    print a; b
+                end sub
+            `);
+        });
+
+        it('uses a temp when the source variable is also a target', async () => {
+            await testTranspile(`
+                sub main(items)
+                    [items, other] = items
+                    print items; other
+                end sub
+            `, `
+                sub main(items)
+                    __bsDestructure0 = items
+                    items = __bsDestructure0[0]
+                    other = __bsDestructure0[1]
+                    print items; other
+                end sub
+            `);
+        });
+
+        it('transpiles nested blocks with correct indentation', async () => {
+            await testTranspile(`
+                sub main(items)
+                    if true then
+                        [a, b] = getItems()
+                        print a; b
+                    end if
+                end sub
+                function getItems()
+                    return [1, 2]
+                end function
+            `, `
+                sub main(items)
+                    if true then
+                        __bsDestructure0 = getItems()
+                        a = __bsDestructure0[0]
+                        b = __bsDestructure0[1]
+                        print a; b
+                    end if
+                end sub
+
+                function getItems()
+                    return [
+                        1
+                        2
+                    ]
+                end function
+            `);
+        });
+
+        it('keeps leading comments and handles multi-line patterns', async () => {
+            await testTranspile(`
+                sub main(person)
+                    'extract the important bits
+                    {
+                        name,
+                        age
+                    } = person
+                    print name; age
+                end sub
+            `, `
+                sub main(person)
+                    'extract the important bits
+                    name = person.name
+                    age = person.age
+                    print name; age
+                end sub
+            `);
+        });
+
+        it('keeps comments inside multi-line patterns', async () => {
+            await testTranspile(`
+                sub main(obj)
+                    {
+                        a, ' after a
+                        ' about b
+                        b
+                        ' about rest
+                        ...rest
+                        ' at the end
+                    } = obj
+                    [
+                        ' about x
+                        x
+                        ' about the separator
+                        , ' after the separator
+                        ' about the hole
+                        ,
+                        z
+                    ] = obj.items
+                    print a; b; rest; x; z
+                end sub
+            `, `
+                sub main(obj)
+                    a = obj.a
+                    ' after a
+                    ' about b
+                    b = obj.b
+                    ' about rest
+                    rest = {}
+                    rest.append(obj)
+                    rest.delete("a")
+                    rest.delete("b")
+                    ' at the end
+                    __bsDestructure0 = obj.items
+                    ' about x
+                    x = __bsDestructure0[0]
+                    ' about the separator
+                    ' after the separator
+                    ' about the hole
+                    z = __bsDestructure0[2]
+                    print a; b; rest; x; z
+                end sub
+            `);
+        });
+
+        it('removes `as <type>` from targets', async () => {
+            await testTranspile(`
+                sub main(data)
+                    { name as string, age = 0 as integer, id: userId as string } = data
+                    [first as string] = data.items
+                    print name; age; userId; first
+                end sub
+            `, `
+                sub main(data)
+                    name = data.name
+                    age = data.age
+                    if age = invalid then
+                        age = 0
+                    end if
+                    userId = data.id
+                    __bsDestructure0 = data.items
+                    first = __bsDestructure0[0]
+                    print name; age; userId; first
+                end sub
+            `);
+        });
+    });
+
+    describe('validation', () => {
+        function getMainBodyTable(file: BrsFile) {
+            const func = file.ast.findChild<any>(x => x.kind === 'FunctionStatement');
+            return func.func.body.getSymbolTable();
+        }
+
+        it('flags a destructured target that shadows a scoped function', () => {
+            program.setFile('source/main.bs', `
+                sub helper()
+                end sub
+                sub main(obj)
+                    { helper } = obj
+                    print helper
+                end sub
+            `);
+            program.validate();
+            //same as `helper = obj.helper`, which already warns
+            expectDiagnostics(program, [
+                DiagnosticMessages.localVarShadowedByScopedFunction().message
+            ]);
+        });
+
+        it('flags shadowing for renamed, nested, array, and rest targets', () => {
+            program.setFile('source/main.bs', `
+                sub one()
+                end sub
+                sub two()
+                end sub
+                sub three()
+                end sub
+                sub four()
+                end sub
+                sub main(obj, items)
+                    { a: one, b: { two } } = obj
+                    [three, ...four] = items
+                    print one; two; three; four
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(10, 25, 10, 28) } },
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(10, 35, 10, 38) } },
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(11, 21, 11, 26) } },
+                { ...DiagnosticMessages.localVarShadowedByScopedFunction(), location: { range: util.createRange(11, 31, 11, 35) } }
+            ]);
+        });
+
+        it('flags a key that does not exist on a typed source', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                end interface
+                sub main(p as Person)
+                    { nmae } = p
+                    { nmae: q } = p
+                    print nmae; q
+                end sub
+            `);
+            program.validate();
+            //same as `x = p.nmae`: reported at the key, and the targets don't error again where they're used
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('nmae', 'p.nmae', 'Person'),
+                location: { range: util.createRange(5, 22, 5, 26) }
+            }, {
+                ...DiagnosticMessages.cannotFindName('nmae', 'p.nmae', 'Person'),
+                location: { range: util.createRange(6, 22, 6, 26) }
+            }]);
+        });
+
+        it('flags a missing key in a nested pattern and inside an array pattern', () => {
+            program.setFile('source/main.bs', `
+                interface Address
+                    city as string
+                end interface
+                interface Person
+                    address as Address
+                    friends as Person[]
+                end interface
+                sub main(p as Person)
+                    { address: { ctiy } } = p
+                    [{ adress }] = p.friends
+                    print ctiy; adress
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('ctiy', 'p.address.ctiy', 'Address'),
+                location: { range: util.createRange(9, 33, 9, 37) }
+            }, {
+                ...DiagnosticMessages.cannotFindName('adress', 'p.friends[0].adress', 'Person'),
+                location: { range: util.createRange(10, 23, 10, 29) }
+            }]);
+        });
+
+        it('does not flag keys on dynamic or associative array sources', () => {
+            program.setFile('source/main.bs', `
+                sub main(data, aa as object)
+                    { anything, nested: { deep } } = data
+                    { whatever } = aa
+                    { missing } = { name: "bob" }
+                    print anything; deep; whatever; missing
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('supports `as type` on targets', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(data)
+                    { name as string, age = 0 as integer } = data
+                    [first as string] = data.items
+                    print name; age; first
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            const typeOf = (name: string) => table.getSymbolType(name, { flags: SymbolTypeFlag.runtime }).toString();
+            expect(typeOf('name')).to.eql('string');
+            expect(typeOf('age')).to.eql('integer');
+            expect(typeOf('first')).to.eql('string');
+        });
+
+        it('uses the declared type over the inferred one', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+                sub main(data)
+                    { id: personId as string, person as Person } = data
+                    print personId; person
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            expect(table.getSymbolType('personId', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('string');
+            expect(table.getSymbolType('person', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('Person');
+        });
+
+        it('flags a typed target whose value does not match the declared type', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                    tags as string[]
+                end interface
+                sub main(p as Person, data)
+                    { name as integer } = p
+                    [firstTag as integer] = p.tags
+                    { age = "old" as integer } = data
+                    print name; firstTag; age
+                end sub
+            `);
+            program.validate();
+            //same as \`name as integer = p.name\`
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.assignmentTypeMismatch('string', 'integer', {}),
+                location: { range: util.createRange(6, 22, 6, 37) }
+            }, {
+                ...DiagnosticMessages.assignmentTypeMismatch('string', 'integer', {}),
+                location: { range: util.createRange(7, 21, 7, 40) }
+            }, {
+                ...DiagnosticMessages.assignmentTypeMismatch('string', 'integer', {}),
+                location: { range: util.createRange(8, 22, 8, 44) }
+            }]);
+        });
+
+        it('flags an unknown type on a target', () => {
+            program.setFile('source/main.bs', `
+                sub main(data)
+                    { name as Unknown } = data
+                    print name
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('Unknown').message
+            ]);
+        });
+
+        it('registers the targets as variables with inferred types', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    person = { name: "bob", age: 12, address: { city: "nyc" }, tags: ["a", "b"] }
+                    { name, age: personAge, address: { city }, missing = 1.5, ...others } = person
+                    [firstTag, ...otherTags] = person.tags
+                    print name; personAge; city; missing; others; firstTag; otherTags
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            const typeOf = (name: string) => table.getSymbolType(name, { flags: SymbolTypeFlag.runtime }).toString();
+            expect(typeOf('name')).to.eql('string');
+            expect(typeOf('personAge')).to.eql('integer');
+            expect(typeOf('city')).to.eql('string');
+            expect(typeOf('missing')).to.eql('float');
+            expect(typeOf('others')).to.eql('roAssociativeArray');
+            expect(typeOf('firstTag')).to.eql('string');
+            expect(typeOf('otherTags')).to.eql('Array<string>');
+        });
+
+        it('drops invalid from the inferred type when a default is present', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    [first, second = 3] = [1, 2, invalid]
+                    print first; second
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            expect(table.getSymbolType('first', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('integer or invalid');
+            expect(table.getSymbolType('second', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('integer');
+        });
+
+        it('infers dynamic for targets from an unknown source', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(data)
+                    { name } = data
+                    [first] = data.items
+                    print name; first
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            expect(table.getSymbolType('name', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('dynamic');
+            expect(table.getSymbolType('first', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('dynamic');
+        });
+
+        it('infers element types from an array source whose type is not resolved yet', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    [n, ...others] = getNums()
+                    nums = getNums()
+                    [n2] = nums
+                    print n; others; n2
+                end sub
+                function getNums() as integer[]
+                    return [1, 2]
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            const typeOf = (name: string) => table.getSymbolType(name, { flags: SymbolTypeFlag.runtime }).toString();
+            expect(typeOf('n')).to.eql('integer');
+            expect(typeOf('others')).to.eql('Array<integer>');
+            expect(typeOf('n2')).to.eql('integer');
+        });
+
+        it('validates usage of targets from an array source whose type is not resolved yet', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    [n] = getNums()
+                    [s as string] = getNums()
+                    print n.len(); s
+                end sub
+                function getNums() as integer[]
+                    return [1, 2]
+                end function
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.cannotFindFunction('len', 'integer.len', 'integer').message
+            ]);
+            expect(program.getDiagnostics().map(x => x.code)).to.include(DiagnosticMessages.assignmentTypeMismatch('integer', 'string').code);
+        });
+
+        it('flags a shorthand key with a type designator that does not exist on a typed source', () => {
+            program.setFile('source/main.bs', `
+                interface Person
+                    name as string
+                end interface
+                sub main(person as Person)
+                    { name$, title$ } = person
+                    print name$; title$
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('title', 'person.title', 'Person'),
+                location: { range: util.createRange(5, 29, 5, 35) }
+            }]);
+        });
+
+        it('gets target names without resolving any types', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(person)
+                    { a, b: renamed, c: { d, e: [f, , g = 1, ...h] }, ...i } = person
+                end sub
+            `);
+            const statement = file.ast.findChild<DestructuringAssignmentStatement>(isDestructuringAssignmentStatement);
+            const getTypeSpy = sinon.spy(statement.value, 'getType');
+            const names = statement.getTargetNames();
+            expect(getTypeSpy.called).to.be.false;
+            expect(names.map(x => x.text)).to.eql(['a', 'renamed', 'd', 'f', 'g', 'h', 'i']);
+            expect(names).to.eql(statement.getTargets({ flags: SymbolTypeFlag.runtime }).map(x => x.name));
+        });
+
+        it('gets the type of a single target the same as getTargets', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    person = { name: "bob", address: { city: "nyc", zips: [1, 2] } }
+                    { name, address: { city, zips: [firstZip, ...otherZips] }, missing = 1.5 as float, ...others } = person
+                    print name; city; firstZip; otherZips; missing; others
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const statement = file.ast.findChild<DestructuringAssignmentStatement>(isDestructuringAssignmentStatement);
+            const options = { flags: SymbolTypeFlag.runtime };
+            const targets = statement.getTargets(options);
+            expect(targets).to.have.lengthOf(6);
+            for (const target of targets) {
+                expect(statement.getTargetType(target.name, options)?.toString(), target.name.text).to.eql(target.type.toString());
+            }
+            expect(statement.getTargetType(createIdentifier('notATarget'), options)).to.be.undefined;
+        });
+
+        it('flags an array pattern on a value that cannot be indexed by position', () => {
+            program.setFile('source/main.bs', `
+                class Person
+                    name as string
+                end class
+                sub main(user as Person, count as integer)
+                    [a] = "abc"
+                    [b] = { x: 1 }
+                    [c] = user
+                    [d] = count
+                    { items: [e] } = { items: "abc" }
+                    print a; b; c; d; e
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotDestructureAsArray('string'),
+                location: { range: util.createRange(5, 20, 5, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('roAssociativeArray'),
+                location: { range: util.createRange(6, 20, 6, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('Person'),
+                location: { range: util.createRange(7, 20, 7, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('integer'),
+                location: { range: util.createRange(8, 20, 8, 23) }
+            }, {
+                ...DiagnosticMessages.cannotDestructureAsArray('string'),
+                location: { range: util.createRange(9, 29, 9, 32) }
+            }]);
+        });
+
+        it('does not flag an array pattern on an array, dynamic, object, or unresolved source', () => {
+            program.setFile('source/main.bs', `
+                interface HasItems
+                    items as object
+                end interface
+                sub main(data, obj as object, typed as HasItems)
+                    [a] = [1, 2]
+                    [b] = data
+                    [c] = obj
+                    [d] = typed.items
+                    [e] = createObject("roList")
+                    [f] = getItems()
+                    print a; b; c; d; e; f
+                end sub
+                function getItems() as integer[]
+                    return [1]
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags an object rest element on a value that is not an associative array', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    node = createObject("roSGNode", "Group")
+                    { id, ...nodeRest } = node
+                    { ...arrayRest } = [1, 2]
+                    { ...stringRest } = "abc"
+                    { ...dateRest } = createObject("roDateTime")
+                    print id; nodeRest; arrayRest; stringRest; dateRest
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotCollectObjectRest('roSGNodeGroup'),
+                location: { range: util.createRange(3, 26, 3, 37) }
+            }, {
+                ...DiagnosticMessages.cannotCollectObjectRest('Array<integer>'),
+                location: { range: util.createRange(4, 22, 4, 34) }
+            }, {
+                ...DiagnosticMessages.cannotCollectObjectRest('string'),
+                location: { range: util.createRange(5, 22, 5, 35) }
+            }, {
+                ...DiagnosticMessages.cannotCollectObjectRest('roDateTime'),
+                location: { range: util.createRange(6, 22, 6, 33) }
+            }]);
+        });
+
+        it('does not flag an object rest element on an associative array, class, interface, dynamic, or object source', () => {
+            program.setFile('source/main.bs', `
+                class Person
+                    name as string
+                end class
+                interface Named
+                    name as string
+                end interface
+                sub main(data, obj as object, user as Person, named as Named)
+                    { ...a } = { x: 1 }
+                    { ...b } = data
+                    { ...c } = obj
+                    { name, ...d } = user
+                    { name: n, ...e } = named
+                    { ...f } = createObject("roAssociativeArray")
+                    print a; b; c; d; e; f; name; n
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not flag a field that shares its name with a built-in method', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    data = {}
+                    data.items = [1, 2]
+                    data.keys = [3]
+                    data.count = { a: 1 }
+                    [first, second] = data.items
+                    [k] = data.keys
+                    { a, ...rest } = data.count
+                    print first; second; k; a; rest
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('merges a default value with a member type from another file', () => {
+            program.setFile('source/thing.bs', `
+                interface Thing
+                    age as string
+                    items as string[]
+                end interface
+                function getThing() as Thing
+                    return { age: "1", items: ["a"] }
+                end function
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    { age = 0 } = getThing()
+                    [firstItem = 0] = getThing().items
+                    print age; firstItem
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            const typeOf = (name: string) => table.getSymbolType(name, { flags: SymbolTypeFlag.runtime }).toString();
+            expect(typeOf('age')).to.eql('string or integer');
+            expect(typeOf('firstItem')).to.eql('string or integer');
+        });
+
+        it('flags a typed use of a defaulted target whose member type is from another file', () => {
+            program.setFile('source/thing.bs', `
+                interface Thing
+                    age as string
+                end interface
+                function getThing() as Thing
+                    return { age: "1" }
+                end function
+            `);
+            program.setFile('source/main.bs', `
+                sub main()
+                    { age = 0 } = getThing()
+                    x as integer = age
+                    print x
+                end sub
+            `);
+            program.validate();
+            expect(program.getDiagnostics().map(x => x.message)).to.include(
+                DiagnosticMessages.assignmentTypeMismatch('string or integer', 'integer').message
+            );
+        });
+
+        it('does not flag a defaulted target from an unknown source', () => {
+            program.setFile('source/main.bs', `
+                sub main(data)
+                    { age = 0 } = data
+                    [first = ""] = data.items
+                    print age + 1; first.len()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a target that is read before the statement assigns it', () => {
+            program.setFile('source/main.bs', `
+                sub main(obj)
+                    { b = a, a } = obj
+                    [x = y, y] = obj
+                    { n: { m } = m } = obj
+                    { q } = q
+                    print a; b; x; y; m; q
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment('a'),
+                location: { range: util.createRange(2, 26, 2, 27) }
+            }, {
+                ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment('y'),
+                location: { range: util.createRange(3, 25, 3, 26) }
+            }, {
+                ...DiagnosticMessages.destructuringTargetUsedBeforeAssignment('m'),
+                location: { range: util.createRange(4, 33, 4, 34) }
+            }, {
+                //a target read by the source is already flagged the same way as `q = q + 1`
+                ...DiagnosticMessages.cannotFindName('q'),
+                location: { range: util.createRange(5, 28, 5, 29) }
+            }]);
+        });
+
+        it('does not flag a target read after it is assigned or declared earlier', () => {
+            program.setFile('source/main.bs', `
+                sub main(obj, p)
+                    { a, b = a } = obj
+                    { c = c } = obj
+                    [first, second = first, ...rest] = obj
+                    x = 1
+                    y = 2
+                    [x, y] = [y, x]
+                    { p = 0 } = p
+                    print a; b; c; first; second; rest; x; y; p
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('uses the type from an interface when destructuring a typed value', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                interface Person
+                    name as string
+                    age as integer
+                end interface
+                sub main(person as Person)
+                    { name, age } = person
+                    print name; age
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const table = getMainBodyTable(file);
+            expect(table.getSymbolType('name', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('string');
+            expect(table.getSymbolType('age', { flags: SymbolTypeFlag.runtime }).toString()).to.eql('integer');
+        });
+
+        it('validates the expressions used as default values and sources', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    { name = notDefined } = alsoNotDefined()
+                    print name
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('notDefined').message,
+                DiagnosticMessages.cannotFindFunction('alsoNotDefined').message
+            ]);
+        });
+
+        it('does not flag a spread literal owned by a destructuring assignment', () => {
+            program.setFile('source/main.bs', `
+                sub main(defaults)
+                    { name } = { ...defaults, name: "bob" }
+                    print name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('provides hover for a rest element', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(person)
+                    { name, ...others } = person
+                    print name; others
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const hover = program.getHover(file.srcPath, util.createPosition(2, 33))[0];
+            expect(hover.contents).to.eql(['```brightscript\nothers as roAssociativeArray\n```']);
+        });
+
+        it('provides hover for a destructured variable', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main()
+                    person = { name: "bob", age: 12 }
+                    { name, age: personAge } = person
+                    print name; personAge
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //hover over `name` in the pattern
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
+            expect(hover.contents).to.eql(['```brightscript\nname as string\n```']);
+            //hover over `personAge` in the pattern
+            hover = program.getHover(file.srcPath, util.createPosition(3, 36))[0];
+            expect(hover.contents).to.eql(['```brightscript\npersonAge as integer\n```']);
+        });
+
+        it('reports the targets as variable declarations in the function scope', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(person)
+                    { name, address: { city } } = person
+                    print name; city
+                end sub
+            `);
+            program.validate();
+            const scope = file.getFunctionScopeAtPosition(util.createPosition(3, 10));
+            expect(scope.variableDeclarations.map(x => x.name)).to.eql(['person', 'name', 'city']);
+        });
+
+        it('includes destructured variables in references', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub main(person)
+                    { name } = person
+                    print name
+                end sub
+            `);
+            program.validate();
+            const references = program.getReferences(file.srcPath, util.createPosition(3, 27));
+            expect(references.map(x => x.range.start.line)).to.eql([2, 3]);
+        });
+    });
+});
