@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -7,7 +7,7 @@ import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -30,6 +30,12 @@ export class BrsFileValidator {
     }
 
 
+    /**
+     * Labels and gotos collected during `walk()`, grouped by their enclosing function.
+     * Collected from the main walk so that `#if` branches are evaluated against the live `bsConsts`.
+     */
+    private labelsAndGotosByFunction = new Map<FunctionExpression, LabelsAndGotos>();
+
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
 
@@ -45,6 +51,7 @@ export class BrsFileValidator {
         this.event.file['_cachedLookups'].rehydrate();
 
         this.walk();
+        this.validateGotosAndLabels();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
         if (!this.event.file.hasTypedef) {
@@ -53,6 +60,98 @@ export class BrsFileValidator {
         }
 
         unlinkGlobalSymbolTable();
+    }
+
+    private getLabelsAndGotos(node: LabelStatement | GotoStatement): LabelsAndGotos | undefined {
+        const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+        if (!func) {
+            return undefined;
+        }
+        let record = this.labelsAndGotosByFunction.get(func);
+        if (!record) {
+            record = { labels: [], gotos: [] };
+            this.labelsAndGotosByFunction.set(func, record);
+        }
+        return record;
+    }
+
+    /**
+     * Report duplicate labels, labels inside `try` blocks, gotos with no matching label,
+     * and gotos that jump into a `for` / `for each` loop from outside it.
+     */
+    private validateGotosAndLabels() {
+        for (const [func, { labels, gotos }] of this.labelsAndGotosByFunction) {
+            const firstLabelByName = new Map<string, LabelStatement>();
+            for (const label of labels) {
+                const labelName = label.tokens.name.text;
+                const lowerName = labelName.toLowerCase();
+                if (firstLabelByName.has(lowerName)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.duplicateLabel(labelName),
+                        location: label.tokens.name.location
+                    });
+                } else {
+                    firstLabelByName.set(lowerName, label);
+                }
+                if (this.isInsideTryBranch(label, func)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.labelInTryBlock(labelName),
+                        location: label.tokens.name.location
+                    });
+                }
+            }
+
+            for (const gotoStatement of gotos) {
+                const labelToken = gotoStatement.tokens.label;
+                if (!labelToken?.text) {
+                    continue;
+                }
+                const targetLabel = firstLabelByName.get(labelToken.text.toLowerCase());
+                if (!targetLabel) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.labelNotFound(labelToken.text),
+                        location: labelToken.location
+                    });
+                } else if (this.jumpsIntoForLoop(gotoStatement, targetLabel, func)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.gotoIntoForLoop(labelToken.text),
+                        location: labelToken.location
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Is the label inside the `try` branch of any try/catch within the function, at any depth? A `catch` between the label and an outer `try` does not exempt it. A label in a `catch` with no enclosing `try` is allowed.
+     */
+    private isInsideTryBranch(label: LabelStatement, func: FunctionExpression) {
+        let child: AstNode = label;
+        let parent = label.parent;
+        while (parent && parent !== func) {
+            if (isTryCatchStatement(parent) && parent.tryBranch === child) {
+                return true;
+            }
+            child = parent;
+            parent = parent.parent;
+        }
+        return false;
+    }
+
+    /**
+     * Does the goto land inside a `for` / `for each` loop that does not also contain the goto?
+     */
+    private jumpsIntoForLoop(gotoStatement: GotoStatement, targetLabel: LabelStatement, func: FunctionExpression) {
+        const gotoAncestors = new Set<AstNode>();
+        for (let ancestor = gotoStatement.parent; ancestor && ancestor !== func; ancestor = ancestor.parent) {
+            gotoAncestors.add(ancestor);
+        }
+        for (let ancestor = targetLabel.parent; ancestor && ancestor !== func; ancestor = ancestor.parent) {
+            if ((isForStatement(ancestor) || isForEachStatement(ancestor)) && !gotoAncestors.has(ancestor)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -352,6 +451,12 @@ export class BrsFileValidator {
             },
             PrintStatement: (node) => {
                 this.validatePrintStatementItemCount(node);
+            },
+            LabelStatement: (node) => {
+                this.getLabelsAndGotos(node)?.labels.push(node);
+            },
+            GotoStatement: (node) => {
+                this.getLabelsAndGotos(node)?.gotos.push(node);
             },
             ConditionalCompileStatement: (node) => {
                 this.validateHashIfCondition(node);
@@ -1272,4 +1377,9 @@ export class BrsFileValidator {
         }
         return undefined;
     }
+}
+
+interface LabelsAndGotos {
+    labels: LabelStatement[];
+    gotos: GotoStatement[];
 }

@@ -1310,6 +1310,26 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
     }),
+    labelInTryBlock: (name = '') => ({
+        message: `Label '${name}' cannot be declared inside a 'try' block`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-in-try'
+    }),
+    duplicateLabel: (name = '') => ({
+        message: `Label '${name}' is already declared in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-label'
+    }),
+    labelNotFound: (name = '') => ({
+        message: `Cannot find label '${name}' in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-not-found'
+    }),
+    gotoIntoForLoop: (name = '') => ({
+        message: `'goto ${name}' jumps into a 'for' loop from outside it, which skips the loop setup`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'goto-into-for-loop'
+    }),
     /**
      * The body of an `#if` / `#else if` / `#else` branch that is not compiled with the current constants.
      * Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
