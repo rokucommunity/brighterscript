@@ -3097,7 +3097,22 @@ export class TupleTypeExpression extends Expression {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        return new ArrayType(...this.elements.map(x => x.getType({ ...options, typeChain: undefined })));
+        const elementTypes: BscType[] = [];
+        for (const element of this.elements) {
+            let elementType = element.getType({ ...options, typeChain: undefined });
+            if (element.isRest) {
+                //a rest element's type is an array; the tuple's items are that array's items
+                let restType = elementType;
+                while (isTypeStatementType(restType)) {
+                    restType = restType.wrappedType;
+                }
+                if (isArrayType(restType)) {
+                    elementType = restType.defaultType;
+                }
+            }
+            elementTypes.push(elementType);
+        }
+        return new ArrayType(...elementTypes);
     }
 
     public clone() {

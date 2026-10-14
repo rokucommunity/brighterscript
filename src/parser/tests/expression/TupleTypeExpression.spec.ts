@@ -9,6 +9,7 @@ import { Program } from '../../../Program';
 import type { BrsFile } from '../../../files/BrsFile';
 import { util } from '../../../util';
 import { WalkMode } from '../../../astUtils/visitors';
+import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
 
 describe('TupleTypeExpression', () => {
     let program: Program;
@@ -265,6 +266,21 @@ describe('TupleTypeExpression', () => {
     });
 
     describe('validation', () => {
+        it('types a tuple as an array of its element types, using the item type of a rest element', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                type Nums = integer[]
+                sub main(fixed as [string, integer], rest as [string, ...integer[]], aliasRest as [string, ...Nums])
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const func = file.ast.statements[1] as FunctionStatement;
+            const typeOf = (index: number) => func.func.parameters[index].getType({ flags: SymbolTypeFlag.typetime }).toString();
+            expect(typeOf(0)).to.eql('Array<string or integer>');
+            expect(typeOf(1)).to.eql('Array<string or integer>');
+            expect(typeOf(2)).to.eql('Array<string or integer>');
+        });
+
         it('validates the type names inside a tuple', () => {
             program.setFile('source/main.bs', `
                 interface Person
