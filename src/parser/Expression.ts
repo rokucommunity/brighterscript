@@ -3136,7 +3136,7 @@ export class TupleTypeExpression extends Expression {
 export class TupleTypeElementExpression extends Expression {
     constructor(options: {
         dotDotDot?: Token;
-        typeExpression: TypeExpression;
+        typeExpression?: TypeExpression;
         question?: Token;
         comma?: Token;
     }) {
@@ -3160,7 +3160,10 @@ export class TupleTypeElementExpression extends Expression {
         readonly comma?: Token;
     };
 
-    public readonly typeExpression: TypeExpression;
+    /**
+     * The element's type. Missing only in BrightScript mode, where a custom type name is skipped (with its own diagnostic)
+     */
+    public readonly typeExpression?: TypeExpression;
 
     public readonly kind = AstNodeKind.TupleTypeElementExpression;
 
