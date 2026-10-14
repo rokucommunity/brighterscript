@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isInheritableType, isInterfaceStatement, isMemberField, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -176,6 +176,11 @@ export class HoverProcessor {
                     exprType = expression.getType({ flags: typeFlag, typeChain: typeChain, data: extraData, ignoreCall: isCallfuncExpression(expression) });
                 }
 
+                //nodes in an inactive conditional compile branch are never added to a symbol table
+                if (!exprType) {
+                    continue;
+                }
+
                 const processedTypeChain = util.processTypeChain(typeChain);
                 const fullName = processedTypeChain.fullNameOfItem || token.text;
                 // if the type chain has dynamic in it, then just say the token text
@@ -185,7 +190,7 @@ export class HoverProcessor {
                 }
                 const useCustomTypeHover = isInTypeExpression || expression?.findAncestor(isNewExpression);
                 let hoverContent = '';
-                let descriptionNode;
+                let descriptionNode: AstNode | undefined;
                 if (useCustomTypeHover && (isInheritableType(exprType) || isTypeStatementType(exprType))) {
                     hoverContent = this.getCustomTypeHover(exprType, extraData);
                 } else if (isMemberField(expression)) {
@@ -209,6 +214,10 @@ export class HoverProcessor {
                         }
                     }
                     hoverContent = fence(`${variableName}${exprTypeString}`);
+                    // hovering a function's own declaration: use its doc comment
+                    if (isFunctionStatement(expression.parent) || isMethodStatement(expression.parent)) {
+                        descriptionNode = expression.parent;
+                    }
                 }
                 const modifiers = [];
                 // eslint-disable-next-line no-bitwise

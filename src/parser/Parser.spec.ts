@@ -4,8 +4,8 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, GroupingExpression, InlineInterfaceExpression, LiteralExpression, TypecastExpression, TypeExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement, TypeStatement } from './Statement';
-import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement, TypeStatement } from './Statement';
+import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement, Block, ConditionalCompileStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
@@ -2515,7 +2515,7 @@ describe('parser', () => {
             ]);
         });
 
-        it('has no diagnostics from false blocks', () => {
+        it('keeps the diagnostics from inactive blocks, because validation decides which branches are inactive', () => {
             let { diagnostics } = parse(`
                 sub foo()
                 #if DEBUG
@@ -2527,7 +2527,78 @@ describe('parser', () => {
                 #end if
                 end sub
             `, ParseMode.BrighterScript, { debug: false });
+            expect(diagnostics.map(diagnostic => diagnostic.location.range.start.line)).to.include.members([3, 7]);
+        });
+
+        it('allows a chain with #else if to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if', ParseMode.BrighterScript, { A: true, B: false });
             expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows a chain with #else if and #else to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#else\nz = 3\n#end if', ParseMode.BrighterScript, { A: true, B: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows a chain with #elseif and #endif to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#elseif B\ny = 2\n#endif', ParseMode.BrighterScript, { A: true, B: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('parses a statement on the line after #end if at the top level', () => {
+            const { ast, diagnostics } = parse('#if bla\n#end if \ndoesThisStillWork()\n', ParseMode.BrighterScript, { bla: false });
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(2);
+            expect(isConditionalCompileStatement(ast.statements[0])).to.be.true;
+            expect(isExpressionStatement(ast.statements[1])).to.be.true;
+        });
+
+        for (const [description, directives] of [
+            ['#if', '#if bla\n#end if '],
+            ['an #else if chain', '#if bla\n#else if foo\n#end if '],
+            ['an #else if and #else chain', '#if bla\n#else if foo\n#else\n#end if ']
+        ]) {
+            it(`parses a statement on the line after the #end if of ${description} in a function`, () => {
+                const { ast, diagnostics } = parse(`sub main()\n${directives}\ndoesThisStillWork()\nend sub\n`, ParseMode.BrighterScript, { bla: false, foo: true });
+                expectZeroDiagnostics(diagnostics);
+                const statements = (ast.statements[0] as FunctionStatement).func.body.statements;
+                expect(statements).to.be.lengthOf(2);
+                expect(isConditionalCompileStatement(statements[0])).to.be.true;
+                expect(isExpressionStatement(statements[1])).to.be.true;
+            });
+        }
+
+        it('gives each branch a location from the end of its opening directive to the start of its closing directive', () => {
+            const { ast } = parse(`#if A\n    x = 1\n#else if B\n#else\n    ' only a comment\n#end if\n`, ParseMode.BrighterScript, { A: false, B: false });
+            const statement = ast.statements[0] as ConditionalCompileStatement;
+            const elseIf = statement.elseBranch as ConditionalCompileStatement;
+            expect(statement.thenBranch.location.range).to.eql({ start: { line: 0, character: 5 }, end: { line: 2, character: 0 } });
+            //an empty branch
+            expect(elseIf.thenBranch.location.range).to.eql({ start: { line: 2, character: 10 }, end: { line: 3, character: 0 } });
+            //a branch with only a comment, which is not a statement
+            expect((elseIf.elseBranch as Block).location.range).to.eql({ start: { line: 3, character: 5 }, end: { line: 5, character: 0 } });
+        });
+
+        it('gives the branches of a statement built without the parser their locations once it is linked', () => {
+            const { ast } = parse(`#if A\n    x = 1\n#else\n    y = 2\n#end if\n`, ParseMode.BrighterScript, { A: false });
+            const parsed = ast.statements[0] as ConditionalCompileStatement;
+            const built = new ConditionalCompileStatement({
+                hashIf: parsed.tokens.hashIf,
+                condition: parsed.tokens.condition,
+                hashElse: parsed.tokens.hashElse,
+                hashEndIf: parsed.tokens.hashEndIf,
+                thenBranch: new Block({ statements: [] }),
+                elseBranch: new Block({ statements: [] })
+            });
+            ast.statements[0] = built;
+            ast.link();
+            expect(built.thenBranch.location.range).to.eql({ start: { line: 0, character: 5 }, end: { line: 2, character: 0 } });
+            expect((built.elseBranch as Block).location.range).to.eql({ start: { line: 2, character: 5 }, end: { line: 4, character: 0 } });
+        });
+
+        it('reports junk after the #end if of a chain', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if x\n', ParseMode.BrighterScript, { A: true, B: false });
+            expect(diagnostics).to.not.be.empty;
         });
 
         it('allows #if not bs_const', () => {
@@ -2602,13 +2673,12 @@ describe('parser', () => {
                 ]);
             });
 
-            it('has diagnostic if invalid lhs', () => {
-                let { diagnostics } = parse(`
+            it('parses a value that is not true or false without a diagnostic, because the value is validated later', () => {
+                let { ast, diagnostics } = parse(`
                     #const test = 4
                 `, ParseMode.BrighterScript);
-                expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.invalidHashConstValue().message
-                ]);
+                expectZeroDiagnostics(diagnostics);
+                expect(isConditionalCompileConstStatement(ast.statements[0])).to.be.true;
             });
         });
 

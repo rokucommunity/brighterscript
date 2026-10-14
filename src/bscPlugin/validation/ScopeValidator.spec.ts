@@ -1,6 +1,7 @@
 import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
+import { util } from '../../util';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
 import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
@@ -502,6 +503,24 @@ describe('ScopeValidator', () => {
             expect(program.getDiagnostics().map(x => x.message)).to.include(
                 DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
             );
+        });
+
+        it('Catches argument type mismatches on method calls using doc comment param types', () => {
+            program.setFile('source/file.bs', `
+                class Counter
+                    ' @param {integer} count the count
+                    sub add(count)
+                    end sub
+                end class
+                sub main()
+                    tally = new Counter()
+                    tally.add("hello")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
         });
 
         it('Catches argument type mismatches on function calls for functions defined in another file', () => {
@@ -5961,7 +5980,10 @@ describe('ScopeValidator', () => {
                 #end if
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                //the `#else` in main.bs
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+            ]);
         });
     });
 

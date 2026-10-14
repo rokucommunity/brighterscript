@@ -87,6 +87,8 @@ export class ProgramBuilder {
         } else {
             diagnostic.location.uri = util.pathToUri(srcPath);
         }
+        //this legacy api accepts a loosely-shaped diagnostic; the cast is deliberate
+        //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.diagnostics.register(<any>diagnostic, { tags: ['ProgramBuilder'] });
     }
 
@@ -528,7 +530,7 @@ export class ProgramBuilder {
                 this.program!.loadManifest(manifestFile, false);
             }
 
-            const loadFile = async (fileObj) => {
+            const loadFile = async (fileObj: FileObj) => {
                 try {
                     this.program!.setFile(fileObj, await this.getFileContents(fileObj.src));
                 } catch (e) {

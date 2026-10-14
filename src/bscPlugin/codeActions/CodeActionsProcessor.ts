@@ -33,9 +33,9 @@ export class CodeActionsProcessor {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
-                this.suggestCannotFindNameQuickFix(diagnostic as any);
+                this.suggestCannotFindNameQuickFix(diagnostic as DiagnosticMessageType<'cannotFindName'>);
             } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.suggestMissingExtendsQuickFix(diagnostic as any);
+                this.suggestMissingExtendsQuickFix(diagnostic as DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
@@ -111,12 +111,14 @@ export class CodeActionsProcessor {
      *   - "Disable {code} for this file": adds the code to an existing header-level `bs:disable`
      *     directive if present, otherwise inserts a new `bs:disable: {code}` at the top of the file.
      *
+     * The `inactive-conditional-compile-branch` hint only fades code that is active under other constants, so it gets no quick fixes.
+     *
      * Comment placement and the line-vs-next-line preference are centralized here so they can be
      * revisited without touching the directive parser.
      */
     private suggestDisableDiagnosticQuickFixes(diagnostic: BsDiagnostic) {
         const code = diagnostic.code;
-        if (code === undefined || code === null) {
+        if (code === undefined || code === null || code === DiagnosticCodeMap.inactiveConditionalCompileBranch) {
             return;
         }
         const file = this.event.file;
@@ -260,6 +262,8 @@ export class CodeActionsProcessor {
             const commentTokens = isXml ? [token] : token.leadingTrivia.filter(t => t.kind === TokenKind.Comment);
 
             for (const commentToken of commentTokens) {
+                //`tokens` is an `any[]` union of brs/xml token shapes (see declaration above)
+                //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : commentToken.location.range;
                 const tokenText: string = isXml ? commentToken.image : commentToken.text;
                 const parsed = parseDisableComment(tokenText);
@@ -290,8 +294,9 @@ export class CodeActionsProcessor {
             //insert after the `<?xml ?>` declaration if present, otherwise at the very top
             const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
             if (declCloseToken) {
-                const endLine = (declCloseToken as any).endLine - 1;
-                const endColumn = (declCloseToken as any).endColumn;
+                //xml declaration tokens carry chevrotain's positional fields, which aren't on the brs Token type
+                const endLine: number = (declCloseToken as any).endLine - 1;
+                const endColumn: number = (declCloseToken as any).endColumn;
                 return {
                     position: util.createPosition(endLine, endColumn),
                     prefix: '\n',

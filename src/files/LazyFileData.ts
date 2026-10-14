@@ -40,7 +40,7 @@ export class LazyFileData {
             result = this.initialData();
             //convert result to buffer
             if (!Buffer.isBuffer(result)) {
-                result = Buffer.from(result);
+                result = Buffer.from(result as string);
             }
         } else if (isLazyFileData(this.initialData)) {
             result = this.initialData.value;

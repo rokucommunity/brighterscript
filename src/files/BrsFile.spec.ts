@@ -1203,7 +1203,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } },
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(8, 0, 9, 0) } }
+                ]);
             });
 
             it('supports single-word #elseif and #endif', () => {
@@ -1218,7 +1221,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('supports multi-word #else if and #end if', () => {
@@ -1233,7 +1238,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
@@ -1245,7 +1252,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                //no parse errors, just the hint that fades the branch
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
+                ]);
             });
 
             it('detects syntax error in #if', () => {
@@ -1258,7 +1268,9 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.hashConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist(),
+                    //an undeclared constant is false, so the branch is inactive
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
                 ]);
             });
 
@@ -1301,12 +1313,13 @@ describe('BrsFile', () => {
                 ]);
             });
 
-            it('detects syntax error in #const', () => {
+            it('detects an invalid #const value', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                         #const someConst = 123
                     end sub
                 `);
+                program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.invalidHashConstValue()
                 ]);
@@ -7318,6 +7331,261 @@ describe('BrsFile', () => {
             ...DiagnosticMessages.tooManyCallableParameters(65, 63),
             location: { range: util.createRange(1, 648, 1, 651) }
         }]);
+    });
+
+    describe('function variable limit', () => {
+        function buildLocals(prefix: string, count: number, indent = '') {
+            const lines = [] as string[];
+            for (let index = 0; index < count; index++) {
+                lines.push(`${indent}${prefix}${index} = ${index}`);
+            }
+            return lines;
+        }
+
+        function buildParameters(count: number) {
+            const names = [] as string[];
+            for (let index = 0; index < count; index++) {
+                names.push(`p${index}`);
+            }
+            return names.join(', ');
+        }
+
+        function buildFunction(options: { parameterCount?: number; localCount: number; extraLines?: string[]; name?: string }) {
+            return [
+                `function ${options.name ?? 'main'}(${buildParameters(options.parameterCount ?? 0)})`,
+                ...buildLocals('v', options.localCount),
+                ...options.extraLines ?? [],
+                'end function'
+            ].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 253 local variables', () => {
+            validateSource(buildFunction({ localCount: 253 }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 254 local variables', () => {
+            validateSource(buildFunction({ localCount: 254 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('counts parameters toward the limit', () => {
+            validateSource(buildFunction({ parameterCount: 63, localCount: 190 }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags parameters plus locals over the limit', () => {
+            validateSource(buildFunction({ parameterCount: 63, localCount: 191 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('counts case-insensitive duplicates and reassignments once', () => {
+            validateSource(buildFunction({
+                localCount: 253,
+                extraLines: ['V0 = 1', 'v0 = 2', 'v1 = v1 + 1', 'v2 += 1']
+            }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count member assignments', () => {
+            validateSource(buildFunction({
+                localCount: 253,
+                extraLines: ['m.foo = 1', 'm["bar"] = 2', 'm.baz.qux = 3']
+            }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts for and for each loop variables', () => {
+            const loopLines = ['for i = 0 to 1', 'end for', 'for each item in []', 'end for'];
+            validateSource(buildFunction({ localCount: 251, extraLines: loopLines }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags when for and for each loop variables push the count over', () => {
+            const loopLines = ['for i = 0 to 1', 'end for', 'for each item in []', 'end for'];
+            validateSource(buildFunction({ localCount: 252, extraLines: loopLines }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('counts catch variables', () => {
+            const tryLines = ['try', 'v0 = 1', 'catch e', 'end try'];
+            validateSource(buildFunction({ localCount: 252, extraLines: tryLines }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags when a catch variable pushes the count over', () => {
+            const tryLines = ['try', 'v0 = 1', 'catch e', 'end try'];
+            validateSource(buildFunction({ localCount: 253, extraLines: tryLines }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('gives each anonymous function its own limit', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 252),
+                'f = function()',
+                ...buildLocals('a', 253),
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags an anonymous function over the limit inside the anonymous function', () => {
+            validateSource([
+                'function main()',
+                'f = function()',
+                ...buildLocals('a', 254),
+                'end function',
+                'end function'
+            ].join('\n'));
+            //line 0 is `function main()`, line 1 is `f = function()`, `a253` is the 254th local on line 255
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(255, 0, 255, 4) }
+            }]);
+        });
+
+        it('counts the variable an anonymous function is assigned to in the parent', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 253),
+                'f = function()',
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(254, 0, 254, 1) }
+            }]);
+        });
+
+        it('does not add nested function variables to the parent', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 252),
+                'f = function()',
+                ...buildLocals('a', 254),
+                'end function',
+                'end function'
+            ].join('\n'));
+            //only the nested function is over the limit, and `a253` is on line 507
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(507, 0, 507, 4) }
+            }]);
+        });
+
+        it('allows many functions that are each at the limit', () => {
+            const functions = [] as string[];
+            for (let index = 0; index < 5; index++) {
+                functions.push(buildFunction({ name: `func${index}`, localCount: 253 }));
+            }
+            validateSource(functions.join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('reports the range of the first variable over the limit', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 253),
+                'overLimitFirst = 1',
+                'overLimitSecond = 2',
+                'end function'
+            ].join('\n'));
+            //`overLimitFirst` is the 254th variable, which sits on line 254
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(255, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(254, 0, 254, 14) }
+            }]);
+        });
+
+        it('counts a new dim variable', () => {
+            validateSource(buildFunction({ localCount: 252, extraLines: ['dim arr[5]'] }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a new dim variable over the limit', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['dim arr[5]'] }));
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('does not count dim of an existing variable', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['dim v1[3]'] }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a new incremented variable over the limit', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['newName++'] }));
+            expectDiagnosticsIncludes(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('does not count incrementing an existing variable', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['v1++'] }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a new augmented assignment variable over the limit', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['newName += 1'] }));
+            expectDiagnosticsIncludes(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('counts a typecast catch variable', () => {
+            const tryLines = ['try', 'v0 = 1', 'catch e as roException', 'end try'];
+            validateSource(buildFunction({ localCount: 253, extraLines: tryLines }), 'source/main.bs');
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('checks class methods', () => {
+            validateSource([
+                'class Widget',
+                'sub run()',
+                ...buildLocals('v', 254),
+                'end sub',
+                'end class'
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('checks functions inside namespaces', () => {
+            validateSource([
+                'namespace alpha',
+                buildFunction({ localCount: 254 }),
+                'end namespace'
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('does not count variables assigned only in a false conditional compile branch', () => {
+            validateSource(buildFunction({
+                localCount: 253,
+                extraLines: ['#if false', 'hiddenName = 1', '#end if']
+            }), 'source/main.bs');
+            //no variable limit error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(buildFunction({ localCount: 254 }), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
     });
 
     it('handles deprecated .setPort() on rourltransfer', () => {
