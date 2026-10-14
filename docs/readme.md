@@ -236,3 +236,13 @@ end sub
 ## [Variable Shadowing](variable-shadowing.md)
 
 Name resolution rules for various types of shadowing.
+
+## [With Statement](with-statement.md)
+
+```brighterscript
+with m.top.findNode("title")
+    .text = "Hello"
+    .color = "#FFFFFF"
+    .setFocus(true)
+end with
+```

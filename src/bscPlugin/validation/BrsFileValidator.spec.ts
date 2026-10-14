@@ -6088,4 +6088,172 @@ describe('BrsFileValidator', () => {
             });
         });
     });
+    describe('with statement', () => {
+        it('allows leading-dot members inside a with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        .name = "x"
+                        .save()
+                        print .name
+                        with .child
+                            .name = "y"
+                        end with
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags leading-dot members outside a with block', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    .name = "x"
+                    print .other
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.withMemberOutsideWithBlock('name'),
+                    location: util.createLocation(2, 20, 2, 25, util.pathToUri(s`${rootDir}/source/main.bs`))
+                },
+                DiagnosticMessages.withMemberOutsideWithBlock('other')
+            ]);
+        });
+
+        it('flags leading-dot members inside a function nested in the with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        callback = function()
+                            return .name
+                        end function
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.withMemberInNestedFunction('name')
+            ]);
+        });
+
+        it('flags `with` in BrightScript files', () => {
+            program.setFile('source/main.brs', `
+                sub main(c as object)
+                    with c
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('with statement')
+            ]);
+        });
+
+        it('allows `with` as an identifier in BrightScript files', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    with = {}
+                    with.foo = 1
+                    with["bar"] = 2
+                    print with.foo
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a goto that jumps into a with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    goto inside
+                    with c
+                        inside:
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program.getDiagnostics().filter(x => x.code !== DiagnosticCodeMap.unreachableCode), [
+                DiagnosticMessages.gotoIntoWithBlock('inside')
+            ]);
+        });
+
+        it('allows a goto within the same with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        goto done
+                        .skipped = true
+                        done:
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program.getDiagnostics().filter(x => x.code !== DiagnosticCodeMap.unreachableCode));
+        });
+
+        it('type checks leading-dot members against the target type', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                    zip as integer
+                end interface
+                sub main(c as Customer)
+                    with c
+                        .name = "ok"
+                        .nope = 1
+                        .zip = "not a number"
+                        print .name.len()
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nope', 'Customer.nope', 'Customer'),
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('resolves the inner target of a nested block against the outer block', () => {
+            program.setFile('source/main.bs', `
+                interface Order
+                    customer as Customer
+                end interface
+                interface Customer
+                    name as string
+                end interface
+                sub main(order as Order)
+                    with order
+                        with .customer
+                            .name = "Ann"
+                            .nope = 1
+                        end with
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nope', 'Customer.nope', 'Customer')
+            ]);
+        });
+
+        it('makes variables assigned inside the block visible after it', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        name = .name
+                    end with
+                    print name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
 });

@@ -143,6 +143,8 @@ export enum TokenKind {
     Catch = 'Catch',
     EndTry = 'EndTry',
     Throw = 'Throw',
+    With = 'With',
+    EndWith = 'EndWith',
 
     //misc
     Library = 'Library',
@@ -330,6 +332,9 @@ export const Keywords: Record<string, TokenKind> = {
     endtry: TokenKind.EndTry,
     'end try': TokenKind.EndTry,
     throw: TokenKind.Throw,
+    with: TokenKind.With,
+    endwith: TokenKind.EndWith,
+    'end with': TokenKind.EndWith,
     'end interface': TokenKind.EndInterface,
     endinterface: TokenKind.EndInterface,
     const: TokenKind.Const,
@@ -368,7 +373,8 @@ export type BlockTerminator =
     | TokenKind.EndInterface
     | TokenKind.Catch
     | TokenKind.EndTry
-    | TokenKind.EndSelect;
+    | TokenKind.EndSelect
+    | TokenKind.EndWith;
 
 /** Set of keywords that end non-conditional compilation blocks. */
 export const BlockTerminators = [
@@ -383,7 +389,8 @@ export const BlockTerminators = [
     TokenKind.EndInterface,
     TokenKind.Catch,
     TokenKind.EndTry,
-    TokenKind.EndSelect
+    TokenKind.EndSelect,
+    TokenKind.EndWith
 ];
 
 /** The set of operators valid for use in assignment statements. */
@@ -492,6 +499,8 @@ export const AllowedProperties = [
     TokenKind.Catch,
     TokenKind.EndTry,
     TokenKind.Throw,
+    TokenKind.With,
+    TokenKind.EndWith,
     TokenKind.EndInterface,
     TokenKind.Const,
     TokenKind.Continue,
@@ -533,6 +542,8 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Try,
     TokenKind.Catch,
     TokenKind.EndTry,
+    TokenKind.With,
+    TokenKind.EndWith,
     TokenKind.Const,
     TokenKind.Continue,
     TokenKind.In,

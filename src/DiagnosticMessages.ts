@@ -1330,6 +1330,26 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning,
         code: 'goto-into-for-loop'
     }),
+    gotoIntoWithBlock: (name = '') => ({
+        message: `'goto ${name}' jumps into a 'with' block from outside it, so the block's target is never evaluated`,
+        severity: DiagnosticSeverity.Error,
+        code: 'goto-into-with-block'
+    }),
+    withMemberOutsideWithBlock: (name = '') => ({
+        message: `Leading-dot member access${name ? ` '.${name}'` : ''} is only allowed inside a 'with' block`,
+        severity: DiagnosticSeverity.Error,
+        code: 'with-member-outside-with-block'
+    }),
+    withMemberInNestedFunction: (name = '') => ({
+        message: `Cannot use${name ? ` '.${name}'` : ' a leading-dot member access'} here: a function defined inside a 'with' block cannot access the block's target`,
+        severity: DiagnosticSeverity.Error,
+        code: 'with-member-in-nested-function'
+    }),
+    expectedExpressionAfterWith: () => ({
+        message: `Expected an expression after 'with'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-expression-after-with'
+    }),
     /**
      * The body of an `#if` / `#else if` / `#else` branch that is not compiled with the current constants.
      * Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.

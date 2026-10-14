@@ -911,6 +911,21 @@ describe('AstNode', () => {
             `);
         });
 
+        it('clones with statement', () => {
+            testClone(`
+                sub main(order)
+                    with order
+                        .id = 1
+                        print .name; .items[0]
+                        .save()
+                        with .customer
+                            .name = "Ann"
+                        end with
+                    end with
+                end sub
+            `);
+        });
+
         it('clones tryCatch statement when missing branches', () => {
             const original = Parser.parse(`
                sub main()

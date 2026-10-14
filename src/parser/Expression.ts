@@ -2,7 +2,7 @@
 import type { Token, Identifier } from '../lexer/Token';
 import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, NamespaceStatement } from './Statement';
+import type { Block, NamespaceStatement, WithStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isWithContextExpression, isWithStatement } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -659,6 +659,100 @@ export class FunctionParameterExpression extends Expression {
     }
 }
 
+/**
+ * Prefix of the local variable that holds the evaluated target of a `with` block in the transpiled output.
+ * The nesting depth of the block is appended (`__bsc_tmp_with0`, `__bsc_tmp_with1`, ...)
+ */
+export const WITH_TEMP_VARIABLE_PREFIX = '__bsc_tmp_with';
+
+/**
+ * The implicit object of a leading-dot member access inside a `with` block (i.e. the part before the `.` in `.name = "x"`).
+ * It stands in for the target expression of the innermost enclosing `with` statement.
+ *
+ * This node owns no tokens: the `.` belongs to the `DottedGetExpression` that wraps it, so this node's location
+ * mirrors that dot token.
+ */
+export class WithContextExpression extends Expression {
+    constructor(options: {
+        dot?: Token;
+    }) {
+        super();
+        this.tokens = {
+            dot: options.dot
+        };
+        this.location = this.tokens.dot?.location;
+    }
+
+    public readonly tokens: {
+        readonly dot?: Token;
+    };
+
+    public readonly kind = AstNodeKind.WithContextExpression;
+
+    public readonly location: Location | undefined;
+
+    /**
+     * Find the `with` statement this expression refers to: the innermost enclosing one within the current function.
+     *
+     * A `with` statement's own target expression is skipped (`with .inner` refers to the *outer* block), and the search
+     * stops at a function boundary because BrightScript functions cannot see the locals of the function that contains them.
+     * Returns `undefined` when there is no such `with` statement, which validation reports as an error.
+     */
+    public getWithStatement(): WithStatement | undefined {
+        let child: AstNode = this;
+        let node = this.parent;
+        while (node) {
+            if (isFunctionExpression(node)) {
+                return undefined;
+            }
+            if (isWithStatement(node) && node.expression !== child) {
+                return node;
+            }
+            child = node;
+            node = node.parent;
+        }
+        return undefined;
+    }
+
+    transpile(state: BrsTranspileState) {
+        const withStatement = this.getWithStatement();
+        let name: string;
+        if (withStatement && !withStatement.usesTempVariable()) {
+            //a plain variable target is used directly
+            name = (withStatement.expression as VariableExpression).tokens.name.text;
+        } else {
+            //the `with` statement evaluated its target into a local; refer to that local
+            name = withStatement?.getTempVariableName() ?? `${WITH_TEMP_VARIABLE_PREFIX}0`;
+        }
+        return [
+            //this node starts the line, so it owns the line's leading comments (they live on the dot token)
+            ...state.transpileLeadingComments(this.tokens.dot),
+            state.sourceNode(this, name)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    getType(options: GetTypeOptions) {
+        //delegate to the target expression so the type chain reads as `target.member` in diagnostics
+        return this.getWithStatement()?.expression?.getType(options) ?? DynamicType.instance;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.dot?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new WithContextExpression({
+                dot: util.cloneToken(this.tokens.dot)
+            })
+        );
+    }
+}
+
 export class DottedGetExpression extends Expression {
     constructor(options: {
         obj: Expression;
@@ -717,7 +811,8 @@ export class DottedGetExpression extends Expression {
         } else {
             return [
                 ...this.obj.transpile(state),
-                state.transpileToken(this.tokens.dot, '.'),
+                //inside a `with` block the dot is the first token of the line and `WithContextExpression` already emitted its comments
+                state.transpileToken(this.tokens.dot, '.', false, isWithContextExpression(this.obj)),
                 state.transpileToken(this.tokens.name)
             ];
         }
