@@ -94,5 +94,7 @@ end sub
 ## Limitations
 
 - Tuple types are a BrighterScript feature and are not available in `.brs` files.
+- A rest element must be the last element. TypeScript also allows a rest element at the start or in the middle of a tuple (`[...string[], integer]`); BrighterScript does not.
+- A tuple typecast followed by an index must be parenthesized: `(data as [string, integer])[0]`. Without the parentheses the `[0]` is read as part of the type, the same as with typed arrays.
 - Elements cannot be labeled (`[name as string, age as integer]` is not supported).
 - Array literals are never inferred to be tuples. `x = ["a", 1]` is an `Array<string or integer>`; a literal is only treated as a tuple where a tuple type is declared.

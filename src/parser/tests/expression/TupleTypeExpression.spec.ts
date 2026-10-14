@@ -3,12 +3,13 @@ import { Parser, ParseMode } from '../../Parser';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, rootDir } from '../../../testHelpers.spec';
 import { isFunctionStatement, isTupleTypeElementExpression, isTupleTypeExpression, isTypedArrayExpression, isTypeExpression, isTypeStatement } from '../../../astUtils/reflection';
-import type { TupleTypeExpression, TypeExpression } from '../../Expression';
+import type { TupleTypeElementExpression, TupleTypeExpression, TypeExpression } from '../../Expression';
 import type { FunctionStatement, TypeStatement } from '../../Statement';
 import { Program } from '../../../Program';
 import type { BrsFile } from '../../../files/BrsFile';
 import { util } from '../../../util';
 import { WalkMode } from '../../../astUtils/visitors';
+import type { Location } from 'vscode-languageserver';
 import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
 
 describe('TupleTypeExpression', () => {
@@ -122,6 +123,67 @@ describe('TupleTypeExpression', () => {
                 '[string, integer]',
                 '[string, integer]'
             ]);
+        });
+
+        it('parses tuples in class fields, interface members, inline interfaces, and typed function types', () => {
+            const parser = parse(`
+                class Foo
+                    pair as [string, integer]
+                end class
+                interface Bar
+                    pair as [string, integer]
+                end interface
+                sub main(a as { pair as [string, integer] }, cb as function(p as [string, integer]) as [string, string])
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+            const tuples = parser.ast.findChildren(isTupleTypeExpression, { walkMode: WalkMode.visitAllRecursive });
+            expect(tuples.map(x => util.getTypeExpressionName(x)).sort()).to.eql([
+                '[string, integer]',
+                '[string, integer]',
+                '[string, integer]',
+                '[string, integer]',
+                '[string, string]'
+            ]);
+        });
+
+        it('parses grouping, typed function, keyword, and multidimensional element types', () => {
+            expect(parseParamType('[(string or integer), boolean]').getName()).to.eql('[(string or integer), boolean]');
+            expect(parseParamType('[function(a as integer) as string, integer]').getName()).to.eql('[function(a as integer) as string, integer]');
+            expect(parseParamType('[object, dynamic, boolean, float, double, longinteger, void?]').getName()).to.eql('[object, dynamic, boolean, float, double, longinteger, void?]');
+            expect(parseParamType('[string, ...integer[][]]').getName()).to.eql('[string, ...integer[][]]');
+        });
+
+        it('allows comments inside a multi-line tuple', () => {
+            const typeExpression = parseParamType(`[
+                string, ' the name
+                ' the count
+                integer
+            ]`);
+            expect(typeExpression.getName()).to.eql('[string, integer]');
+        });
+
+        it('parses a parenthesized tuple typecast followed by an index, and a colon after a typed assignment', () => {
+            const parser = parse(`
+                sub main(data)
+                    first = (data as [string, integer])[0]
+                    pair as [string, integer] = ["a", 1] : print pair; first
+                end sub
+            `);
+            expectZeroDiagnostics(parser);
+        });
+
+        it('reports malformed elements and still parses the following function', () => {
+            for (const bad of ['[string, , integer]', '[, string]', '[string, ...]', '[?]']) {
+                const parser = parse(`
+                    sub main(value as ${bad})
+                    end sub
+                    sub other()
+                    end sub
+                `);
+                expect(parser.diagnostics, bad).to.not.be.empty;
+                expect(parser.ast.statements.map(x => (x as FunctionStatement).tokens.name.text), bad).to.eql(['other']);
+            }
         });
 
         it('wraps each element type in a type expression', () => {
@@ -242,6 +304,18 @@ describe('TupleTypeExpression', () => {
             expect(ordering.location?.range).to.exist;
         });
 
+        it('clones an element whose type was skipped in plain brightscript', () => {
+            const parser = parse(`
+                sub main(value as [Foo, integer])
+                end sub
+            `, ParseMode.BrightScript);
+            const elements = parser.ast.findChildren<TupleTypeElementExpression>(isTupleTypeElementExpression, { walkMode: WalkMode.visitAllRecursive });
+            expect(elements[0].typeExpression).to.be.undefined;
+            const clone = elements[0].clone();
+            expect(clone.typeExpression).to.be.undefined;
+            expect(elements[1].clone().typeExpression.getName()).to.eql('integer');
+        });
+
         it('does not affect array literals or indexing', () => {
             const parser = parse(`
                 sub main(items)
@@ -281,6 +355,25 @@ describe('TupleTypeExpression', () => {
             expect(typeOf(2)).to.eql('Array<string or integer>');
         });
 
+        it('supports hover, go-to-definition, and completions for a type name inside a tuple', () => {
+            program.setFile('source/main.bs', [
+                'interface Person',
+                '    name as string',
+                'end interface',
+                'sub main(people as [Person, integer])',
+                'end sub'
+            ].join('\n'));
+            program.validate();
+            //`Person` occupies columns 20-25 on line 3
+            const hover = program.getHover('source/main.bs', util.createPosition(3, 22));
+            expect(hover?.[0]?.contents).to.eql(['```brightscript\ninterface Person\n```']);
+            const definitions = program.getDefinition('source/main.bs', util.createPosition(3, 22));
+            expect(definitions.map(x => (x as Location).range.start.line)).to.eql([0]);
+            //completions in the middle of the name should offer type names, not runtime variables
+            const completions = program.getCompletions('source/main.bs', util.createPosition(3, 23));
+            expect(completions.map(x => x.label)).to.include('Person');
+        });
+
         it('validates the type names inside a tuple', () => {
             program.setFile('source/main.bs', `
                 interface Person
@@ -316,10 +409,12 @@ describe('TupleTypeExpression', () => {
 
         it('emits tuple types as dynamic in typedefs, the same as typed arrays', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
-                sub main(pair as [string, integer], items as string[])
-                end sub
+                type Pair = [string, integer]
+                function main(pair as [string, integer], items as string[]) as [string, string]
+                    return ["a", "b"]
+                end function
             `);
-            expect(file.getTypedef().trim()).to.eql('sub main(pair as dynamic, items as dynamic)\nend sub');
+            expect(file.getTypedef().trim()).to.eql('type Pair = dynamic\nfunction main(pair as dynamic, items as dynamic) as dynamic\nend function');
         });
     });
 });
