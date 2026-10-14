@@ -101,6 +101,8 @@ import {
     PrintSeparatorExpression,
     InlineInterfaceExpression,
     InlineInterfaceMemberExpression,
+    TupleTypeExpression,
+    TupleTypeElementExpression,
     TypedFunctionTypeExpression
 } from './Expression';
 import type { Range } from 'vscode-languageserver';
@@ -457,7 +459,7 @@ export class Parser {
                 }
                 //consume the statement separator
                 this.consumeStatementSeparators();
-            } else if (!this.checkAny(TokenKind.Identifier, TokenKind.LeftCurlyBrace, TokenKind.LeftParen, ...DeclarableTypes, ...AllowedTypeIdentifiers)) {
+            } else if (!this.checkAny(TokenKind.Identifier, TokenKind.LeftCurlyBrace, TokenKind.LeftSquareBracket, TokenKind.LeftParen, ...DeclarableTypes, ...AllowedTypeIdentifiers)) {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedIdentifier(asToken.text),
@@ -1336,6 +1338,9 @@ export class Parser {
                 // may be a typed assignment
                 const backtrack = this.current;
                 let validTypeExpression = false;
+                //the probe is speculative, so any diagnostics it produces (i.e. from inside an inline interface or tuple type)
+                //are dropped here and reported again by the real parse
+                const diagnosticCount = this.diagnostics.length;
 
                 try {
                     // skip the identifier, and check for valid type expression
@@ -1346,6 +1351,7 @@ export class Parser {
                     // ignore any errors
                 } finally {
                     this.current = backtrack;
+                    this.diagnostics.splice(diagnosticCount);
                 }
                 if (validTypeExpression) {
                     // there is a valid 'as' and type expression
@@ -3540,7 +3546,7 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression | TupleTypeExpression;
 
         if (this.checkAny(TokenKind.Sub, TokenKind.Function) && this.checkNext(TokenKind.LeftParen)) {
             // this is a tyyed function type expression, eg. "function(type1, type2) as type3"
@@ -3551,9 +3557,9 @@ export class Parser {
             expr = new VariableExpression({ name: this.advance() as Identifier });
         } else {
             if (this.options.mode === ParseMode.BrightScript && !declarableTypesLower.includes(this.peek()?.text?.toLowerCase())) {
-                //inline interfaces have their own diagnostic ('inline interface'); let `{`
-                //flow through to the matcher below so it fires the more-specific warning.
-                if (!this.check(TokenKind.LeftCurlyBrace)) {
+                //inline interfaces and tuple types have their own diagnostics ('inline interface', 'tuple types'); let `{`
+                //and `[` flow through to the matchers below so they fire the more-specific warning.
+                if (!this.checkAny(TokenKind.LeftCurlyBrace, TokenKind.LeftSquareBracket)) {
                     // custom types arrays not allowed in Brightscript
                     this.warnIfNotBrighterScriptMode('custom types');
                     this.advance(); // skip custom type token
@@ -3563,6 +3569,8 @@ export class Parser {
 
             if (this.match(TokenKind.LeftCurlyBrace)) {
                 expr = this.inlineInterface();
+            } else if (this.match(TokenKind.LeftSquareBracket)) {
+                expr = this.tupleType();
             } else if (this.match(TokenKind.LeftParen)) {
                 // this is a grouping type expression, ie. "(typeExpr)"
                 let left = this.previous();
@@ -3646,6 +3654,83 @@ export class Parser {
 
     }
 
+
+    /**
+     * Parse a tuple type (the `[` has already been consumed), i.e. `[string, integer?, ...float[]]`
+     */
+    private tupleType(): TupleTypeExpression {
+        const open = this.previous();
+        if (this.options.mode !== ParseMode.BrighterScript) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('tuple types'),
+                location: open.location
+            });
+        }
+        const elements: TupleTypeElementExpression[] = [];
+        let optionalElement: TupleTypeElementExpression;
+        let restElement: TupleTypeElementExpression;
+        let reportedRestNotLast = false;
+        while (this.match(TokenKind.Newline)) { }
+        while (!this.check(TokenKind.RightSquareBracket) && !this.isAtEnd()) {
+            const element = this.tupleTypeElement();
+            //in BrightScript mode a custom type has no type expression (it was skipped with its own diagnostic),
+            //so fall back to the previous token for the location
+            const location = element.location ?? this.previous()?.location;
+            if (restElement) {
+                if (!reportedRestNotLast) {
+                    reportedRestNotLast = true;
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.tupleRestElementMustBeLast(),
+                        location: restElement.location ?? location
+                    });
+                }
+            } else if (element.isRest) {
+                restElement = element;
+                if (element.isOptional) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.tupleRestElementCannotBeOptional(),
+                        location: location
+                    });
+                }
+            } else if (element.isOptional) {
+                optionalElement = element;
+            } else if (optionalElement) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.tupleRequiredElementAfterOptional(),
+                    location: location
+                });
+            }
+            elements.push(element);
+            //elements are separated by commas (newlines are allowed around the comma, and a trailing comma is allowed).
+            //Anything else ends the tuple, so an unclosed tuple does not swallow the following lines as type names
+            while (this.match(TokenKind.Newline)) { }
+            if (!this.match(TokenKind.Comma)) {
+                break;
+            }
+            (element as DeepWriteable<TupleTypeElementExpression>).tokens.comma = this.previous();
+            while (this.match(TokenKind.Newline)) { }
+        }
+        const close = this.consume(
+            DiagnosticMessages.unmatchedLeftToken(open.text, 'tuple type'),
+            TokenKind.RightSquareBracket
+        );
+        return new TupleTypeExpression({
+            open: open,
+            elements: elements,
+            close: close
+        });
+    }
+
+    private tupleTypeElement(): TupleTypeElementExpression {
+        const dotDotDot = this.consumeTokenIf(TokenKind.DotDotDot);
+        const typeExpression = this.typeExpression();
+        const question = this.consumeTokenIf(TokenKind.Question);
+        return new TupleTypeElementExpression({
+            dotDotDot: dotDotDot,
+            typeExpression: typeExpression,
+            question: question
+        });
+    }
 
     private inlineInterface() {
         let expr: InlineInterfaceExpression;

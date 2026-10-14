@@ -197,6 +197,14 @@ second line text`
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```
 
+## [Tuples](tuples.md)
+
+```brighterscript
+function getPair() as [string, integer]
+    return ["hello", 42]
+end function
+```
+
 ## [Typecasts](typecasts.md)
 
 ```BrighterScript

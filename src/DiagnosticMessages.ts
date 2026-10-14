@@ -586,6 +586,21 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-token'
     }),
+    tupleRequiredElementAfterOptional: () => ({
+        message: `A required element cannot follow an optional element in a tuple type`,
+        severity: DiagnosticSeverity.Error,
+        code: 'tuple-required-element-after-optional'
+    }),
+    tupleRestElementMustBeLast: () => ({
+        message: `A rest element must be the last element in a tuple type`,
+        severity: DiagnosticSeverity.Error,
+        code: 'tuple-rest-element-must-be-last'
+    }),
+    tupleRestElementCannotBeOptional: () => ({
+        message: `A rest element in a tuple type cannot be optional`,
+        severity: DiagnosticSeverity.Error,
+        code: 'tuple-rest-element-cannot-be-optional'
+    }),
     /**
      * Used in the lexer anytime we encounter an unsupported character
      */
