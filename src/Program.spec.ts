@@ -4254,7 +4254,7 @@ describe('Program', () => {
             expect(manifest.get('bs_const')).to.equal('DEBUG=false');
         });
 
-        it('loads the manifest from a FileObj', () => {
+        it('loads the manifest from a ResolvedFilesArrayEntry', () => {
             fsExtra.emptyDirSync(tempDir);
             fsExtra.ensureDirSync(`${tempDir}/someDeepDir`);
             fsExtra.writeFileSync(`${tempDir}/someDeepDir/manifest`, trim`
