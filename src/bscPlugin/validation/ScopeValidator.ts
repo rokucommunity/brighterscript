@@ -1082,7 +1082,7 @@ export class ScopeValidator {
         if (!isAllowed) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.spreadValueTypeMismatch(valueType.toString(), isArray ? 'array' : 'associative array'),
-                location: util.getLocation(spreadExpr)
+                location: spreadExpr
             });
         }
     }
@@ -1787,7 +1787,7 @@ export class ScopeValidator {
                     if (isEnumMemberType(valueType) && valueType.enumName?.toLowerCase() !== enumType.name.toLowerCase()) {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.caseValueEnumMismatch(valueType.enumName, enumType.name),
-                            location: util.getLocation(value)
+                            location: value
                         });
                     }
                 }
@@ -1920,7 +1920,7 @@ export class ScopeValidator {
                 const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
-                    location: util.getLocation(callbackArg)
+                    location: callbackArg
                 }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
             }
         }
