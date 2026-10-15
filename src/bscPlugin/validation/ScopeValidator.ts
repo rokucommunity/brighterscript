@@ -498,9 +498,16 @@ export class ScopeValidator {
      * Does this type chain start with a named type import (`import type { Name } from "..."`) whose name exists in the imported file?
      * When it does, an unresolvable type here means the *value* of the imported symbol cannot be resolved (i.e. a const that points at
      * something that does not exist). That problem is reported in the imported file itself, which is always validated (see
-     * `TypeImportScope`). Reporting `Cannot find name` here too would be misleading, because the name does exist
+     * `TypeImportScope`). Reporting `Cannot find name` here too would be misleading, because the name does exist.
+     * This only applies when the unresolved part of the chain is the imported name itself: an unknown member of it
+     * (i.e. `Alias.nonexistent`) is still a real error in this file
      */
     private isExistingTypeImport(file: BrsFile, typeChain: TypeChainEntry[]) {
+        const firstUnresolvedIndex = typeChain.findIndex(x => !x.isResolved);
+        const unresolvedIndex = firstUnresolvedIndex >= 0 ? firstUnresolvedIndex : typeChain.length - 1;
+        if (unresolvedIndex !== 0) {
+            return false;
+        }
         const typeImport = file.typeImports.get(typeChain[0]?.name?.toLowerCase());
         return typeImport ? file.getTypeImportTargetSymbols(typeImport).length > 0 : false;
     }
@@ -1339,7 +1346,8 @@ export class ScopeValidator {
                 location: expression.location
             });
         } else if (isEnumType(exprType) && !isAliasStatement(expression.parent)) {
-            const enumStatement = this.event.scope.getEnum(util.getAllDottedGetPartsAsString(expression));
+            //this follows named type imports too (`import type { Name as Alias } from "..."`)
+            const enumStatement = file.findEnumStatement(util.getAllDottedGetPartsAsString(expression), undefined, this.event.scope)?.item;
             if (enumStatement) {
                 // there's an enum with this name
                 this.addMultiScopeDiagnostic({
@@ -1348,7 +1356,8 @@ export class ScopeValidator {
                 });
             }
         } else if (isDynamicType(exprType) && isEnumType(parentTypeInfo?.type) && isDottedGetExpression(expression)) {
-            const enumFileLink = this.event.scope.getEnumFileLink(util.getAllDottedGetPartsAsString(expression.obj));
+            //this follows named type imports too (`import type { Name as Alias } from "..."`)
+            const enumFileLink = file.findEnumStatement(util.getAllDottedGetPartsAsString(expression.obj), undefined, this.event.scope);
             if (enumFileLink) {
                 const typeChainScanForItem = util.processTypeChain(typeChain);
                 const typeChainScanForParent = util.processTypeChain(typeChain.slice(0, -1));

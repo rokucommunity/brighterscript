@@ -1244,7 +1244,7 @@ export let DiagnosticMessages = {
      * @param kindName the friendly name of what else in the file has that name (i.e. `Const`, `Function`)
      */
     typeImportCollidesWithDeclaration: (name: string, kindName: string) => ({
-        message: `'${name}' is already declared in this file as a ${kindName?.toLowerCase() ?? 'symbol'}, so it cannot also be imported with \`import type\`. Rename one of them, or import it with \`as\``,
+        message: `'${name}' is already declared in this file (${kindName?.toLowerCase() ?? 'symbol'}), so it cannot also be imported with \`import type\`. Rename one of them, or import it with \`as\``,
         data: {
             name: name,
             kindName: kindName

@@ -860,6 +860,82 @@ describe('Scope', () => {
             ]);
         });
 
+        it('uses the kind name without an article when a type import collides with a declaration', () => {
+            program.setFile('components/lib/c.bs', `
+                interface Thing
+                    a as string
+                end interface
+            `);
+            program.setFile('source/main.bs', `
+                import type { Thing } from "pkg:/components/lib/c.bs"
+
+                interface Thing
+                    b as string
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                `'Thing' is already declared in this file (interface), so it cannot also be imported with \`import type\`. Rename one of them, or import it with \`as\``
+            ]);
+        });
+
+        it('still flags unknown members of type-imported names', () => {
+            program.setFile('components/lib/styles.bs', `
+                enum ButtonStyle
+                    primary = "p"
+                end enum
+                const MAX = 10
+            `);
+            program.setFile('source/main.bs', `
+                import type { ButtonStyle as Style, MAX } from "pkg:/components/lib/styles.bs"
+
+                sub foo()
+                    print Style.nonexistent
+                    print MAX.foo
+                    print Style
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.itemCannotBeUsedAsVariable('enum').message,
+                DiagnosticMessages.cannotFindName('nonexistent', 'Style.nonexistent', 'Style', 'enum').message,
+                DiagnosticMessages.cannotFindName('foo', 'integer.foo', 'integer').message
+            ]);
+        });
+
+        it('keeps diagnostics when a type-imported file joins a regular scope', () => {
+            program.setFile('components/lib/types.bs', `
+                import type { Nope } from "./missing.bs"
+
+                const LABEL = Nope
+            `);
+            program.setFile('source/main.bs', `
+                import type { LABEL } from "pkg:/components/lib/types.bs"
+
+                sub main()
+                    print LABEL
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist(),
+                DiagnosticMessages.cannotFindName('Nope')
+            ]);
+
+            //types.bs now joins a regular scope, so its TypeImportScope goes away
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brighterscript" uri="lib/types.bs" />
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.referencedFileDoesNotExist(),
+                DiagnosticMessages.cannotFindName('Nope')
+            ]);
+        });
+
         it('reports a circular reference for consts that cycle through type imports', () => {
             program.setFile('components/lib/x.bs', `
                 import type { B } from "./y.bs"

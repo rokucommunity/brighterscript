@@ -1368,9 +1368,9 @@ export class Program {
                 logValidateEnd = this.logger.timeStart(LogLevel.log, `Validating project${(this.logger.logLevel as LogLevel) > LogLevel.log ? ` (run ${validationRunId})` : ''}`);
                 this.diagnostics.clearForTag(ProgramValidatorDiagnosticsTag);
                 //give every file that is only ever `import type`d a scope of its own (and drop the scopes of files that no longer need one).
-                //A file that just got such a scope has never been validated in it, so make sure it is
-                for (const scope of this.syncTypeImportScopes()) {
-                    filesToBeValidatedInScopeContext.add(scope.file);
+                //A file that just got such a scope, or just moved from one into a regular scope, has not been validated in its new scope yet, so make sure it is
+                for (const file of this.syncTypeImportScopes()) {
+                    filesToBeValidatedInScopeContext.add(file);
                 }
                 this.plugins.emit('beforeValidateProgram', {
                     program: this
@@ -1897,9 +1897,10 @@ export class Program {
      * Make sure every file that is the target of a named type import (`import type { Name } from "..."`) but is not part of any
      * other scope has a `TypeImportScope`, so that it gets validated. Scopes for files that no longer qualify (the file was removed,
      * is no longer type-imported, or joined a regular scope) are removed
-     * @returns the scopes that were created
+     * @returns the files that need to be validated in their new scope: files that just got a `TypeImportScope`, and files that
+     * lost theirs because they joined a regular scope (their diagnostics from the old scope were cleared, but the file itself may not have changed)
      */
-    private syncTypeImportScopes(): TypeImportScope[] {
+    private syncTypeImportScopes(): BrsFile[] {
         //every brs file that is the target of a type import, indexed by lower-case destPath
         const targets = new Map<string, BrsFile>();
         for (const file of Object.values(this.files)) {
@@ -1914,18 +1915,24 @@ export class Program {
             }
         }
 
+        const result = [] as BrsFile[];
+
         //remove the scopes that are no longer needed
         for (const scope of this.getAllUserScopes()) {
             if (isTypeImportScope(scope)) {
                 const target = targets.get(scope.file.destPath.toLowerCase());
-                if (target !== scope.file || this.hasRegularScope(scope.file)) {
+                const fileStillExists = this.getFile(scope.file.srcPath) === scope.file;
+                const joinedRegularScope = fileStillExists && this.hasRegularScope(scope.file);
+                if (target !== scope.file || joinedRegularScope) {
                     this.removeTypeImportScope(scope.file);
+                    if (joinedRegularScope) {
+                        result.push(scope.file);
+                    }
                 }
             }
         }
 
         //create the scopes that are missing
-        const result = [] as TypeImportScope[];
         for (const target of targets.values()) {
             if (this.scopes[TypeImportScope.getScopeName(target)] || this.hasRegularScope(target)) {
                 continue;
@@ -1947,7 +1954,7 @@ export class Program {
                 program: this,
                 scope: scope
             });
-            result.push(scope);
+            result.push(target);
         }
         return result;
     }
