@@ -110,7 +110,7 @@ export class BrsFileValidator {
                 if (firstLabelByName.has(lowerName)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.duplicateLabel(labelName),
-                        location: util.getLocation(label.tokens.name)
+                        location: label.tokens.name
                     });
                 } else {
                     firstLabelByName.set(lowerName, label);
@@ -118,7 +118,7 @@ export class BrsFileValidator {
                 if (this.isInsideTryBranch(label, func)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.labelInTryBlock(labelName),
-                        location: util.getLocation(label.tokens.name)
+                        location: label.tokens.name
                     });
                 }
             }
@@ -132,12 +132,12 @@ export class BrsFileValidator {
                 if (!targetLabel) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.labelNotFound(labelToken.text),
-                        location: util.getLocation(labelToken)
+                        location: labelToken
                     });
                 } else if (this.jumpsIntoForLoop(gotoStatement, targetLabel, func)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.gotoIntoForLoop(labelToken.text),
-                        location: util.getLocation(labelToken)
+                        location: labelToken
                     });
                 }
             }
@@ -520,7 +520,7 @@ export class BrsFileValidator {
                     if (!target || target.isInLoop) {
                         this.event.program.diagnostics.register({
                             ...(target ? DiagnosticMessages.exitSelectInLoop() : DiagnosticMessages.exitSelectOutsideSelectCase()),
-                            location: util.getLocation(node)
+                            location: node
                         });
                     }
                 }
@@ -876,12 +876,12 @@ export class BrsFileValidator {
         if (!isLiteralBoolean(assignment.value)) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.invalidHashConstValue(),
-                location: util.getLocation(assignment.value)
+                location: assignment.value
             });
         } else if (statement.isDuplicate) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
-                location: util.getLocation(assignment.tokens.name)
+                location: assignment.tokens.name
             });
         }
     }
@@ -1018,7 +1018,7 @@ export class BrsFileValidator {
         if (statement.isConditionDeclared === false && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.hashConstDoesNotExist(),
-                location: util.getLocation(statement.tokens.condition)
+                location: statement.tokens.condition
             });
         }
     }
@@ -1163,11 +1163,10 @@ export class BrsFileValidator {
     }
 
     private validateSelectCaseStatement(statement: SelectCaseStatement) {
-        const headerLocation = util.createBoundingLocation(statement.tokens.select, statement.tokens.case);
         if (statement.cases.length === 0) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.selectCaseHasNoCases(),
-                location: headerLocation
+                location: util.setBounds({} as Locatable, statement.tokens.select, statement.tokens.case)
             });
             return;
         }
@@ -1179,14 +1178,14 @@ export class BrsFileValidator {
             for (const elseCase of elseCases.slice(1)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.duplicateCaseElse(),
-                    location: util.createBoundingLocation(elseCase.tokens.case, elseCase.tokens.else)
+                    location: util.setBounds({} as Locatable, elseCase.tokens.case, elseCase.tokens.else)
                 });
             }
             //only flag the first one. Any others were already flagged as duplicates
             if (statement.cases.indexOf(elseCases[0]) < statement.cases.length - elseCases.length) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.caseElseMustBeLast(),
-                    location: util.createBoundingLocation(elseCases[0].tokens.case, elseCases[0].tokens.else)
+                    location: util.setBounds({} as Locatable, elseCases[0].tokens.case, elseCases[0].tokens.else)
                 });
             }
         }
@@ -1202,7 +1201,7 @@ export class BrsFileValidator {
             ) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
-                    location: util.getLocation(caseStatement.tokens.case)
+                    location: caseStatement.tokens.case
                 });
             }
         }
@@ -1224,13 +1223,12 @@ export class BrsFileValidator {
                 if (key) {
                     const firstValue = seenValues.get(key);
                     if (firstValue) {
-                        const valueLocation = util.getLocation(value);
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.duplicateCaseValue(
-                                util.getTextForRange(this.event.file.fileContents, valueLocation?.range) ?? key,
+                                util.getTextForRange(this.event.file.fileContents, util.getLocation(value)?.range) ?? key,
                                 util.getStartPosition(firstValue)?.line + 1
                             ),
-                            location: valueLocation
+                            location: value
                         });
                     } else {
                         seenValues.set(key, value);
@@ -1244,7 +1242,7 @@ export class BrsFileValidator {
                     } else if (valueType !== expectedType) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.caseValueTypeMismatch(valueType, expectedType),
-                            location: util.getLocation(value)
+                            location: value
                         });
                     }
                 }
@@ -1365,7 +1363,7 @@ export class BrsFileValidator {
             if (isSpreadExpression(element)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.spreadOperatorNotAllowedHere(),
-                    location: util.getLocation(element.tokens.dotDotDot)
+                    location: element.tokens.dotDotDot
                 });
             }
         }
@@ -1436,17 +1434,17 @@ export class BrsFileValidator {
      */
     private validateRegexLiteral(node: RegexLiteralExpression) {
         const token = node.tokens.regexLiteral;
-        const start = util.getStartPosition(token);
-        if (!start) {
+        if (!token?.sourceInfo) {
             return;
         }
-        //regex literals are always on a single line, so problem offsets map directly onto the token's starting line
+        //problem offsets are relative to the start of the token
         for (const problem of findRegexLiteralProblems(token.text)) {
             this.event.program.diagnostics.register({
                 ...problem.diagnostic,
                 location: {
-                    uri: token.sourceInfo.uri,
-                    range: util.createRange(start.line, start.character + problem.start, start.line, start.character + problem.end)
+                    startPosition: token.startPosition + problem.start,
+                    endPosition: token.startPosition + problem.end,
+                    sourceInfo: token.sourceInfo
                 }
             });
         }
