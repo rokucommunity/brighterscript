@@ -88,6 +88,25 @@ describe('RegexLiteralExpression', () => {
             ]);
         });
 
+        it('supports a regex in a return statement', async () => {
+            await testTranspile(`
+                function getEmojiRegex() as dynamic
+                    return /([\\xA9\\xAE\\x{2000}-\\x{3300}\\x{1F000}-\\x{1FBFF}])/mi
+                end function
+                function isMatch(value as string) as boolean
+                    return /abc/i.isMatch(value)
+                end function
+            `, `
+                function getEmojiRegex() as dynamic
+                    return CreateObject("roRegex", "([\\xA9\\xAE\\x{2000}-\\x{3300}\\x{1F000}-\\x{1FBFF}])", "mi")
+                end function
+
+                function isMatch(value as string) as boolean
+                    return CreateObject("roRegex", "abc", "i").isMatch(value)
+                end function
+            `);
+        });
+
         it('handles edge cases', async () => {
             await testTranspile(`
                 sub main()
