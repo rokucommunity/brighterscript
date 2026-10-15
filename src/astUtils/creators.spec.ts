@@ -32,8 +32,9 @@ describe('creators', () => {
         });
 
         it('accepts a location from util.setLocation', () => {
-            const location = util.createLocation(2, 4, 2, 7, 'file:///source/main.brs');
-            const locatable = util.setLocation({} as Locatable, location);
+            const sourceInfo = Lexer.scan('\n\n    abc', { srcPath: 'source/main.brs' }).tokens[0].source;
+            const location = util.createLocation(2, 4, 2, 7, sourceInfo.uri);
+            const locatable = util.setLocation({} as Locatable, location, sourceInfo);
             expect(util.getLocation(createToken(TokenKind.Identifier, 'xyz', locatable))).to.eql(location);
             expect(util.getLocation(createIdentifier('xyz', locatable))).to.eql(location);
             expect(util.getLocation(createVariableExpression('xyz', locatable))).to.eql(location);

@@ -32,6 +32,7 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
 import { brsDocParser } from './BrightScriptDocParser';
+import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
 
@@ -435,11 +436,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //if there's a defined return type, use that
         let returnType: BscType;
 
-        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+        const docs = getFunctionDocs(this);
+
+        // resolve return and param types with their own typeChain and data, so they don't leak into this function's (eg. hover name and description)
+        const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: {} });
 
         returnType = util.chooseTypeFromCodeOrDocComment(
-            this.returnTypeExpression?.getType({ ...options, typeChain: undefined }),
-            docs.getReturnBscType({ ...options, tableProvider: () => this.getSymbolTable() }),
+            this.returnTypeExpression?.getType(innerOptions()),
+            docs.getReturnBscType({ ...innerOptions(), tableProvider: () => this.getSymbolTable() }),
             options
         );
 
@@ -452,7 +456,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.parameters) {
-            resultType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
+            resultType.addParameter(param.tokens.name.text, param.getType(innerOptions()), !!param.defaultValue);
         }
         // Figure out this function's name if we can
         let funcName = '';
@@ -562,7 +566,7 @@ export class FunctionParameterExpression extends Expression {
     public readonly typeExpression?: TypeExpression;
 
     public getType(options: GetTypeOptions) {
-        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+        const docs = getFunctionDocs(this.parent);
         const paramName = this.tokens.name.text;
 
         let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
@@ -2735,6 +2739,16 @@ export class RegexLiteralExpression extends Expression {
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue } | null;
+
+/**
+ * Doc comment of the function or method that declares `func`.
+ * Anonymous functions and function type expressions have none, rather than inheriting an enclosing function's.
+ */
+function getFunctionDocs(func: AstNode): BrightScriptDoc {
+    const declaration = func?.parent;
+    const isDeclared = isFunctionStatement(declaration) || isMethodStatement(declaration);
+    return brsDocParser.parseNode(isDeclared ? declaration : undefined);
+}
 
 function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (!expr) {
