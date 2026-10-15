@@ -5,7 +5,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
@@ -19,6 +19,7 @@ import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import { findUnreachableRegions } from './ControlFlowReachability';
+import { findRegexLiteralProblems } from './RegexLiteralValidation';
 import * as semver from 'semver';
 import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
@@ -215,6 +216,9 @@ export class BrsFileValidator {
                     this.validateMinFirmwareVersionForOptionalChaining(node.tokens.openingParen?.location?.range);
                 }
                 this.validateGlobalCallableAvailability(node);
+            },
+            RegexLiteralExpression: (node) => {
+                this.validateRegexLiteral(node);
             },
             EnumStatement: (node) => {
                 this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
@@ -1423,6 +1427,27 @@ export class BrsFileValidator {
                 elseTable.complementOtherTable(thenBranch.symbolTable);
                 currentNode = currentNode.parent as IfStatement | ConditionalCompileStatement;
             }
+        }
+    }
+
+    /**
+     * Flag regex literals that `roRegex` would fail to compile (i.e. `/(abc/`), and unsupported flags
+     */
+    private validateRegexLiteral(node: RegexLiteralExpression) {
+        const token = node.tokens.regexLiteral;
+        const start = token?.location?.range?.start;
+        if (!start) {
+            return;
+        }
+        //regex literals are always on a single line, so problem offsets map directly onto the token's starting line
+        for (const problem of findRegexLiteralProblems(token.text)) {
+            this.event.program.diagnostics.register({
+                ...problem.diagnostic,
+                location: {
+                    uri: token.location.uri,
+                    range: util.createRange(start.line, start.character + problem.start, start.line, start.character + problem.end)
+                }
+            });
         }
     }
 
