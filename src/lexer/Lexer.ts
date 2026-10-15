@@ -4,6 +4,7 @@ import type { Locatable, SourceInfo, Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
+import { TokenObject } from './TokenObject';
 import type { BsDiagnosticInput } from '../interfaces';
 
 /**
@@ -87,15 +88,15 @@ export class Lexer {
             this.scanToken();
         }
 
-        this.tokens.push({
-            kind: TokenKind.Eof,
-            text: '',
-            isReserved: false,
-            pos: this.current,
-            end: this.current + 1,
-            source: this.sourceInfo,
-            leadingTrivia: this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
-        });
+        this.tokens.push(new TokenObject(
+            TokenKind.Eof,
+            '',
+            false,
+            this.current,
+            this.current + 1,
+            this.sourceInfo,
+            this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
+        ));
         return this;
     }
 
@@ -534,6 +535,18 @@ export class Lexer {
                 this.advance();
                 token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 token.charCode = 10;
+
+                //track the start of the next line
+                this.sourceInfo?.lineStarts.push(this.current);
+                continue;
+
+                //a lone `\r` is a newline too (the same as everywhere else in the lexer, and in LSP)
+            } else if (this.check('\r')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
 
                 //track the start of the next line
                 this.sourceInfo?.lineStarts.push(this.current);
@@ -1148,15 +1161,15 @@ export class Lexer {
         //this is the canonical Token field order. Every other place that synthesizes a
         //Token should use this same order (and set every field) so all tokens share a
         //single V8 hidden class instead of forcing megamorphic property access downstream
-        let token: Token = {
-            kind: kind,
-            text: text,
-            isReserved: ReservedTokenKinds.has(kind),
-            pos: this.start,
-            end: this.current,
-            source: this.sourceInfo,
-            leadingTrivia: undefined
-        };
+        let token: Token = new TokenObject(
+            kind,
+            text,
+            ReservedTokenKinds.has(kind),
+            this.start,
+            this.current,
+            this.sourceInfo,
+            undefined
+        );
 
         if (this.isTrivia(token)) {
             this.pushTrivia(token);
