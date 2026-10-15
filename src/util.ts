@@ -1424,6 +1424,19 @@ export class Util {
     }
 
     /**
+     * Get the first item that has a real location (a `sourceInfo`), skipping `undefined` and synthetic items.
+     * The locatable equivalent of `util.getLocation(a) ?? util.getLocation(b)`
+     */
+    public firstLocatable<T extends Locatable>(...items: Array<T | undefined>): T | undefined {
+        for (const item of items) {
+            if (item?.sourceInfo) {
+                return item;
+            }
+        }
+        return undefined;
+    }
+
+    /**
      * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `sourceInfo`)
      */
     public getLocation(locatable: Locatable): Location | undefined {
