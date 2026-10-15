@@ -1924,7 +1924,7 @@ export class ScopeValidator {
                 const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
-                    location: callbackArg.location
+                    location: util.getLocation(callbackArg)
                 }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
             }
         }
