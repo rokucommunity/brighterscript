@@ -8,6 +8,7 @@ import { expect } from './chai-config.spec';
 import { createSandbox } from 'sinon';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
+import { DiagnosticMessages } from './DiagnosticMessages';
 
 
 describe('DiagnosticManager', () => {
@@ -57,6 +58,64 @@ describe('DiagnosticManager', () => {
             program.diagnostics.isDiagnosticSuppressed(diagnostic);
 
             //test passes if there's no crash
+        });
+    });
+
+    describe('parse diagnostics in conditional compile branches', () => {
+        const source = [
+            'sub main()',
+            '#if FEATURE',
+            '    thenCode = = 1',
+            '#else',
+            '    elseCode = = 2',
+            '#end if',
+            '    outsideCode = = 3',
+            'end sub'
+        ].join('\n');
+
+        function setFeature(file: BrsFile, isEnabled: boolean) {
+            file.ast.bsConsts = new Map([['feature', isEnabled]]);
+            file.isValidated = false;
+            program.validate();
+        }
+
+        function getParseErrorLines() {
+            return program.getDiagnostics()
+                .filter(diagnostic => diagnostic.message === DiagnosticMessages.unexpectedToken('=').message)
+                .map(diagnostic => diagnostic.location.range.start.line);
+        }
+
+        it('reports a parse error in an active branch and drops one in an inactive branch', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', source);
+            setFeature(file, true);
+            expect(getParseErrorLines()).to.eql([2, 6]);
+        });
+
+        it('flipping the constant and validating again restores and suppresses parse errors', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', source);
+            setFeature(file, true);
+            expect(getParseErrorLines()).to.eql([2, 6]);
+            setFeature(file, false);
+            expect(getParseErrorLines()).to.eql([4, 6]);
+            setFeature(file, true);
+            expect(getParseErrorLines()).to.eql([2, 6]);
+        });
+
+        it('keeps a diagnostic that was not registered as a parse diagnostic, wherever it is', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', source);
+            setFeature(file, true);
+            program.diagnostics.register({
+                message: 'registered by a plugin',
+                code: 'plugin-diagnostic',
+                location: util.createLocationFromFileRange(file, util.createRange(4, 4, 4, 8))
+            });
+            expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.include('plugin-diagnostic');
+        });
+
+        it('keeps every diagnostic of a file without conditional compile statements', () => {
+            program.setFile<BrsFile>('source/main.brs', 'sub main()\n    code = = 1\nend sub');
+            program.validate();
+            expect(getParseErrorLines()).to.eql([1]);
         });
     });
 
@@ -397,9 +456,9 @@ describe('DiagnosticManager', () => {
             });
             const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
             expect(cached.location).not.to.equal(printToken);
-            expect(cached.location).to.eql({ pos: printToken.pos, end: printToken.end, source: printToken.source });
+            expect(cached.location).to.eql({ startPosition: printToken.startPosition, endPosition: printToken.endPosition, sourceInfo: printToken.sourceInfo });
             expect(cached.relatedInformation[0].location).not.to.equal(subToken);
-            expect(cached.relatedInformation[0].location).to.eql({ pos: subToken.pos, end: subToken.end, source: subToken.source });
+            expect(cached.relatedInformation[0].location).to.eql({ startPosition: subToken.startPosition, endPosition: subToken.endPosition, sourceInfo: subToken.sourceInfo });
         });
 
         it('only computes Locations during getDiagnostics', () => {
@@ -496,7 +555,7 @@ describe('DiagnosticManager', () => {
             program.diagnostics.register({ message: 'test', location: tokenWithGetters });
 
             const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
-            expect(cached.location).to.eql({ pos: printToken.pos, end: printToken.end, source: printToken.source });
+            expect(cached.location).to.eql({ startPosition: printToken.startPosition, endPosition: printToken.endPosition, sourceInfo: printToken.sourceInfo });
             expectDiagnostics(program.getDiagnostics(), [
                 { message: 'test', location: util.getLocation(printToken) }
             ]);
@@ -519,11 +578,47 @@ describe('DiagnosticManager', () => {
         it('uses the locationResolver for synthetic locatables', () => {
             const { file } = getTokens('sub main()\nend sub\n');
             program.diagnostics.locationResolver = () => util.createLocation(0, 0, 0, 100, file.srcPath);
-            program.diagnostics.register({ message: 'test', location: { pos: 0, end: 0, source: undefined } });
+            program.diagnostics.register({ message: 'test', location: { startPosition: 0, endPosition: 0, sourceInfo: undefined } });
             expectDiagnostics(program.getDiagnostics(), [{
                 message: 'test (location unknown, added here for visibility)',
                 location: util.createLocation(0, 0, 0, 100, file.srcPath)
             }]);
+        });
+
+        it('keeps the diagnostic source string and does not mistake it for a locatable', () => {
+            const { file, tokens } = getTokens('sub main()\n    print "hello"\nend sub\n');
+            const printToken = tokens.find(x => x.kind === TokenKind.Print);
+            const subToken = tokens.find(x => x.kind === TokenKind.Sub);
+            const location = util.createLocation(0, 0, 0, 3, printToken.sourceInfo.uri);
+            program.diagnostics.register([
+                {
+                    message: 'location',
+                    source: 'bslint',
+                    location: location,
+                    relatedInformation: [{ message: 'related', location: location }]
+                },
+                {
+                    message: 'locatable',
+                    source: 'bslint',
+                    location: printToken,
+                    relatedInformation: [{ message: 'related', location: subToken }]
+                }
+            ]);
+
+            const diagnostics = program.getDiagnostics();
+            const locationDiagnostic = diagnostics.find(x => x.message === 'location');
+            expect(locationDiagnostic.source).to.eql('bslint');
+            expect(locationDiagnostic.location).to.eql(location);
+            expect(locationDiagnostic.relatedInformation).to.eql([{ message: 'related', location: location }]);
+
+            const locatableDiagnostic = diagnostics.find(x => x.message === 'locatable');
+            expect(locatableDiagnostic.source).to.eql('bslint');
+            expect(locatableDiagnostic.location).to.eql(util.getLocation(printToken));
+            expect(locatableDiagnostic.relatedInformation).to.eql([{ message: 'related', location: util.getLocation(subToken) }]);
+
+            //both should be cleared by their file
+            program.diagnostics.clearForFile(file.srcPath);
+            expectZeroDiagnostics(program.getDiagnostics());
         });
     });
 

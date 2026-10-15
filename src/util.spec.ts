@@ -1135,8 +1135,8 @@ describe('util', () => {
         });
 
         it('clears the bounds when nothing has a source', () => {
-            const result = util.setBounds({ pos: 1, end: 2, source: testLocatable(0, 0, 0, 0).source }, createToken(TokenKind.Identifier, 'a'));
-            expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
+            const result = util.setBounds({ startPosition: 1, endPosition: 2, sourceInfo: testLocatable(0, 0, 0, 0).sourceInfo }, createToken(TokenKind.Identifier, 'a'));
+            expect(result).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
         });
 
         it('does not end at the start of the next line when the last locatable is a LF newline', () => {
@@ -1185,21 +1185,21 @@ describe('util', () => {
     });
 
     describe('firstLocatable', () => {
-        it('returns the first item that has a source', () => {
+        it('returns the first item that has a sourceInfo', () => {
             const [a, b] = Lexer.scan('a b').tokens;
             const synthetic = createToken(TokenKind.Identifier, 'c');
             expect(util.firstLocatable(undefined, synthetic, a, b)).to.equal(a);
             expect(util.firstLocatable(b, a)).to.equal(b);
         });
 
-        it('returns undefined when nothing has a source', () => {
+        it('returns undefined when nothing has a sourceInfo', () => {
             expect(util.firstLocatable(undefined, createToken(TokenKind.Identifier, 'c'))).to.be.undefined;
             expect(util.firstLocatable()).to.be.undefined;
         });
     });
 
     describe('getOffset', () => {
-        const source = Lexer.scan('ab\ncd\nef').tokens[0].source;
+        const source = Lexer.scan('ab\ncd\nef').tokens[0].sourceInfo;
 
         it('converts positions to offsets', () => {
             expect(util.getOffset(source, util.createPosition(0, 0))).to.eql(0);
@@ -1223,37 +1223,37 @@ describe('util', () => {
 
         it('maps the location into the source, so it combines with that source', () => {
             const tokens = Lexer.scan('a = 1\nbb = 2', { srcPath: srcPath }).tokens;
-            const sourceInfo = tokens[0].source;
+            const sourceInfo = tokens[0].sourceInfo;
             const location = util.createLocation(1, 0, 1, 2, sourceInfo.uri);
             const result = util.setLocation({} as Locatable, location, sourceInfo);
-            expect(result.source).to.equal(sourceInfo);
-            expect(result.pos).to.eql(6);
-            expect(result.end).to.eql(8);
+            expect(result.sourceInfo).to.equal(sourceInfo);
+            expect(result.startPosition).to.eql(6);
+            expect(result.endPosition).to.eql(8);
             expect(util.getLocation(result)).to.eql(location);
             expect(util.getLocation(util.setBounds({} as Locatable, tokens[0], result)).range).to.eql(util.createRange(0, 0, 1, 2));
         });
 
         it('clears the position when given no location or source', () => {
-            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].source;
-            expect(util.setLocation(testLocatable(0, 0, 0, 1), undefined, sourceInfo)).to.eql({ pos: undefined, end: undefined, source: undefined });
-            expect(util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1), undefined)).to.eql({ pos: undefined, end: undefined, source: undefined });
+            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), undefined, sourceInfo)).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1), undefined)).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
         });
 
         it('clears the position for a location in a different file', () => {
-            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].source;
+            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
             const result = util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1, 'file:///other.brs'), sourceInfo);
             expect(util.getLocation(result)).to.be.undefined;
         });
 
         it('clears the position for lines that are not in the source', () => {
-            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].source;
+            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
             //bsc builds ranges like this for comment flags that run to the end of the file
             const result = util.setLocation({} as Locatable, util.createLocation(0, 0, Number.MAX_SAFE_INTEGER, 0, sourceInfo.uri), sourceInfo);
             expect(util.getLocation(result)).to.be.undefined;
         });
 
         it('keeps a character past the end of a line on that line', () => {
-            const sourceInfo = Lexer.scan('a = 1\nb = 2', { srcPath: srcPath }).tokens[0].source;
+            const sourceInfo = Lexer.scan('a = 1\nb = 2', { srcPath: srcPath }).tokens[0].sourceInfo;
             //bsc builds ranges like this for whole-file diagnostics
             const result = util.setLocation({} as Locatable, util.createLocation(0, 0, 0, Number.MAX_VALUE, sourceInfo.uri), sourceInfo);
             expect(util.getLocation(result).range.end.line).to.eql(0);

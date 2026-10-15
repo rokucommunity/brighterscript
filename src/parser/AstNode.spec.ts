@@ -7,12 +7,12 @@ import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression
 import { expectZeroDiagnostics } from '../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypecastExpression, isUnaryExpression, isVariableExpression, isLiteralExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
-import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
+import type { ConditionalCompileStatement, ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
 import { WalkMode } from '../astUtils/visitors';
-import { isStatement } from '../astUtils/reflection';
+import { isConditionalCompileStatement, isStatement } from '../astUtils/reflection';
 import { createAssignmentStatement, createBlock, createIfStatement, createToken, createVariableExpression } from '../astUtils/creators';
 import { TokenKind } from '../lexer/TokenKind';
 
@@ -305,6 +305,115 @@ describe('AstNode', () => {
         });
     });
 
+    describe('bounds', () => {
+        it('keeps the bounds from construction when the AST is changed afterwards', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const block = ast.findChild<Block>(isBlock);
+            const bodyLocation = util.getLocation(ast);
+            const blockLocation = util.getLocation(block);
+            //a plugin moves a statement with a real position from elsewhere into this AST
+            const other = Parser.parse('\n\n\n\n\nsub other()\n    b = 2\nend sub').ast;
+            ast.statements.push(other.statements[0]);
+            block.statements.push(other.findChild<AssignmentStatement>(isAssignmentStatement));
+            expect(util.getLocation(ast)).to.eql(bodyLocation);
+            expect(util.getLocation(block)).to.eql(blockLocation);
+        });
+
+        it('computes the body bounds from its statements', () => {
+            const { ast } = Parser.parse('\n\nsub main()\nend sub\n\nsub other()\nend sub\n');
+            expect(util.getLocation(ast).range).to.eql(util.createRange(2, 0, 6, 7));
+        });
+
+        it('includes the annotation call in the annotation bounds', () => {
+            const { ast } = Parser.parse('@annotation(1, 2)\nsub main()\nend sub', { mode: ParseMode.BrighterScript });
+            const annotation = (ast.statements[0] as FunctionStatement).annotations[0];
+            expect(util.getLocation(annotation).range).to.eql(util.createRange(0, 0, 0, 17));
+        });
+
+        describe('empty blocks', () => {
+            function getEmptyBlockRanges(code: string) {
+                const { ast } = Parser.parse(code, { mode: ParseMode.BrighterScript });
+                return ast.findChildren<Block>(isBlock, { walkMode: WalkMode.visitAllRecursive }).map(x => util.getLocation(x)?.range);
+            }
+
+            it('function', () => {
+                expect(getEmptyBlockRanges('sub main(a)\nend sub')).to.eql([
+                    util.createRange(0, 11, 1, 0)
+                ]);
+            });
+
+            it('if/else', () => {
+                expect(getEmptyBlockRanges('sub main()\n    if true then\n    else\n    end if\nend sub')).to.eql([
+                    //the function body is not empty, so it's bounded by its statements
+                    util.createRange(1, 4, 3, 10),
+                    //then branch
+                    util.createRange(1, 16, 2, 4),
+                    //else branch
+                    util.createRange(2, 8, 3, 4)
+                ]);
+            });
+
+            it('for', () => {
+                expect(getEmptyBlockRanges('sub main()\n    for i = 0 to 1\n    end for\nend sub')[1]).to.eql(
+                    util.createRange(1, 18, 2, 4)
+                );
+            });
+
+            it('for each', () => {
+                expect(getEmptyBlockRanges('sub main()\n    for each x in y\n    end for\nend sub')[1]).to.eql(
+                    util.createRange(1, 19, 2, 4)
+                );
+            });
+
+            it('while', () => {
+                expect(getEmptyBlockRanges('sub main()\n    while true\n    end while\nend sub')[1]).to.eql(
+                    util.createRange(1, 14, 2, 4)
+                );
+            });
+
+            it('try/catch', () => {
+                expect(getEmptyBlockRanges('sub main()\n    try\n    catch e\n    end try\nend sub').slice(1)).to.eql([
+                    //try branch
+                    util.createRange(1, 7, 2, 4),
+                    //catch branch
+                    util.createRange(2, 11, 3, 4)
+                ]);
+            });
+
+            it('#if/#else', () => {
+                //the walker skips inactive conditional compile branches, so read both branches off the statement directly
+                const { ast } = Parser.parse('#const DEBUG = true\n#if DEBUG\n#else\n#end if', { mode: ParseMode.BrighterScript });
+                const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                expect([statement.thenBranch, statement.elseBranch].map(x => util.getLocation(x)?.range)).to.eql([
+                    //then branch
+                    util.createRange(1, 9, 2, 0),
+                    //else branch
+                    util.createRange(2, 5, 3, 0)
+                ]);
+            });
+
+            it('select case', () => {
+                expect(getEmptyBlockRanges('sub main()\n    select case x\n        case 1\n        case else\n    end select\nend sub').slice(1)).to.eql([
+                    //`case 1` body ends at the next case
+                    util.createRange(2, 14, 3, 8),
+                    //`case else` body ends at `end select`
+                    util.createRange(3, 17, 4, 4)
+                ]);
+            });
+        });
+
+        it('spans the gap between the directives for #if/#else branches that have statements', () => {
+            const { ast } = Parser.parse('#const DEBUG = true\n#if DEBUG\n    print 1\n#else\n    print 2\n#end if', { mode: ParseMode.BrighterScript });
+            const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+            expect([statement.thenBranch, statement.elseBranch].map(x => util.getLocation(x)?.range)).to.eql([
+                //then branch
+                util.createRange(1, 9, 3, 0),
+                //else branch
+                util.createRange(3, 5, 5, 0)
+            ]);
+        });
+    });
+
     describe('findChild', () => {
         it('finds a child that matches the matcher', () => {
             const file = program.setFile<BrsFile>('source/main.brs', `
@@ -510,7 +619,11 @@ describe('AstNode', () => {
 
                     //skip these properties
                     if (
-                        ['parent', 'symbolTable', 'pos', 'end', 'source'].includes(key) ||
+                        ['parent', 'symbolTable', 'startPosition', 'endPosition', 'sourceInfo'].includes(key) ||
+                        //conditional compile state is filled in by walks of the tree, and a clone has not been walked yet
+                        ['isActive', 'isConditionTrue', 'isConditionDeclared'].includes(key) ||
+                        //another index of the class members, which are already compared through `body`, `methods`, `fields` and `memberMap`
+                        (isClassStatement(original) && key === 'members') ||
                         //this is a circular reference property or the `returnType` prop, skip it
                         (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
                         //circular reference property for annotations

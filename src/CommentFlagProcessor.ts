@@ -248,11 +248,11 @@ export class CommentFlagProcessor {
                     range.start.character + codeOffset + item.text.length
                 )
             };
-            if (locatable?.source) {
+            if (locatable?.sourceInfo) {
                 code.locatable = {
-                    pos: locatable.pos + codeOffset,
-                    end: locatable.pos + codeOffset + item.text.length,
-                    source: locatable.source
+                    startPosition: locatable.startPosition + codeOffset,
+                    endPosition: locatable.startPosition + codeOffset + item.text.length,
+                    sourceInfo: locatable.sourceInfo
                 };
             }
             codes.push(code);

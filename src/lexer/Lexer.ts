@@ -82,7 +82,7 @@ export class Lexer {
         this.tokens = [];
         this.diagnostics = [];
         this.sourceInfo = this.options.trackLocations
-            ? { uri: util.pathToUri(options?.srcPath), lineStarts: [0] }
+            ? { uri: util.pathToUri(options?.srcPath), linePositions: [0] }
             : undefined;
         while (!this.isAtEnd()) {
             this.scanToken();
@@ -143,6 +143,10 @@ export class Lexer {
             // are allowed
             if (isDecimalDigit(this.peek())) {
                 this.decimalNumber(true);
+            } else if (this.peek() === '.' && this.peekNext() === '.') {
+                this.advance();
+                this.advance();
+                this.addToken(TokenKind.DotDotDot);
             } else {
                 this.addToken(TokenKind.Dot);
             }
@@ -407,7 +411,7 @@ export class Lexer {
 
         this.addToken(TokenKind.Newline);
         this.start = this.current;
-        this.sourceInfo?.lineStarts.push(this.current);
+        this.sourceInfo?.linePositions.push(this.current);
     }
 
     /**
@@ -523,7 +527,7 @@ export class Lexer {
                 token.charCode = 10;
 
                 //track the start of the next line
-                this.sourceInfo?.lineStarts.push(this.current);
+                this.sourceInfo?.linePositions.push(this.current);
                 continue;
             } else if (this.check('\r') && this.peekNext() === '\n') {
                 this.templateQuasiString();
@@ -537,7 +541,7 @@ export class Lexer {
                 token.charCode = 10;
 
                 //track the start of the next line
-                this.sourceInfo?.lineStarts.push(this.current);
+                this.sourceInfo?.linePositions.push(this.current);
                 continue;
 
                 //a lone `\r` is a newline too (the same as everywhere else in the lexer, and in LSP)
@@ -549,7 +553,7 @@ export class Lexer {
                 token.charCode = 13;
 
                 //track the start of the next line
-                this.sourceInfo?.lineStarts.push(this.current);
+                this.sourceInfo?.linePositions.push(this.current);
                 continue;
 
                 //escaped chars
@@ -1196,7 +1200,7 @@ export class Lexer {
      * @returns the locatable of `text`
      */
     private locationOf(): Locatable {
-        return { pos: this.start, end: this.current, source: this.sourceInfo };
+        return { startPosition: this.start, endPosition: this.current, sourceInfo: this.sourceInfo };
     }
 }
 

@@ -27,12 +27,12 @@ describe('creators', () => {
         it('copies the bounds of a locatable', () => {
             const original = Lexer.scan('\n  abc').tokens[1];
             const token = createToken(TokenKind.Identifier, 'xyz', original);
-            expect(token.source).to.equal(original.source);
+            expect(token.sourceInfo).to.equal(original.sourceInfo);
             expect(util.getLocation(token)).to.eql(util.getLocation(original));
         });
 
         it('accepts a location from util.setLocation', () => {
-            const sourceInfo = Lexer.scan('\n\n    abc', { srcPath: 'source/main.brs' }).tokens[0].source;
+            const sourceInfo = Lexer.scan('\n\n    abc', { srcPath: 'source/main.brs' }).tokens[0].sourceInfo;
             const location = util.createLocation(2, 4, 2, 7, sourceInfo.uri);
             const locatable = util.setLocation({} as Locatable, location, sourceInfo);
             expect(util.getLocation(createToken(TokenKind.Identifier, 'xyz', locatable))).to.eql(location);

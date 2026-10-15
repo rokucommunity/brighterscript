@@ -37,13 +37,13 @@ export const trim = undent;
 /**
  * A shared source for hand-built test tokens, where every line is 1000 characters long
  */
-const testSource: SourceInfo = { uri: undefined, lineStarts: Array.from({ length: 1000 }, (x, i) => i * 1000) };
+const testSource: SourceInfo = { uri: undefined, linePositions: Array.from({ length: 1000 }, (x, i) => i * 1000) };
 
 /**
  * Create a `Locatable` for a hand-built test token from line/character positions
  */
 export function testLocatable(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Locatable {
-    return { pos: (startLine * 1000) + startCharacter, end: (endLine * 1000) + endCharacter, source: testSource };
+    return { startPosition: (startLine * 1000) + startCharacter, endPosition: (endLine * 1000) + endCharacter, sourceInfo: testSource };
 }
 const sinon = createSandbox();
 
@@ -61,8 +61,8 @@ type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Prom
  * Is this location a `Locatable` (i.e. from `lexer.diagnostics` or `parser.diagnostics`) rather than a `Location`?
  */
 function isLocatableLocation(location: DiagnosticLocationInput) {
-    //same check as `DiagnosticManager`: tokens and nodes always have a `pos` key, and may have deprecated `range`/`location` getters
-    return !!location && ('pos' in location || !('uri' in location));
+    //same check as `DiagnosticManager`: tokens and nodes always have a `startPosition` key, and may have deprecated `range`/`location` getters
+    return !!location && ('startPosition' in location || !('uri' in location));
 }
 
 /**
@@ -394,7 +394,8 @@ function getTestFileAction(
         }
         program.validate();
         if (failOnDiagnostic !== false) {
-            expectZeroDiagnostics(program);
+            //transpile tests often have inactive `#if` branches or unreachable code, whose hints only fade code and say nothing about the output
+            expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== 'inactive-conditional-compile-branch' && diagnostic.code !== 'unreachable-code'));
         }
         let codeWithMap = await action(file);
 
