@@ -1349,6 +1349,20 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Hint,
         tags: [DiagnosticTag.Unnecessary],
         code: 'unreachable-code'
+    }),
+    /**
+     * A regex literal pattern that PCRE (the engine behind `roRegex`) would fail to compile
+     * @param reason why the pattern is invalid (i.e. `missing closing ')' for group`)
+     */
+    invalidRegexPattern: (reason: string) => ({
+        message: `Invalid regular expression: ${reason}`,
+        severity: DiagnosticSeverity.Error,
+        code: 'invalid-regex-pattern'
+    }),
+    unknownRegexFlag: (flag: string) => ({
+        message: `Unknown regular expression flag '${flag}'. roRegex only supports 'i', 'm', 's', and 'x'`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'unknown-regex-flag'
     })
 };
 export const defaultMaximumTruncationLength = 160;
