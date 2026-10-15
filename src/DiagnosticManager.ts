@@ -547,9 +547,10 @@ export class DiagnosticManager {
     }
 
     private isDetachedLocatable(location: StoredLocation | DiagnosticLocationInput): location is DetachedLocatable {
-        //a `Location` always has a `uri` and never a `pos`. Tokens and nodes always have a `pos` key (even synthetic ones, where it's undefined),
-        //and may also have deprecated `range`/`location` getters, so those can't be used to tell them apart
-        return !!location && ('pos' in location || !('uri' in location));
+        //a `Location` always has a `uri` and never a `startPosition`. Tokens and nodes always have a `startPosition` key (even synthetic ones, where it's undefined),
+        //and may also have deprecated `range`/`location` getters, so those can't be used to tell them apart.
+        //never check for `source` here: that's the diagnostic's own `source` string (i.e. 'brs' or 'bslint'), not a locatable field
+        return !!location && ('startPosition' in location || !('uri' in location));
     }
 
     /**
@@ -560,9 +561,9 @@ export class DiagnosticManager {
         if (!this.isDetachedLocatable(location)) {
             return location;
         }
-        const detached: DetachedLocatable = { pos: location.pos, end: location.end, source: location.source };
+        const detached: DetachedLocatable = { startPosition: location.startPosition, endPosition: location.endPosition, sourceInfo: location.sourceInfo };
         //`util.getLocation()` keeps a newline-terminated token on its own line by looking at its text, so keep just enough text for that
-        const newlineLength = location.source ? location.end - util.getContentEnd(location) : 0;
+        const newlineLength = location.sourceInfo ? location.endPosition - util.getContentEnd(location) : 0;
         if (newlineLength > 0) {
             detached.text = newlineLength === 2 ? '\r\n' : '\n';
         }
@@ -570,12 +571,12 @@ export class DiagnosticManager {
     }
 
     private getUri(location: StoredLocation | undefined): string | undefined {
-        return this.isDetachedLocatable(location) ? location.source?.uri : location?.uri;
+        return this.isDetachedLocatable(location) ? location.sourceInfo?.uri : location?.uri;
     }
 
     private getLocationKey(location: StoredLocation | undefined) {
         if (this.isDetachedLocatable(location)) {
-            return `${location.source?.uri ?? 'No uri'} @${location.pos}-${location.end}`;
+            return `${location.sourceInfo?.uri ?? 'No uri'} @${location.startPosition}-${location.endPosition}`;
         }
         return `${location?.uri ?? 'No uri'} ${util.rangeToString(location?.range)}`;
     }

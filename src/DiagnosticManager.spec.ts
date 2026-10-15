@@ -397,9 +397,9 @@ describe('DiagnosticManager', () => {
             });
             const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
             expect(cached.location).not.to.equal(printToken);
-            expect(cached.location).to.eql({ pos: printToken.pos, end: printToken.end, source: printToken.source });
+            expect(cached.location).to.eql({ startPosition: printToken.startPosition, endPosition: printToken.endPosition, sourceInfo: printToken.sourceInfo });
             expect(cached.relatedInformation[0].location).not.to.equal(subToken);
-            expect(cached.relatedInformation[0].location).to.eql({ pos: subToken.pos, end: subToken.end, source: subToken.source });
+            expect(cached.relatedInformation[0].location).to.eql({ startPosition: subToken.startPosition, endPosition: subToken.endPosition, sourceInfo: subToken.sourceInfo });
         });
 
         it('only computes Locations during getDiagnostics', () => {
@@ -496,7 +496,7 @@ describe('DiagnosticManager', () => {
             program.diagnostics.register({ message: 'test', location: tokenWithGetters });
 
             const cached = [...program.diagnostics['diagnosticsCache'].values()][0].diagnostic;
-            expect(cached.location).to.eql({ pos: printToken.pos, end: printToken.end, source: printToken.source });
+            expect(cached.location).to.eql({ startPosition: printToken.startPosition, endPosition: printToken.endPosition, sourceInfo: printToken.sourceInfo });
             expectDiagnostics(program.getDiagnostics(), [
                 { message: 'test', location: util.getLocation(printToken) }
             ]);
@@ -519,7 +519,7 @@ describe('DiagnosticManager', () => {
         it('uses the locationResolver for synthetic locatables', () => {
             const { file } = getTokens('sub main()\nend sub\n');
             program.diagnostics.locationResolver = () => util.createLocation(0, 0, 0, 100, file.srcPath);
-            program.diagnostics.register({ message: 'test', location: { pos: 0, end: 0, source: undefined } });
+            program.diagnostics.register({ message: 'test', location: { startPosition: 0, endPosition: 0, sourceInfo: undefined } });
             expectDiagnostics(program.getDiagnostics(), [{
                 message: 'test (location unknown, added here for visibility)',
                 location: util.createLocation(0, 0, 0, 100, file.srcPath)

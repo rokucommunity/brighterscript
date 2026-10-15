@@ -1268,9 +1268,9 @@ export class Util {
                 token.kind,
                 token.text,
                 token.isReserved,
-                token.pos,
-                token.end,
-                token.source,
+                token.startPosition,
+                token.endPosition,
+                token.sourceInfo,
                 token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
             ) as Token;
             //handle those tokens that have charCode
@@ -1364,20 +1364,20 @@ export class Util {
         let end: number;
         let source: SourceInfo;
         for (const locatable of locatables) {
-            if (!locatable?.source) {
+            if (!locatable?.sourceInfo) {
                 continue;
-            } else if (!source || (!source.uri && locatable.source.uri)) {
-                source = locatable.source;
-                pos = locatable.pos;
+            } else if (!source || (!source.uri && locatable.sourceInfo.uri)) {
+                source = locatable.sourceInfo;
+                pos = locatable.startPosition;
                 end = this.getContentEnd(locatable);
-            } else if (locatable.source === source) {
-                pos = Math.min(pos, locatable.pos);
+            } else if (locatable.sourceInfo === source) {
+                pos = Math.min(pos, locatable.startPosition);
                 end = Math.max(end, this.getContentEnd(locatable));
             }
         }
-        target.pos = pos;
-        target.end = end;
-        target.source = source;
+        target.startPosition = pos;
+        target.endPosition = end;
+        target.sourceInfo = source;
         return target;
     }
 
@@ -1394,13 +1394,13 @@ export class Util {
         const pos = this.getOffset(sourceInfo, range?.start);
         const end = this.getOffset(sourceInfo, range?.end);
         if (pos === undefined || end === undefined || (location.uri && location.uri !== sourceInfo.uri)) {
-            target.source = undefined;
-            target.pos = undefined;
-            target.end = undefined;
+            target.sourceInfo = undefined;
+            target.startPosition = undefined;
+            target.endPosition = undefined;
         } else {
-            target.source = sourceInfo;
-            target.pos = pos;
-            target.end = end;
+            target.sourceInfo = sourceInfo;
+            target.startPosition = pos;
+            target.endPosition = end;
         }
         return target;
     }
@@ -1414,22 +1414,22 @@ export class Util {
             const lastCharCode = text.charCodeAt(text.length - 1);
             // \n (and \r\n)
             if (lastCharCode === 10) {
-                return locatable.end - (text.length > 1 && text.charCodeAt(text.length - 2) === 13 ? 2 : 1);
+                return locatable.endPosition - (text.length > 1 && text.charCodeAt(text.length - 2) === 13 ? 2 : 1);
                 // \r
             } else if (lastCharCode === 13) {
-                return locatable.end - 1;
+                return locatable.endPosition - 1;
             }
         }
-        return locatable.end;
+        return locatable.endPosition;
     }
 
     /**
-     * Get the first item that has a real location (a `source`), skipping `undefined` and synthetic items.
+     * Get the first item that has a real location (a `sourceInfo`), skipping `undefined` and synthetic items.
      * The locatable equivalent of `util.getLocation(a) ?? util.getLocation(b)`
      */
     public firstLocatable<T extends Locatable>(...items: Array<T | undefined>): T | undefined {
         for (const item of items) {
-            if (item?.source) {
+            if (item?.sourceInfo) {
                 return item;
             }
         }
@@ -1440,20 +1440,20 @@ export class Util {
      * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `source`)
      */
     public getLocation(locatable: Locatable): Location | undefined {
-        const source = locatable?.source;
+        const source = locatable?.sourceInfo;
         if (!source) {
             return undefined;
         }
-        const lineStarts = source.lineStarts;
-        const startLine = this.getLineIndex(lineStarts, locatable.pos, 0);
-        let endLine = this.getLineIndex(lineStarts, locatable.end, startLine);
+        const lineStarts = source.linePositions;
+        const startLine = this.getLineIndex(lineStarts, locatable.startPosition, 0);
+        let endLine = this.getLineIndex(lineStarts, locatable.endPosition, startLine);
         //a token that ends with a newline ends on its own line rather than at the start of the next one
-        if (endLine > startLine && lineStarts[endLine] === locatable.end && this.getContentEnd(locatable) !== locatable.end) {
+        if (endLine > startLine && lineStarts[endLine] === locatable.endPosition && this.getContentEnd(locatable) !== locatable.endPosition) {
             endLine--;
         }
         return {
             uri: source.uri,
-            range: this.createRange(startLine, locatable.pos - lineStarts[startLine], endLine, locatable.end - lineStarts[endLine])
+            range: this.createRange(startLine, locatable.startPosition - lineStarts[startLine], endLine, locatable.endPosition - lineStarts[endLine])
         };
     }
 
@@ -1462,12 +1462,12 @@ export class Util {
      * Returns `undefined` for synthetic items (those without a `source`)
      */
     public getStartPosition(locatable: Locatable): Position | undefined {
-        const lineStarts = locatable?.source?.lineStarts;
+        const lineStarts = locatable?.sourceInfo?.linePositions;
         if (!lineStarts) {
             return undefined;
         }
-        const line = this.getLineIndex(lineStarts, locatable.pos, 0);
-        return this.createPosition(line, locatable.pos - lineStarts[line]);
+        const line = this.getLineIndex(lineStarts, locatable.startPosition, 0);
+        return this.createPosition(line, locatable.startPosition - lineStarts[line]);
     }
 
     /**
@@ -1476,7 +1476,7 @@ export class Util {
      * Returns `undefined` if the source or the position's line is missing
      */
     public getOffset(source: SourceInfo | undefined, position: Position | undefined): number | undefined {
-        const lineStarts = source?.lineStarts;
+        const lineStarts = source?.linePositions;
         const lineStart = lineStarts?.[position?.line];
         if (lineStart === undefined) {
             return undefined;
