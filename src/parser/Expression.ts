@@ -9,14 +9,15 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
-import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { AstNode } from './AstNode';
 import { AstNodeKind, Expression } from './AstNode';
+import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
@@ -35,6 +36,7 @@ import { brsDocParser } from './BrightScriptDocParser';
 import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
+import type { BrsFile } from '../files/BrsFile';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -61,9 +63,9 @@ export class BinaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.BinaryExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -157,9 +159,9 @@ export class CallExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /** `a.b()` -> `a.b` (not the args) */
     public get previousInChain() {
@@ -290,15 +292,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.body.parent = this;
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
-        util.setBounds(this,
+        const signature = util.setBounds({} as Locatable,
             this.tokens.functionType,
             this.tokens.leftParen,
             ...this.parameters ?? [],
             this.tokens.rightParen,
             this.tokens.as,
-            this.returnTypeExpression,
-            this.tokens.endFunctionType
+            this.returnTypeExpression
         );
+        util.setBounds(this, signature, this.tokens.endFunctionType);
+        this.body?.setBoundsBetween(signature, this.tokens.endFunctionType);
     }
 
     public readonly kind = AstNodeKind.FunctionExpression;
@@ -323,9 +326,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return this.tokens.endFunctionType?.leadingTrivia;
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
         let results = [] as TranspileResult;
@@ -586,9 +589,9 @@ export class FunctionParameterExpression extends Expression {
         return paramType;
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState) {
         let result: TranspileResult = [
@@ -700,9 +703,9 @@ export class DottedGetExpression extends Expression {
 
     public readonly kind = AstNodeKind.DottedGetExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /** `a.b` -> `a` */
     public get previousInChain() {
@@ -810,9 +813,9 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly obj: Expression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /** `a@b` -> `a` */
     public get previousInChain() {
@@ -913,9 +916,9 @@ export class IndexedGetExpression extends Expression {
         return this.indexes?.[0];
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /** `a[i]` -> `a` (not the index) */
     public get previousInChain() {
@@ -1002,9 +1005,9 @@ export class GroupingExpression extends Expression {
 
     public readonly kind = AstNodeKind.GroupingExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         if (isTypecastExpression(this.expression)) {
@@ -1051,6 +1054,7 @@ export class LiteralExpression extends Expression {
         this.tokens = {
             value: options.value
         };
+        util.setBounds(this, this.tokens.value);
     }
 
     public readonly tokens: {
@@ -1059,15 +1063,9 @@ export class LiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.LiteralExpression;
 
-    public get pos() {
-        return this.tokens.value.pos;
-    }
-    public get end() {
-        return this.tokens.value.end;
-    }
-    public get source() {
-        return this.tokens.value.source;
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getType(options?: GetTypeOptions) {
         return util.tokenToBscType(this.tokens.value);
@@ -1132,9 +1130,9 @@ export class PrintSeparatorExpression extends Expression {
 
     public readonly kind = AstNodeKind.PrintSeparatorExpression;
 
-    public pos: number;
-    public end: number;
-    public source: SourceInfo | undefined;
+    public startPosition: number;
+    public endPosition: number;
+    public sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1178,9 +1176,9 @@ export class EscapedCharCodeLiteralExpression extends Expression {
         readonly value: Token & { charCode: number };
     };
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1225,9 +1223,9 @@ export class ArrayLiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.ArrayLiteralExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
@@ -1268,7 +1266,16 @@ export class ArrayLiteralExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        const innerTypes = this.elements.map(expr => expr.getType(options));
+        const innerTypes: BscType[] = [];
+        for (const element of this.elements) {
+            const type = element.getType(options);
+            //a spread array contributes its element types, not the array type itself
+            if (isSpreadExpression(element) && isArrayType(type)) {
+                innerTypes.push(...type.innerTypes);
+            } else {
+                innerTypes.push(type);
+            }
+        }
         return new ArrayType(...innerTypes);
     }
     get leadingTrivia(): Token[] {
@@ -1311,9 +1318,9 @@ export class AAMemberExpression extends Expression {
 
     public readonly kind = AstNodeKind.AAMemberExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly key: Token;
@@ -1388,9 +1395,9 @@ export class AAIndexedMemberExpression extends Expression {
 
     public readonly kind = AstNodeKind.AAIndexedMemberExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [];
@@ -1418,7 +1425,7 @@ export class AAIndexedMemberExpression extends Expression {
 
 export class AALiteralExpression extends Expression {
     constructor(options: {
-        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression>;
         readonly open?: Token;
         readonly close?: Token;
     }
@@ -1432,7 +1439,7 @@ export class AALiteralExpression extends Expression {
         util.setBounds(this, this.tokens.open, ...this.elements ?? [], this.tokens.close);
     }
 
-    public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression>;
+    public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression>;
     public readonly tokens: {
         readonly open?: Token;
         readonly close?: Token;
@@ -1440,9 +1447,9 @@ export class AALiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.AALiteralExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
@@ -1450,16 +1457,24 @@ export class AALiteralExpression extends Expression {
         result.push(
             state.transpileToken(this.tokens.open, '{')
         );
-        let hasChildren = this.elements.length > 0;
-        //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && !util.isLeadingCommentOnSameLine(this.tokens.open, this.elements[0])) {
-            result.push('\n');
-        }
         state.blockDepth++;
-        for (let i = 0; i < this.elements.length; i++) {
-            let element = this.elements[i];
-            let previousElement = this.elements[i - 1];
-            let nextElement = this.elements[i + 1];
+        //the most recently transpiled member (spread members are skipped, so this is not necessarily `elements[i - 1]`)
+        let previousElement: AAMemberExpression | AAIndexedMemberExpression | undefined;
+        for (const element of this.elements) {
+            //spread members are lowered to statements before transpile; any left over were already flagged by validation
+            if (isSpreadExpression(element)) {
+                continue;
+            }
+
+            if (!previousElement) {
+                //add newline if the first child isn't a comment starting on the same line as opening curly
+                if (!util.isLeadingCommentOnSameLine(this.tokens.open, element)) {
+                    result.push('\n');
+                }
+            } else if (!util.isLeadingCommentOnSameLine(previousElement, element)) {
+                //add a newline between members (skipped when this member is a same-line comment)
+                result.push('\n');
+            }
 
             //don't indent if comment is same-line
             if (util.isLeadingCommentOnSameLine(this.tokens.open, element) ||
@@ -1487,16 +1502,12 @@ export class AALiteralExpression extends Expression {
             //value
             result.push(...element.value.transpile(state));
 
-            //if next element is a same-line comment, skip the newline
-            if (nextElement && !util.isLeadingCommentOnSameLine(element, nextElement)) {
-                //add a newline between statements
-                result.push('\n');
-            }
+            previousElement = element;
         }
         state.blockDepth--;
 
-        const lastElement = this.elements[this.elements.length - 1] ?? this.tokens.open;
-        result.push(...state.transpileEndBlockToken(lastElement, this.tokens.close, '}', hasChildren));
+        const hasChildren = !!previousElement;
+        result.push(...state.transpileEndBlockToken(previousElement ?? this.tokens.open, this.tokens.close, '}', hasChildren));
 
         return result;
     }
@@ -1510,6 +1521,14 @@ export class AALiteralExpression extends Expression {
     getType(options: GetTypeOptions): BscType {
         const resultType = new AssociativeArrayType();
         resultType.addBuiltInInterfaces();
+        //once a spread is involved, a later key replaces an earlier one (as it does at runtime) instead of widening it
+        let sawSpread = false;
+        const setMember = (name: string, data: ExtraSymbolData, type: BscType) => {
+            if (sawSpread) {
+                resultType.getMemberTable().removeSymbol(name);
+            }
+            resultType.addMember(name, data, type, SymbolTypeFlag.runtime);
+        };
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
                 let memberName = element.tokens?.key?.text ?? '';
@@ -1517,7 +1536,21 @@ export class AALiteralExpression extends Expression {
                     memberName = memberName.replace(/"/g, ''); // remove quotes if it was a stringLiteral
                 }
                 if (memberName) {
-                    resultType.addMember(memberName, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
+                    setMember(memberName, { definingNode: element }, element.getType(options));
+                }
+            } else if (isSpreadExpression(element)) {
+                //a spread contributes the known members of the AA or interface being spread
+                sawSpread = true;
+                const spreadType = element.getType(options);
+                let members: BscSymbol[] = [];
+                if (isAssociativeArrayType(spreadType)) {
+                    //own members only: the built-in roAssociativeArray methods already come from addBuiltInInterfaces
+                    members = spreadType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime);
+                } else if (isInterfaceType(spreadType)) {
+                    members = spreadType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+                }
+                for (const member of members) {
+                    setMember(member.name, member.data, member.type);
                 }
             }
         }
@@ -1544,6 +1577,60 @@ export class AALiteralExpression extends Expression {
     }
 }
 
+export class SpreadExpression extends Expression {
+    constructor(options: {
+        dotDotDot: Token;
+        expression: Expression;
+    }) {
+        super();
+        this.tokens = {
+            dotDotDot: options.dotDotDot
+        };
+        this.expression = options.expression;
+        util.setBounds(this, this.tokens.dotDotDot, this.expression);
+    }
+
+    public readonly kind = AstNodeKind.SpreadExpression;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public readonly tokens: {
+        readonly dotDotDot: Token;
+    };
+
+    public readonly expression: Expression;
+
+    transpile(state: BrsTranspileState) {
+        return this.expression.transpile(state);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.expression.getType(options);
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.dotDotDot.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new SpreadExpression({
+                dotDotDot: util.cloneToken(this.tokens.dotDotDot),
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
+    }
+}
+
 export class UnaryExpression extends Expression {
     constructor(options: {
         operator: Token;
@@ -1559,9 +1646,9 @@ export class UnaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.UnaryExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly operator: Token;
@@ -1627,9 +1714,9 @@ export class VariableExpression extends Expression {
 
     public readonly kind = AstNodeKind.VariableExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * @deprecated use `tokens.name` instead
@@ -1721,9 +1808,9 @@ export class SourceLiteralExpression extends Expression {
         util.setBounds(this, this.tokens.value);
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly kind = AstNodeKind.SourceLiteralExpression;
 
@@ -1871,9 +1958,9 @@ export class NewExpression extends Expression {
 
     public readonly kind = AstNodeKind.NewExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly new?: Token;
@@ -1980,9 +2067,9 @@ export class CallfuncExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallfuncExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /** `a@.b()` -> `a` (not the args) */
     public get previousInChain() {
@@ -2068,9 +2155,9 @@ export class TemplateStringQuasiExpression extends Expression {
     public readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
     public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
 
-    readonly pos: number;
-    readonly end: number;
-    readonly source: SourceInfo | undefined;
+    readonly startPosition: number;
+    readonly endPosition: number;
+    readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
         let result = [] as TranspileResult;
@@ -2137,9 +2224,9 @@ export class TemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getType(options: GetTypeOptions) {
         return StringType.instance;
@@ -2263,9 +2350,9 @@ export class TaggedTemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2350,6 +2437,8 @@ export class AnnotationExpression extends Expression {
         };
         this.call = options.call;
         this.name = this.tokens.name.text;
+        //the parser assigns `call` after construction (since the call needs this annotation as its callee), and updates the bounds then
+        util.setBounds(this, this.tokens.at, this.tokens.name, this.call);
     }
 
     public readonly kind = AstNodeKind.AnnotationExpression;
@@ -2359,19 +2448,9 @@ export class AnnotationExpression extends Expression {
         readonly name: Token;
     };
 
-    public get pos() {
-        return this.getBounds().pos;
-    }
-    public get end() {
-        return this.getBounds().end;
-    }
-    public get source() {
-        return this.getBounds().source;
-    }
-    private getBounds() {
-        //this needs to be computed on demand because `call` is assigned after construction
-        return util.setBounds({} as Locatable, this.tokens.at, this.tokens.name, this.call);
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly name: string;
 
@@ -2446,9 +2525,9 @@ export class TernaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.TernaryExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly questionMark?: Token;
@@ -2571,9 +2650,9 @@ export class NullCoalescingExpression extends Expression {
 
     public readonly kind = AstNodeKind.NullCoalescingExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly questionQuestion?: Token;
@@ -2581,6 +2660,17 @@ export class NullCoalescingExpression extends Expression {
 
     public readonly consequent: Expression;
     public readonly alternate: Expression;
+
+    /**
+     * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
+     * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
+     */
+    public hasMutatingExpression(file: BrsFile) {
+        return [
+            ...util.getExpressionInfo(this.consequent, file).expressions,
+            ...util.getExpressionInfo(this.alternate, file).expressions
+        ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2594,12 +2684,7 @@ export class NullCoalescingExpression extends Expression {
             return !nonReferenceableFunctions.includes(name.toLowerCase());
         });
 
-        let hasMutatingExpression = [
-            ...consequentInfo.expressions,
-            ...alternateInfo.expressions
-        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
-
-        if (hasMutatingExpression) {
+        if (this.hasMutatingExpression(state.file)) {
             result.push(
                 `(function(`,
                 //write all the scope variables as parameters.
@@ -2678,6 +2763,7 @@ export class RegexLiteralExpression extends Expression {
         this.tokens = {
             regexLiteral: options.regexLiteral
         };
+        util.setBounds(this, this.tokens.regexLiteral);
     }
 
     public readonly kind = AstNodeKind.RegexLiteralExpression;
@@ -2685,15 +2771,9 @@ export class RegexLiteralExpression extends Expression {
         readonly regexLiteral: Token;
     };
 
-    public get pos() {
-        return this.tokens?.regexLiteral?.pos;
-    }
-    public get end() {
-        return this.tokens?.regexLiteral?.end;
-    }
-    public get source() {
-        return this.tokens?.regexLiteral?.source;
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         let text = this.tokens.regexLiteral?.text ?? '';
@@ -2774,7 +2854,7 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            if (!(isAAIndexedMemberExpression(e))) {
+            if (isAAMemberExpression(e)) {
                 acc[e.tokens.key.text] = expressionToValue(e.value, strict);
             }
             return acc;
@@ -2829,9 +2909,9 @@ export class TypeExpression extends Expression implements TypedefProvider {
      */
     public readonly resolvedType?: BscType;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         //roku built-in names (rosgnode*, etc.) collapse to `dynamic` at transpile.
@@ -2927,9 +3007,9 @@ export class TypecastExpression extends Expression {
 
     public typeExpression?: TypeExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return this.obj.transpile(state);
@@ -2993,9 +3073,9 @@ export class TypedArrayExpression extends Expression {
 
     public readonly kind = AstNodeKind.TypedArrayExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         //typed arrays (e.g. `float[]`, `float[][][]`) collapse to `dynamic` since
@@ -3053,9 +3133,9 @@ export class InlineInterfaceExpression extends Expression {
 
     public readonly kind = AstNodeKind.InlineInterfaceExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     get leadingTrivia(): Token[] {
         return this.tokens.open?.leadingTrivia;
@@ -3134,9 +3214,9 @@ export class InlineInterfaceMemberExpression extends Expression {
 
     public readonly typeExpression?: TypeExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     get leadingTrivia(): Token[] {
         return this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
@@ -3214,9 +3294,9 @@ export class TypedFunctionTypeExpression extends Expression {
     public readonly params: FunctionParameterExpression[];
     public readonly returnType?: TypeExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];

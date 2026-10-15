@@ -8,9 +8,9 @@ import { util } from '../util';
 import type { TranspileResult } from '../interfaces';
 
 interface TranspileToken {
-    pos?: number;
-    end?: number;
-    source?: SourceInfo;
+    startPosition?: number;
+    endPosition?: number;
+    sourceInfo?: SourceInfo;
     /**
      * Location for tokens that aren't `Locatable` (i.e. SGTokens)
      */
@@ -69,7 +69,7 @@ export class TranspileState {
     public newline = '\n';
 
     private getSource(locatable: RangeLike) {
-        let srcPath = (locatable as Locatable)?.source?.uri ?? (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        let srcPath = (locatable as Locatable)?.sourceInfo?.uri ?? (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
         if (srcPath) {
             srcPath = util.uriToPath(srcPath);
             //if a sourceRoot is specified, use that instead of the rootDir
@@ -90,7 +90,7 @@ export class TranspileState {
      */
     public sourceNode(locatable: RangeLike, code: string | SourceNode | TranspileResult): SourceNode {
         //source maps only need the start, so skip building a whole `Location` for locatables
-        const start = (locatable && 'source' in locatable)
+        const start = (locatable && 'sourceInfo' in locatable)
             ? this.getLocatableStart(locatable)
             : util.extractRange(locatable)?.start;
         return util.sourceNodeFromTranspileResult(
@@ -123,7 +123,7 @@ export class TranspileState {
      * Get the start position of a token. Source maps only need the start, so this skips building a whole `Location`
      */
     private getTokenStart(token: TranspileToken): Position | undefined {
-        return token?.source
+        return token?.sourceInfo
             ? this.getLocatableStart(token as Locatable)
             : token?.location?.range?.start;
     }
@@ -133,15 +133,15 @@ export class TranspileState {
      * that position belongs to. Mapping it would point at the same lines of whatever file is being transpiled, so leave it unmapped instead
      */
     private getLocatableStart(locatable: Locatable): Position | undefined {
-        return locatable.source?.uri ? util.getStartPosition(locatable) : undefined;
+        return locatable.sourceInfo?.uri ? util.getStartPosition(locatable) : undefined;
     }
 
     /**
      * Does this token span more than one line? (a trailing newline doesn't count)
      */
     private isMultiLine(token: TranspileToken, start: Position) {
-        if (token.source) {
-            const nextLineStart = token.source.lineStarts[start.line + 1];
+        if (token.sourceInfo) {
+            const nextLineStart = token.sourceInfo.linePositions[start.line + 1];
             return nextLineStart !== undefined && nextLineStart <= util.getContentEnd(token as Locatable);
         }
         return token.location?.range?.end?.line > start.line;
