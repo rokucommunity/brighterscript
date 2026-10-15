@@ -1355,7 +1355,8 @@ export class Util {
 
     /**
      * Set the `pos`, `end`, and `source` of `target` to the bounds of all the locatables.
-     * Offsets from different sources can't be compared, so only locatables from the same source as the first one are included.
+     * Offsets from different sources can't be compared, so only locatables from one source are included: the first one that has a uri,
+     * or the first one if none of them do. That way, code parsed from a snippet (which has no uri) never takes over the bounds of real code from a file.
      * A trailing newline is not included in the bounds, so the target never ends at the start of the next line
      */
     public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | undefined>): T {
@@ -1365,7 +1366,7 @@ export class Util {
         for (const locatable of locatables) {
             if (!locatable?.source) {
                 continue;
-            } else if (!source) {
+            } else if (!source || (!source.uri && locatable.source.uri)) {
                 source = locatable.source;
                 pos = locatable.pos;
                 end = this.getContentEnd(locatable);
@@ -1382,15 +1383,17 @@ export class Util {
 
     /**
      * Give a locatable (such as a synthetic token or node created by a plugin) a position from a line/character `Location`.
+     * This is meant for building new items. Parsed tokens and nodes describe where they came from in the original source, so don't move them.
      *
-     * Prefer `util.setBounds(target, someRealToken)` when a token or node from the same file is available, since that shares the
-     * file's real `source` and so combines correctly with the rest of that file's AST. This is for when only a `Location` is
+     * Prefer `util.setBounds(target, someRealToken)` when a token or node from the same file is available. This is for when only a `Location` is
      * available (i.e. one from an xml file or another program). Passing `undefined` clears the position.
      *
-     * The position is stored against a synthetic `source` (one per uri) whose lines are spaced far enough apart that the offsets
-     * encode the line and character exactly, so `util.getLocation()` returns the same `Location`
+     * If `sourceInfo` is given (and is for the same uri as the location), the position is mapped into that source, so the item combines with
+     * the rest of that source's AST like any parsed item would. Otherwise the position is stored against a synthetic source (one per uri) where
+     * every line is `Util.syntheticLineLength` long, so the offsets encode the line and character directly and `util.getLocation()` returns the same `Location`.
+     * Lines and characters too large for that encoding are clamped
      */
-    public setLocation<T extends Locatable>(target: T, location: Location | undefined): T {
+    public setLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo?: SourceInfo): T {
         const range = location?.range;
         if (!range) {
             target.source = undefined;
@@ -1398,35 +1401,60 @@ export class Util {
             target.end = undefined;
             return target;
         }
-        const source = this.getSyntheticSource(location.uri, Math.max(range.start.line, range.end.line));
-        target.source = source;
-        target.pos = (range.start.line * Util.syntheticLineLength) + range.start.character;
-        target.end = (range.end.line * Util.syntheticLineLength) + range.end.character;
+        if (sourceInfo && !sourceInfo.lineLength && (!location.uri || location.uri === sourceInfo.uri)) {
+            const pos = this.getOffset(sourceInfo, range.start);
+            const end = this.getOffset(sourceInfo, range.end);
+            if (pos !== undefined && end !== undefined) {
+                target.source = sourceInfo;
+                target.pos = pos;
+                target.end = end;
+                return target;
+            }
+        }
+        target.source = this.getSyntheticSource(location.uri);
+        target.pos = this.getSyntheticOffset(range.start);
+        target.end = this.getSyntheticOffset(range.end);
         return target;
     }
 
     /**
-     * The spacing between the lines of a synthetic source. Characters must be smaller than this to round-trip through `getLocation()`
+     * The length of every line in a synthetic source. Characters must be smaller than this to round-trip through `getLocation()`
      */
-    private static readonly syntheticLineLength = 2 ** 20;
+    private static readonly syntheticLineLength = 2 ** 26;
+
+    /**
+     * The largest line a synthetic source can hold, so offsets stay within `Number.MAX_SAFE_INTEGER`
+     */
+    private static readonly syntheticMaxLine = 2 ** 26;
 
     private syntheticSources = new Map<string, SourceInfo>();
 
     /**
-     * Get the synthetic source for the given uri, making sure it has at least enough lines to contain `line`
+     * Get the synthetic source for the given uri. Its lines are a fixed length, so it doesn't need any `lineStarts`
      */
-    private getSyntheticSource(uri: string, line: number): SourceInfo {
+    private getSyntheticSource(uri: string): SourceInfo {
         let source = this.syntheticSources.get(uri);
         if (!source) {
-            source = { uri: uri, lineStarts: [0] };
+            source = { uri: uri, lineStarts: [], lineLength: Util.syntheticLineLength };
             this.syntheticSources.set(uri, source);
         }
-        const lineStarts = source.lineStarts;
-        //include the line after, so the end of a range that runs to the end of its line still resolves to that line
-        for (let i = lineStarts.length; i <= line + 1; i++) {
-            lineStarts.push(i * Util.syntheticLineLength);
-        }
         return source;
+    }
+
+    private getSyntheticOffset(position: Position) {
+        const line = Math.min(Math.max(position.line, 0), Util.syntheticMaxLine);
+        const character = Math.min(Math.max(position.character, 0), Util.syntheticLineLength - 1);
+        return (line * Util.syntheticLineLength) + character;
+    }
+
+    /**
+     * Get the offset where the given line starts in the source
+     */
+    public getLineStart(source: SourceInfo, line: number): number | undefined {
+        if (source.lineLength) {
+            return line >= 0 && line <= Util.syntheticMaxLine ? line * source.lineLength : undefined;
+        }
+        return source.lineStarts[line];
     }
 
     /**
@@ -1455,16 +1483,15 @@ export class Util {
         if (!source) {
             return undefined;
         }
-        const lineStarts = source.lineStarts;
-        const startLine = this.getLineIndex(lineStarts, locatable.pos, 0);
-        let endLine = this.getLineIndex(lineStarts, locatable.end, startLine);
+        const startLine = this.getLineIndex(source, locatable.pos, 0);
+        let endLine = this.getLineIndex(source, locatable.end, startLine);
         //a token that ends with a newline ends on its own line rather than at the start of the next one
-        if (endLine > startLine && lineStarts[endLine] === locatable.end && this.getContentEnd(locatable) !== locatable.end) {
+        if (endLine > startLine && this.getLineStart(source, endLine) === locatable.end && this.getContentEnd(locatable) !== locatable.end) {
             endLine--;
         }
         return {
             uri: source.uri,
-            range: this.createRange(startLine, locatable.pos - lineStarts[startLine], endLine, locatable.end - lineStarts[endLine])
+            range: this.createRange(startLine, locatable.pos - this.getLineStart(source, startLine), endLine, locatable.end - this.getLineStart(source, endLine))
         };
     }
 
@@ -1473,12 +1500,12 @@ export class Util {
      * Returns `undefined` for synthetic items (those without a `source`)
      */
     public getStartPosition(locatable: Locatable): Position | undefined {
-        const lineStarts = locatable?.source?.lineStarts;
-        if (!lineStarts) {
+        const source = locatable?.source;
+        if (!source) {
             return undefined;
         }
-        const line = this.getLineIndex(lineStarts, locatable.pos, 0);
-        return this.createPosition(line, locatable.pos - lineStarts[line]);
+        const line = this.getLineIndex(source, locatable.pos, 0);
+        return this.createPosition(line, locatable.pos - this.getLineStart(source, line));
     }
 
     /**
@@ -1487,20 +1514,26 @@ export class Util {
      * Returns `undefined` if the source or the position's line is missing
      */
     public getOffset(source: SourceInfo | undefined, position: Position | undefined): number | undefined {
-        const lineStarts = source?.lineStarts;
-        const lineStart = lineStarts?.[position?.line];
+        if (!source || !position) {
+            return undefined;
+        }
+        const lineStart = this.getLineStart(source, position.line);
         if (lineStart === undefined) {
             return undefined;
         }
         const offset = lineStart + position.character;
-        const nextLineStart = lineStarts[position.line + 1];
+        const nextLineStart = this.getLineStart(source, position.line + 1);
         return nextLineStart !== undefined && offset >= nextLineStart ? nextLineStart - 1 : offset;
     }
 
     /**
-     * Binary search `lineStarts` (beginning at line index `low`) for the index of the line that contains `offset`
+     * Get the index of the line (at or after line index `low`) that contains `offset`. Binary searches `lineStarts` for real sources
      */
-    private getLineIndex(lineStarts: number[], offset: number, low: number) {
+    private getLineIndex(source: SourceInfo, offset: number, low: number) {
+        if (source.lineLength) {
+            return Math.max(low, Math.floor(offset / source.lineLength));
+        }
+        const lineStarts = source.lineStarts;
         let high = lineStarts.length - 1;
         while (low < high) {
             const mid = Math.floor((low + high + 1) / 2);

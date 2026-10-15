@@ -1127,6 +1127,13 @@ describe('util', () => {
             expect(util.getLocation(result).range).to.eql(util.createRange(0, 2, 0, 4));
         });
 
+        it('prefers a source with a uri over one parsed from a snippet, no matter the order', () => {
+            const real = Lexer.scan('\n\nabcdef', { srcPath: s`${rootDir}/source/main.brs` }).tokens[2];
+            const snippet = Lexer.scan('xyz').tokens[0];
+            expect(util.getLocation(util.setBounds({} as Locatable, snippet, real))).to.eql(util.getLocation(real));
+            expect(util.getLocation(util.setBounds({} as Locatable, real, snippet))).to.eql(util.getLocation(real));
+        });
+
         it('clears the bounds when nothing has a source', () => {
             const result = util.setBounds({ pos: 1, end: 2, source: testLocatable(0, 0, 0, 0).source }, createToken(TokenKind.Identifier, 'a'));
             expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
@@ -1218,6 +1225,41 @@ describe('util', () => {
         it('clears the position when given undefined', () => {
             const result = util.setLocation(testLocatable(0, 0, 0, 1), undefined);
             expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
+        });
+
+        it('maps into a real source when given one, so it combines with that source', () => {
+            const tokens = Lexer.scan('a = 1\nbb = 2', { srcPath: s`${rootDir}/source/main.brs` }).tokens;
+            const sourceInfo = tokens[0].source;
+            const result = util.setLocation({} as Locatable, util.createLocation(1, 0, 1, 2, sourceInfo.uri), sourceInfo);
+            expect(result.source).to.equal(sourceInfo);
+            expect(result.pos).to.eql(6);
+            expect(result.end).to.eql(8);
+            expect(util.getLocation(util.setBounds({} as Locatable, tokens[0], result)).range).to.eql(util.createRange(0, 0, 1, 2));
+        });
+
+        it('does not map into a real source for a different uri', () => {
+            const sourceInfo = Lexer.scan('a = 1', { srcPath: s`${rootDir}/source/main.brs` }).tokens[0].source;
+            const location = util.createLocation(0, 0, 0, 1, 'file:///other.brs');
+            const result = util.setLocation({} as Locatable, location, sourceInfo);
+            expect(result.source).not.to.equal(sourceInfo);
+            expect(util.getLocation(result)).to.eql(location);
+        });
+
+        it('round-trips characters past the old 2^20 line length', () => {
+            const location = util.createLocation(2, (2 ** 20) + 5, 3, 2 ** 21, 'file:///d.brs');
+            expect(util.getLocation(util.setLocation({} as Locatable, location))).to.eql(location);
+        });
+
+        it('clamps huge lines and characters instead of hanging or moving to another line', () => {
+            //bsc builds ranges like these for whole-file diagnostics and comment flags
+            const wholeFile = util.setLocation({} as Locatable, util.createLocation(0, 0, 0, Number.MAX_VALUE, 'file:///e.brs'));
+            expect(util.getLocation(wholeFile).range.end.line).to.eql(0);
+
+            const toEnd = util.setLocation({} as Locatable, util.createLocation(1, 0, Number.MAX_SAFE_INTEGER, 0, 'file:///e.brs'));
+            const range = util.getLocation(toEnd).range;
+            expect(range.start).to.eql(util.createPosition(1, 0));
+            expect(range.end.line).to.be.greaterThan(1_000_000);
+            expect(Number.isSafeInteger(toEnd.end)).to.be.true;
         });
     });
 

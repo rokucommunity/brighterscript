@@ -91,7 +91,7 @@ export class TranspileState {
     public sourceNode(locatable: RangeLike, code: string | SourceNode | TranspileResult): SourceNode {
         //source maps only need the start, so skip building a whole `Location` for locatables
         const start = (locatable && 'source' in locatable)
-            ? util.getStartPosition(locatable)
+            ? this.getLocatableStart(locatable)
             : util.extractRange(locatable)?.start;
         return util.sourceNodeFromTranspileResult(
             //convert 0-based range line to 1-based SourceNode line
@@ -124,8 +124,16 @@ export class TranspileState {
      */
     private getTokenStart(token: TranspileToken): Position | undefined {
         return token?.source
-            ? util.getStartPosition(token as Locatable)
+            ? this.getLocatableStart(token as Locatable)
             : token?.location?.range?.start;
+    }
+
+    /**
+     * Get the start position of a locatable for a source map. Code parsed from a snippet has a position but no uri, so there's no file
+     * that position belongs to. Mapping it would point at the same lines of whatever file is being transpiled, so leave it unmapped instead
+     */
+    private getLocatableStart(locatable: Locatable): Position | undefined {
+        return locatable.source?.uri ? util.getStartPosition(locatable) : undefined;
     }
 
     /**
@@ -133,7 +141,7 @@ export class TranspileState {
      */
     private isMultiLine(token: TranspileToken, start: Position) {
         if (token.source) {
-            const nextLineStart = token.source.lineStarts[start.line + 1];
+            const nextLineStart = util.getLineStart(token.source, start.line + 1);
             return nextLineStart !== undefined && nextLineStart <= util.getContentEnd(token as Locatable);
         }
         return token.location?.range?.end?.line > start.line;

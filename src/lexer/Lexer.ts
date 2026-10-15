@@ -541,6 +541,18 @@ export class Lexer {
                 this.sourceInfo?.lineStarts.push(this.current);
                 continue;
 
+                //a lone `\r` is a newline too (the same as everywhere else in the lexer, and in LSP)
+            } else if (this.check('\r')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
+
+                //track the start of the next line
+                this.sourceInfo?.lineStarts.push(this.current);
+                continue;
+
                 //escaped chars
             } else if (this.check('\\')) {
                 this.templateQuasiString();

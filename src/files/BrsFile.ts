@@ -11,7 +11,7 @@ import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
 import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
 import type { NamespaceContainer } from '../Scope';
-import type { Token } from '../lexer/Token';
+import type { SourceInfo, Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
@@ -299,12 +299,13 @@ export class BrsFile implements BscFile {
     }
 
     /**
-     * Info about the source of this file's tokens (shared by every token from the same parse)
+     * Info about the source of this file's tokens (shared by every token from the same parse).
+     * Pass it to `util.setLocation()` to map a `Location` in this file into it
      */
-    private get sourceInfo() {
-        const tokens = this.parser.tokens;
+    public get sourceInfo(): SourceInfo | undefined {
+        const tokens = this.parser?.tokens;
         //every token from the same parse shares the same source, and the last token (`Eof`) always exists
-        return tokens[tokens.length - 1]?.source;
+        return tokens?.[tokens.length - 1]?.source;
     }
 
     /**
