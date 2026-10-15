@@ -391,6 +391,26 @@ describe('AstNode', () => {
                     util.createRange(2, 5, 3, 0)
                 ]);
             });
+
+            it('select case', () => {
+                expect(getEmptyBlockRanges('sub main()\n    select case x\n        case 1\n        case else\n    end select\nend sub').slice(1)).to.eql([
+                    //`case 1` body ends at the next case
+                    util.createRange(2, 14, 3, 8),
+                    //`case else` body ends at `end select`
+                    util.createRange(3, 17, 4, 4)
+                ]);
+            });
+        });
+
+        it('spans the gap between the directives for #if/#else branches that have statements', () => {
+            const { ast } = Parser.parse('#const DEBUG = true\n#if DEBUG\n    print 1\n#else\n    print 2\n#end if', { mode: ParseMode.BrighterScript });
+            const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+            expect([statement.thenBranch, statement.elseBranch].map(x => util.getLocation(x)?.range)).to.eql([
+                //then branch
+                util.createRange(1, 9, 3, 0),
+                //else branch
+                util.createRange(3, 5, 5, 0)
+            ]);
         });
     });
 
@@ -600,6 +620,10 @@ describe('AstNode', () => {
                     //skip these properties
                     if (
                         ['parent', 'symbolTable', 'startPosition', 'endPosition', 'sourceInfo'].includes(key) ||
+                        //conditional compile state is filled in by walks of the tree, and a clone has not been walked yet
+                        ['isActive', 'isConditionTrue', 'isConditionDeclared'].includes(key) ||
+                        //another index of the class members, which are already compared through `body`, `methods`, `fields` and `memberMap`
+                        (isClassStatement(original) && key === 'members') ||
                         //this is a circular reference property or the `returnType` prop, skip it
                         (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
                         //circular reference property for annotations
