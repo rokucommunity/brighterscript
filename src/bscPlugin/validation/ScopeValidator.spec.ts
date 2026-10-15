@@ -506,6 +506,24 @@ describe('ScopeValidator', () => {
             );
         });
 
+        it('Catches argument type mismatches on method calls using doc comment param types', () => {
+            program.setFile('source/file.bs', `
+                class Counter
+                    ' @param {integer} count the count
+                    sub add(count)
+                    end sub
+                end class
+                sub main()
+                    tally = new Counter()
+                    tally.add("hello")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
         it('Catches argument type mismatches on function calls for functions defined in another file', () => {
             program.setFile('source/file.brs', `
                     sub a(age as integer)
