@@ -4,7 +4,8 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
-import { expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { util } from '../../util';
 import { rootDir } from '../../testHelpers.spec';
 
@@ -38,7 +39,8 @@ describe('BrsFileSemanticTokensProcessor', () => {
     function getSemanticTokenResults(file: BscFile, expected: Array<SemanticToken | [SemanticTokenTypes, number, number, number, number, SemanticTokenModifiers[]?]>, validateDiagnostics = true) {
         program.validate();
         if (validateDiagnostics) {
-            expectZeroDiagnostics(program);
+            //the hints that fade inactive `#if` branches don't affect the tokens
+            expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== 'inactive-conditional-compile-branch'));
         }
         const result = util.sortByRange(
             program.getSemanticTokens(file.srcPath)!
@@ -70,6 +72,46 @@ describe('BrsFileSemanticTokensProcessor', () => {
             expected: (expected as SemanticToken[]).map(x => stringify(x))
         };
     }
+
+    it('emits tokens for the active branch and for what can be resolved in the inactive branch of a conditional compile block', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            #const LOGGING = true
+            sub main()
+            #if LOGGING
+                activeVar = 1
+                print activeVar
+            #else
+                inactiveVar = 2
+                print inactiveVar
+            #end if
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(7, 0, 9, 0) } }
+        ]);
+        const tokenLines = program.getSemanticTokens(file.srcPath)!.map(token => token.range.start.line);
+        expect(tokenLines).to.include(5);
+        //the assignment in the inactive branch
+        expect(tokenLines).to.include(7);
+    });
+
+    it('colors a class in an inactive branch like a class', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            #const LOGGING = false
+            class Widget
+            end class
+            sub main()
+            #if LOGGING
+                widget = new Widget()
+            #end if
+            end sub
+        `);
+        expectSemanticTokensIncludes(file, [
+            //widget = new |Widget|()
+            [SemanticTokenTypes.class, 6, 29, 6, 35]
+        ]);
+    });
 
     it('matches each namespace section for class', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
