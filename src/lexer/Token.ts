@@ -56,10 +56,6 @@ export interface SourceInfo {
      * Where each line starts (the gap before its first character), counted the same way as `Locatable.pos`
      */
     lineStarts: number[];
-    /**
-     * Only set for synthetic sources (see `util.setLocation()`), where every line is this long and `lineStarts` is unused
-     */
-    lineLength?: number;
 }
 
 /**

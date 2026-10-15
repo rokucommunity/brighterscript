@@ -141,7 +141,7 @@ export class TranspileState {
      */
     private isMultiLine(token: TranspileToken, start: Position) {
         if (token.source) {
-            const nextLineStart = util.getLineStart(token.source, start.line + 1);
+            const nextLineStart = token.source.lineStarts[start.line + 1];
             return nextLineStart !== undefined && nextLineStart <= util.getContentEnd(token as Locatable);
         }
         return token.location?.range?.end?.line > start.line;

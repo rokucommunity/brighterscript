@@ -300,7 +300,7 @@ export class BrsFile implements BscFile {
 
     /**
      * Info about the source of this file's tokens (shared by every token from the same parse).
-     * Pass it to `util.setLocation()` to map a `Location` in this file into it
+     * Pass it to `util.setLocation()` to give a new token or node a position in this file
      */
     public get sourceInfo(): SourceInfo | undefined {
         const tokens = this.parser?.tokens;
