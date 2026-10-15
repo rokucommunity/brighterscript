@@ -381,10 +381,11 @@ export class BrsFile implements BscFile {
 
         //a member of the containing namespace shadows everything else with the same name
         const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
+        let qualifiedResult: FileLink<T>;
         if (fullNameLower !== lowerName) {
-            const result = lookup(fullNameLower);
-            if (result) {
-                return result;
+            qualifiedResult = lookup(fullNameLower);
+            if (qualifiedResult && qualifiedResult.item.isActive !== false) {
+                return qualifiedResult;
             }
         }
 
@@ -401,7 +402,8 @@ export class BrsFile implements BscFile {
             return statement ? { item: statement, file: targetFile } : undefined;
         }
 
-        return lookup(lowerName);
+        const result = lookup(lowerName);
+        return !qualifiedResult || (result && result.item.isActive !== false) ? result : qualifiedResult;
     }
 
     /**
@@ -586,6 +588,8 @@ export class BrsFile implements BscFile {
                 });
             });
 
+            this._cachedLookups.invalidate();
+
             //absorb all lexing/preprocessing/parsing diagnostics
             diagnostics.push(
                 ...lexer.diagnostics as BsDiagnostic[],
@@ -600,7 +604,7 @@ export class BrsFile implements BscFile {
                 ...DiagnosticMessages.genericParserMessage('Critical error parsing file: ' + JSON.stringify(util.serializeError(e)))
             });
         }
-        this.program?.diagnostics.register(diagnostics);
+        this.program?.diagnostics.registerParseDiagnostics(diagnostics);
     }
 
     /**

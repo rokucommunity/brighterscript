@@ -111,12 +111,14 @@ export class CodeActionsProcessor {
      *   - "Disable {code} for this file": adds the code to an existing header-level `bs:disable`
      *     directive if present, otherwise inserts a new `bs:disable: {code}` at the top of the file.
      *
+     * The `inactive-conditional-compile-branch` hint only fades code that is active under other constants, so it gets no quick fixes.
+     *
      * Comment placement and the line-vs-next-line preference are centralized here so they can be
      * revisited without touching the directive parser.
      */
     private suggestDisableDiagnosticQuickFixes(diagnostic: BsDiagnostic) {
         const code = diagnostic.code;
-        if (code === undefined || code === null) {
+        if (code === undefined || code === null || code === DiagnosticCodeMap.inactiveConditionalCompileBranch) {
             return;
         }
         const file = this.event.file;

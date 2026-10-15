@@ -4,10 +4,11 @@ import { getFirmwareCapabilities } from './RokuConstants';
 describe('RokuConstants', () => {
     describe('getFirmwareCapabilities', () => {
         it('enables everything for a modern firmware version', () => {
-            expect(getFirmwareCapabilities('15.3.0')).to.eql({
+            expect(getFirmwareCapabilities('16.0.0')).to.eql({
                 optionalChaining: true,
                 continueStatement: true,
-                lineContinuation: true
+                lineContinuation: true,
+                undeclaredHashConstIsFalse: true
             });
         });
 
@@ -15,7 +16,8 @@ describe('RokuConstants', () => {
             expect(getFirmwareCapabilities('10.0.0')).to.eql({
                 optionalChaining: false,
                 continueStatement: false,
-                lineContinuation: false
+                lineContinuation: false,
+                undeclaredHashConstIsFalse: false
             });
         });
 
@@ -32,6 +34,11 @@ describe('RokuConstants', () => {
             });
         });
 
+        it('treats undeclared hash consts as false starting at 16.0', () => {
+            expect(getFirmwareCapabilities('15.3.0').undeclaredHashConstIsFalse).to.be.false;
+            expect(getFirmwareCapabilities('16.0.0').undeclaredHashConstIsFalse).to.be.true;
+        });
+
         it('coerces partial versions', () => {
             expect(getFirmwareCapabilities('11.5').continueStatement).to.be.true;
             expect(getFirmwareCapabilities('11.4').continueStatement).to.be.false;
@@ -44,7 +51,8 @@ describe('RokuConstants', () => {
                 expect(getFirmwareCapabilities(value)).to.eql({
                     optionalChaining: true,
                     continueStatement: true,
-                    lineContinuation: false
+                    lineContinuation: false,
+                    undeclaredHashConstIsFalse: false
                 }, `failed for ${JSON.stringify(value)}`);
             }
         });
