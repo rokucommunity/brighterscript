@@ -750,9 +750,10 @@ export class BrsFile implements BscFile {
             return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
                 let mostSpecificNamespace: NamespaceStatement;
                 for (const statement of this._cachedLookups.namespaceStatements) {
-                    if (util.rangeContains(util.getLocation(statement)?.range, position)) {
+                    const statementRange = util.getLocation(statement)?.range;
+                    if (util.rangeContains(statementRange, position)) {
                         if (mostSpecificNamespace) {
-                            if (util.isRangeInRange(util.getLocation(statement)?.range, util.getLocation(mostSpecificNamespace)?.range)) {
+                            if (util.isRangeInRange(statementRange, util.getLocation(mostSpecificNamespace)?.range)) {
                                 mostSpecificNamespace = statement;
                             }
                         } else {
