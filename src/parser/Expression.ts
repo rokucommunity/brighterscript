@@ -292,15 +292,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.body.parent = this;
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
-        util.setBounds(this,
+        const signature = util.setBounds({} as Locatable,
             this.tokens.functionType,
             this.tokens.leftParen,
             ...this.parameters ?? [],
             this.tokens.rightParen,
             this.tokens.as,
-            this.returnTypeExpression,
-            this.tokens.endFunctionType
+            this.returnTypeExpression
         );
+        util.setBounds(this, signature, this.tokens.endFunctionType);
+        this.body?.setBoundsBetween(signature, this.tokens.endFunctionType);
     }
 
     public readonly kind = AstNodeKind.FunctionExpression;
@@ -1053,6 +1054,7 @@ export class LiteralExpression extends Expression {
         this.tokens = {
             value: options.value
         };
+        util.setBounds(this, this.tokens.value);
     }
 
     public readonly tokens: {
@@ -1061,15 +1063,9 @@ export class LiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.LiteralExpression;
 
-    public get startPosition() {
-        return this.tokens.value.startPosition;
-    }
-    public get endPosition() {
-        return this.tokens.value.endPosition;
-    }
-    public get sourceInfo() {
-        return this.tokens.value.sourceInfo;
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getType(options?: GetTypeOptions) {
         return util.tokenToBscType(this.tokens.value);
@@ -2441,6 +2437,8 @@ export class AnnotationExpression extends Expression {
         };
         this.call = options.call;
         this.name = this.tokens.name.text;
+        //the parser assigns `call` after construction (since the call needs this annotation as its callee), and updates the bounds then
+        util.setBounds(this, this.tokens.at, this.tokens.name, this.call);
     }
 
     public readonly kind = AstNodeKind.AnnotationExpression;
@@ -2450,19 +2448,9 @@ export class AnnotationExpression extends Expression {
         readonly name: Token;
     };
 
-    public get startPosition() {
-        return this.getBounds().startPosition;
-    }
-    public get endPosition() {
-        return this.getBounds().endPosition;
-    }
-    public get sourceInfo() {
-        return this.getBounds().sourceInfo;
-    }
-    private getBounds() {
-        //this needs to be computed on demand because `call` is assigned after construction
-        return util.setBounds({} as Locatable, this.tokens.at, this.tokens.name, this.call);
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly name: string;
 
@@ -2775,6 +2763,7 @@ export class RegexLiteralExpression extends Expression {
         this.tokens = {
             regexLiteral: options.regexLiteral
         };
+        util.setBounds(this, this.tokens.regexLiteral);
     }
 
     public readonly kind = AstNodeKind.RegexLiteralExpression;
@@ -2782,15 +2771,9 @@ export class RegexLiteralExpression extends Expression {
         readonly regexLiteral: Token;
     };
 
-    public get startPosition() {
-        return this.tokens?.regexLiteral?.startPosition;
-    }
-    public get endPosition() {
-        return this.tokens?.regexLiteral?.endPosition;
-    }
-    public get sourceInfo() {
-        return this.tokens?.regexLiteral?.sourceInfo;
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         let text = this.tokens.regexLiteral?.text ?? '';

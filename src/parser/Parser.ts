@@ -256,7 +256,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body({ statements: [] });
+        const statements: Statement[] = [];
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
@@ -271,7 +271,7 @@ export class Parser {
                     if (dec) {
                         if (!isAnnotationExpression(dec)) {
                             this.consumePendingAnnotations(dec);
-                            body.statements.push(dec);
+                            statements.push(dec);
                             //ensure statement separator
                             this.consumeStatementSeparators(false);
                         } else {
@@ -286,7 +286,8 @@ export class Parser {
         }
 
         this.exitAnnotationBlock(parentAnnotations);
-        return body;
+        //construct the body once all of its statements are known, so its bounds are computed from them
+        return new Body({ statements: statements });
     }
 
     private sanitizeParseOptions(options: ParseOptions) {
@@ -1796,6 +1797,8 @@ export class Parser {
         if (this.check(TokenKind.LeftParen)) {
             let leftParen = this.advance();
             annotation.call = this.finishCall(leftParen, annotation, false);
+            //the call needs the annotation as its callee, so it can't be passed to the constructor. Include it in the bounds now that it exists
+            util.setBounds(annotation, annotation.tokens.at, annotation.tokens.name, annotation.call);
         }
         return annotation;
     }
