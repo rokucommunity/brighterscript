@@ -37,13 +37,15 @@ export class InlayHintProcessor {
 
         file.ast.walk(createVisitor({
             CallExpression: (call) => {
-                if (!util.getLocation(call)?.range || !util.rangesIntersectOrTouch(util.getLocation(call).range, range)) {
+                const callRange = util.getLocation(call)?.range;
+                if (!callRange || !util.rangesIntersectOrTouch(callRange, range)) {
                     return;
                 }
                 this.emitParameterNameHints(file, call);
             },
             CallfuncExpression: (call) => {
-                if (!util.getLocation(call)?.range || !util.rangesIntersectOrTouch(util.getLocation(call).range, range)) {
+                const callRange = util.getLocation(call)?.range;
+                if (!callRange || !util.rangesIntersectOrTouch(callRange, range)) {
                     return;
                 }
                 this.emitParameterNameHintsForCallfunc(file, call);
