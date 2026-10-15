@@ -37,6 +37,7 @@ import { brsDocParser } from './BrightScriptDocParser';
 import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
+import type { BrsFile } from '../files/BrsFile';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -2617,6 +2618,17 @@ export class NullCoalescingExpression extends Expression {
     public readonly consequent: Expression;
     public readonly alternate: Expression;
 
+    /**
+     * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
+     * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
+     */
+    public hasMutatingExpression(file: BrsFile) {
+        return [
+            ...util.getExpressionInfo(this.consequent, file).expressions,
+            ...util.getExpressionInfo(this.alternate, file).expressions
+        ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+    }
+
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
         let consequentInfo = util.getExpressionInfo(this.consequent, state.file);
@@ -2629,12 +2641,7 @@ export class NullCoalescingExpression extends Expression {
             return !nonReferenceableFunctions.includes(name.toLowerCase());
         });
 
-        let hasMutatingExpression = [
-            ...consequentInfo.expressions,
-            ...alternateInfo.expressions
-        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
-
-        if (hasMutatingExpression) {
+        if (this.hasMutatingExpression(state.file)) {
             result.push(
                 `(function(`,
                 //write all the scope variables as parameters.

@@ -1,4 +1,4 @@
-import { createAssignmentStatement, createBlock, createCall, createDottedSetStatement, createIdentifier, createIfStatement, createIndexedSetStatement, createToken, createVariableExpression } from '../../astUtils/creators';
+import { createAssignmentStatement, createBlock, createCall, createDottedSetStatement, createIdentifier, createIfStatement, createIndexedSetStatement, createInvalidLiteral, createToken, createVariableExpression } from '../../astUtils/creators';
 import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
 import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
@@ -6,9 +6,9 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
 import type { Identifier, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
-import type { Expression, Statement } from '../../parser/AstNode';
-import type { AALiteralExpression, TernaryExpression } from '../../parser/Expression';
-import { ArrayLiteralExpression, DottedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
+import type { AstNode, Expression, Statement } from '../../parser/AstNode';
+import type { AALiteralExpression, NullCoalescingExpression, TernaryExpression } from '../../parser/Expression';
+import { ArrayLiteralExpression, BinaryExpression, DottedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { Block, Body, ConstStatement, NamespaceStatement } from '../../parser/Statement';
 import { AugmentedAssignmentStatement, ExpressionStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
@@ -67,9 +67,15 @@ export class BrsFilePreTranspileProcessor {
         //inactive conditional compile branches still ship in the output, so transpile their ternaries to if statements too
         // eslint-disable-next-line no-bitwise
         const walkMode = WalkMode.visitExpressionsRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks;
+        //`??` rewrites move the operands into new statements, but the walk re-links an expression's children to it after the
+        //visitor returns. So collect them during the walk and rewrite them afterwards (outermost first, since the walk is pre-order)
+        const nullCoalescingExpressions: NullCoalescingExpression[] = [];
         const visitor = createVisitor({
             TernaryExpression: (ternaryExpression) => {
                 this.processTernaryExpression(ternaryExpression, visitor, walkMode);
+            },
+            NullCoalescingExpression: (expression) => {
+                nullCoalescingExpressions.push(expression);
             },
             ArrayLiteralExpression: (literal) => {
                 this.processSpreadLiteral(literal, visitor, walkMode);
@@ -79,6 +85,93 @@ export class BrsFilePreTranspileProcessor {
             }
         });
         this.event.file.ast.walk(visitor, { walkMode: walkMode });
+        //rewriting one can surface nested ones (re-collected by the visitor), so drain until there are none left
+        while (nullCoalescingExpressions.length > 0) {
+            this.processNullCoalescingExpression(nullCoalescingExpressions.shift(), visitor, walkMode);
+        }
+    }
+
+    /**
+     * Lower a `??` that is the entire value of an assignment into plain statements, instead of the inline function that
+     * `NullCoalescingExpression.transpile` would otherwise produce:
+     * - `x = a.b ?? c` -> `x = a.b` then `if x = invalid then x = c`
+     * - `m.x = a.b ?? c` -> `__bsc_tmp_coalesce = a.b`, `if __bsc_tmp_coalesce = invalid then __bsc_tmp_coalesce = c`, `m.x = __bsc_tmp_coalesce`
+     *
+     * The temp is used when the target is not a plain local (so the target is written once, and node observers fire once),
+     * or when the alternate reads the local being assigned (`x = a.b ?? x`), since assigning first would clobber it.
+     */
+    private processNullCoalescingExpression(expression: NullCoalescingExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
+        //simple operands already transpile to a one-line `bslib_coalesce()` call, so leave those alone
+        if (!expression.hasMutatingExpression(this.event.file)) {
+            return;
+        }
+        //the `??` (ignoring wrapping parens) must be the entire value of an assignment
+        let valueNode: AstNode = expression;
+        while (isGroupingExpression(valueNode.parent)) {
+            valueNode = valueNode.parent;
+        }
+        const statement = valueNode.parent;
+        if (
+            !(isAssignmentStatement(statement) || isDottedSetStatement(statement) || isIndexedSetStatement(statement) || isAugmentedAssignmentStatement(statement)) ||
+            statement.value !== valueNode
+        ) {
+            return;
+        }
+        //the statement must live in a statement list so we have somewhere to insert the new statements
+        const block = statement.parent as Block | Body;
+        if (!isBlock(block) && !isBody(block)) {
+            return;
+        }
+        const index = block.statements.indexOf(statement);
+        if (index < 0) {
+            return;
+        }
+        const editor = this.event.editor;
+        const location = expression.tokens.questionQuestion?.location;
+
+        //`if <name> = invalid then <name> = <alternate> end if`
+        const createFallback = (name: string) => createIfStatement({
+            condition: new BinaryExpression({
+                left: createVariableExpression(name, location),
+                operator: createToken(TokenKind.Equal, '=', location),
+                right: createInvalidLiteral('invalid', location)
+            }),
+            thenBranch: createBlock({
+                statements: [
+                    createAssignmentStatement({ name: createIdentifier(name, location), value: expression.alternate })
+                ]
+            })
+        });
+
+        let newStatements: Statement[];
+        if (isAssignmentStatement(statement) && !this.expressionReferencesLocal(statement.tokens.name.text, expression.alternate)) {
+            //local variable target: assign the consequent directly, then fall back to the alternate
+            editor.setProperty(statement, 'value', expression.consequent);
+            newStatements = [createFallback(statement.tokens.name.text)];
+            editor.arraySplice(block.statements, index + 1, 0, ...newStatements);
+        } else {
+            const tmpName = '__bsc_tmp_coalesce';
+            newStatements = [
+                createAssignmentStatement({ name: createIdentifier(tmpName, location), value: expression.consequent }),
+                createFallback(tmpName)
+            ];
+            editor.setProperty(statement, 'value', createVariableExpression(tmpName, location));
+            editor.arraySplice(block.statements, index, 0, ...newStatements);
+        }
+
+        //link the moved operands into the tree, and walk them for nested rewrites (`??` and ternaries that are now statement-level)
+        for (const newStatement of [...newStatements, statement]) {
+            newStatement.parent = block;
+            newStatement.walk(visitor, { walkMode: walkMode });
+        }
+    }
+
+    /**
+     * Does the expression read the given local variable?
+     */
+    private expressionReferencesLocal(name: string, expression: Expression) {
+        const lowerName = name.toLowerCase();
+        return util.getExpressionInfo(expression, this.event.file).uniqueVarNames.some(varName => varName.toLowerCase() === lowerName);
     }
 
     /**
@@ -247,10 +340,7 @@ export class BrsFilePreTranspileProcessor {
      * Does any trailing element read the local variable being assigned (e.g. `list = [...list, 1]`)?
      */
     private spreadReferencesLocal(name: string, trailing: Expression[]) {
-        const lowerName = name.toLowerCase();
-        return trailing.some(element => {
-            return util.getExpressionInfo(element, this.event.file).uniqueVarNames.some(varName => varName.toLowerCase() === lowerName);
-        });
+        return trailing.some(element => this.expressionReferencesLocal(name, element));
     }
 
 
