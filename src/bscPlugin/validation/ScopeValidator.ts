@@ -58,6 +58,7 @@ const enum ScopeValidatorDiagnosticTag {
     Classes = 'ScopeValidatorClasses',
     XMLInterface = 'ScopeValidatorXML',
     XMLImports = 'ScopeValidatorXMLImports',
+    ObserverCallbacks = 'ScopeValidatorObserverCallbacks',
     Default = 'ScopeValidator',
     Segment = 'ScopeValidatorSegment'
 }
@@ -115,6 +116,8 @@ export class ScopeValidator {
                     this.diagnosticDetectDuplicateAncestorScriptImports(this.event.scope);
                     //validate component interface
                     this.validateXmlInterface(this.event.scope);
+                    //validate the function names passed to `observeField`/`observeFieldScoped`
+                    this.validateObserverCallbacks(this.event.scope);
                 }
             }).durationText;
             metrics.circularConstTime = validationStopwatch.getDurationTextFor(() => {
@@ -1875,6 +1878,77 @@ export class ScopeValidator {
         const memberValue = (member.parent as EnumStatement)?.getMemberValue(member.name);
         //string comparisons are case sensitive, but everything else (`&HFF`, etc) is not
         return isLiteralString(value) ? literalText === memberValue : literalText.toLowerCase() === memberValue?.toLowerCase();
+    }
+
+    /**
+     * Flag string callbacks passed to `observeField`/`observeFieldScoped` that don't exist in this component.
+     *
+     * This runs over the whole scope on every validation (rather than per-segment) because the callback is a string, not a symbol reference,
+     * so adding or removing the function in another file wouldn't otherwise trigger revalidation of the call.
+     */
+    private validateObserverCallbacks(scope: XmlScope) {
+        this.event.program.diagnostics.clearByFilter({ scope: scope, tag: ScopeValidatorDiagnosticTag.ObserverCallbacks });
+
+        //the names functions actually have at runtime (i.e. `alpha_onChange`), mapped to how they are written in BrighterScript (i.e. `alpha.onChange`)
+        let functionNames: Map<string, string>;
+        const getFunctionNames = () => {
+            if (!functionNames) {
+                functionNames = new Map();
+                for (const { callable } of scope.getAllCallables()) {
+                    //only functions declared in code can be callbacks (not built-in global functions)
+                    if (callable.functionStatement) {
+                        functionNames.set(callable.getName(ParseMode.BrightScript).toLowerCase(), callable.getName(ParseMode.BrighterScript).toLowerCase());
+                    }
+                }
+            }
+            return functionNames;
+        };
+
+        for (const file of scope.getOwnFiles()) {
+            if (!isBrsFile(file)) {
+                continue;
+            }
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            for (const expression of file['_cachedLookups'].expressions) {
+                if (!isCallExpression(expression) || !this.isObserverCallWithStringCallback(expression)) {
+                    continue;
+                }
+                const callbackArg = expression.args[1] as LiteralExpression;
+                const callbackName = callbackArg.tokens.value.text.replace(/^"|"$/g, '');
+                const lowerCallbackName = callbackName.toLowerCase();
+                if (!callbackName || getFunctionNames().has(lowerCallbackName)) {
+                    continue;
+                }
+                //if it was written with its BrighterScript name (`alpha.onChange`), suggest the name it actually has at runtime
+                const isBrighterScriptName = [...getFunctionNames().values()].includes(lowerCallbackName);
+                const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
+                    location: callbackArg.location
+                }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
+            }
+        }
+    }
+
+    /**
+     * Is this a call like `node.observeField("field", "callbackName")` on something we know is a node?
+     * The receiver must be `m.top` (always the component's node) or have a node type, so look-alike methods on
+     * other objects (i.e. a custom AA with its own `observeFieldScoped` method) are never checked.
+     */
+    private isObserverCallWithStringCallback(call: CallExpression) {
+        if (!isDottedGetExpression(call.callee) || !isLiteralString(call.args[1])) {
+            return false;
+        }
+        const methodName = call.callee.tokens.name?.text?.toLowerCase();
+        if (methodName !== 'observefield' && methodName !== 'observefieldscoped') {
+            return false;
+        }
+        const receiver = call.callee.obj;
+        const isMTop = isDottedGetExpression(receiver) &&
+            receiver.tokens.name?.text?.toLowerCase() === 'top' &&
+            isVariableExpression(receiver.obj) &&
+            receiver.obj.tokens.name?.text?.toLowerCase() === 'm';
+        return isMTop || isCallFuncableTypeLike(receiver.getType({ flags: SymbolTypeFlag.runtime }));
     }
 
     private validateXmlInterface(scope: XmlScope) {

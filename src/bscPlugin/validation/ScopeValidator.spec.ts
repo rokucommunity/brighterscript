@@ -6053,6 +6053,160 @@ describe('ScopeValidator', () => {
         });
     });
 
+    describe('observerCallbackNotFound', () => {
+        function setComponent(name: string, scriptUris: string[], parentName = 'Group') {
+            program.setFile(`components/${name}.xml`, [
+                `<?xml version="1.0" encoding="utf-8" ?>`,
+                `<component name="${name}" extends="${parentName}">`,
+                ...scriptUris.map(uri => `    <script uri="${uri}" />`),
+                `</component>`
+            ].join('\n'));
+        }
+
+        it('flags a missing callback observed on m.top', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.observeField("width", "onWidthChange")
+                    m.top.observeFieldScoped("height", "onHeightChange")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onWidthChange', 'Widget'),
+                DiagnosticMessages.observerCallbackNotFound('onHeightChange', 'Widget')
+            ]);
+        });
+
+        it('flags a missing callback observed on a variable with a node type', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    poster = CreateObject("roSGNode", "Poster")
+                    poster.observeField("loadStatus", "onLoadStatusChange")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onLoadStatusChange', 'Widget')
+            ]);
+        });
+
+        it('allows callbacks defined in the same file, another script, or a parent component (case-insensitive)', () => {
+            setComponent('Base', ['Base.bs']);
+            program.setFile('components/Base.bs', `
+                sub onBaseChange()
+                end sub
+            `);
+            setComponent('Widget', ['Widget.bs', 'Helpers.bs'], 'Base');
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.observeField("a", "onLocalChange")
+                    m.top.observeField("b", "onHelperChange")
+                    m.top.observeField("c", "onBaseChange")
+                    m.top.observeField("d", "ONLOCALCHANGE")
+                end sub
+                sub onLocalChange()
+                end sub
+            `);
+            program.setFile('components/Helpers.bs', `
+                sub onHelperChange()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not check receivers that are not known to be nodes', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.poster = m.top.findNode("poster")
+                    m.poster.observeField("loadStatus", "notChecked")
+                    m.observerManager = {
+                        observeFieldScoped: sub(id as string, field as string, callback as string)
+                        end sub
+                    }
+                    m.observerManager.observeFieldScoped("myButton", "selected", "alsoNotChecked")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not check callbacks that are not string literals', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    port = CreateObject("roMessagePort")
+                    m.top.observeField("width", port)
+                    callbackName = "notChecked"
+                    m.top.observeField("height", callbackName)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not check code outside of components', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    node = CreateObject("roSGNode", "Poster")
+                    node.observeField("loadStatus", "onLoadStatusChange")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('requires the transpiled name for namespaced callbacks', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                namespace alpha
+                    sub onChange()
+                    end sub
+                end namespace
+                sub init()
+                    m.top.observeField("width", "alpha_onChange")
+                    m.top.observeField("height", "alpha.onChange")
+                    m.top.observeField("x", "onChange")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('alpha.onChange', 'Widget', 'alpha_onChange'),
+                DiagnosticMessages.observerCallbackNotFound('onChange', 'Widget')
+            ]);
+        });
+
+        it('updates when the callback is added or removed in another file', () => {
+            setComponent('Widget', ['Widget.bs', 'Helpers.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.observeField("width", "onWidthChange")
+                end sub
+            `);
+            program.setFile('components/Helpers.bs', ``);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onWidthChange', 'Widget')
+            ]);
+
+            program.setFile('components/Helpers.bs', `
+                sub onWidthChange()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('components/Helpers.bs', ``);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onWidthChange', 'Widget')
+            ]);
+        });
+    });
+
     describe('callFunc', () => {
         it('allows access to member of return type when return type is custom node', () => {
             program.setFile('components/Widget.xml', trim`
