@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBlock, isCallExpression, isCatchStatement, isClassType, isConditionalCompileStatement, isEnumMemberStatement, isEnumType, isEnumStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isTryCatchStatement, isTypedefProvider, isUnaryExpression, isUninitializedType, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -38,9 +38,9 @@ export class EmptyStatement extends Statement {
     /**
      * Create a negative range to indicate this is an interpolated location
      */
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly kind = AstNodeKind.EmptyStatement;
 
@@ -67,6 +67,7 @@ export class Body extends Statement implements TypedefProvider {
     }) {
         super();
         this.statements = options?.statements ?? [];
+        util.setBounds(this, ...this.statements);
     }
 
     public readonly statements: Statement[] = [];
@@ -74,23 +75,9 @@ export class Body extends Statement implements TypedefProvider {
 
     public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
-    public get pos() {
-        return this.getBounds().pos;
-    }
-    public get end() {
-        return this.getBounds().end;
-    }
-    public get source() {
-        return this.getBounds().source;
-    }
-    private getBounds() {
-        //this needs to be lazy because the body has its statements pushed to it after being constructed
-        if (!this._bounds?.source) {
-            this._bounds = util.setBounds(this._bounds ?? {} as Locatable, ...(this.statements ?? []));
-        }
-        return this._bounds;
-    }
-    private _bounds: Locatable;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = state.transpileAnnotations(this);
@@ -140,18 +127,35 @@ export class Body extends Statement implements TypedefProvider {
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkMode & InternalWalkMode.walkStatements) {
-            walkArray(this.statements, visitor, options, this);
+        if (!(options.walkMode & InternalWalkMode.walkStatements)) {
+            return;
         }
+        const fullWalkMode = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.recurseChildFunctions;
+        //only a full walk from the root of the tree resolves conditional compile statements, because `#const` applies in source order.
+        //a walk that skips part of the tree would miss the `#const` statements there, so it uses the results of the last full walk instead
+        const isFullWalk = (options.walkMode & fullWalkMode) === fullWalkMode && !options.skipChildren;
+        //constants passed by the caller already flow down the walk as they are
+        if (this.parent || options.bsConsts || !isFullWalk) {
+            walkArray(this.statements, visitor, options, this);
+            return;
+        }
+        //carry the manifest `bs_const` values down the walk, and let each `#const` add to them as the walk reaches it.
+        //copy them so the walk never changes `ast.bsConsts`, and copy the options so the caller's object is untouched
+        walkArray(this.statements, visitor, { ...options, bsConsts: new Map(this.bsConsts) }, this);
     }
 
     public clone() {
-        return this.finalizeClone(
+        const clone = this.finalizeClone(
             new Body({
                 statements: this.statements?.map(s => s?.clone())
             }),
             ['statements']
         );
+        //keep the manifest `bs_const` values, so a full walk of the clone resolves `#if` statements the same way
+        if (this.bsConsts) {
+            clone.bsConsts = new Map(this.bsConsts);
+        }
+        return clone;
     }
 }
 
@@ -186,9 +190,9 @@ export class AssignmentStatement extends Statement {
 
     public readonly kind = AstNodeKind.AssignmentStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -263,9 +267,9 @@ export class AugmentedAssignmentStatement extends Statement {
 
     public readonly kind = AstNodeKind.AugmentedAssignmentStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -318,121 +322,38 @@ export class Block extends Statement {
         super();
         this.statements = options.statements;
         this.symbolTable = new SymbolTable('Block', () => this.parent.getSymbolTable());
+        util.setBounds(this, ...this.statements ?? []);
     }
 
     public readonly statements: Statement[];
 
     public readonly kind = AstNodeKind.Block;
 
-    private buildBounds(): Locatable {
-        if (this.statements?.length > 0) {
-            return util.setBounds({} as Locatable, ...this.statements ?? []);
-        }
-        let lastBitBefore: Locatable;
-        let firstBitAfter: Locatable;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
-        if (isFunctionExpression(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.tokens.functionType,
-                this.parent.tokens.leftParen,
-                ...(this.parent.parameters ?? []),
-                this.parent.tokens.rightParen,
-                this.parent.tokens.as,
-                this.parent.returnTypeExpression
-            );
-            firstBitAfter = this.parent.tokens.endFunctionType;
-        } else if (isIfStatement(this.parent)) {
-            if (this.parent.thenBranch === this) {
-                lastBitBefore = util.setBounds({} as Locatable,
-                    this.parent.tokens.then,
-                    this.parent.condition
-                );
-                firstBitAfter = util.setBounds({} as Locatable,
-                    this.parent.tokens.else,
-                    this.parent.elseBranch,
-                    this.parent.tokens.endIf
-                );
-            } else if (this.parent.elseBranch === this) {
-                lastBitBefore = this.parent.tokens.else;
-                firstBitAfter = this.parent.tokens.endIf;
-            }
-        } else if (isConditionalCompileStatement(this.parent)) {
-            if (this.parent.thenBranch === this) {
-                lastBitBefore = util.setBounds({} as Locatable,
-                    this.parent.tokens.condition,
-                    this.parent.tokens.not,
-                    this.parent.tokens.hashIf
-                );
-                firstBitAfter = util.setBounds({} as Locatable,
-                    this.parent.tokens.hashElse,
-                    this.parent.elseBranch,
-                    this.parent.tokens.hashEndIf
-                );
-            } else if (this.parent.elseBranch === this) {
-                lastBitBefore = this.parent.tokens.hashElse;
-                firstBitAfter = this.parent.tokens.hashEndIf;
-            }
-        } else if (isForStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.increment,
-                this.parent.tokens.step,
-                this.parent.finalValue,
-                this.parent.tokens.to,
-                this.parent.counterDeclaration,
-                this.parent.tokens.for
-            );
-            firstBitAfter = this.parent.tokens.endFor;
-        } else if (isForEachStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.target,
-                this.parent.tokens.in,
-                this.parent.tokens.item,
-                this.parent.tokens.forEach
-            );
-            firstBitAfter = this.parent.tokens.endFor;
-        } else if (isWhileStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.condition,
-                this.parent.tokens.while
-            );
-            firstBitAfter = this.parent.tokens.endWhile;
-        } else if (isTryCatchStatement(this.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.tokens.try
-            );
-            firstBitAfter = util.setBounds({} as Locatable,
-                this.parent.tokens.endTry,
-                this.parent.catchStatement
-            );
-        } else if (isCatchStatement(this.parent) && isTryCatchStatement(this.parent?.parent)) {
-            lastBitBefore = util.setBounds({} as Locatable,
-                this.parent.tokens.catch,
-                this.parent.exceptionVariableExpression
-            );
-            firstBitAfter = this.parent.parent.tokens.endTry;
+    /**
+     * An empty block has no statements to get its bounds from, so its parent calls this (from the parent's constructor)
+     * to set the bounds to the gap between the parent's code on either side of the block. Does nothing if the block has statements,
+     * unless `options.evenIfNotEmpty` is true. If either side has no position, the block keeps the bounds of its statements.
+     * @param before the parent's code just before this block (i.e. a function's signature)
+     * @param after the parent's code just after this block (i.e. `end function`)
+     * @param options extra options
+     * @param options.evenIfNotEmpty span the gap even when the block has statements (i.e. a conditional compile branch, which also covers blank lines, comments and code that did not parse)
+     */
+    public setBoundsBetween(before: Locatable | undefined, after: Locatable | undefined, options?: { evenIfNotEmpty?: boolean }) {
+        if (this.statements?.length > 0 && !options?.evenIfNotEmpty) {
+            return;
         }
-        if (lastBitBefore?.source && firstBitAfter?.source) {
-            return { pos: lastBitBefore.end, end: firstBitAfter.pos, source: lastBitBefore.source };
+        //offsets from different sources can't be compared, so both sides must come from the same source
+        if (before?.sourceInfo && before.sourceInfo === after?.sourceInfo) {
+            const self = this as Locatable;
+            self.startPosition = util.getContentEnd(before);
+            self.endPosition = after.startPosition;
+            self.sourceInfo = before.sourceInfo;
         }
     }
-
-    public get pos() {
-        return this.getBounds()?.pos;
-    }
-    public get end() {
-        return this.getBounds()?.end;
-    }
-    public get source() {
-        return this.getBounds()?.source;
-    }
-    private getBounds() {
-        //this needs to be lazy because the body has its statements pushed to it after being constructed
-        if (!this._bounds?.source) {
-            this._bounds = this.buildBounds();
-        }
-        return this._bounds;
-    }
-    private _bounds: Locatable;
 
     transpile(state: BrsTranspileState): TranspileResult {
         state.blockDepth++;
@@ -511,9 +432,9 @@ export class ExpressionStatement extends Statement {
     public readonly expression: Expression;
     public readonly kind = AstNodeKind.ExpressionStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -571,11 +492,24 @@ export class ExitStatement extends Statement {
 
     public readonly kind = AstNodeKind.ExitStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
+        //`select case` is transpiled to an if/else chain, so there's nothing to exit. Jump past the end of it instead.
+        //(An `exit select` at the end of a case is dropped by the case itself, so it never gets here)
+        if (this.tokens.loopType?.kind === TokenKind.Select) {
+            const selectCase = getExitSelectTarget(this)?.selectCase;
+            if (!selectCase) {
+                //validation flags this. Keep any comments, but there's nothing sensible to emit
+                return state.transpileLeadingComments(this.tokens.exit);
+            }
+            return [
+                ...state.transpileLeadingComments(this.tokens.exit),
+                state.sourceNode(this, `goto ${state.getExitSelectLabel(selectCase)}`)
+            ];
+        }
         return [
             state.transpileToken(this.tokens.exit, 'exit'),
             (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
@@ -625,9 +559,9 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * Get the name of this expression based on the parse mode
@@ -729,6 +663,15 @@ export class IfStatement extends Statement {
             endIf: options.endIf
         };
 
+        //give empty branches the bounds of the gap they occupy (the else branch first, since the then branch ends where it starts)
+        if (isBlock(this.elseBranch)) {
+            this.elseBranch.setBoundsBetween(this.tokens.else, this.tokens.endIf);
+        }
+        this.thenBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.tokens.then, this.condition),
+            util.setBounds({} as Locatable, this.tokens.else, this.elseBranch, this.tokens.endIf)
+        );
+
         util.setBounds(this,
             ...Object.values(this.tokens),
             this.condition,
@@ -749,9 +692,9 @@ export class IfStatement extends Statement {
 
     public readonly kind = AstNodeKind.IfStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     get isInline() {
         const allLeadingTrivia = [
@@ -886,9 +829,9 @@ export class IncrementStatement extends Statement {
 
     public readonly kind = AstNodeKind.IncrementStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -974,9 +917,9 @@ export class PrintStatement extends Statement {
         return { valueCount: valueCount, commaCount: commaCount };
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [
@@ -1062,9 +1005,9 @@ export class DimStatement extends Statement {
 
     public readonly kind = AstNodeKind.DimStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState) {
         let result: TranspileResult = [
@@ -1142,9 +1085,9 @@ export class GotoStatement extends Statement {
 
     public readonly kind = AstNodeKind.GotoStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1193,9 +1136,9 @@ export class LabelStatement extends Statement {
     };
     public readonly kind = AstNodeKind.LabelStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
@@ -1245,9 +1188,9 @@ export class ReturnStatement extends Statement {
     public readonly value?: Expression;
     public readonly kind = AstNodeKind.ReturnStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1297,9 +1240,9 @@ export class EndStatement extends Statement {
     };
     public readonly kind = AstNodeKind.EndStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1338,9 +1281,9 @@ export class StopStatement extends Statement {
 
     public readonly kind = AstNodeKind.StopStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1388,6 +1331,10 @@ export class ForStatement extends Statement {
         this.body = options.body;
         this.increment = options.increment;
 
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.increment, this.tokens.step, this.finalValue, this.tokens.to, this.counterDeclaration, this.tokens.for),
+            this.tokens.endFor
+        );
         util.setBounds(this,
             this.tokens.for,
             this.counterDeclaration,
@@ -1414,9 +1361,9 @@ export class ForStatement extends Statement {
 
     public readonly kind = AstNodeKind.ForStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1520,6 +1467,10 @@ export class ForEachStatement extends Statement {
         this.target = options.target;
         this.typeExpression = options.typeExpression;
 
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.target, this.tokens.in, this.typeExpression, this.tokens.as, this.tokens.item, this.tokens.forEach),
+            this.tokens.endFor
+        );
         util.setBounds(this,
             this.tokens.forEach,
             this.tokens.item,
@@ -1545,9 +1496,9 @@ export class ForEachStatement extends Statement {
 
     public readonly kind = AstNodeKind.ForEachStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1645,6 +1596,10 @@ export class WhileStatement extends Statement {
         };
         this.body = options.body;
         this.condition = options.condition;
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.condition, this.tokens.while),
+            this.tokens.endWhile
+        );
         util.setBounds(this,
             this.tokens.while,
             this.condition,
@@ -1662,9 +1617,9 @@ export class WhileStatement extends Statement {
 
     public readonly kind = AstNodeKind.WhileStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1755,9 +1710,9 @@ export class DottedSetStatement extends Statement {
 
     public readonly kind = AstNodeKind.DottedSetStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
@@ -1851,9 +1806,9 @@ export class IndexedSetStatement extends Statement {
 
     public readonly kind = AstNodeKind.IndexedSetStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         const result = [];
@@ -1933,9 +1888,9 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.LibraryStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2009,9 +1964,9 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return this.getName(ParseMode.BrighterScript);
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getName(parseMode: ParseMode) {
         const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
@@ -2124,9 +2079,9 @@ export class ImportStatement extends Statement implements TypedefProvider {
             this.filePath = this.tokens.path.text.replace(/"/g, '');
             //adjust the range to exclude the quotes (but only if that hasn't already been done, such as for a cloned token)
             const path = this.tokens.path;
-            if (path.source && path.text.startsWith('"') && path.end - path.pos === path.text.length) {
-                path.pos++;
-                path.end--;
+            if (path.sourceInfo && path.text.startsWith('"') && path.endPosition - path.startPosition === path.text.length) {
+                path.startPosition++;
+                path.endPosition--;
             }
         }
     }
@@ -2138,9 +2093,9 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.ImportStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly filePath: string;
 
@@ -2223,9 +2178,9 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         readonly endInterface?: Token;
     };
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get fields(): InterfaceFieldStatement[] {
         return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
@@ -2431,9 +2386,9 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public readonly typeExpression?: TypeExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly name: Identifier;
@@ -2552,9 +2507,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     public readonly kind = AstNodeKind.InterfaceMethodStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
     /**
      * Get the name of this method.
      */
@@ -2778,13 +2733,43 @@ export class ClassStatement extends Statement implements TypedefProvider {
         return this.tokens.endClass?.leadingTrivia ?? [];
     }
 
-    public readonly memberMap = {} as Record<string, MemberStatement>;
+    /**
+     * Every member by lowercase name. When conditional compile branches declare the same name, a member that is not inactive wins
+     * over an inactive one, and otherwise the last one wins. A name declared only in inactive branches maps to its inactive member,
+     * since inactive code is still transpiled. Check `isActive` on a member to find what is visible to the type system.
+     *
+     * Rebuilt on every access, because `isActive` changes as the tree is walked.
+     */
+    public get memberMap(): Record<string, MemberStatement> {
+        const memberMap = {} as Record<string, MemberStatement>;
+        const activeNames = new Set<string>();
+        for (const member of this.members) {
+            const nameLower = member?.tokens.name?.text.toLowerCase();
+            if (member.isActive !== false) {
+                activeNames.add(nameLower);
+                memberMap[nameLower] = member;
+            } else if (!activeNames.has(nameLower)) {
+                memberMap[nameLower] = member;
+            }
+        }
+        return memberMap;
+    }
+    /**
+     * Every method in source order, including methods in inactive conditional compile branches
+     */
     public readonly methods = [] as MethodStatement[];
+    /**
+     * Every field in source order, including fields in inactive conditional compile branches
+     */
     public readonly fields = [] as FieldStatement[];
+    /**
+     * Every method and field in source order, including members in inactive conditional compile branches
+     */
+    public readonly members = [] as MemberStatement[];
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * Register all members (methods and fields) found in the given statements,
@@ -2794,10 +2779,10 @@ export class ClassStatement extends Statement implements TypedefProvider {
         for (let statement of statements) {
             if (isMethodStatement(statement)) {
                 this.methods.push(statement);
-                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
+                this.members.push(statement);
             } else if (isFieldStatement(statement)) {
                 this.fields.push(statement);
-                this.memberMap[statement?.tokens.name?.text.toLowerCase()] = statement;
+                this.members.push(statement);
             } else if (isConditionalCompileStatement(statement)) {
                 forEachConditionalCompileBranch(statement, (branchStatements) => {
                     this.registerMembers(branchStatements);
@@ -2805,6 +2790,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
         }
     }
+
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -3338,6 +3324,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
 
         for (const statement of this.methods) {
+            if (statement.isActive === false) {
+                continue;
+            }
             const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
             let flag = SymbolTypeFlag.runtime;
             if (statement.accessModifier?.kind === TokenKind.Private) {
@@ -3349,6 +3338,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
             resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, funcType, flag);
         }
         for (const statement of this.fields) {
+            if (statement.isActive === false) {
+                continue;
+            }
             const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
             let flag = SymbolTypeFlag.runtime;
             if (statement.isOptional) {
@@ -3427,9 +3419,9 @@ export class MethodStatement extends FunctionStatement {
         return this.modifiers.find(x => accessModifiers.includes(x.kind));
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * Get the name of this method.
@@ -3528,9 +3520,9 @@ export class MethodStatement extends FunctionStatement {
                         kind: TokenKind.Identifier,
                         text: 'super',
                         isReserved: false,
-                        pos: state.classStatement.tokens.name.pos,
-                        end: state.classStatement.tokens.name.end,
-                        source: state.classStatement.tokens.name.source,
+                        startPosition: state.classStatement.tokens.name.startPosition,
+                        endPosition: state.classStatement.tokens.name.endPosition,
+                        sourceInfo: state.classStatement.tokens.name.sourceInfo,
                         leadingTrivia: []
                     }
                 }),
@@ -3538,18 +3530,18 @@ export class MethodStatement extends FunctionStatement {
                     kind: TokenKind.LeftParen,
                     text: '(',
                     isReserved: false,
-                    pos: state.classStatement.tokens.name.pos,
-                    end: state.classStatement.tokens.name.end,
-                    source: state.classStatement.tokens.name.source,
+                    startPosition: state.classStatement.tokens.name.startPosition,
+                    endPosition: state.classStatement.tokens.name.endPosition,
+                    sourceInfo: state.classStatement.tokens.name.sourceInfo,
                     leadingTrivia: []
                 },
                 closingParen: {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
-                    pos: state.classStatement.tokens.name.pos,
-                    end: state.classStatement.tokens.name.end,
-                    source: state.classStatement.tokens.name.source,
+                    startPosition: state.classStatement.tokens.name.startPosition,
+                    endPosition: state.classStatement.tokens.name.endPosition,
+                    sourceInfo: state.classStatement.tokens.name.sourceInfo,
                     leadingTrivia: []
                 },
                 args: []
@@ -3739,9 +3731,9 @@ export class FieldStatement extends Statement implements TypedefProvider {
             DynamicType.instance;
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
@@ -3832,6 +3824,15 @@ export class TryCatchStatement extends Statement {
         };
         this.tryBranch = options.tryBranch;
         this.catchStatement = options.catchStatement;
+        this.tryBranch?.setBoundsBetween(
+            this.tokens.try,
+            util.setBounds({} as Locatable, this.tokens.endTry, this.catchStatement)
+        );
+        //the catch statement doesn't know where the `end try` is, so the try/catch sets the bounds of its (empty) branch
+        this.catchStatement?.catchBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.catchStatement.tokens.catch, this.catchStatement.exceptionVariableExpression),
+            this.tokens.endTry
+        );
         util.setBounds(this,
             this.tokens.try,
             this.tryBranch,
@@ -3850,9 +3851,9 @@ export class TryCatchStatement extends Statement {
 
     public readonly kind = AstNodeKind.TryCatchStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -3924,9 +3925,9 @@ export class CatchStatement extends Statement {
 
     public readonly kind = AstNodeKind.CatchStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -3987,9 +3988,9 @@ export class ThrowStatement extends Statement {
 
     public readonly kind = AstNodeKind.ThrowStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState) {
         const result = [
@@ -4064,9 +4065,9 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.EnumStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getMembers() {
         const result = [] as EnumMemberStatement[];
@@ -4264,9 +4265,9 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.EnumMemberStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * The name of the member
@@ -4367,9 +4368,9 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.ConstStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get name() {
         return this.tokens.name.text;
@@ -4474,9 +4475,9 @@ export class ContinueStatement extends Statement {
 
     public readonly kind = AstNodeKind.ContinueStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //when targeting firmware without native `continue` support, rewrite into a jump to the
@@ -4545,9 +4546,9 @@ export class TypecastStatement extends Statement {
 
     public readonly kind = AstNodeKind.TypecastStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //the typecast statement is a comment just for debugging purposes
@@ -4608,9 +4609,9 @@ export class ConditionalCompileErrorStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -4674,9 +4675,9 @@ export class AliasStatement extends Statement {
 
     public readonly kind = AstNodeKind.AliasStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //transpile to a comment just for debugging purposes
@@ -4740,6 +4741,17 @@ export class ConditionalCompileStatement extends Statement {
             hashEndIf: options.hashEndIf
         };
 
+        //a branch always spans the gap between its directives (even when it has statements), so it covers blank lines, comments and code that did not parse too.
+        //the else branch goes first, since the then branch ends where it starts
+        if (isBlock(this.elseBranch)) {
+            this.elseBranch.setBoundsBetween(this.tokens.hashElse, this.tokens.hashEndIf, { evenIfNotEmpty: true });
+        }
+        this.thenBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.tokens.condition, this.tokens.not, this.tokens.hashIf),
+            util.setBounds({} as Locatable, this.tokens.hashElse, this.elseBranch, this.tokens.hashEndIf),
+            { evenIfNotEmpty: true }
+        );
+
         util.setBounds(this,
             ...Object.values(this.tokens),
             this.thenBranch,
@@ -4759,9 +4771,9 @@ export class ConditionalCompileStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let results = [] as TranspileResult;
@@ -4834,20 +4846,52 @@ export class ConditionalCompileStatement extends Statement {
         return results;
     }
 
+    /**
+     * Is the condition (including `not`) true, using the constants in effect at this statement? Set by full walks from the root of the tree. Undefined until walked.
+     */
+    public isConditionTrue?: boolean;
+
+    /**
+     * Does the condition name a declared constant (or is it `true` / `false`)? Set like `isConditionTrue`.
+     */
+    public isConditionDeclared?: boolean;
+
+    /**
+     * Evaluate the condition against the constants in effect at this statement. Called by the walk as it reaches this statement.
+     * @internal
+     */
+    public resolve(bsConsts: Map<string, boolean>) {
+        const condition = this.tokens.condition;
+        let value: boolean;
+        this.isConditionDeclared = true;
+        if (condition?.kind === TokenKind.True) {
+            value = true;
+        } else if (condition?.kind === TokenKind.False) {
+            value = false;
+        } else {
+            const constNameLower = condition?.text.toLowerCase();
+            this.isConditionDeclared = bsConsts.has(constNameLower);
+            //an undeclared constant is false
+            value = bsConsts.get(constNameLower) === true;
+        }
+        this.isConditionTrue = this.tokens.not ? !value : value;
+    }
+
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkStatements) {
-            const bsConsts = options.bsConsts ?? this.getBsConsts();
-            let conditionTrue = bsConsts?.get(this.tokens.condition.text.toLowerCase());
-            if (this.tokens.not) {
-                // flips the boolean value
-                conditionTrue = !conditionTrue;
-            }
-            const walkFalseBlocks = options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks;
-            if (conditionTrue || walkFalseBlocks) {
+            if (options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks) {
                 walk(this, 'thenBranch', visitor, options);
+                if (this.elseBranch) {
+                    walk(this, 'elseBranch', visitor, options);
+                }
+                return;
             }
-            if (this.elseBranch && (!conditionTrue || walkFalseBlocks)) {
-                walk(this, 'elseBranch', visitor, options);
+            walk(this, this.isConditionTrue ? 'thenBranch' : 'elseBranch', visitor, options);
+            //the visitor never sees the inactive branch, but a walk that resolves the tree still marks its nodes inactive
+            if (options.bsConsts) {
+                walk(this, this.isConditionTrue ? 'elseBranch' : 'thenBranch', undefined, {
+                    walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
+                });
             }
         }
     }
@@ -4903,9 +4947,9 @@ export class ConditionalCompileConstStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileConstStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -4918,6 +4962,30 @@ export class ConditionalCompileConstStatement extends Statement {
             ...this.assignment.value.transpile(state)
         ];
 
+    }
+
+    /**
+     * Does this `#const` redeclare a constant that is already in effect? The first declaration keeps its value.
+     * Resolved by full walks from the root of the tree, and only meaningful while this statement is active.
+     */
+    public isDuplicate = false;
+
+    /**
+     * Declare this constant in the constants in effect, when this statement is active. Called by the walk as it reaches this statement.
+     * An invalid value declares nothing, and a redeclaration keeps the first value.
+     * @internal
+     */
+    public resolve(bsConsts: Map<string, boolean>) {
+        this.isDuplicate = false;
+        const value = this.assignment.value;
+        if (!this.isActive || !isLiteralBoolean(value)) {
+            return;
+        }
+        const constNameLower = this.assignment.tokens.name.text.toLowerCase();
+        this.isDuplicate = bsConsts.has(constNameLower);
+        if (!this.isDuplicate) {
+            bsConsts.set(constNameLower, value.tokens.value.text.toLowerCase() === 'true');
+        }
     }
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -4974,9 +5042,9 @@ export class TypeStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.TypeStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //type statements have no runtime representation, so they're stripped entirely
@@ -5029,4 +5097,469 @@ export class TypeStatement extends Statement implements TypedefProvider {
             ['value']
         );
     }
+}
+
+/**
+ * The name of the temporary variable used to hold the `select case` subject when it must be evaluated exactly once
+ * (i.e. `select case getValue()`). A single name is safe to reuse, even for nested `select case` statements, because
+ * once a case body starts running, the enclosing `select case` never reads its subject again.
+ */
+export const SELECT_CASE_SUBJECT_VARIABLE = '__bsSelectCaseSubject';
+
+/**
+ * A `select case` statement.
+ *
+ * ```brighterscript
+ * select case value
+ *     case 1
+ *         print "one"
+ *     case 2, 3
+ *         print "two or three"
+ *     case else
+ *         print "something else"
+ * end select
+ * ```
+ */
+export class SelectCaseStatement extends Statement {
+    constructor(options: {
+        select: Token;
+        /**
+         * The `case` keyword that follows `select`. It is optional, so this will be undefined for `select value`
+         */
+        case?: Token;
+        endSelect?: Token;
+        /**
+         * The value being compared against each case. Undefined when missing (i.e. while the user is still typing)
+         */
+        subject?: Expression;
+        /**
+         * Any statements found between the `select case` line and the first `case`. These are invalid, but are kept so
+         * that partially-written code still produces a useful AST
+         */
+        leadingStatements?: Block;
+        cases?: CaseStatement[];
+    }) {
+        super();
+        this.tokens = {
+            select: options.select,
+            case: options.case,
+            endSelect: options.endSelect
+        };
+        this.subject = options.subject;
+        this.leadingStatements = options.leadingStatements;
+        this.cases = options.cases ?? [];
+        //a case doesn't know where the next case (or `end select`) is, so the select sets the bounds of its (empty) body
+        for (let i = 0; i < this.cases.length; i++) {
+            const caseStatement = this.cases[i];
+            caseStatement?.body?.setBoundsBetween(
+                caseStatement.headerBounds,
+                this.cases[i + 1]?.tokens.case ?? this.tokens.endSelect
+            );
+        }
+        util.setBounds(this,
+            this.tokens.select,
+            this.tokens.case,
+            this.subject,
+            this.leadingStatements,
+            ...this.cases,
+            this.tokens.endSelect
+        );
+    }
+
+    public readonly tokens: {
+        readonly select: Token;
+        readonly case?: Token;
+        readonly endSelect?: Token;
+    };
+
+    public readonly subject?: Expression;
+
+    public readonly leadingStatements?: Block;
+
+    public readonly cases: CaseStatement[];
+
+    public readonly kind = AstNodeKind.SelectCaseStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * The `case else` branch, if there is one
+     */
+    public get elseCase() {
+        return this.cases.find(x => x.isElse);
+    }
+
+    transpile(state: BrsTranspileState) {
+        const lines = [] as TranspileResult[];
+
+        //any (invalid) statements found before the first case go ahead of the generated code
+        for (const statement of this.leadingStatements?.statements ?? []) {
+            lines.push(statement.transpile(state));
+        }
+
+        //literals and local variables can be referenced repeatedly without changing behavior (a local variable can't be
+        //modified by a call inside a case value). Everything else gets evaluated exactly once into a temp variable
+        let getSubject: () => TranspileResult;
+        if (!this.subject) {
+            getSubject = () => ['invalid'];
+        } else if (isLiteralExpression(this.subject) || isVariableExpression(this.subject)) {
+            getSubject = () => this.subject.transpile(state);
+        } else {
+            lines.push([
+                state.sourceNode(this.subject, SELECT_CASE_SUBJECT_VARIABLE),
+                ' = ',
+                ...this.subject.transpile(state)
+            ]);
+            getSubject = () => [state.sourceNode(this.subject, SELECT_CASE_SUBJECT_VARIABLE)];
+        }
+        //`select case true` is the idiom for "run the first case whose condition is true", so use the conditions directly
+        const isSelectTrue = isLiteralExpression(this.subject) && this.subject.tokens.value.kind === TokenKind.True;
+
+        const cases = this.cases.filter(x => !x.isElse);
+        //validation flags misplaced or duplicate `case else` branches. Here we just use the first one as the final `else`
+        const elseCase = this.elseCase;
+
+        const chain = [] as TranspileResult;
+        let previousCase: CaseStatement;
+        for (const caseStatement of [...cases, elseCase]) {
+            if (!caseStatement) {
+                continue;
+            }
+            let keyword: string;
+            if (caseStatement.isElse) {
+                //when there are no cases to chain off of, the `case else` body always runs
+                keyword = previousCase ? 'else' : 'if true then';
+            } else {
+                keyword = previousCase ? 'else if' : 'if';
+            }
+            if (previousCase) {
+                //comments above the `case` belong at the end of the previous case's body
+                chain.push(
+                    ...state.transpileEndBlockToken(previousCase, withTrailingExitSelectTrivia(previousCase, { ...caseStatement.tokens.case, text: keyword }), keyword)
+                );
+            } else {
+                chain.push(
+                    state.transpileToken({ ...caseStatement.tokens.case, text: keyword })
+                );
+            }
+            if (!caseStatement.isElse) {
+                chain.push(
+                    ' ',
+                    ...caseStatement.transpileCondition(state, getSubject, isSelectTrue),
+                    ' then'
+                );
+            }
+            chain.push(
+                ...caseStatement.transpileBody(state)
+            );
+            previousCase = caseStatement;
+        }
+        if (previousCase) {
+            chain.push(
+                ...state.transpileEndBlockToken(
+                    previousCase,
+                    withTrailingExitSelectTrivia(previousCase, this.tokens.endSelect ? { ...this.tokens.endSelect, text: 'end if' } : createToken(TokenKind.EndIf, 'end if')),
+                    'end if'
+                )
+            );
+            lines.push(chain);
+        }
+
+        //an `exit select` in the middle of a case jumps here
+        const exitLabel = state.peekExitSelectLabel?.(this);
+        if (exitLabel) {
+            lines.push([`${exitLabel}:`]);
+        }
+
+        //comments above the `select case` go ahead of everything else
+        const result = [...state.transpileLeadingComments(this.tokens.select)] as TranspileResult;
+        for (let i = 0; i < lines.length; i++) {
+            if (i > 0) {
+                result.push(state.newline, state.indent());
+            }
+            result.push(...lines[i]);
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.subject && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'subject', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            if (this.leadingStatements) {
+                walk(this, 'leadingStatements', visitor, options);
+            }
+            walkArray(this.cases, visitor, options, this);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.select?.leadingTrivia ?? [];
+    }
+
+    get endTrivia(): Token[] {
+        return this.tokens.endSelect?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new SelectCaseStatement({
+                select: util.cloneToken(this.tokens.select),
+                case: util.cloneToken(this.tokens.case),
+                endSelect: util.cloneToken(this.tokens.endSelect),
+                subject: this.subject?.clone(),
+                leadingStatements: this.leadingStatements?.clone(),
+                cases: this.cases?.map(x => x?.clone())
+            }),
+            ['subject', 'leadingStatements', 'cases']
+        );
+    }
+}
+
+/**
+ * A single `case` (or `case else`) branch within a `select case` statement
+ */
+export class CaseStatement extends Statement {
+    constructor(options: {
+        case: Token;
+        /**
+         * The `else` keyword for a `case else` branch
+         */
+        else?: Token;
+        /**
+         * The comma-separated list of values for this case. Always empty for `case else`
+         */
+        values?: Expression[];
+        body?: Block;
+    }) {
+        super();
+        this.tokens = {
+            case: options.case,
+            else: options.else
+        };
+        this.values = options.values ?? [];
+        this.body = options.body;
+        util.setBounds(this,
+            this.tokens.case,
+            this.tokens.else,
+            ...this.values,
+            this.body
+        );
+    }
+
+    public readonly tokens: {
+        readonly case: Token;
+        readonly else?: Token;
+    };
+
+    public readonly values: Expression[];
+
+    public readonly body?: Block;
+
+    public readonly kind = AstNodeKind.CaseStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * Is this the `case else` branch
+     */
+    public get isElse() {
+        return !!this.tokens.else;
+    }
+
+    /**
+     * The bounds of just the `case ...` line (the keyword and its values), excluding the body
+     */
+    public get headerBounds(): Locatable {
+        return util.setBounds({} as Locatable, this.tokens.case, this.tokens.else, ...this.values);
+    }
+
+    /**
+     * A case is normally transpiled by its parent `SelectCaseStatement`. On its own, the best we can do is emit its body
+     */
+    transpile(state: BrsTranspileState) {
+        return this.transpileBody(state);
+    }
+
+    /**
+     * The `exit select` at the very end of this case's body, if there is one. It doesn't need to do anything, since the
+     * case ends right after it anyway
+     */
+    public get trailingExitSelect(): ExitStatement | undefined {
+        const lastStatement = this.body?.statements[this.body.statements.length - 1];
+        if (isExitSelectStatement(lastStatement)) {
+            return lastStatement;
+        }
+    }
+
+    /**
+     * Can this case be left with an `exit select` before the end of its body? (ie. `if done then exit select`). If so,
+     * the statements after it might not run. `exit select` statements that belong to a nested `select case` don't count
+     */
+    public get canExitEarly(): boolean {
+        const trailingExitSelect = this.trailingExitSelect;
+        return !!this.body?.findChild((node) => {
+            return isExitSelectStatement(node) && node !== trailingExitSelect && getExitSelectTarget(node)?.selectCase === this.parent;
+        }, { walkMode: WalkMode.visitStatementsRecursive });
+    }
+
+    /**
+     * Transpile the body of this case. Starts with a newline (unless empty) and does not include a trailing newline
+     */
+    public transpileBody(state: BrsTranspileState) {
+        if (!this.body) {
+            return [];
+        }
+        //only the `case ...` line itself counts as the parent line, so that only a trailing comment on that line stays attached to it
+        state.lineage.unshift(this.headerBounds as AstNode);
+        let result: TranspileResult;
+        if (this.trailingExitSelect) {
+            //leave out the trailing `exit select`. (Its comments get emitted by the parent `select case`)
+            result = new Block({ statements: this.body.statements.slice(0, -1) }).transpile(state);
+        } else {
+            result = this.body.transpile(state);
+        }
+        state.lineage.shift();
+        return result;
+    }
+
+    /**
+     * Transpile the condition for this case, i.e. `subject = 1 or subject = 2`
+     * @param state the transpile state
+     * @param getSubject returns a freshly transpiled copy of the `select case` subject
+     * @param isSelectTrue when true, the values are boolean conditions that are used directly (i.e. `select case true`)
+     */
+    public transpileCondition(state: BrsTranspileState, getSubject: () => TranspileResult, isSelectTrue: boolean) {
+        //a case without any values (a syntax error) can never match
+        if (this.values.length === 0) {
+            return ['false'];
+        }
+        const result = [] as TranspileResult;
+        for (let i = 0; i < this.values.length; i++) {
+            const value = this.values[i];
+            if (i > 0) {
+                result.push(' or ');
+            }
+            if (isSelectTrue) {
+                //`and` and `or` share the same precedence, so group them to keep each value as its own condition
+                const needsParens = this.values.length > 1 && isLogicalExpression(value);
+                result.push(...wrapInParens(value.transpile(state), needsParens));
+            } else {
+                //group anything that would bind looser than the `=` we're about to put in front of it
+                const needsParens = isLogicalExpression(value) || isComparisonExpression(value);
+                result.push(
+                    ...getSubject(),
+                    ' = ',
+                    ...wrapInParens(value.transpile(state), needsParens)
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.values, visitor, options, this);
+        }
+        if (this.body && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.case?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new CaseStatement({
+                case: util.cloneToken(this.tokens.case),
+                else: util.cloneToken(this.tokens.else),
+                values: this.values?.map(x => x?.clone()),
+                body: this.body?.clone()
+            }),
+            ['values', 'body']
+        );
+    }
+}
+
+/**
+ * Is this an `exit select` statement
+ */
+export function isExitSelectStatement(node: AstNode | undefined): node is ExitStatement {
+    return isExitStatement(node) && node.tokens.loopType?.kind === TokenKind.Select;
+}
+
+/**
+ * Find the `select case` that an `exit select` would exit (the nearest enclosing one, without leaving the current function).
+ * `isInLoop` is true when there's a loop between the `exit select` and its case
+ */
+export function getExitSelectTarget(exitStatement: ExitStatement): { selectCase: SelectCaseStatement; isInLoop: boolean } | undefined {
+    let isInLoop = false;
+    let node = exitStatement.parent;
+    while (node && !isFunctionExpression(node)) {
+        if (isCaseStatement(node) && isSelectCaseStatement(node.parent)) {
+            return { selectCase: node.parent, isInLoop: isInLoop };
+        }
+        if (isForStatement(node) || isForEachStatement(node) || isWhileStatement(node)) {
+            isInLoop = true;
+        }
+        node = node.parent;
+    }
+}
+
+/**
+ * A trailing `exit select` is left out of the output, so move any comments above it onto the keyword that comes next
+ */
+function withTrailingExitSelectTrivia(previousCase: CaseStatement, token: Token): Token {
+    const exitToken = previousCase.trailingExitSelect?.tokens.exit;
+    if (!util.hasLeadingComments(exitToken)) {
+        return token;
+    }
+    //the newline after the last comment is already part of the next keyword's trivia
+    const lastCommentIndex = exitToken.leadingTrivia.map(x => x.kind).lastIndexOf(TokenKind.Comment);
+    return { ...token, leadingTrivia: [...exitToken.leadingTrivia.slice(0, lastCommentIndex + 1), ...(token.leadingTrivia ?? [])] };
+}
+
+function wrapInParens(transpiled: TranspileResult, wrap: boolean): TranspileResult {
+    return wrap ? ['(', ...transpiled, ')'] : transpiled;
+}
+
+/**
+ * Unwrap any type casts (which transpile to just their inner expression)
+ */
+function unwrapTypecast(expression: Expression) {
+    while (isTypecastExpression(expression)) {
+        expression = expression.obj;
+    }
+    return expression;
+}
+
+/**
+ * Is this an `and`, `or`, or `not` expression
+ */
+function isLogicalExpression(expression: Expression) {
+    expression = unwrapTypecast(expression);
+    return (isBinaryExpression(expression) && (expression.tokens.operator.kind === TokenKind.And || expression.tokens.operator.kind === TokenKind.Or)) ||
+        (isUnaryExpression(expression) && expression.tokens.operator.kind === TokenKind.Not);
+}
+
+/**
+ * Is this a comparison expression like `a = b` or `a < b`
+ */
+function isComparisonExpression(expression: Expression) {
+    expression = unwrapTypecast(expression);
+    return isBinaryExpression(expression) && [
+        TokenKind.Equal,
+        TokenKind.LessGreater,
+        TokenKind.Less,
+        TokenKind.LessEqual,
+        TokenKind.Greater,
+        TokenKind.GreaterEqual
+    ].includes(expression.tokens.operator.kind);
 }

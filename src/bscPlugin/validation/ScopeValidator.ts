@@ -1,20 +1,20 @@
 import * as path from 'path';
-import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAliasStatement, isArrayType, isAssignmentStatement, isAssociativeArrayType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallFuncableTypeLike, isCallableType, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIterableType, isLiteralExpression, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypeStatementType, isTypedFunctionType, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { DiagnosticTag } from 'vscode-languageserver';
+import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
-import type { Token } from '../../lexer/Token';
+import type { Locatable, Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -40,6 +40,7 @@ import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
 import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
+import type { EnumType } from '../../types/EnumType';
 import type { Scope } from '../../Scope';
 
 /**
@@ -57,6 +58,7 @@ const enum ScopeValidatorDiagnosticTag {
     Classes = 'ScopeValidatorClasses',
     XMLInterface = 'ScopeValidatorXML',
     XMLImports = 'ScopeValidatorXMLImports',
+    ObserverCallbacks = 'ScopeValidatorObserverCallbacks',
     Default = 'ScopeValidator',
     Segment = 'ScopeValidatorSegment'
 }
@@ -114,6 +116,8 @@ export class ScopeValidator {
                     this.diagnosticDetectDuplicateAncestorScriptImports(this.event.scope);
                     //validate component interface
                     this.validateXmlInterface(this.event.scope);
+                    //validate the function names passed to `observeField`/`observeFieldScoped`
+                    this.validateObserverCallbacks(this.event.scope);
                 }
             }).durationText;
             metrics.circularConstTime = validationStopwatch.getDurationTextFor(() => {
@@ -234,6 +238,11 @@ export class ScopeValidator {
                             this.validateUnaryExpression(file, unaryExpr);
                         });
                     },
+                    SpreadExpression: (spreadExpr) => {
+                        this.addValidationKindMetric('SpreadExpression', () => {
+                            this.validateSpreadExpression(file, spreadExpr);
+                        });
+                    },
                     AssignmentStatement: (assignStmt) => {
                         this.addValidationKindMetric('AssignmentStatement', () => {
                             this.validateAssignmentStatement(file, assignStmt);
@@ -242,7 +251,7 @@ export class ScopeValidator {
                                 expr: assignStmt,
                                 name: assignStmt.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: util.getLocation(assignStmt.tokens.name)?.range
+                                nameToken: assignStmt.tokens.name
                             });
                         });
                     },
@@ -267,7 +276,7 @@ export class ScopeValidator {
                                 expr: forEachStmt,
                                 name: forEachStmt.tokens.item.text,
                                 type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: util.getLocation(forEachStmt.tokens.item)?.range
+                                nameToken: forEachStmt.tokens.item
                             });
                             this.validateForEachStatement(file, forEachStmt);
                         });
@@ -278,7 +287,7 @@ export class ScopeValidator {
                                 expr: funcParam,
                                 name: funcParam.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: util.getLocation(funcParam.tokens.name)?.range
+                                nameToken: funcParam.tokens.name
                             });
                         });
                     },
@@ -290,6 +299,11 @@ export class ScopeValidator {
                     ForStatement: (forStmt) => {
                         this.addValidationKindMetric('ForStatement', () => {
                             this.validateForStatement(file, forStmt);
+                        });
+                    },
+                    SelectCaseStatement: (selectCaseStmt) => {
+                        this.addValidationKindMetric('SelectCaseStatement', () => {
+                            this.validateSelectCaseStatement(file, selectCaseStmt);
                         });
                     },
                     AAIndexedMemberExpression: (member) => {
@@ -574,7 +588,10 @@ export class ScopeValidator {
         };
 
         for (const [, link] of scope.getConstMap()) {
-            walkConst(link.item, link.file, []);
+            //an inactive const is not compiled, so it can not take part in a cycle
+            if (link.item.isActive !== false) {
+                walkConst(link.item, link.file, []);
+            }
         }
     }
 
@@ -1043,6 +1060,64 @@ export class ScopeValidator {
     /**
      * Detect invalid use of a Unary operator
      */
+    /**
+     * Flag a spread whose value is known to be something `.append()` cannot take: an array literal needs an
+     * array-like value and an AA literal needs an AA-like value. Unknown, unresolvable, `dynamic` and `object`
+     * values are left alone.
+     */
+    private validateSpreadExpression(file: BrsFile, spreadExpr: SpreadExpression) {
+        const literal = spreadExpr.parent;
+        const isArray = isArrayLiteralExpression(literal);
+        if (!isArray && !isAALiteralExpression(literal)) {
+            return;
+        }
+        if (!util.getSpreadLiteralOwnerStatement(literal)) {
+            //the spread is in an unsupported position, which is already reported; don't stack a type error on it
+            return;
+        }
+        const valueType = this.getNodeTypeWrapper(file, spreadExpr.expression, { flags: SymbolTypeFlag.runtime });
+        if (!valueType?.isResolvable()) {
+            return;
+        }
+        const isAllowed = isArray ? this.canSpreadIntoArray(valueType) : this.canSpreadIntoAA(valueType);
+        if (!isAllowed) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.spreadValueTypeMismatch(valueType.toString(), isArray ? 'array' : 'associative array'),
+                location: util.getLocation(spreadExpr)
+            });
+        }
+    }
+
+    private canSpreadIntoArray(type: BscType): boolean {
+        return this.isSpreadTypeAllowed(type, t => isArrayTypeLike(t) || isBuiltInType(t, 'roList'));
+    }
+
+    private canSpreadIntoAA(type: BscType): boolean {
+        return this.isSpreadTypeAllowed(type, t => {
+            //user-defined interfaces and classes are AAs at runtime; built-in interfaces (roSGNode, roArray, ...) are not
+            return isAssociativeArrayTypeLike(t) || (isInterfaceType(t) && !t.isBuiltIn) || isClassType(t);
+        });
+    }
+
+    private isSpreadTypeAllowed(type: BscType, isAllowedConcreteType: (t: BscType) => boolean): boolean {
+        while (isTypeStatementType(type)) {
+            type = type.wrappedType;
+        }
+        if (!type || !type.isResolvable() || isDynamicType(type) || isObjectType(type)) {
+            return true;
+        }
+        if (isCallableType(type)) {
+            //an AA member that shares a name with a built-in method (`m.items`, `m.count`) resolves to that method's
+            //type even though it is almost certainly a field, so a function type is not evidence of a bad spread
+            return true;
+        }
+        if (isUnionType(type)) {
+            //a union is fine as long as it could hold an allowed value
+            return type.types.some(t => this.isSpreadTypeAllowed(t, isAllowedConcreteType));
+        }
+        return isAllowedConcreteType(type);
+    }
+
     private validateUnaryExpression(file: BrsFile, unaryExpr: UnaryExpression) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
@@ -1560,7 +1635,10 @@ export class ScopeValidator {
         }
     }
 
-    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
+    /**
+     * Detect a local variable that shadows a function or class. `varDeclaration.nameToken` is only resolved into a range when a diagnostic is actually added
+     */
+    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameToken: Locatable }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
@@ -1579,7 +1657,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange)
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range)
                 });
             }
         } else if (callableContainerMap.has(lowerVarName) && !localVarIsInNamespace) {
@@ -1588,7 +1666,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromFileRange(
@@ -1600,7 +1678,7 @@ export class ScopeValidator {
             } else {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromRange(
@@ -1613,10 +1691,11 @@ export class ScopeValidator {
             //has the same name as an in-scope class
         } else if (!localVarIsInNamespace) {
             const classStmtLink = this.event.scope.getClassFileLink(lowerVarName);
-            if (classStmtLink) {
+            //an inactive class is not compiled, so it can not be shadowed
+            if (classStmtLink && classStmtLink.item.isActive !== false) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
                     relatedInformation: [{
                         message: 'Class declared here',
                         location: util.createLocationFromRange(
@@ -1692,6 +1771,187 @@ export class ScopeValidator {
                 });
             }
         }
+    }
+
+    /**
+     * Check that a `select case` handles every value it can receive. When the subject is an enum, covering every
+     * member is enough. Otherwise, there must be a `case else`
+     */
+    private validateSelectCaseStatement(file: BrsFile, selectCaseStmt: SelectCaseStatement) {
+        //an empty `select case` is flagged separately by the BrsFileValidator
+        if (selectCaseStmt.cases.length === 0) {
+            return;
+        }
+        const typeOptions = { flags: SymbolTypeFlag.runtime, statementIndex: selectCaseStmt.statementIndex };
+        const subjectType = selectCaseStmt.subject ? this.getNodeTypeWrapper(file, selectCaseStmt.subject, typeOptions) : undefined;
+        const { enumType, members: enumMembers } = this.getPossibleEnumMembers(subjectType) ?? {};
+
+        //values from a different enum than the subject are almost always a mistake
+        if (enumMembers) {
+            for (const caseStatement of selectCaseStmt.cases) {
+                for (const value of caseStatement.values) {
+                    const valueType = this.getNodeTypeWrapper(file, value, typeOptions);
+                    if (isEnumMemberType(valueType) && valueType.enumName?.toLowerCase() !== enumType.name.toLowerCase()) {
+                        this.addMultiScopeDiagnostic({
+                            ...DiagnosticMessages.caseValueEnumMismatch(valueType.enumName, enumType.name),
+                            location: util.getLocation(value)
+                        });
+                    }
+                }
+            }
+        }
+
+        if (selectCaseStmt.elseCase) {
+            return;
+        }
+        const headerLocation = util.createBoundingLocation(selectCaseStmt.tokens.select, selectCaseStmt.tokens.case);
+        if (!enumMembers) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.selectCaseMissingCaseElse(),
+                location: headerLocation
+            });
+            return;
+        }
+
+        const missingMembers = enumMembers.filter(member => {
+            return !selectCaseStmt.cases.some(caseStatement => caseStatement.values.some(value => {
+                return this.isCaseValueForEnumMember(file, value, member, enumType.name, typeOptions);
+            }));
+        });
+        if (missingMembers.length > 0) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.selectCaseMissingEnumMembers(enumType.name, missingMembers.map(x => x.tokens.name.text)),
+                location: headerLocation
+            });
+        }
+    }
+
+    /**
+     * Get the enum members that a value of this type could hold, in the order they were declared. An enum type could hold
+     * any of its members, but the type of a local variable is often narrowed down to specific members (i.e. `RemoteDirection.up or RemoteDirection.down`).
+     * Returns undefined when the type isn't limited to the members of a single enum
+     */
+    private getPossibleEnumMembers(type: BscType): { enumType: EnumType; members: EnumMemberStatement[] } | undefined {
+        let enumType: EnumType;
+        //undefined means every member
+        let memberNames = new Set<string>();
+        for (const innerType of isUnionType(type) ? type.types : [type]) {
+            let innerEnumType: BscType;
+            if (isEnumMemberType(innerType)) {
+                innerEnumType = innerType.parentEnumType;
+                //the default member type stands in for "some member of this enum"
+                memberNames?.add(innerType === innerType.parentEnumType?.defaultMemberType ? undefined : innerType.memberName?.toLowerCase());
+            } else {
+                innerEnumType = innerType;
+                memberNames = undefined;
+            }
+            if (!isEnumType(innerEnumType) || (enumType && enumType.name.toLowerCase() !== innerEnumType.name.toLowerCase())) {
+                return undefined;
+            }
+            enumType = innerEnumType;
+        }
+        if (memberNames?.has(undefined)) {
+            memberNames = undefined;
+        }
+        const members = enumType?.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime)
+            .map(symbol => symbol.data?.definingNode)
+            .filter(node => isEnumMemberStatement(node) && (!memberNames || memberNames.has(node.name.toLowerCase()))) as EnumMemberStatement[];
+        if (members?.length > 0) {
+            return { enumType: enumType, members: members };
+        }
+    }
+
+    /**
+     * Does this case value match the given enum member, either as a reference to it (`Direction.up`) or as its literal value (`"up"`)
+     */
+    private isCaseValueForEnumMember(file: BrsFile, value: Expression, member: EnumMemberStatement, enumName: string, typeOptions: GetTypeOptions) {
+        const valueType = this.getNodeTypeWrapper(file, value, typeOptions);
+        if (isEnumMemberType(valueType)) {
+            return valueType.enumName?.toLowerCase() === enumName.toLowerCase() &&
+                valueType.memberName?.toLowerCase() === member.name.toLowerCase();
+        }
+        let literalText: string;
+        if (isLiteralExpression(value)) {
+            literalText = value.tokens.value.text;
+        } else if (isUnaryExpression(value) && value.tokens.operator.kind === TokenKind.Minus && isLiteralExpression(value.right)) {
+            literalText = '-' + value.right.tokens.value.text;
+        } else {
+            return false;
+        }
+        const memberValue = (member.parent as EnumStatement)?.getMemberValue(member.name);
+        //string comparisons are case sensitive, but everything else (`&HFF`, etc) is not
+        return isLiteralString(value) ? literalText === memberValue : literalText.toLowerCase() === memberValue?.toLowerCase();
+    }
+
+    /**
+     * Flag string callbacks passed to `observeField`/`observeFieldScoped` that don't exist in this component.
+     *
+     * This runs over the whole scope on every validation (rather than per-segment) because the callback is a string, not a symbol reference,
+     * so adding or removing the function in another file wouldn't otherwise trigger revalidation of the call.
+     */
+    private validateObserverCallbacks(scope: XmlScope) {
+        this.event.program.diagnostics.clearByFilter({ scope: scope, tag: ScopeValidatorDiagnosticTag.ObserverCallbacks });
+
+        //the names functions actually have at runtime (i.e. `alpha_onChange`), mapped to how they are written in BrighterScript (i.e. `alpha.onChange`)
+        let functionNames: Map<string, string>;
+        const getFunctionNames = () => {
+            if (!functionNames) {
+                functionNames = new Map();
+                for (const { callable } of scope.getAllCallables()) {
+                    //only functions declared in code can be callbacks (not built-in global functions)
+                    if (callable.functionStatement) {
+                        functionNames.set(callable.getName(ParseMode.BrightScript).toLowerCase(), callable.getName(ParseMode.BrighterScript).toLowerCase());
+                    }
+                }
+            }
+            return functionNames;
+        };
+
+        for (const file of scope.getOwnFiles()) {
+            if (!isBrsFile(file)) {
+                continue;
+            }
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            for (const expression of file['_cachedLookups'].expressions) {
+                if (!isCallExpression(expression) || !this.isObserverCallWithStringCallback(expression)) {
+                    continue;
+                }
+                const callbackArg = expression.args[1] as LiteralExpression;
+                const callbackName = callbackArg.tokens.value.text.replace(/^"|"$/g, '');
+                const lowerCallbackName = callbackName.toLowerCase();
+                if (!callbackName || getFunctionNames().has(lowerCallbackName)) {
+                    continue;
+                }
+                //if it was written with its BrighterScript name (`alpha.onChange`), suggest the name it actually has at runtime
+                const isBrighterScriptName = [...getFunctionNames().values()].includes(lowerCallbackName);
+                const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
+                    location: util.getLocation(callbackArg)
+                }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
+            }
+        }
+    }
+
+    /**
+     * Is this a call like `node.observeField("field", "callbackName")` on something we know is a node?
+     * The receiver must be `m.top` (always the component's node) or have a node type, so look-alike methods on
+     * other objects (i.e. a custom AA with its own `observeFieldScoped` method) are never checked.
+     */
+    private isObserverCallWithStringCallback(call: CallExpression) {
+        if (!isDottedGetExpression(call.callee) || !isLiteralString(call.args[1])) {
+            return false;
+        }
+        const methodName = call.callee.tokens.name?.text?.toLowerCase();
+        if (methodName !== 'observefield' && methodName !== 'observefieldscoped') {
+            return false;
+        }
+        const receiver = call.callee.obj;
+        const isMTop = isDottedGetExpression(receiver) &&
+            receiver.tokens.name?.text?.toLowerCase() === 'top' &&
+            isVariableExpression(receiver.obj) &&
+            receiver.obj.tokens.name?.text?.toLowerCase() === 'm';
+        return isMTop || isCallFuncableTypeLike(receiver.getType({ flags: SymbolTypeFlag.runtime }));
     }
 
     private validateXmlInterface(scope: XmlScope) {

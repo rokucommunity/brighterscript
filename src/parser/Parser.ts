@@ -52,6 +52,8 @@ import {
     NamespaceStatement,
     PrintStatement,
     ReturnStatement,
+    SelectCaseStatement,
+    CaseStatement,
     StopStatement,
     ThrowStatement,
     TryCatchStatement,
@@ -92,6 +94,7 @@ import {
     TypecastExpression,
     TypeExpression,
     TypedArrayExpression,
+    SpreadExpression,
     UnaryExpression,
     VariableExpression,
     XmlAttributeGetExpression,
@@ -103,7 +106,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isVariableExpression, isConditionalCompileStatement, isLiteralBoolean, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
@@ -176,6 +179,13 @@ export class Parser {
     private globalTerminators = [] as TokenKind[][];
 
     /**
+     * How many `select case` statements we are currently nested inside of (reset to zero inside function bodies).
+     * While greater than zero, every block also stops at `case` and `end select` so that an unterminated inner
+     * block (i.e. a missing `end if` while the user is typing) doesn't swallow the rest of the `select case`
+     */
+    private selectCaseDepth = 0;
+
+    /**
      * A list of identifiers that are permitted to be used as local variables. We store this in a property because we augment the list in the constructor
      * based on the parse mode
      */
@@ -231,6 +241,7 @@ export class Parser {
         this.current = 0;
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
+        this.selectCaseDepth = 0;
         this.pendingAnnotations = [];
 
         this.ast = this.body();
@@ -245,7 +256,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body({ statements: [] });
+        const statements: Statement[] = [];
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
@@ -260,7 +271,7 @@ export class Parser {
                     if (dec) {
                         if (!isAnnotationExpression(dec)) {
                             this.consumePendingAnnotations(dec);
-                            body.statements.push(dec);
+                            statements.push(dec);
                             //ensure statement separator
                             this.consumeStatementSeparators(false);
                         } else {
@@ -275,7 +286,8 @@ export class Parser {
         }
 
         this.exitAnnotationBlock(parentAnnotations);
-        return body;
+        //construct the body once all of its statements are known, so its bounds are computed from them
+        return new Body({ statements: statements });
     }
 
     private sanitizeParseOptions(options: ParseOptions) {
@@ -305,6 +317,16 @@ export class Parser {
             };
             this.diagnostics.push(diagnostic);
         }
+    }
+
+    /**
+     * Parse a spread expression (`...operand`) inside an array or AA literal.
+     * The current token must be `...`. Whitespace between `...` and its operand is allowed (`[... items]`)
+     */
+    private spreadExpression() {
+        this.warnIfNotBrighterScriptMode('spread operator');
+        let dotDotDot = this.advance();
+        return new SpreadExpression({ dotDotDot: dotDotDot, expression: this.expression() });
     }
 
     /**
@@ -921,9 +943,9 @@ export class Parser {
                     TokenKind.Function,
                     'function',
                     true,
-                    this.peek().pos,
-                    this.peek().end,
-                    this.peek().source,
+                    this.peek().startPosition,
+                    this.peek().endPosition,
+                    this.peek().sourceInfo,
                     []
                 );
             }
@@ -997,8 +1019,16 @@ export class Parser {
             this.consumeStatementSeparators(true);
 
 
-            //support ending the function with `end sub` OR `end function`
-            let body = this.block();
+            //support ending the function with `end sub` OR `end function`.
+            //a function body is its own world, so don't let an enclosing `select case` end it early on `case`
+            const selectCaseDepth = this.selectCaseDepth;
+            this.selectCaseDepth = 0;
+            let body: Block;
+            try {
+                body = this.block();
+            } finally {
+                this.selectCaseDepth = selectCaseDepth;
+            }
             //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
 
             // consume 'end sub' or 'end function'
@@ -1219,6 +1249,20 @@ export class Parser {
             return this.ifStatement();
         }
 
+        if (this.checkSelectCase()) {
+            return this.selectCaseStatement();
+        }
+
+        //`case` and `end select` found outside of a `select case` (they could also be local variables, which is fine)
+        if (this.checkCaseClause() || this.checkEndSelect()) {
+            const token = this.advance();
+            this.diagnostics.push({
+                ...(token.kind === TokenKind.Case ? DiagnosticMessages.caseOutsideSelectCase() : DiagnosticMessages.endSelectWithoutSelectCase()),
+                location: util.getLocation(token)
+            });
+            throw this.lastDiagnosticAsError();
+        }
+
         //`try` must be followed by a block, otherwise it could be a local variable
         if (this.check(TokenKind.Try) && this.checkAnyNext(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
             return this.tryCatchStatement();
@@ -1381,16 +1425,16 @@ export class Parser {
             const originalToken = exitToken;
 
             exitToken = createToken(TokenKind.Exit, exitText, originalToken);
-            exitToken.end = exitToken.pos + 4;
+            exitToken.endPosition = exitToken.startPosition + 4;
             this.tokens[this.current - 1] = exitToken;
             const newLoopToken = createToken(TokenKind.While, whileText, originalToken);
-            newLoopToken.pos += 4;
+            newLoopToken.startPosition += 4;
             this.tokens.splice(this.current, 0, newLoopToken);
         }
 
         const loopTypeToken = this.tryConsume(
-            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For),
-            TokenKind.While, TokenKind.For
+            DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For, TokenKind.Select),
+            TokenKind.While, TokenKind.For, TokenKind.Select
         );
 
         return new ExitStatement({
@@ -1606,7 +1650,8 @@ export class Parser {
      * Add an 'unexpected token' diagnostic for any token found between current and the first stopToken found.
      */
     private flagUntil(...stopTokens: TokenKind[]) {
-        while (!this.checkAny(...stopTokens) && !this.isAtEnd()) {
+        //never run past the start of the next `case` in a `select case` (i.e. when recovering from a broken line)
+        while (!this.checkAny(...stopTokens) && !this.isAtEnd() && !this.checkSelectCaseTerminator()) {
             let token = this.advance();
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedToken(token.text),
@@ -1684,7 +1729,7 @@ export class Parser {
         this.diagnostics.push({
             ...DiagnosticMessages.expectedIdentifier('typecast'),
             location: {
-                uri: typecastToken?.source?.uri,
+                uri: typecastToken?.sourceInfo?.uri,
                 range: util.createBoundingRange(typecastToken, this.peek())
             }
         });
@@ -1752,6 +1797,8 @@ export class Parser {
         if (this.check(TokenKind.LeftParen)) {
             let leftParen = this.advance();
             annotation.call = this.finishCall(leftParen, annotation, false);
+            //the call needs the annotation as its callee, so it can't be passed to the constructor. Include it in the bounds now that it exists
+            util.setBounds(annotation, annotation.tokens.at, annotation.tokens.name, annotation.call);
         }
         return annotation;
     }
@@ -1864,7 +1911,7 @@ export class Parser {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unterminatedTemplateExpression(),
                         location: {
-                            uri: openingBacktick?.source?.uri,
+                            uri: openingBacktick?.sourceInfo?.uri,
                             range: util.createBoundingRange(openingBacktick, this.peek())
                         }
                     });
@@ -1883,7 +1930,7 @@ export class Parser {
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedTemplateString(),
                 location: {
-                    uri: openingBacktick?.source?.uri,
+                    uri: openingBacktick?.sourceInfo?.uri,
                     range: util.createBoundingRange(openingBacktick, this.peek())
                 }
             });
@@ -1906,6 +1953,239 @@ export class Parser {
                     expressions: expressions,
                     closingBacktick: closingBacktick
                 });
+            }
+        }
+    }
+
+    /**
+     * Tokens that can start a `select` subject when the optional `case` keyword is omitted (i.e. `select value`).
+     * This is intentionally narrow so that `select` can still be used as a variable or function (i.e. `select = 1`, `select(1)`, `select.name`)
+     */
+    private static selectSubjectStartTokens = [
+        TokenKind.Identifier,
+        TokenKind.StringLiteral,
+        TokenKind.IntegerLiteral,
+        TokenKind.FloatLiteral,
+        TokenKind.DoubleLiteral,
+        TokenKind.LongIntegerLiteral,
+        TokenKind.True,
+        TokenKind.False,
+        TokenKind.Invalid,
+        TokenKind.Not
+    ];
+
+    /**
+     * Does the current token start a `select case` statement
+     */
+    private checkSelectCase() {
+        return this.check(TokenKind.Select) && this.checkAnyNext(TokenKind.Case, ...Parser.selectSubjectStartTokens);
+    }
+
+    /**
+     * Tokens that, when found right after `case` or `end select`, mean the keyword is actually being used as a variable (i.e. `case = 1`, `case.name = 1`)
+     */
+    private static keywordAsVariableTokens = [
+        ...AssignmentOperators,
+        TokenKind.Dot,
+        TokenKind.QuestionDot,
+        TokenKind.LeftSquareBracket,
+        TokenKind.QuestionLeftSquare,
+        TokenKind.PlusPlus,
+        TokenKind.MinusMinus,
+        TokenKind.Callfunc,
+        TokenKind.QuestionAt
+    ];
+
+    /**
+     * Does the current token start a `case` clause (as opposed to a variable named `case`)
+     */
+    private checkCaseClause() {
+        return this.check(TokenKind.Case) && !this.checkAnyNext(...Parser.keywordAsVariableTokens);
+    }
+
+    /**
+     * Is the current token `end select` (as opposed to a variable named `endselect`)
+     */
+    private checkEndSelect() {
+        return this.check(TokenKind.EndSelect) && !this.checkAnyNext(...Parser.keywordAsVariableTokens);
+    }
+
+    /**
+     * When inside a `select case`, every block ends at the next `case` or `end select`
+     */
+    private checkSelectCaseTerminator() {
+        return this.selectCaseDepth > 0 && (this.checkCaseClause() || this.checkEndSelect());
+    }
+
+    private selectCaseStatement(): SelectCaseStatement {
+        this.warnIfNotBrighterScriptMode('select case statements');
+        const selectToken = this.advance();
+        const caseToken = this.consumeTokenIf(TokenKind.Case);
+
+        let subject: Expression | undefined;
+        let leadingStatements: Block | undefined;
+        const cases = [] as CaseStatement[];
+        let endSelectToken: Token | undefined;
+
+        this.selectCaseDepth++;
+        try {
+            if (this.checkEndOfStatement()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedExpressionAfterSelectCase(),
+                    location: util.createBoundingLocation(selectToken, caseToken)
+                });
+            } else {
+                subject = this.tryExpressionForRestOfLine();
+                //anything left over on this line is unexpected (i.e. `select case a b`)
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
+            }
+
+            //anything between `select case` and the first `case` is invalid (comments are fine, but those are trivia on the first `case`)
+            const leadingBlock = this.block();
+            if (leadingBlock?.statements.length > 0) {
+                leadingStatements = leadingBlock;
+                for (const statement of leadingBlock.statements) {
+                    this.diagnostics.push({
+                        ...DiagnosticMessages.statementBeforeFirstCase(),
+                        location: util.getLocation(statement)
+                    });
+                }
+            }
+
+            while (this.checkCaseClause()) {
+                cases.push(this.caseStatement());
+            }
+        } finally {
+            this.selectCaseDepth--;
+        }
+
+        if (this.checkEndSelect()) {
+            endSelectToken = this.advance();
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.couldNotFindMatchingEndKeyword('select'),
+                location: util.getLocation(selectToken)
+            });
+            //we hit the end of the enclosing function. Give back the statement separator so the function can end cleanly
+            if (this.checkAny(TokenKind.EndSub, TokenKind.EndFunction) && this.checkAnyPrevious(TokenKind.Newline, TokenKind.Colon)) {
+                this.current--;
+            }
+        }
+
+        return new SelectCaseStatement({
+            select: selectToken,
+            case: caseToken,
+            endSelect: endSelectToken,
+            subject: subject,
+            leadingStatements: leadingStatements,
+            cases: cases
+        });
+    }
+
+    /**
+     * Parses a single `case` or `case else` branch of a `select case` statement
+     */
+    private caseStatement(): CaseStatement {
+        const caseToken = this.advance();
+        const elseToken = this.consumeTokenIf(TokenKind.Else);
+        const values = [] as Expression[];
+
+        if (elseToken) {
+            //nothing should follow `case else` on this line
+            this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
+
+        } else if (this.checkEndOfStatement()) {
+            //the values may start on the next line, since a `case` with no values can't be anything else
+            if (!this.tryCaseValuesOnNextLine(values)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedCaseValue(caseToken.text),
+                    location: util.getLocation(caseToken)
+                });
+            }
+
+        } else {
+            this.caseValues(values);
+        }
+
+        const body = this.block() ?? new Block({ statements: [] });
+
+        return new CaseStatement({
+            case: caseToken,
+            else: elseToken,
+            values: values,
+            body: body
+        });
+    }
+
+    /**
+     * Look for a `case` value list on the line after a bare `case`. The next line only counts when the whole line is a
+     * value list, so anything else (i.e. `print "x"`, or the next `case`) is left alone for the case body.
+     * @returns true if values were found (and added to `values`)
+     */
+    private tryCaseValuesOnNextLine(values: Expression[]) {
+        if (!this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            return false;
+        }
+        const startIndex = this.current;
+        const diagnosticCount = this.diagnostics.length;
+        while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+            this.advance();
+        }
+        if (!this.isAtEnd() && !this.checkSelectCaseTerminator() && !this.checkAny(TokenKind.Colon, TokenKind.EndSub, TokenKind.EndFunction)) {
+            const foundValues = [] as Expression[];
+            this.caseValues(foundValues);
+            if (foundValues.length > 0 && this.diagnostics.length === diagnosticCount && this.checkEndOfStatement()) {
+                values.push(...foundValues);
+                return true;
+            }
+        }
+        //not a value list. Pretend we never looked
+        this.current = startIndex;
+        this.diagnostics.length = diagnosticCount;
+        return false;
+    }
+
+    /**
+     * Parse a comma-separated list of case values, which may span multiple lines as long as each line ends with a comma
+     */
+    private caseValues(values: Expression[]) {
+        while (true) {
+            const value = this.tryExpressionForRestOfLine();
+            if (!value) {
+                break;
+            }
+            values.push(value);
+            if (!this.check(TokenKind.Comma)) {
+                this.flagUntil(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
+                break;
+            }
+            const comma = this.advance();
+            while (this.checkAny(TokenKind.Newline, TokenKind.Comment)) {
+                this.advance();
+            }
+            //a trailing comma with nothing after it (i.e. the user is still typing, or the next line is the case body)
+            if (this.isAtEnd() || this.check(TokenKind.Colon) || this.checkSelectCaseTerminator() || this.checkAny(TokenKind.EndSub, TokenKind.EndFunction)) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedCaseValue(comma.text),
+                    location: util.getLocation(comma)
+                });
+                break;
+            }
+        }
+    }
+
+    /**
+     * Parse an expression. If it fails, skip the rest of the line (the failure already added a diagnostic) and return undefined
+     * so that the enclosing statement can keep going
+     */
+    private tryExpressionForRestOfLine(): Expression | undefined {
+        try {
+            return this.expression();
+        } catch (error) {
+            this.rethrowNonDiagnosticError(error);
+            //skip the rest of the line, but never past the start of the next case
+            while (!this.isAtEnd() && !this.checkAny(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment) && !this.checkSelectCaseTerminator()) {
+                this.advance();
             }
         }
     }
@@ -2236,16 +2516,7 @@ export class Parser {
         let hashEndIfToken: Token | undefined;
         let hashElseToken: Token | undefined;
 
-        //keep track of the current error count
-        //if this is `#if false` remove all diagnostics.
-        let diagnosticsLengthBeforeBlock = this.diagnostics.length;
-
         thenBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
-        const conditionTextLower = condition.text.toLowerCase();
-        if (!this.options.bsConsts?.get(conditionTextLower) || conditionTextLower === 'false') {
-            //throw out any new diagnostics created as a result of a false block
-            this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
-        }
 
         this.ensureNewLine();
         this.advance();
@@ -2254,17 +2525,10 @@ export class Parser {
         if (this.check(TokenKind.HashElseIf)) {
             // recurse-read `#else if`
             elseBranch = this.conditionalCompileStatement(branchBlockParser);
-            this.ensureNewLine();
 
         } else if (this.check(TokenKind.HashElse)) {
             hashElseToken = this.advance();
-            let diagnosticsLengthBeforeBlock = this.diagnostics.length;
             elseBranch = this.blockConditionalCompileBranch(hashIfToken, branchBlockParser);
-
-            if (condition.text.toLowerCase() === 'true') {
-                //throw out any new diagnostics created as a result of a false block
-                this.diagnostics.splice(diagnosticsLengthBeforeBlock, this.diagnostics.length - diagnosticsLengthBeforeBlock);
-            }
             this.ensureNewLine();
             this.advance();
         }
@@ -2415,22 +2679,11 @@ export class Parser {
         }
         const assignment = this.assignment();
         if (assignment) {
-            // check for something other than #const <name> = <otherName|true|false>
+            // check for something other than #const <name> = <true|false>
             if (assignment.tokens.as || assignment.typeExpression) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedToken(assignment.tokens.as?.text || assignment.typeExpression?.getName(ParseMode.BrighterScript)),
                     location: util.getLocation(assignment.tokens.as) ?? util.getLocation(assignment.typeExpression)
-                });
-                this.lastDiagnosticAsError();
-            }
-
-            if (isVariableExpression(assignment.value) || isLiteralBoolean(assignment.value)) {
-                //value is an identifier or a boolean
-                //check for valid identifiers will happen in program validation
-            } else {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.invalidHashConstValue(),
-                    location: util.getLocation(assignment.value)
                 });
                 this.lastDiagnosticAsError();
             }
@@ -2770,7 +3023,7 @@ export class Parser {
         this.consumeStatementSeparators(true);
         const statements: Statement[] = [];
         const flatGlobalTerminators = this.globalTerminators.flat().flat();
-        while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators)) {
+        while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators) && !this.checkSelectCaseTerminator()) {
             //grab the location of the current token
             let loopCurrent = this.current;
             let dec = this.declaration();
@@ -2780,8 +3033,11 @@ export class Parser {
                     statements.push(dec);
                 }
 
-                //ensure statement separator
-                this.consumeStatementSeparators();
+                //ensure statement separator. An unterminated inner block (i.e. an `if` missing its `end if`) that stopped at the
+                //next `case` already consumed the separator, so don't complain about it a second time
+                this.consumeStatementSeparators(
+                    this.checkSelectCaseTerminator() && this.checkAnyPrevious(TokenKind.Newline, TokenKind.Colon)
+                );
 
             } else {
                 //something went wrong. reset to the top of the loop
@@ -3489,6 +3745,15 @@ export class Parser {
             case this.checkAny(TokenKind.Identifier, ...AllowedLocalIdentifiers) && this.checkNext(TokenKind.BackTick):
                 return this.templateString(true);
 
+            //inside a `select case`, a `case` at the start of a line is always the next case, even when the previous line
+            //ended with a dangling operator (i.e. `select case a +`). Don't treat it as a variable named `case`
+            case this.checkSelectCaseTerminator() && this.checkAnyPrevious(TokenKind.Newline, TokenKind.Colon):
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedToken(this.peek().text),
+                    location: util.getLocation(this.peek())
+                });
+                throw this.lastDiagnosticAsError();
+
             case this.matchAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers):
                 return new VariableExpression({ name: this.previous() as Identifier });
 
@@ -3539,13 +3804,20 @@ export class Parser {
         let elements: Array<Expression> = [];
         let openingSquare = this.previous();
 
+        let parseArrayElement = () => {
+            if (this.check(TokenKind.DotDotDot)) {
+                return this.spreadExpression();
+            }
+            return this.expression();
+        };
+
         while (this.match(TokenKind.Newline)) {
         }
         let closingSquare: Token;
 
         if (!this.match(TokenKind.RightSquareBracket)) {
             try {
-                elements.push(this.expression());
+                elements.push(parseArrayElement());
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Comment)) {
 
@@ -3557,7 +3829,7 @@ export class Parser {
                         break;
                     }
 
-                    elements.push(this.expression());
+                    elements.push(parseArrayElement());
                 }
             } catch (error: any) {
                 this.rethrowNonDiagnosticError(error);
@@ -3577,7 +3849,7 @@ export class Parser {
 
     private aaLiteral() {
         let openingBrace = this.previous();
-        let members: Array<AAMemberExpression | AAIndexedMemberExpression> = [];
+        let members: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression> = [];
 
         let key = () => {
             let result = {
@@ -3613,21 +3885,30 @@ export class Parser {
             return result;
         };
 
+        let parseAAMember = () => {
+            if (this.check(TokenKind.DotDotDot)) {
+                members.push(this.spreadExpression());
+                return null;
+            }
+            let k = key();
+            let expr = this.expression();
+            let member = k.key
+                ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
+                : new AAMemberExpression({
+                    key: k.keyToken,
+                    colon: k.colon,
+                    value: expr
+                });
+            members.push(member);
+            return member;
+        };
+
         while (this.match(TokenKind.Newline)) { }
         let closingBrace: Token;
         if (!this.match(TokenKind.RightCurlyBrace)) {
             let lastAAMember: AAMemberExpression | AAIndexedMemberExpression;
             try {
-                let k = key();
-                let expr = this.expression();
-                lastAAMember = k.key
-                    ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
-                    : new AAMemberExpression({
-                        key: k.keyToken,
-                        colon: k.colon,
-                        value: expr
-                    });
-                members.push(lastAAMember);
+                lastAAMember = parseAAMember();
 
                 while (this.matchAny(TokenKind.Comma, TokenKind.Newline, TokenKind.Colon, TokenKind.Comment)) {
                     // collect comma at end of expression
@@ -3640,17 +3921,7 @@ export class Parser {
                     if (this.check(TokenKind.RightCurlyBrace)) {
                         break;
                     }
-                    let k = key();
-                    let expr = this.expression();
-                    lastAAMember = k.key
-                        ? new AAIndexedMemberExpression({ leftBracket: k.leftBracket, key: k.key, rightBracket: k.rightBracket, colon: k.colon, value: expr })
-                        : new AAMemberExpression({
-                            key: k.keyToken,
-                            colon: k.colon,
-                            value: expr
-                        });
-                    members.push(lastAAMember);
-
+                    lastAAMember = parseAAMember();
                 }
             } catch (error: any) {
                 this.rethrowNonDiagnosticError(error);
@@ -3794,6 +4065,10 @@ export class Parser {
 
     private checkPrevious(tokenKind: TokenKind): boolean {
         return this.previous()?.kind === tokenKind;
+    }
+
+    private checkAnyPrevious(...tokenKinds: TokenKind[]): boolean {
+        return tokenKinds.includes(this.previous()?.kind);
     }
 
     /**

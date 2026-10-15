@@ -19,6 +19,7 @@ const tokenDefaults = {
     [TokenKind.Comment]: '\'',
     [TokenKind.Dollar]: '$',
     [TokenKind.Dot]: '.',
+    [TokenKind.DotDotDot]: '...',
     [TokenKind.EndClass]: 'end class',
     [TokenKind.EndEnum]: 'end enum',
     [TokenKind.EndFor]: 'end for',
@@ -83,9 +84,9 @@ export function createToken<T extends TokenKind>(kind: T, text?: string, locatab
         kind,
         text ?? (tokenDefaults[kind as string] as string) ?? kind.toString().toLowerCase(),
         !text || text === kind.toString(),
-        locatable?.pos,
-        locatable?.end,
-        locatable?.source,
+        locatable?.startPosition,
+        locatable?.endPosition,
+        locatable?.sourceInfo,
         []
     ) as Token as Token & { kind: T };
 }
@@ -95,9 +96,9 @@ export function createIdentifier(name: string, locatable?: Locatable): Identifie
         TokenKind.Identifier,
         name,
         false,
-        locatable?.pos,
-        locatable?.end,
-        locatable?.source,
+        locatable?.startPosition,
+        locatable?.endPosition,
+        locatable?.sourceInfo,
         []
     ) as Identifier;
 }

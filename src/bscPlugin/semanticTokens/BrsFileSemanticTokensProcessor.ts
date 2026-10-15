@@ -7,7 +7,7 @@ import type { Locatable, Token } from '../../lexer/Token';
 import util from '../../util';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { BscType } from '../../types/BscType';
-import { WalkMode, createVisitor } from '../../astUtils/visitors';
+import { InternalWalkMode, WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { AstNode } from '../../parser/AstNode';
 
 export class BrsFileSemanticTokensProcessor {
@@ -59,7 +59,9 @@ export class BrsFileSemanticTokensProcessor {
                 this.tryAddToken(node, node.tokens.name);
             }
         }), {
-            walkMode: WalkMode.visitAllRecursive
+            //inactive conditional compile branches are still code the developer reads, so color them too
+            // eslint-disable-next-line no-bitwise
+            walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
         });
 
         if (scope) {
@@ -98,8 +100,9 @@ export class BrsFileSemanticTokensProcessor {
 
     private addToken(locatable: Locatable, type: SemanticTokenTypes, modifiers: SemanticTokenModifiers[] = []) {
         //only keep a single token per range. Last-in wins
-        this.result.set(util.rangeToString(util.getLocation(locatable).range), {
-            range: util.getLocation(locatable).range,
+        const range = util.getLocation(locatable).range;
+        this.result.set(util.rangeToString(range), {
+            range: range,
             tokenType: type,
             tokenModifiers: modifiers
         });

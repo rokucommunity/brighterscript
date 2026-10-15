@@ -190,9 +190,9 @@ describe('reflection', () => {
             kind: TokenKind.EscapedCharCodeLiteral,
             text: '0',
             isReserved: false,
-            pos: undefined,
-            end: undefined,
-            source: undefined,
+            startPosition: undefined,
+            endPosition: undefined,
+            sourceInfo: undefined,
             charCode: 0,
             leadingTrivia: []
         };

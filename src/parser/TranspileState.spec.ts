@@ -18,7 +18,7 @@ describe('TranspileState', () => {
     it('does not map code parsed from a snippet, since its position is not in any file', () => {
         const state = new TranspileState(srcPath, {});
         const token = Lexer.scan('\n    print').tokens[1];
-        expect(token.source).to.exist;
+        expect(token.sourceInfo).to.exist;
         expect(state.tokenToSourceNode(token).line).to.be.null;
         expect(state.sourceNode(token, 'print').line).to.be.null;
     });
