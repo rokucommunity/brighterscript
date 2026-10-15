@@ -1355,7 +1355,8 @@ export class Util {
 
     /**
      * Set the `pos`, `end`, and `source` of `target` to the bounds of all the locatables.
-     * Offsets from different sources can't be compared, so only locatables from the same source as the first one are included.
+     * Offsets from different sources can't be compared, so only locatables from one source are included: the first one that has a uri,
+     * or the first one if none of them do. That way, code parsed from a snippet (which has no uri) never takes over the bounds of real code from a file.
      * A trailing newline is not included in the bounds, so the target never ends at the start of the next line
      */
     public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | undefined>): T {
@@ -1365,7 +1366,7 @@ export class Util {
         for (const locatable of locatables) {
             if (!locatable?.source) {
                 continue;
-            } else if (!source) {
+            } else if (!source || (!source.uri && locatable.source.uri)) {
                 source = locatable.source;
                 pos = locatable.pos;
                 end = this.getContentEnd(locatable);
@@ -1381,52 +1382,27 @@ export class Util {
     }
 
     /**
-     * Give a locatable (such as a synthetic token or node created by a plugin) a position from a line/character `Location`.
+     * Give a locatable (such as a token or node created by a plugin) a position from a line/character `Location` in the given source
+     * (i.e. `file.sourceInfo`), so it combines with the rest of that source's AST like any parsed item would.
+     * This is meant for building new items. Parsed tokens and nodes describe where they came from in the original source, so don't move them.
      *
-     * Prefer `util.setBounds(target, someRealToken)` when a token or node from the same file is available, since that shares the
-     * file's real `source` and so combines correctly with the rest of that file's AST. This is for when only a `Location` is
-     * available (i.e. one from an xml file or another program). Passing `undefined` clears the position.
-     *
-     * The position is stored against a synthetic `source` (one per uri) whose lines are spaced far enough apart that the offsets
-     * encode the line and character exactly, so `util.getLocation()` returns the same `Location`
+     * Prefer `util.setBounds(target, someRealToken)` when a token or node from the same file is available.
+     * The position is cleared if there's no location or source, if the location is for a different uri, or if its lines aren't in the source
      */
-    public setLocation<T extends Locatable>(target: T, location: Location | undefined): T {
+    public setLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo: SourceInfo | undefined): T {
         const range = location?.range;
-        if (!range) {
+        const pos = this.getOffset(sourceInfo, range?.start);
+        const end = this.getOffset(sourceInfo, range?.end);
+        if (pos === undefined || end === undefined || (location.uri && location.uri !== sourceInfo.uri)) {
             target.source = undefined;
             target.pos = undefined;
             target.end = undefined;
-            return target;
+        } else {
+            target.source = sourceInfo;
+            target.pos = pos;
+            target.end = end;
         }
-        const source = this.getSyntheticSource(location.uri, Math.max(range.start.line, range.end.line));
-        target.source = source;
-        target.pos = (range.start.line * Util.syntheticLineLength) + range.start.character;
-        target.end = (range.end.line * Util.syntheticLineLength) + range.end.character;
         return target;
-    }
-
-    /**
-     * The spacing between the lines of a synthetic source. Characters must be smaller than this to round-trip through `getLocation()`
-     */
-    private static readonly syntheticLineLength = 2 ** 20;
-
-    private syntheticSources = new Map<string, SourceInfo>();
-
-    /**
-     * Get the synthetic source for the given uri, making sure it has at least enough lines to contain `line`
-     */
-    private getSyntheticSource(uri: string, line: number): SourceInfo {
-        let source = this.syntheticSources.get(uri);
-        if (!source) {
-            source = { uri: uri, lineStarts: [0] };
-            this.syntheticSources.set(uri, source);
-        }
-        const lineStarts = source.lineStarts;
-        //include the line after, so the end of a range that runs to the end of its line still resolves to that line
-        for (let i = lineStarts.length; i <= line + 1; i++) {
-            lineStarts.push(i * Util.syntheticLineLength);
-        }
-        return source;
     }
 
     /**

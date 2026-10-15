@@ -24,9 +24,6 @@ export class TokenObject implements Token {
     public get location(): Location | undefined {
         return util.getLocation(this);
     }
-    public set location(value: Location | undefined) {
-        util.setLocation(this, value);
-    }
 
     /**
      * @deprecated use `util.getLocation(token)?.range`. This is computed on every read

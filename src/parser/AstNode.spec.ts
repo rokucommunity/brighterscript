@@ -13,7 +13,7 @@ import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
 import { WalkMode } from '../astUtils/visitors';
 import { isStatement } from '../astUtils/reflection';
-import { createToken, createVariableExpression } from '../astUtils/creators';
+import { createAssignmentStatement, createBlock, createIfStatement, createToken, createVariableExpression } from '../astUtils/creators';
 import { TokenKind } from '../lexer/TokenKind';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
@@ -259,6 +259,50 @@ describe('AstNode', () => {
             const node = file.ast.findChildAtPosition(util.createPosition(1, 12));
             expect(isVariableExpression(node) && node.tokens.name.text === 'bb').to.be.false;
         });
+
+        it('finds real code inside a synthetic node', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = b',
+                'end sub'
+            ].join('\n'));
+            //wrap `a = b` in a synthetic `if cond then ... end if`
+            const block = file.ast.findChild<Block>(isBlock);
+            const assignment = block.statements[0];
+            block.statements[0] = createIfStatement({
+                condition: createVariableExpression('cond'),
+                thenBranch: createBlock({ statements: [assignment] })
+            });
+            const node = file.ast.findChildAtPosition<VariableExpression>(util.createPosition(1, 8));
+            expect(isVariableExpression(node) && node.tokens.name.text).to.eql('b');
+        });
+
+        it('does not match a node without a source on its own', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                'end sub'
+            ].join('\n'));
+            const block = file.ast.findChild<Block>(isBlock);
+            //a synthetic statement before the real one would be visited first
+            block.statements.unshift(createAssignmentStatement({ name: 'x', value: createVariableExpression('y') }));
+            const node = file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
+        });
+
+        it('does not match code parsed from a snippet against the positions of the file', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                'end sub'
+            ].join('\n'));
+            const block = file.ast.findChild<Block>(isBlock);
+            //the snippet's `zz = 2` is on line 1 too, but of a different source
+            const snippet = Parser.parse('sub snippet()\n    zz = 2\nend sub').ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            block.statements.unshift(snippet);
+            const node = file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
+        });
     });
 
     describe('findChild', () => {
@@ -425,18 +469,17 @@ describe('AstNode', () => {
             expect((createToken(TokenKind.Identifier, 'b') as any).location).to.be.undefined;
         });
 
-        it('sets the location of a synthetic node and token', () => {
+        it('does not allow setting the location, since it describes where the code came from', () => {
             const location = util.createLocation(2, 3, 2, 7, 'file:///a.brs');
             const node = createVariableExpression('x');
-            (node as any).location = location;
-            expect(util.getLocation(node)).to.eql(location);
+            expect(() => {
+                (node as any).location = location;
+            }).to.throw();
 
             const token = createToken(TokenKind.Identifier, 'x');
-            (token as any).location = location;
-            expect(util.getLocation(token)).to.eql(location);
-
-            (token as any).location = undefined;
-            expect(util.getLocation(token)).to.be.undefined;
+            expect(() => {
+                (token as any).location = location;
+            }).to.throw();
         });
     });
 

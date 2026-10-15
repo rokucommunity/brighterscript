@@ -38,9 +38,6 @@ export abstract class AstNode implements Locatable {
     public get location(): Location | undefined {
         return util.getLocation(this);
     }
-    public set location(value: Location | undefined) {
-        util.setLocation(this, value);
-    }
 
     /**
      * @deprecated use `util.getLocation(node)?.range`. This is computed on every read
@@ -170,10 +167,13 @@ export abstract class AstNode implements Locatable {
      * FInd the deepest child that includes the given position
      */
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
+        //a position only means something within one source (the one this search starts from), so only nodes from that source can match.
+        //Nodes without a source (i.e. a synthetic `if` wrapping real code) or from another source (i.e. code parsed from a snippet) never match
+        //on their own, but the walk still steps into them, so the real code inside them can still be found
+        const searchSource = this.source;
         return this.findChild<TNodeType>((node) => {
-            //if the current node includes this position, keep that node (nodes without a source include every position)
-            if (!node?.source) {
-                return node.findChildAtPosition(position, options) ?? node;
+            if (!node?.source || (searchSource && node.source !== searchSource)) {
+                return;
             }
             const offset = util.getOffset(node.source, position);
             if (offset !== undefined && node.pos <= offset && offset <= node.end) {
