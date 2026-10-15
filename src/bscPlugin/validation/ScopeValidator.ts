@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { DiagnosticTag, type Range } from 'vscode-languageserver';
+import { DiagnosticTag } from 'vscode-languageserver';
 import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
@@ -10,7 +10,7 @@ import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement,
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
-import type { Token } from '../../lexer/Token';
+import type { Locatable, Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
@@ -251,7 +251,7 @@ export class ScopeValidator {
                                 expr: assignStmt,
                                 name: assignStmt.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: util.getLocation(assignStmt.tokens.name)?.range
+                                nameToken: assignStmt.tokens.name
                             });
                         });
                     },
@@ -276,7 +276,7 @@ export class ScopeValidator {
                                 expr: forEachStmt,
                                 name: forEachStmt.tokens.item.text,
                                 type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: util.getLocation(forEachStmt.tokens.item)?.range
+                                nameToken: forEachStmt.tokens.item
                             });
                             this.validateForEachStatement(file, forEachStmt);
                         });
@@ -287,7 +287,7 @@ export class ScopeValidator {
                                 expr: funcParam,
                                 name: funcParam.tokens.name.text,
                                 type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
-                                nameRange: util.getLocation(funcParam.tokens.name)?.range
+                                nameToken: funcParam.tokens.name
                             });
                         });
                     },
@@ -1635,7 +1635,10 @@ export class ScopeValidator {
         }
     }
 
-    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
+    /**
+     * Detect a local variable that shadows a function or class. `varDeclaration.nameToken` is only resolved into a range when a diagnostic is actually added
+     */
+    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameToken: Locatable }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
@@ -1654,7 +1657,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange)
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range)
                 });
             }
         } else if (callableContainerMap.has(lowerVarName) && !localVarIsInNamespace) {
@@ -1663,7 +1666,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromFileRange(
@@ -1675,7 +1678,7 @@ export class ScopeValidator {
             } else {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromRange(
@@ -1692,7 +1695,7 @@ export class ScopeValidator {
             if (classStmtLink && classStmtLink.item.isActive !== false) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(file, util.getLocation(varDeclaration.nameToken)?.range),
                     relatedInformation: [{
                         message: 'Class declared here',
                         location: util.createLocationFromRange(
