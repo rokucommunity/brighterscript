@@ -37,13 +37,13 @@ export const trim = undent;
 /**
  * A shared source for hand-built test tokens, where every line is 1000 characters long
  */
-const testSource: SourceInfo = { uri: undefined, lineStarts: Array.from({ length: 1000 }, (x, i) => i * 1000) };
+const testSource: SourceInfo = { uri: undefined, linePositions: Array.from({ length: 1000 }, (x, i) => i * 1000) };
 
 /**
  * Create a `Locatable` for a hand-built test token from line/character positions
  */
 export function testLocatable(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Locatable {
-    return { pos: (startLine * 1000) + startCharacter, end: (endLine * 1000) + endCharacter, source: testSource };
+    return { startPosition: (startLine * 1000) + startCharacter, endPosition: (endLine * 1000) + endCharacter, sourceInfo: testSource };
 }
 const sinon = createSandbox();
 

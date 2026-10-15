@@ -38,9 +38,9 @@ export class EmptyStatement extends Statement {
     /**
      * Create a negative range to indicate this is an interpolated location
      */
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly kind = AstNodeKind.EmptyStatement;
 
@@ -75,9 +75,9 @@ export class Body extends Statement implements TypedefProvider {
 
     public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = state.transpileAnnotations(this);
@@ -173,9 +173,9 @@ export class AssignmentStatement extends Statement {
 
     public readonly kind = AstNodeKind.AssignmentStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -250,9 +250,9 @@ export class AugmentedAssignmentStatement extends Statement {
 
     public readonly kind = AstNodeKind.AugmentedAssignmentStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -312,9 +312,9 @@ export class Block extends Statement {
 
     public readonly kind = AstNodeKind.Block;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * An empty block has no statements to get its bounds from, so its parent calls this (from the parent's constructor)
@@ -327,11 +327,11 @@ export class Block extends Statement {
             return;
         }
         //offsets from different sources can't be compared, so both sides must come from the same source
-        if (before?.source && before.source === after?.source) {
+        if (before?.sourceInfo && before.sourceInfo === after?.sourceInfo) {
             const self = this as Locatable;
-            self.pos = util.getContentEnd(before);
-            self.end = after.pos;
-            self.source = before.source;
+            self.startPosition = util.getContentEnd(before);
+            self.endPosition = after.startPosition;
+            self.sourceInfo = before.sourceInfo;
         }
     }
 
@@ -412,9 +412,9 @@ export class ExpressionStatement extends Statement {
     public readonly expression: Expression;
     public readonly kind = AstNodeKind.ExpressionStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -472,9 +472,9 @@ export class ExitStatement extends Statement {
 
     public readonly kind = AstNodeKind.ExitStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -526,9 +526,9 @@ export class FunctionStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * Get the name of this expression based on the parse mode
@@ -659,9 +659,9 @@ export class IfStatement extends Statement {
 
     public readonly kind = AstNodeKind.IfStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     get isInline() {
         const allLeadingTrivia = [
@@ -796,9 +796,9 @@ export class IncrementStatement extends Statement {
 
     public readonly kind = AstNodeKind.IncrementStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -884,9 +884,9 @@ export class PrintStatement extends Statement {
         return { valueCount: valueCount, commaCount: commaCount };
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [
@@ -972,9 +972,9 @@ export class DimStatement extends Statement {
 
     public readonly kind = AstNodeKind.DimStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState) {
         let result: TranspileResult = [
@@ -1052,9 +1052,9 @@ export class GotoStatement extends Statement {
 
     public readonly kind = AstNodeKind.GotoStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1103,9 +1103,9 @@ export class LabelStatement extends Statement {
     };
     public readonly kind = AstNodeKind.LabelStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.name.leadingTrivia;
@@ -1155,9 +1155,9 @@ export class ReturnStatement extends Statement {
     public readonly value?: Expression;
     public readonly kind = AstNodeKind.ReturnStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1207,9 +1207,9 @@ export class EndStatement extends Statement {
     };
     public readonly kind = AstNodeKind.EndStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1248,9 +1248,9 @@ export class StopStatement extends Statement {
 
     public readonly kind = AstNodeKind.StopStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1328,9 +1328,9 @@ export class ForStatement extends Statement {
 
     public readonly kind = AstNodeKind.ForStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1463,9 +1463,9 @@ export class ForEachStatement extends Statement {
 
     public readonly kind = AstNodeKind.ForEachStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1584,9 +1584,9 @@ export class WhileStatement extends Statement {
 
     public readonly kind = AstNodeKind.WhileStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1677,9 +1677,9 @@ export class DottedSetStatement extends Statement {
 
     public readonly kind = AstNodeKind.DottedSetStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
@@ -1773,9 +1773,9 @@ export class IndexedSetStatement extends Statement {
 
     public readonly kind = AstNodeKind.IndexedSetStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         const result = [];
@@ -1855,9 +1855,9 @@ export class LibraryStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.LibraryStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1931,9 +1931,9 @@ export class NamespaceStatement extends Statement implements TypedefProvider {
         return this.getName(ParseMode.BrighterScript);
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getName(parseMode: ParseMode) {
         const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
@@ -2044,10 +2044,10 @@ export class ImportStatement extends Statement implements TypedefProvider {
         if (this.tokens.path) {
             //remove quotes
             this.filePath = this.tokens.path.text.replace(/"/g, '');
-            if (this.tokens.path.source) {
+            if (this.tokens.path.sourceInfo) {
                 //adjust the range to exclude the quotes
-                this.tokens.path.pos++;
-                this.tokens.path.end--;
+                this.tokens.path.startPosition++;
+                this.tokens.path.endPosition--;
             }
         }
     }
@@ -2059,9 +2059,9 @@ export class ImportStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.ImportStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly filePath: string;
 
@@ -2144,9 +2144,9 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
         readonly endInterface?: Token;
     };
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get fields(): InterfaceFieldStatement[] {
         return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
@@ -2352,9 +2352,9 @@ export class InterfaceFieldStatement extends Statement implements TypedefProvide
 
     public readonly typeExpression?: TypeExpression;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly name: Identifier;
@@ -2473,9 +2473,9 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
 
     public readonly kind = AstNodeKind.InterfaceMethodStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
     /**
      * Get the name of this method.
      */
@@ -2703,9 +2703,9 @@ export class ClassStatement extends Statement implements TypedefProvider {
     public readonly methods = [] as MethodStatement[];
     public readonly fields = [] as FieldStatement[];
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * Register all members (methods and fields) found in the given statements,
@@ -3348,9 +3348,9 @@ export class MethodStatement extends FunctionStatement {
         return this.modifiers.find(x => accessModifiers.includes(x.kind));
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * Get the name of this method.
@@ -3449,9 +3449,9 @@ export class MethodStatement extends FunctionStatement {
                         kind: TokenKind.Identifier,
                         text: 'super',
                         isReserved: false,
-                        pos: state.classStatement.tokens.name.pos,
-                        end: state.classStatement.tokens.name.end,
-                        source: state.classStatement.tokens.name.source,
+                        startPosition: state.classStatement.tokens.name.startPosition,
+                        endPosition: state.classStatement.tokens.name.endPosition,
+                        sourceInfo: state.classStatement.tokens.name.sourceInfo,
                         leadingTrivia: []
                     }
                 }),
@@ -3459,18 +3459,18 @@ export class MethodStatement extends FunctionStatement {
                     kind: TokenKind.LeftParen,
                     text: '(',
                     isReserved: false,
-                    pos: state.classStatement.tokens.name.pos,
-                    end: state.classStatement.tokens.name.end,
-                    source: state.classStatement.tokens.name.source,
+                    startPosition: state.classStatement.tokens.name.startPosition,
+                    endPosition: state.classStatement.tokens.name.endPosition,
+                    sourceInfo: state.classStatement.tokens.name.sourceInfo,
                     leadingTrivia: []
                 },
                 closingParen: {
                     kind: TokenKind.RightParen,
                     text: ')',
                     isReserved: false,
-                    pos: state.classStatement.tokens.name.pos,
-                    end: state.classStatement.tokens.name.end,
-                    source: state.classStatement.tokens.name.source,
+                    startPosition: state.classStatement.tokens.name.startPosition,
+                    endPosition: state.classStatement.tokens.name.endPosition,
+                    sourceInfo: state.classStatement.tokens.name.sourceInfo,
                     leadingTrivia: []
                 },
                 args: []
@@ -3660,9 +3660,9 @@ export class FieldStatement extends Statement implements TypedefProvider {
             DynamicType.instance;
     }
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get leadingTrivia(): Token[] {
         return this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
@@ -3780,9 +3780,9 @@ export class TryCatchStatement extends Statement {
 
     public readonly kind = AstNodeKind.TryCatchStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -3854,9 +3854,9 @@ export class CatchStatement extends Statement {
 
     public readonly kind = AstNodeKind.CatchStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -3917,9 +3917,9 @@ export class ThrowStatement extends Statement {
 
     public readonly kind = AstNodeKind.ThrowStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState) {
         const result = [
@@ -3994,9 +3994,9 @@ export class EnumStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.EnumStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getMembers() {
         const result = [] as EnumMemberStatement[];
@@ -4194,9 +4194,9 @@ export class EnumMemberStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.EnumMemberStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     /**
      * The name of the member
@@ -4297,9 +4297,9 @@ export class ConstStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.ConstStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public get name() {
         return this.tokens.name.text;
@@ -4404,9 +4404,9 @@ export class ContinueStatement extends Statement {
 
     public readonly kind = AstNodeKind.ContinueStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //when targeting firmware without native `continue` support, rewrite into a jump to the
@@ -4475,9 +4475,9 @@ export class TypecastStatement extends Statement {
 
     public readonly kind = AstNodeKind.TypecastStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //the typecast statement is a comment just for debugging purposes
@@ -4538,9 +4538,9 @@ export class ConditionalCompileErrorStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -4604,9 +4604,9 @@ export class AliasStatement extends Statement {
 
     public readonly kind = AstNodeKind.AliasStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //transpile to a comment just for debugging purposes
@@ -4698,9 +4698,9 @@ export class ConditionalCompileStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let results = [] as TranspileResult;
@@ -4842,9 +4842,9 @@ export class ConditionalCompileConstStatement extends Statement {
 
     public readonly kind = AstNodeKind.ConditionalCompileConstStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -4913,9 +4913,9 @@ export class TypeStatement extends Statement implements TypedefProvider {
 
     public readonly kind = AstNodeKind.TypeStatement;
 
-    public readonly pos: number;
-    public readonly end: number;
-    public readonly source: SourceInfo | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         //type statements have no runtime representation, so they're stripped entirely

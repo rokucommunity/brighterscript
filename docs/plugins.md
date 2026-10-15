@@ -582,9 +582,9 @@ export default function () {
 ```
 
 ## Locations
-To keep memory down, tokens and AST nodes don't store a `Location`. Instead, each one stores where it starts and ends, counted from the start of the file (`pos` and `end`), plus a reference to info about the file it was parsed from (`source`), which is shared by everything from the same parse.
+To keep memory down, tokens and AST nodes don't store a `Location`. Instead, each one stores where it starts and ends, counted from the start of the file (`startPosition` and `endPosition`), plus a reference to info about the file it was parsed from (`sourceInfo`), which is shared by everything from the same parse. `sourceInfo.linePositions` holds where each line of the file starts, which is how positions get converted to lines and characters.
 
-Positions are the gaps between characters, like an editor cursor (and like an LSP `Position`). For a file that starts with `print`, the `print` token's `pos` is `0` (before the `p`) and its `end` is `5` (after the `t`), so `end - pos` is its length.
+Positions are the gaps between characters, like an editor cursor (and like an LSP `Position`). For a file that starts with `print`, the `print` token's `startPosition` is `0` (before the `p`) and its `endPosition` is `5` (after the `t`), so `endPosition - startPosition` is its length.
 
 Build the line/character `Location` on demand with `util.getLocation()`:
 
@@ -597,7 +597,7 @@ A node's bounds are computed once, when it's constructed, from the children and 
 `util.getLocation()` returns `undefined` for synthetic tokens and nodes (ones that were created in code rather than parsed from a file), since they have no position. A synthetic node won't get a source map entry, and diagnostics can't point at it.
 
 A position describes where the code came from in the original source, so it's used as-is for source maps and diagnostics. Don't change the position of a parsed token or node. Only give one to a synthetic token or node you're creating:
-- **Borrow it from a real token or node in the same file** (preferred): `util.setBounds(node, someToken)`. This shares the file's real `source`, so the node combines correctly with the rest of that file's AST. The `create*` functions do the same when given a token or node: `createToken(TokenKind.Identifier, 'name', someToken)`.
+- **Borrow it from a real token or node in the same file** (preferred): `util.setBounds(node, someToken)`. This shares the file's real `sourceInfo`, so the node combines correctly with the rest of that file's AST. The `create*` functions do the same when given a token or node: `createToken(TokenKind.Identifier, 'name', someToken)`.
 - **From a `Location` in a file**: `util.setLocation(node, location, file.sourceInfo)`. This maps the location into that file, so the node combines with the rest of its AST. If the location is in a different file (or its lines aren't in the file), the node is left without a position. To pass one to a `create*` function, convert it first: `createToken(TokenKind.Identifier, 'name', util.setLocation({} as Locatable, location, file.sourceInfo))`.
 
 Code parsed from a snippet (i.e. `Parser.parse('...')` without a `srcPath`) has positions, but no uri. Those positions aren't in the file the code is added to, so lookups by position in that file (hover, definition, etc.) skip it, it isn't included in the bounds of nodes that also contain code from a file, and it doesn't get source map entries.

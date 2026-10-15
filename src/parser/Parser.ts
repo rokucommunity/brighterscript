@@ -922,9 +922,9 @@ export class Parser {
                     TokenKind.Function,
                     'function',
                     true,
-                    this.peek().pos,
-                    this.peek().end,
-                    this.peek().source,
+                    this.peek().startPosition,
+                    this.peek().endPosition,
+                    this.peek().sourceInfo,
                     []
                 );
             }
@@ -1382,10 +1382,10 @@ export class Parser {
             const originalToken = exitToken;
 
             exitToken = createToken(TokenKind.Exit, exitText, originalToken);
-            exitToken.end = exitToken.pos + 4;
+            exitToken.endPosition = exitToken.startPosition + 4;
             this.tokens[this.current - 1] = exitToken;
             const newLoopToken = createToken(TokenKind.While, whileText, originalToken);
-            newLoopToken.pos += 4;
+            newLoopToken.startPosition += 4;
             this.tokens.splice(this.current, 0, newLoopToken);
         }
 
@@ -1685,7 +1685,7 @@ export class Parser {
         this.diagnostics.push({
             ...DiagnosticMessages.expectedIdentifier('typecast'),
             location: {
-                uri: typecastToken?.source?.uri,
+                uri: typecastToken?.sourceInfo?.uri,
                 range: util.createBoundingRange(typecastToken, this.peek())
             }
         });
@@ -1867,7 +1867,7 @@ export class Parser {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unterminatedTemplateExpression(),
                         location: {
-                            uri: openingBacktick?.source?.uri,
+                            uri: openingBacktick?.sourceInfo?.uri,
                             range: util.createBoundingRange(openingBacktick, this.peek())
                         }
                     });
@@ -1886,7 +1886,7 @@ export class Parser {
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedTemplateString(),
                 location: {
-                    uri: openingBacktick?.source?.uri,
+                    uri: openingBacktick?.sourceInfo?.uri,
                     range: util.createBoundingRange(openingBacktick, this.peek())
                 }
             });
