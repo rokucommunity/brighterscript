@@ -364,6 +364,104 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
+        describe('namespace names in scope capturing', () => {
+            beforeEach(() => {
+                program.setFile('source/lib.bs', `
+                    namespace promises
+                        function resolve(value)
+                            return value
+                        end function
+                    end namespace
+                    namespace alpha.beta
+                        function getValue()
+                            return 1
+                        end function
+                    end namespace
+                `);
+            });
+
+            it('does not capture a namespace', async () => {
+                await testTranspile(`
+                    sub main(value)
+                        print value.next ?? promises.resolve(value)
+                    end sub
+                `, `
+                    sub main(value)
+                        print (function(value)
+                                __bsConsequent = value.next
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return promises_resolve(value)
+                                end if
+                            end function)(value)
+                    end sub
+                `);
+            });
+
+            it('does not capture a nested namespace', async () => {
+                await testTranspile(`
+                    sub main(value)
+                        print value.next ?? alpha.beta.getValue()
+                    end sub
+                `, `
+                    sub main(value)
+                        print (function(value)
+                                __bsConsequent = value.next
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return alpha_beta_getValue()
+                                end if
+                            end function)(value)
+                    end sub
+                `);
+            });
+
+            it('still captures a parameter that shadows a namespace name', async () => {
+                await testTranspile(`
+                    sub main(promises, value)
+                        print value.next ?? promises
+                    end sub
+                `, `
+                    sub main(promises, value)
+                        print (function(promises, value)
+                                __bsConsequent = value.next
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return promises
+                                end if
+                            end function)(promises, value)
+                    end sub
+                `);
+            });
+
+            it('still captures a local variable that shadows a namespace name', async () => {
+                await testTranspile(`
+                    sub main(value)
+                        promises = [1, 2]
+                        print value.next ?? promises
+                    end sub
+                `, `
+                    sub main(value)
+                        promises = [
+                            1
+                            2
+                        ]
+                        print (function(promises, value)
+                                __bsConsequent = value.next
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return promises
+                                end if
+                            end function)(promises, value)
+                    end sub
+                `);
+            });
+        });
+
         describe('as the value of an assignment', () => {
             it('assigns a local target directly when the alternate does not read it', async () => {
                 await testTranspile(`
