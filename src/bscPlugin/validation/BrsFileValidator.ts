@@ -13,7 +13,7 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
-import type { Location, Position, Range } from 'vscode-languageserver';
+import type { Location, Position } from 'vscode-languageserver';
 import type { Locatable, Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
@@ -110,7 +110,7 @@ export class BrsFileValidator {
                 if (firstLabelByName.has(lowerName)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.duplicateLabel(labelName),
-                        location: util.getLocation(label.tokens.name)
+                        location: label.tokens.name
                     });
                 } else {
                     firstLabelByName.set(lowerName, label);
@@ -118,7 +118,7 @@ export class BrsFileValidator {
                 if (this.isInsideTryBranch(label, func)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.labelInTryBlock(labelName),
-                        location: util.getLocation(label.tokens.name)
+                        location: label.tokens.name
                     });
                 }
             }
@@ -132,12 +132,12 @@ export class BrsFileValidator {
                 if (!targetLabel) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.labelNotFound(labelToken.text),
-                        location: util.getLocation(labelToken)
+                        location: labelToken
                     });
                 } else if (this.jumpsIntoForLoop(gotoStatement, targetLabel, func)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.gotoIntoForLoop(labelToken.text),
-                        location: util.getLocation(labelToken)
+                        location: labelToken
                     });
                 }
             }
@@ -196,24 +196,23 @@ export class BrsFileValidator {
                 if (node.args.length > 5) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
-                        location: util.getLocation(node.tokens.methodName)
+                        location: node.tokens.methodName
                     });
                 }
             },
             DottedGetExpression: (node) => {
                 if (node.tokens.dot?.kind === TokenKind.QuestionDot) {
-                    this.validateMinFirmwareVersionForOptionalChaining(util.getLocation(node.tokens.dot)?.range);
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.dot);
                 }
             },
             IndexedGetExpression: (node) => {
                 if (node.tokens.questionDot || node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare) {
-                    const range = util.getLocation(node.tokens.questionDot)?.range ?? util.getLocation(node.tokens.openingSquare)?.range;
-                    this.validateMinFirmwareVersionForOptionalChaining(range);
+                    this.validateMinFirmwareVersionForOptionalChaining(util.firstLocatable(node.tokens.questionDot, node.tokens.openingSquare));
                 }
             },
             CallExpression: (node) => {
                 if (node.tokens.openingParen?.kind === TokenKind.QuestionLeftParen) {
-                    this.validateMinFirmwareVersionForOptionalChaining(util.getLocation(node.tokens.openingParen)?.range);
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.openingParen);
                 }
                 this.validateGlobalCallableAvailability(node);
             },
@@ -221,7 +220,7 @@ export class BrsFileValidator {
                 this.validateRegexLiteral(node);
             },
             EnumStatement: (node) => {
-                this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
+                this.validateDeclarationLocations(node, 'enum', () => util.setBounds({} as Locatable, node.tokens.enum, node.tokens.name));
 
                 this.validateEnumDeclaration(node);
 
@@ -237,12 +236,12 @@ export class BrsFileValidator {
                 if (!node?.tokens?.name) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.class, node.tokens.name));
+                this.validateDeclarationLocations(node, 'class', () => util.setBounds({} as Locatable, node.tokens.class, node.tokens.name));
 
                 for (const constructor of node.getConditionalCompileConstructors()) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.classConstructorNotAllowedInConditionalCompile(),
-                        location: util.getLocation(constructor.tokens.name)
+                        location: constructor.tokens.name
                     });
                 }
 
@@ -300,11 +299,11 @@ export class BrsFileValidator {
                 if (!node?.nameExpression) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
+                this.validateDeclarationLocations(node, 'namespace', () => util.setBounds({} as Locatable, node.tokens.namespace, node.nameExpression));
                 //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
             },
             FunctionStatement: (node) => {
-                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.tokens.functionType, node.tokens.name));
+                this.validateDeclarationLocations(node, 'function', () => util.setBounds({} as Locatable, node.func.tokens.functionType, node.tokens.name));
                 const funcType = node.getType({ flags: SymbolTypeFlag.typetime });
 
                 if (node.tokens.name?.text) {
@@ -389,7 +388,7 @@ export class BrsFileValidator {
                 if (!node.tokens.name) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
+                this.validateDeclarationLocations(node, 'interface', () => util.setBounds({} as Locatable, node.tokens.interface, node.tokens.name));
 
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
                 // eslint-disable-next-line no-bitwise
@@ -399,7 +398,7 @@ export class BrsFileValidator {
                 if (!node.tokens.name) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
+                this.validateDeclarationLocations(node, 'const', () => util.setBounds({} as Locatable, node.tokens.const, node.tokens.name));
                 const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
             },
@@ -430,7 +429,7 @@ export class BrsFileValidator {
                 } else {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.expectedExceptionVarToFollowCatch(),
-                        location: util.getLocation(node.exceptionVariableExpression) ?? util.getLocation(node.tokens.catch)
+                        location: util.firstLocatable<Locatable>(node.exceptionVariableExpression, node.tokens.catch)
                     });
                 }
             },
@@ -452,7 +451,7 @@ export class BrsFileValidator {
                     if (node.value) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.voidFunctionMayNotReturnValue(func.tokens.functionType?.text),
-                            location: util.getLocation(node)
+                            location: node
                         });
                     }
 
@@ -461,7 +460,7 @@ export class BrsFileValidator {
                     if (!node.value) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.nonVoidFunctionMustReturnValue(func?.tokens.functionType?.text),
-                            location: util.getLocation(node)
+                            location: node
                         });
                     }
                 }
@@ -494,7 +493,7 @@ export class BrsFileValidator {
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.hashError(node.tokens.message.text),
-                    location: util.getLocation(node)
+                    location: node
                 });
             },
             AliasStatement: (node) => {
@@ -506,7 +505,7 @@ export class BrsFileValidator {
 
             },
             TypeStatement: (node) => {
-                this.validateDeclarationLocations(node, 'type', () => util.createBoundingRange(node.tokens.type, node.tokens.name));
+                this.validateDeclarationLocations(node, 'type', () => util.setBounds({} as Locatable, node.tokens.type, node.tokens.name));
                 const wrappedNodeType = node.getType({ flags: SymbolTypeFlag.runtime });
                 const typeStmtType = new TypeStatementType(node.tokens.name.text, wrappedNodeType);
                 node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isFromTypeStatement: true }, typeStmtType, SymbolTypeFlag.typetime);
@@ -521,7 +520,7 @@ export class BrsFileValidator {
                     if (!target || target.isInLoop) {
                         this.event.program.diagnostics.register({
                             ...(target ? DiagnosticMessages.exitSelectInLoop() : DiagnosticMessages.exitSelectOutsideSelectCase()),
-                            location: util.getLocation(node)
+                            location: node
                         });
                     }
                 }
@@ -580,7 +579,7 @@ export class BrsFileValidator {
                 ) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.reservedBuiltinUsedAsValue(name),
-                        location: util.getLocation(node.tokens.name)
+                        location: node.tokens.name
                     });
                 }
             },
@@ -645,7 +644,7 @@ export class BrsFileValidator {
      *  - inside a namespace
      * This is applicable to things like FunctionStatement, ClassStatement, NamespaceStatement, EnumStatement, InterfaceStatement
      */
-    private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => (Range | undefined)) {
+    private validateDeclarationLocations(statement: Statement, keyword: string, locatableFactory?: () => Locatable) {
         //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
         const isOkDeclarationLocation = (parentNode: AstNode | undefined) => {
             return isNamespaceStatement(parentNode?.parent) || (isBody(parentNode) && !parentNode?.parent);
@@ -675,7 +674,7 @@ export class BrsFileValidator {
         //the statement was defined in the wrong place. Flag it.
         this.event.program.diagnostics.register({
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
-            location: rangeFactory ? util.createLocationFromFileRange(this.event.file, rangeFactory()) : util.getLocation(statement)
+            location: locatableFactory ? locatableFactory() : statement
         });
     }
 
@@ -708,7 +707,7 @@ export class BrsFileValidator {
         if (name && name.length > BrsFileValidator.MaxFunctionNameLength) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.functionNameTooLong(name, name.length, BrsFileValidator.MaxFunctionNameLength),
-                location: util.getLocation(node.tokens.name) ?? util.getLocation(node)
+                location: util.firstLocatable<Locatable>(node.tokens.name, node)
             });
         }
     }
@@ -719,7 +718,7 @@ export class BrsFileValidator {
             for (let i = CallExpression.MaximumArguments; i < func.parameters.length; i++) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
-                    location: util.getLocation(func.parameters[i]?.tokens.name) ?? util.getLocation(func.parameters[i]) ?? util.getLocation(func)
+                    location: util.firstLocatable<Locatable>(func.parameters[i]?.tokens.name, func.parameters[i], func)
                 });
             }
         }
@@ -731,7 +730,7 @@ export class BrsFileValidator {
         if (count > PrintStatement.MaximumPrintCount) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyPrintItems(count, PrintStatement.MaximumPrintCount),
-                location: util.getLocation(statement)
+                location: statement
             });
         }
     }
@@ -787,7 +786,7 @@ export class BrsFileValidator {
             const firstOverLimit = [...variableLocatables.values()][FunctionExpression.MaximumVariables];
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyFunctionVariables(variableLocatables.size, FunctionExpression.MaximumVariables),
-                location: util.getLocation(firstOverLimit) ?? util.getLocation(func.tokens.functionType) ?? util.getLocation(func)
+                location: util.firstLocatable<Locatable>(firstOverLimit, func.tokens.functionType, func)
             });
         }
     }
@@ -806,7 +805,7 @@ export class BrsFileValidator {
             if (memberNames.has(memberNameLower)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.duplicateIdentifier(member.name),
-                    location: util.getLocation(member)
+                    location: member
                 });
             } else {
                 memberNames.add(memberNameLower);
@@ -827,7 +826,7 @@ export class BrsFileValidator {
             memberValueKind = (member.value as LiteralExpression)?.tokens?.value?.kind;
             memberValue = member.value;
         }
-        const range = util.getLocation((memberValue ?? member))?.range;
+        const valueLocatable: Locatable = memberValue ?? member;
         if (
             //is integer enum, has value, that value type is not integer
             (enumValueKind === TokenKind.IntegerLiteral && memberValueKind && memberValueKind !== enumValueKind) ||
@@ -838,7 +837,7 @@ export class BrsFileValidator {
                 ...DiagnosticMessages.enumValueMustBeType(
                     enumValueKind.replace(/literal$/i, '').toLowerCase()
                 ),
-                location: util.createLocationFromFileRange(this.event.file, range)
+                location: valueLocatable
             });
         }
 
@@ -852,7 +851,7 @@ export class BrsFileValidator {
                         ...DiagnosticMessages.enumValueMustBeType(
                             enumValueKind.replace(/literal$/i, '').toLowerCase()
                         ),
-                        location: util.createLocationFromFileRange(this.event.file, range)
+                        location: valueLocatable
                     });
                 }
 
@@ -862,7 +861,7 @@ export class BrsFileValidator {
                     ...DiagnosticMessages.enumValueIsRequired(
                         enumValueKind.replace(/literal$/i, '').toLowerCase()
                     ),
-                    location: util.createLocationFromFileRange(this.event.file, range)
+                    location: valueLocatable
                 });
             }
         }
@@ -877,12 +876,12 @@ export class BrsFileValidator {
         if (!isLiteralBoolean(assignment.value)) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.invalidHashConstValue(),
-                location: util.getLocation(assignment.value)
+                location: assignment.value
             });
         } else if (statement.isDuplicate) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
-                location: util.getLocation(assignment.tokens.name)
+                location: assignment.tokens.name
             });
         }
     }
@@ -1023,7 +1022,7 @@ export class BrsFileValidator {
         if (statement.isConditionDeclared === false && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.hashConstDoesNotExist(),
-                location: util.getLocation(statement.tokens.condition)
+                location: statement.tokens.condition
             });
         }
     }
@@ -1056,7 +1055,7 @@ export class BrsFileValidator {
                 ) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
-                        location: util.getLocation(statement)
+                        location: statement
                     });
                 }
             }
@@ -1099,17 +1098,17 @@ export class BrsFileValidator {
                 if (isLibraryStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file'),
-                        location: util.getLocation(result)
+                        location: result
                     });
                 } else if (isImportStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementLocation('import', 'at the top of the file'),
-                        location: util.getLocation(result)
+                        location: result
                     });
                 } else if (isAliasStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file'),
-                        location: util.getLocation(result)
+                        location: result
                     });
                 }
             }
@@ -1137,7 +1136,7 @@ export class BrsFileValidator {
             if (isBadTypecastObj) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.invalidTypecastStatementApplication(resultVarStr, hasFunctionAncestor),
-                    location: util.getLocation(typecastStmt.typecastExpression.obj)
+                    location: typecastStmt.typecastExpression.obj
                 });
             }
 
@@ -1161,18 +1160,17 @@ export class BrsFileValidator {
             if (!isFirst) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace'),
-                    location: util.getLocation(typecastStmt)
+                    location: typecastStmt
                 });
             }
         }
     }
 
     private validateSelectCaseStatement(statement: SelectCaseStatement) {
-        const headerLocation = util.createBoundingLocation(statement.tokens.select, statement.tokens.case);
         if (statement.cases.length === 0) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.selectCaseHasNoCases(),
-                location: headerLocation
+                location: util.setBounds({} as Locatable, statement.tokens.select, statement.tokens.case)
             });
             return;
         }
@@ -1184,14 +1182,14 @@ export class BrsFileValidator {
             for (const elseCase of elseCases.slice(1)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.duplicateCaseElse(),
-                    location: util.createBoundingLocation(elseCase.tokens.case, elseCase.tokens.else)
+                    location: util.setBounds({} as Locatable, elseCase.tokens.case, elseCase.tokens.else)
                 });
             }
             //only flag the first one. Any others were already flagged as duplicates
             if (statement.cases.indexOf(elseCases[0]) < statement.cases.length - elseCases.length) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.caseElseMustBeLast(),
-                    location: util.createBoundingLocation(elseCases[0].tokens.case, elseCases[0].tokens.else)
+                    location: util.setBounds({} as Locatable, elseCases[0].tokens.case, elseCases[0].tokens.else)
                 });
             }
         }
@@ -1207,7 +1205,7 @@ export class BrsFileValidator {
             ) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
-                    location: util.getLocation(caseStatement.tokens.case)
+                    location: caseStatement.tokens.case
                 });
             }
         }
@@ -1229,13 +1227,12 @@ export class BrsFileValidator {
                 if (key) {
                     const firstValue = seenValues.get(key);
                     if (firstValue) {
-                        const valueLocation = util.getLocation(value);
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.duplicateCaseValue(
-                                util.getTextForRange(this.event.file.fileContents, valueLocation?.range) ?? key,
+                                util.getTextForRange(this.event.file.fileContents, util.getLocation(value)?.range) ?? key,
                                 util.getStartPosition(firstValue)?.line + 1
                             ),
-                            location: valueLocation
+                            location: value
                         });
                     } else {
                         seenValues.set(key, value);
@@ -1249,7 +1246,7 @@ export class BrsFileValidator {
                     } else if (valueType !== expectedType) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.caseValueTypeMismatch(valueType, expectedType),
-                            location: util.getLocation(value)
+                            location: value
                         });
                     }
                 }
@@ -1308,7 +1305,7 @@ export class BrsFileValidator {
             const actualLoopType = statement.tokens.loopType;
             if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
                 this.event.program.diagnostics.register({
-                    location: util.getLocation(statement.tokens.loopType),
+                    location: statement.tokens.loopType,
                     ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
             }
@@ -1330,7 +1327,7 @@ export class BrsFileValidator {
         //flag continue statements found outside of a loop
         if (!parent) {
             this.event.program.diagnostics.register({
-                location: util.getLocation(statement),
+                location: statement,
                 ...DiagnosticMessages.illegalContinueStatement()
             });
         }
@@ -1354,7 +1351,7 @@ export class BrsFileValidator {
                     CONTINUE_MIN_FIRMWARE_VERSION,
                     this.event.program.getMinFirmwareVersion()
                 ),
-                location: util.getLocation(statement)
+                location: statement
             });
         }
     }
@@ -1370,7 +1367,7 @@ export class BrsFileValidator {
             if (isSpreadExpression(element)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.spreadOperatorNotAllowedHere(),
-                    location: util.getLocation(element.tokens.dotDotDot)
+                    location: element.tokens.dotDotDot
                 });
             }
         }
@@ -1390,18 +1387,18 @@ export class BrsFileValidator {
                 (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)
             ) {
                 //try to highlight the entire left-hand-side expression if possible
-                let range: Range;
+                let locatable: Locatable;
                 if (isDottedSetStatement(parent)) {
-                    range = util.createBoundingRange(util.getLocation(parent.obj), parent.tokens.dot, parent.tokens.name);
+                    locatable = util.setBounds({} as Locatable, parent.obj, parent.tokens.dot, parent.tokens.name);
                 } else if (isIndexedSetStatement(parent)) {
-                    range = util.createBoundingRange(util.getLocation(parent.obj), parent.tokens.openingSquare, ...parent.indexes, parent.tokens.closingSquare);
+                    locatable = util.setBounds({} as Locatable, parent.obj, parent.tokens.openingSquare, ...parent.indexes, parent.tokens.closingSquare);
                 } else {
-                    range = util.getLocation(node)?.range;
+                    locatable = node;
                 }
 
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                    location: util.createLocationFromFileRange(this.event.file, range)
+                    location: locatable
                 });
             }
 
@@ -1441,17 +1438,17 @@ export class BrsFileValidator {
      */
     private validateRegexLiteral(node: RegexLiteralExpression) {
         const token = node.tokens.regexLiteral;
-        const start = util.getStartPosition(token);
-        if (!start) {
+        if (!token?.sourceInfo) {
             return;
         }
-        //regex literals are always on a single line, so problem offsets map directly onto the token's starting line
+        //problem offsets are relative to the start of the token
         for (const problem of findRegexLiteralProblems(token.text)) {
             this.event.program.diagnostics.register({
                 ...problem.diagnostic,
                 location: {
-                    uri: token.sourceInfo.uri,
-                    range: util.createRange(start.line, start.character + problem.start, start.line, start.character + problem.end)
+                    startPosition: token.startPosition + problem.start,
+                    endPosition: token.startPosition + problem.end,
+                    sourceInfo: token.sourceInfo
                 }
             });
         }
@@ -1463,7 +1460,7 @@ export class BrsFileValidator {
      * This applies to both .brs and .bs files because optional chaining is not transpiled —
      * it is emitted as-is, so the target device must natively support it.
      */
-    private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
+    private validateMinFirmwareVersionForOptionalChaining(locatable: Locatable | undefined) {
         if (!this.event.program.firmwareCapabilities.optionalChaining) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
@@ -1471,7 +1468,7 @@ export class BrsFileValidator {
                     OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION,
                     this.event.program.getMinFirmwareVersion()
                 ),
-                location: util.createLocationFromFileRange(this.event.file, range)
+                location: locatable
             });
         }
     }
@@ -1504,7 +1501,7 @@ export class BrsFileValidator {
         if (diagnostic) {
             this.event.program.diagnostics.register({
                 ...diagnostic,
-                location: util.getLocation(node.callee)
+                location: node.callee
             });
         }
     }
