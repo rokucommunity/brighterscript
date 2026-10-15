@@ -463,6 +463,21 @@ describe('lexer', () => {
             ]);
         });
 
+        it('treats a lone carriage return as a newline', () => {
+            let { tokens } = Lexer.scan('`a\rb`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral, // carriage return
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect((tokens[2] as any).charCode).to.equal(13);
+            //`b` starts the next line
+            expect(util.getLocation(tokens[3]).range).to.eql(util.createRange(1, 0, 1, 1));
+        });
+
         it('prevents expressions when escaping the dollar sign', () => {
             let { tokens } = Lexer.scan('`\\${just text}`');
             expect(tokens.map(t => t.kind)).to.deep.equal([
