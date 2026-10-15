@@ -1135,8 +1135,8 @@ describe('util', () => {
         });
 
         it('clears the bounds when nothing has a source', () => {
-            const result = util.setBounds({ pos: 1, end: 2, source: testLocatable(0, 0, 0, 0).sourceInfo }, createToken(TokenKind.Identifier, 'a'));
-            expect(result).to.eql({ pos: undefined, end: undefined, source: undefined });
+            const result = util.setBounds({ startPosition: 1, endPosition: 2, sourceInfo: testLocatable(0, 0, 0, 0).sourceInfo }, createToken(TokenKind.Identifier, 'a'));
+            expect(result).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
         });
 
         it('does not end at the start of the next line when the last locatable is a LF newline', () => {
@@ -1235,8 +1235,8 @@ describe('util', () => {
 
         it('clears the position when given no location or source', () => {
             const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
-            expect(util.setLocation(testLocatable(0, 0, 0, 1), undefined, sourceInfo)).to.eql({ pos: undefined, end: undefined, source: undefined });
-            expect(util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1), undefined)).to.eql({ pos: undefined, end: undefined, source: undefined });
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), undefined, sourceInfo)).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1), undefined)).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
         });
 
         it('clears the position for a location in a different file', () => {

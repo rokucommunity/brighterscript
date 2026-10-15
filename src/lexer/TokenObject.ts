@@ -12,9 +12,9 @@ export class TokenObject implements Token {
         public kind: TokenKind,
         public text: string,
         public isReserved: boolean,
-        public pos: number,
-        public end: number,
-        public source: SourceInfo | undefined,
+        public startPosition: number,
+        public endPosition: number,
+        public sourceInfo: SourceInfo | undefined,
         public leadingTrivia: Token[] | undefined
     ) { }
 

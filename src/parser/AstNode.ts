@@ -19,18 +19,18 @@ import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/refl
 export abstract class AstNode implements Locatable {
     public abstract kind: AstNodeKind;
     /**
-     * Where this node starts, counted from the start of its source (see `Locatable.pos`).
+     * Where this node starts, counted from the start of its source (see `Locatable.startPosition`).
      * Use `util.getLocation()` to get the line/character `Location`
      */
-    public abstract pos: number;
+    public abstract startPosition: number;
     /**
-     * Where this node ends: the gap just after its last character (see `Locatable.end`)
+     * Where this node ends: the gap just after its last character (see `Locatable.endPosition`)
      */
-    public abstract end: number;
+    public abstract endPosition: number;
     /**
      * Info about the source this node was parsed from. `undefined` for synthetic nodes
      */
-    public abstract source: SourceInfo | undefined;
+    public abstract sourceInfo: SourceInfo | undefined;
 
     /**
      * @deprecated use `util.getLocation(node)`. This is computed on every read
@@ -170,13 +170,13 @@ export abstract class AstNode implements Locatable {
         //a position only means something within one source (the one this search starts from), so only nodes from that source can match.
         //Nodes without a source (i.e. a synthetic `if` wrapping real code) or from another source (i.e. code parsed from a snippet) never match
         //on their own, but the walk still steps into them, so the real code inside them can still be found
-        const searchSource = this.source;
+        const searchSource = this.sourceInfo;
         return this.findChild<TNodeType>((node) => {
-            if (!node?.source || (searchSource && node.source !== searchSource)) {
+            if (!node?.sourceInfo || (searchSource && node.sourceInfo !== searchSource)) {
                 return;
             }
-            const offset = util.getOffset(node.source, position);
-            if (offset !== undefined && node.pos <= offset && offset <= node.end) {
+            const offset = util.getOffset(node.sourceInfo, position);
+            if (offset !== undefined && node.startPosition <= offset && offset <= node.endPosition) {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);
@@ -230,6 +230,15 @@ export abstract class AstNode implements Locatable {
     public get endTrivia(): Token[] {
         return [];
     }
+
+    /**
+     * False when this node is inside an `#if` / `#else if` / `#else` branch that was not selected. The device discards that code before compiling.
+     * Undefined until a walk reaches the node, such as a node a plugin just created. The compiler treats undefined as active,
+     * so only code known to be in an inactive branch is left out. Check `isActive === false` to find inactive code.
+     *
+     * Every walk sets this from the parent, but only a full walk from the root re-evaluates the `#if` conditions.
+     */
+    public isActive?: boolean;
 
     public getBsConsts(): Map<string, boolean> | undefined {
         return this.bsConsts ?? this.parent?.getBsConsts?.();
@@ -315,7 +324,7 @@ export abstract class AstNode implements Locatable {
             const children = (Array.isArray(clone?.[key]) ? clone[key] : [clone?.[key]]) as any[];
             for (let child of children ?? []) {
                 if (child) {
-                    (clone[key as any] as AstNode).parent = clone;
+                    (child as AstNode).parent = clone;
                 }
             }
         }
@@ -388,6 +397,7 @@ export enum AstNodeKind {
     AALiteralExpression = 'AALiteralExpression',
     AAIndexedMemberExpression = 'AAIndexedMemberExpression',
     UnaryExpression = 'UnaryExpression',
+    SpreadExpression = 'SpreadExpression',
     VariableExpression = 'VariableExpression',
     SourceLiteralExpression = 'SourceLiteralExpression',
     NewExpression = 'NewExpression',
@@ -431,6 +441,8 @@ export enum AstNodeKind {
     ClassFieldStatement = 'ClassFieldStatement',
     TryCatchStatement = 'TryCatchStatement',
     CatchStatement = 'CatchStatement',
+    SelectCaseStatement = 'SelectCaseStatement',
+    CaseStatement = 'CaseStatement',
     ThrowStatement = 'ThrowStatement',
     EnumStatement = 'EnumStatement',
     EnumMemberStatement = 'EnumMemberStatement',

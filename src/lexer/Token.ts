@@ -30,18 +30,19 @@ export interface Locatable {
     /**
      * Where this item starts, counted from the start of the source.
      *
-     * Positions are the gaps between characters, like an editor cursor. For the source `print`, `pos` is `0` (before the `p`) and `end` is `5` (after the `t`).
+     * Positions are the gaps between characters, like an editor cursor. For the source `print`, `startPosition` is `0` (before the `p`) and `endPosition` is `5` (after the `t`).
      * Counted in UTF-16 code units, the same as an LSP `Position.character`
      */
-    pos: number;
+    startPosition: number;
     /**
-     * Where this item ends: the gap just after its last character (see `pos`). `end - pos` is the item's length
+     * Where this item ends: the gap just after its last character, counted from the start of the source (see `startPosition`).
+     * `endPosition - startPosition` is the item's length
      */
-    end: number;
+    endPosition: number;
     /**
      * Info about the source this item was parsed from. Shared by every item from the same parse. `undefined` for synthetic items
      */
-    source: SourceInfo | undefined;
+    sourceInfo: SourceInfo | undefined;
 }
 
 /**
@@ -53,9 +54,12 @@ export interface SourceInfo {
      */
     uri: string;
     /**
-     * Where each line starts (the gap before its first character), counted the same way as `Locatable.pos`
+     * Where each line starts: the gap before its first character, counted from the start of the source in UTF-16 code units
+     * (the same as `Locatable.startPosition`). `linePositions[0]` is always `0`, and the index of each entry is its 0-based line number.
+     *
+     * For the source `a = 1\nb = 2`, this is `[0, 6]`. `util.getLocation()` uses it to convert a position into a line/character `Position`
      */
-    lineStarts: number[];
+    linePositions: number[];
 }
 
 /**

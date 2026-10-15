@@ -99,7 +99,8 @@ export class BrightScriptDocParser {
     }
 
     public getTypeLocationFromToken(token: Token): Location {
-        if (!util.getLocation(token)) {
+        const location = util.getLocation(token);
+        if (!location) {
             return undefined;
         }
         const startCurly = token.text.indexOf('{');
@@ -107,16 +108,17 @@ export class BrightScriptDocParser {
         if (startCurly === -1 || endCurly === -1 || endCurly <= startCurly) {
             return undefined;
         }
+        const start = location.range.start;
         return {
-            uri: util.getLocation(token).uri,
+            uri: location.uri,
             range: {
                 start: {
-                    line: util.getLocation(token).range.start.line,
-                    character: util.getLocation(token).range.start.character + startCurly + 1
+                    line: start.line,
+                    character: start.character + startCurly + 1
                 },
                 end: {
-                    line: util.getLocation(token).range.start.line,
-                    character: util.getLocation(token).range.start.character + endCurly
+                    line: start.line,
+                    character: start.character + endCurly
                 }
             }
         };

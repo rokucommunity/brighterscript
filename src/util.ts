@@ -22,11 +22,11 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { AALiteralExpression, ArrayLiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type SourceInfo, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
+import { isAnyReferenceType, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -47,7 +47,7 @@ import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromVa
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
-import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
+import type { AssignmentStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from './parser/Statement';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
@@ -1070,7 +1070,7 @@ export class Util {
     public extractRange(rangeIsh: RangeLike): Range | undefined {
         if (!rangeIsh) {
             return undefined;
-        } else if ('source' in rangeIsh) {
+        } else if ('sourceInfo' in rangeIsh) {
             return this.getLocation(rangeIsh)?.range;
         } else if ('location' in rangeIsh) {
             return rangeIsh.location?.range;
@@ -1296,7 +1296,7 @@ export class Util {
             let range: Range;
             if (!locatable) {
                 continue;
-            } else if ('source' in locatable) {
+            } else if ('sourceInfo' in locatable) {
                 const location = this.getLocation(locatable);
                 range = location?.range;
                 if (!uri) {
@@ -1354,30 +1354,30 @@ export class Util {
     }
 
     /**
-     * Set the `pos`, `end`, and `source` of `target` to the bounds of all the locatables.
-     * Offsets from different sources can't be compared, so only locatables from one source are included: the first one that has a uri,
+     * Set the `startPosition`, `endPosition`, and `sourceInfo` of `target` to the bounds of all the locatables.
+     * Positions from different sources can't be compared, so only locatables from one source are included: the first one that has a uri,
      * or the first one if none of them do. That way, code parsed from a snippet (which has no uri) never takes over the bounds of real code from a file.
      * A trailing newline is not included in the bounds, so the target never ends at the start of the next line
      */
     public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | undefined>): T {
-        let pos: number;
-        let end: number;
-        let source: SourceInfo;
+        let startPosition: number;
+        let endPosition: number;
+        let sourceInfo: SourceInfo;
         for (const locatable of locatables) {
             if (!locatable?.sourceInfo) {
                 continue;
-            } else if (!source || (!source.uri && locatable.sourceInfo.uri)) {
-                source = locatable.sourceInfo;
-                pos = locatable.startPosition;
-                end = this.getContentEnd(locatable);
-            } else if (locatable.sourceInfo === source) {
-                pos = Math.min(pos, locatable.startPosition);
-                end = Math.max(end, this.getContentEnd(locatable));
+            } else if (!sourceInfo || (!sourceInfo.uri && locatable.sourceInfo.uri)) {
+                sourceInfo = locatable.sourceInfo;
+                startPosition = locatable.startPosition;
+                endPosition = this.getContentEnd(locatable);
+            } else if (locatable.sourceInfo === sourceInfo) {
+                startPosition = Math.min(startPosition, locatable.startPosition);
+                endPosition = Math.max(endPosition, this.getContentEnd(locatable));
             }
         }
-        target.startPosition = pos;
-        target.endPosition = end;
-        target.sourceInfo = source;
+        target.startPosition = startPosition;
+        target.endPosition = endPosition;
+        target.sourceInfo = sourceInfo;
         return target;
     }
 
@@ -1391,22 +1391,22 @@ export class Util {
      */
     public setLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo: SourceInfo | undefined): T {
         const range = location?.range;
-        const pos = this.getOffset(sourceInfo, range?.start);
-        const end = this.getOffset(sourceInfo, range?.end);
-        if (pos === undefined || end === undefined || (location.uri && location.uri !== sourceInfo.uri)) {
+        const startPosition = this.getOffset(sourceInfo, range?.start);
+        const endPosition = this.getOffset(sourceInfo, range?.end);
+        if (startPosition === undefined || endPosition === undefined || (location.uri && location.uri !== sourceInfo.uri)) {
             target.sourceInfo = undefined;
             target.startPosition = undefined;
             target.endPosition = undefined;
         } else {
             target.sourceInfo = sourceInfo;
-            target.startPosition = pos;
-            target.endPosition = end;
+            target.startPosition = startPosition;
+            target.endPosition = endPosition;
         }
         return target;
     }
 
     /**
-     * Get the end offset of a locatable, excluding any trailing newline (i.e. a `Newline` token, or an escaped newline in a template string)
+     * Get the end position of a locatable, excluding any trailing newline (i.e. a `Newline` token, or an escaped newline in a template string)
      */
     public getContentEnd(locatable: Locatable): number {
         const text = (locatable as Token).text;
@@ -1437,63 +1437,63 @@ export class Util {
     }
 
     /**
-     * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `source`)
+     * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `sourceInfo`)
      */
     public getLocation(locatable: Locatable): Location | undefined {
-        const source = locatable?.sourceInfo;
-        if (!source) {
+        const sourceInfo = locatable?.sourceInfo;
+        if (!sourceInfo) {
             return undefined;
         }
-        const lineStarts = source.linePositions;
-        const startLine = this.getLineIndex(lineStarts, locatable.startPosition, 0);
-        let endLine = this.getLineIndex(lineStarts, locatable.endPosition, startLine);
+        const linePositions = sourceInfo.linePositions;
+        const startLine = this.getLineIndex(linePositions, locatable.startPosition, 0);
+        let endLine = this.getLineIndex(linePositions, locatable.endPosition, startLine);
         //a token that ends with a newline ends on its own line rather than at the start of the next one
-        if (endLine > startLine && lineStarts[endLine] === locatable.endPosition && this.getContentEnd(locatable) !== locatable.endPosition) {
+        if (endLine > startLine && linePositions[endLine] === locatable.endPosition && this.getContentEnd(locatable) !== locatable.endPosition) {
             endLine--;
         }
         return {
-            uri: source.uri,
-            range: this.createRange(startLine, locatable.startPosition - lineStarts[startLine], endLine, locatable.endPosition - lineStarts[endLine])
+            uri: sourceInfo.uri,
+            range: this.createRange(startLine, locatable.startPosition - linePositions[startLine], endLine, locatable.endPosition - linePositions[endLine])
         };
     }
 
     /**
-     * Get just the start `Position` of a locatable. Cheaper than `getLocation()` when the end isn't needed.
-     * Returns `undefined` for synthetic items (those without a `source`)
+     * Get just the start line/character `Position` of a locatable. Cheaper than `getLocation()` when the end isn't needed.
+     * Returns `undefined` for synthetic items (those without a `sourceInfo`)
      */
     public getStartPosition(locatable: Locatable): Position | undefined {
-        const lineStarts = locatable?.sourceInfo?.linePositions;
-        if (!lineStarts) {
+        const linePositions = locatable?.sourceInfo?.linePositions;
+        if (!linePositions) {
             return undefined;
         }
-        const line = this.getLineIndex(lineStarts, locatable.startPosition, 0);
-        return this.createPosition(line, locatable.startPosition - lineStarts[line]);
+        const line = this.getLineIndex(linePositions, locatable.startPosition, 0);
+        return this.createPosition(line, locatable.startPosition - linePositions[line]);
     }
 
     /**
-     * Convert a line/character `Position` into an absolute offset within the given source.
+     * Convert a line/character `Position` into a position counted from the start of the source (see `Locatable.startPosition`).
      * A character past the end of its line is clamped to that line, so it never lands on the next line.
      * Returns `undefined` if the source or the position's line is missing
      */
-    public getOffset(source: SourceInfo | undefined, position: Position | undefined): number | undefined {
-        const lineStarts = source?.linePositions;
-        const lineStart = lineStarts?.[position?.line];
+    public getOffset(sourceInfo: SourceInfo | undefined, position: Position | undefined): number | undefined {
+        const linePositions = sourceInfo?.linePositions;
+        const lineStart = linePositions?.[position?.line];
         if (lineStart === undefined) {
             return undefined;
         }
         const offset = lineStart + position.character;
-        const nextLineStart = lineStarts[position.line + 1];
+        const nextLineStart = linePositions[position.line + 1];
         return nextLineStart !== undefined && offset >= nextLineStart ? nextLineStart - 1 : offset;
     }
 
     /**
-     * Binary search `lineStarts` (beginning at line index `low`) for the index of the line that contains `offset`
+     * Binary search `linePositions` (beginning at line index `low`) for the index of the line that contains `position`
      */
-    private getLineIndex(lineStarts: number[], offset: number, low: number) {
-        let high = lineStarts.length - 1;
+    private getLineIndex(linePositions: number[], position: number, low: number) {
+        let high = linePositions.length - 1;
         while (low < high) {
             const mid = Math.floor((low + high + 1) / 2);
-            if (lineStarts[mid] <= offset) {
+            if (linePositions[mid] <= position) {
                 low = mid;
             } else {
                 high = mid - 1;
@@ -2357,6 +2357,21 @@ export class Util {
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * Spread is only supported when the literal is the direct value of an assignment, dotted set, or indexed set
+     * that lives in a statement list. Returns that statement, or undefined when the literal is anywhere else.
+     */
+    public getSpreadLiteralOwnerStatement(literal: ArrayLiteralExpression | AALiteralExpression): AssignmentStatement | DottedSetStatement | IndexedSetStatement | undefined {
+        const parent = literal.parent;
+        if (
+            (isAssignmentStatement(parent) || isDottedSetStatement(parent) || isIndexedSetStatement(parent)) &&
+            parent.value === literal &&
+            (isBlock(parent.parent) || isBody(parent.parent))
+        ) {
+            return parent;
+        }
     }
 
     /**
