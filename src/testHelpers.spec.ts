@@ -363,7 +363,8 @@ function getTestFileAction(
         }
         program.validate();
         if (failOnDiagnostic !== false) {
-            expectZeroDiagnostics(program);
+            //transpile tests often have inactive `#if` branches or unreachable code, whose hints only fade code and say nothing about the output
+            expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== 'inactive-conditional-compile-branch' && diagnostic.code !== 'unreachable-code'));
         }
         let codeWithMap = await action(file);
 

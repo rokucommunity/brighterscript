@@ -1,11 +1,11 @@
 import { expect } from '../../chai-config.spec';
 import type { BrsFile } from '../../files/BrsFile';
 import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
-import type { AssignmentStatement, ClassStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
-import { DiagnosticMessages } from '../../DiagnosticMessages';
+import type { AssignmentStatement, ClassStatement, ConditionalCompileStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import { DiagnosticCodeMap, DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
-import { isAssignmentStatement, isClassStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
+import { isAssignmentStatement, isClassStatement, isConditionalCompileStatement, isForEachStatement, isFunctionExpression, isFunctionParameterExpression, isFunctionStatement, isNamespaceStatement, isPrintStatement, isReturnStatement } from '../../astUtils/reflection';
 import { util, standardizePath as s } from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
@@ -17,12 +17,16 @@ import { StringType } from '../../types/StringType';
 import { ArrayType } from '../../types/ArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import { TypedFunctionType } from '../../types/TypedFunctionType';
-import { ParseMode } from '../../parser/Parser';
-import type { ExtraSymbolData } from '../../interfaces';
+import { ParseMode, Parser } from '../../parser/Parser';
+import type { BsDiagnostic, ExtraSymbolData } from '../../interfaces';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { EnumType } from '../../types';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import * as fsExtra from 'fs-extra';
+import type { Range } from 'vscode-languageserver';
+import { createToken } from '../../astUtils/creators';
+import { TokenKind } from '../../lexer/TokenKind';
 
 describe('BrsFileValidator', () => {
     let program: Program;
@@ -1125,7 +1129,2959 @@ describe('BrsFileValidator', () => {
                 end function
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            //no #error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(4, 0, 5, 0) } }
+            ]);
+        });
+
+        describe('evaluation', () => {
+            let evaluationProgram: Program;
+            afterEach(() => {
+                evaluationProgram?.dispose();
+                fsExtra.removeSync(`${rootDir}/manifest`);
+            });
+
+            /**
+             * Load a file into a new program, validate it and return its diagnostics, except the hints that fade inactive branches.
+             * These specs are about which branches are evaluated, and the `inactive conditional compile branches` specs below cover the hints
+             */
+            function validate(source: string, options?: { bsConsts?: Record<string, boolean>; minFirmwareVersion?: string; destPath?: string }) {
+                evaluationProgram?.dispose();
+                fsExtra.removeSync(`${rootDir}/manifest`);
+                if (options?.bsConsts) {
+                    const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
+                    fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
+                }
+                evaluationProgram = new Program({
+                    rootDir: rootDir,
+                    minFirmwareVersion: options?.minFirmwareVersion
+                });
+                const file = evaluationProgram.setFile<BrsFile>(options?.destPath ?? 'source/main.brs', source);
+                evaluationProgram.validate();
+                return {
+                    file: file,
+                    diagnostics: evaluationProgram.getDiagnostics().filter(diagnostic => diagnostic.code !== DiagnosticCodeMap.inactiveConditionalCompileBranch)
+                };
+            }
+
+            function collectPrintedText(file: BrsFile) {
+                const printed: string[] = [];
+                file.ast.walk(createVisitor({
+                    PrintStatement: (statement) => {
+                        printed.push(statement.expressions.map(expression => (expression as any).tokens?.value?.text).join(''));
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+                return printed;
+            }
+
+            it('uses a file-level #const when walking the active branch', () => {
+                const { diagnostics } = validate(`
+                    #const LOGGING = true
+                    sub main()
+                    #if LOGGING
+                        activeVar = 1
+                        print activeVar
+                    #else
+                        inactiveVar = 2
+                        print inactiveVar
+                    #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('lets plugins walk the active branch and not the inactive branch', () => {
+                const { file, diagnostics } = validate(`
+                    #const LOGGING = true
+                    sub main()
+                        print "start"
+                    #if LOGGING
+                        print "active"
+                        notAFunctionActive()
+                    #else
+                        print "inactive"
+                        notAFunctionInactive()
+                    #end if
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(6, 24, 6, 42) } }
+                ]);
+                expect(collectPrintedText(file)).to.eql(['"start"', '"active"']);
+            });
+
+            it('treats #if true as true', () => {
+                const { diagnostics } = validate(`
+                    #if true
+                    #error active-true-error
+                    #else
+                    #error inactive-else-error
+                    #end if
+                    sub main()
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(2, 20, 2, 26) } }
+                ]);
+            });
+
+            it('treats #if not true as false', () => {
+                const { diagnostics } = validate(`
+                    #if not true
+                    #error inactive-error
+                    #else
+                    #error active-error
+                    #end if
+                    sub main()
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(4, 20, 4, 26) } }
+                ]);
+            });
+
+            it('treats #if false as false and #if not false as true', () => {
+                const { diagnostics } = validate(`
+                    #if false
+                    #error inactive-error
+                    #end if
+                    #if not false
+                    #error active-error
+                    #end if
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'hash-error', location: { range: util.createRange(5, 20, 5, 26) } }
+                ]);
+            });
+
+            it('validates the active branch of a literal #if inside a function', () => {
+                const { file, diagnostics } = validate(`
+                    sub main()
+                    #if true
+                        print "active"
+                        notAFunctionActive()
+                    #else
+                        print "inactive"
+                        notAFunctionInactive()
+                    #end if
+                    end sub
+                `);
+                expectDiagnostics(diagnostics, [
+                    { code: 'cannot-find-function', location: { range: util.createRange(4, 24, 4, 42) } }
+                ]);
+                expect(collectPrintedText(file)).to.eql(['"active"']);
+            });
+
+            describe('parse diagnostics', () => {
+                it('keeps syntax errors in the active branch of a literal #if', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if true
+                            x = = 1
+                        #end if
+                        end sub
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
+                });
+
+                it('drops syntax errors in the inactive else of an active #if DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if DEBUG
+                            print "active"
+                        #else
+                            y = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('keeps syntax errors in an active #if not DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if not DEBUG
+                            z = = 3
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } }
+                    ]);
+                });
+
+                it('keeps syntax errors in a branch enabled by a file-level #const', () => {
+                    const { diagnostics } = validate(`
+                        #const LOGGING = true
+                        sub main()
+                        #if LOGGING
+                            w = = 4
+                        #end if
+                        end sub
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(4, 32, 4, 33) } }
+                    ]);
+                });
+
+                it('keeps the syntax error of text after the condition of an inactive #if', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if DEBUG +
+                            print 1
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(2, 34, 2, 35) } }
+                    ]);
+                });
+
+                it('drops syntax errors in an inactive #if not DEBUG', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if not DEBUG
+                            v = = 5
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('drops syntax errors in the inactive tail of an #else if chain', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if true
+                            print "active"
+                        #else if DEBUG
+                            a = = 1
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('drops syntax errors in an inactive #if false / #else if DEBUG / #else chain', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if false
+                            a = = 1
+                        #else if DEBUG
+                            print "active"
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('keeps syntax errors in the final #else when every earlier condition is false', () => {
+                    const { diagnostics } = validate(`
+                        sub main()
+                        #if false
+                            a = = 1
+                        #else if DEBUG
+                            print "inactive"
+                        #else
+                            b = = 2
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: false } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(7, 32, 7, 33) } }
+                    ]);
+                });
+            });
+
+            describe('changes after parsing', () => {
+                const source = `
+                    sub main()
+                    #if DEBUG
+                        x = = 1
+                    #else
+                        y = = 2
+                    #end if
+                    end sub
+                `;
+
+                function createHashConst(name: string, value: boolean) {
+                    return Parser.parse(`#const ${name} = ${value}\n`).ast.statements[0];
+                }
+
+                /**
+                 * Validate the source after a plugin has edited the parsed file
+                 */
+                function validateAfterEdit(edit: (file: BrsFile) => void) {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            edit(event.file as BrsFile);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', source);
+                    evaluationProgram.validate();
+                    return evaluationProgram.getDiagnostics();
+                }
+
+                const inactiveThenBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
+                const inactiveElseBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(5, 0, 6, 0) } };
+
+                it('reports the diagnostics of the branch that the parsed constants select', () => {
+                    const diagnostics = validateAfterEdit(() => { });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by changing the constants', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the branch that a plugin activates by editing the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition);
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
+                        inactiveElseBranch
+                    ]);
+                });
+
+                it('reports the diagnostics of the else branch when a plugin negates the condition', () => {
+                    const diagnostics = validateAfterEdit((file) => {
+                        file.ast.bsConsts = new Map([['debug', true]]);
+                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
+                    });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'unexpected-token', location: { range: util.createRange(5, 28, 5, 29) } },
+                        inactiveThenBranch
+                    ]);
+                });
+
+                it('does not validate the code of a branch a plugin deactivates', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+                    evaluationProgram.plugins.add({
+                        name: 'edit-after-parse',
+                        beforeValidateFile: (event) => {
+                            (event.file as BrsFile).ast.bsConsts = new Map([['debug', false]]);
+                        }
+                    });
+                    evaluationProgram.setFile('source/main.brs', `
+                        #if DEBUG
+                        sub main()
+                            notAFunction()
+                        end sub
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    //notAFunction() is not validated, and the whole function is faded
+                    expectDiagnostics(evaluationProgram, [
+                        { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 5, 0) } }
+                    ]);
+                });
+
+                it('reflects an injected #const in the parse diagnostics after the next full walk, without validating again', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.brs', `
+                        sub main()
+                        #if DEBUG
+                            x = = 1
+                        #end if
+                        end sub
+                    `);
+                    const inactiveBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
+                    file.ast.statements.unshift(createHashConst('DEBUG', false));
+                    evaluationProgram.validate();
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
+
+                    file.ast.statements[0] = createHashConst('DEBUG', true);
+                    file.ast.link();
+                    //the parse error follows the walk right away. The fading hint comes from validation, so it stays until the file validates again
+                    expectDiagnostics(evaluationProgram, [
+                        { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } },
+                        inactiveBranch
+                    ]);
+
+                    file.ast.statements[0] = createHashConst('DEBUG', false);
+                    file.ast.link();
+                    expectDiagnostics(evaluationProgram, [inactiveBranch]);
+                });
+
+                it('reflects an injected #const in scope lookups after the file validates again', () => {
+                    evaluationProgram?.dispose();
+                    evaluationProgram = new Program({ rootDir: rootDir });
+                    const file = evaluationProgram.setFile<BrsFile>('source/main.bs', `
+                        #if DEBUG
+                        class Foo
+                            sub debugMethod()
+                            end sub
+                        end class
+                        #else
+                        class Foo
+                            sub releaseMethod()
+                            end sub
+                        end class
+                        #end if
+                    `);
+                    evaluationProgram.validate();
+                    const scope = evaluationProgram.getScopeByName('source');
+                    expect(scope.getClass('Foo').memberMap['releasemethod']).to.exist;
+                    file.ast.statements.unshift(createHashConst('DEBUG', true));
+                    file.isValidated = false;
+                    scope.invalidate();
+                    evaluationProgram.validate();
+                    expect(scope.getClass('Foo').memberMap['debugmethod']).to.exist;
+                    expect(file['_cachedLookups'].classStatementMap.get('foo').memberMap['debugmethod']).to.exist;
+                });
+            });
+
+            describe('duplicate #const', () => {
+                it('flags an active #const that redeclares an active #const', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const A = false
+                        sub main()
+                        end sub
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(2, 31, 2, 32) } }
+                    ]);
+                });
+
+                it('flags a #const that redeclares a bs_const', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-const-declaration', location: { range: util.createRange(1, 31, 1, 36) } }
+                    ]);
+                });
+
+                it('allows a duplicate #const inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #if false
+                        #const A = false
+                        #end if
+                        sub main()
+                        end sub
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('reports only the invalid value when a #const alias reuses a declared name', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const A = B
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
+                });
+
+                it('reports only the invalid value when an invalid #const reuses a bs_const name', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = NOPE
+                    `, { bsConsts: { DEBUG: true } });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 39, 1, 43) } }
+                    ]);
+                });
+
+                it('does not apply a #const declared in an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #const A = true
+                        #end if
+                        #if A
+                        #error inactive-error
+                        #end if
+                        #const A = true
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('applies a #const declared in the active branch in source order', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        #if DEBUG
+                        #const LOGGING = true
+                        #else
+                        #const LOGGING = false
+                        #end if
+                        #if LOGGING
+                        #error logging-on
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+            });
+
+            describe('undeclared #const', () => {
+                const source = `
+                    sub main()
+                    #if NOPE
+                        print "a"
+                    #end if
+                    #if LATER
+                        print "b"
+                    #end if
+                    #if INACTIVEONLY
+                        print "c"
+                    #end if
+                    end sub
+                    #const LATER = true
+                    #if false
+                    #const INACTIVEONLY = true
+                    #end if
+                `;
+
+                it('reports undeclared constants before firmware 16', () => {
+                    const { diagnostics } = validate(source, { minFirmwareVersion: '15.3.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
+                    ]);
+                });
+
+                it('reports undeclared constants with the default firmware', () => {
+                    const { diagnostics } = validate(source);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 24, 2, 28) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(5, 24, 5, 29) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(8, 24, 8, 36) } }
+                    ]);
+                });
+
+                it('evaluates undeclared constants as false on firmware 16 and up', () => {
+                    const { diagnostics } = validate(source, { minFirmwareVersion: '16.0.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('reports an undeclared constant in an evaluated #else if before firmware 16', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #else if NOPE
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(2, 33, 2, 37) } }
+                    ]);
+                });
+
+                it('does not report an undeclared constant in an #else if that is never reached', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #else if NOPE
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('does not report an undeclared constant inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        #if NOPE
+                        #end if
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+            });
+
+            describe('duplicate functions', () => {
+                it('allows the same function in mutually exclusive branches', () => {
+                    const { diagnostics } = validate(`
+                        #if DEBUG
+                        sub logit()
+                            print "active"
+                        end sub
+                        #else
+                        sub logit()
+                            print "inactive"
+                        end sub
+                        #end if
+                        sub main()
+                            logit()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('allows the same function in branches chosen by a file-level #const', () => {
+                    const { diagnostics } = validate(`
+                        #const DEBUG = false
+                        #if DEBUG
+                        #const LOGGING = true
+                        #else
+                        #const LOGGING = false
+                        #end if
+                        #if LOGGING
+                        sub logit()
+                            print "log-on"
+                        end sub
+                        #else
+                        sub logit()
+                            print "log-off"
+                        end sub
+                        #end if
+                        sub Main()
+                            logit()
+                        end sub
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('still reports a function duplicated within the active branch', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        sub logit()
+                        end sub
+                        sub logit()
+                        end sub
+                        #end if
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'duplicate-function', location: { range: util.createRange(2, 28, 2, 33) } },
+                        { code: 'duplicate-function', location: { range: util.createRange(4, 28, 4, 33) } }
+                    ]);
+                });
+            });
+
+            describe('invalid #const value', () => {
+                it('rejects an alias of a declared constant at every firmware level', () => {
+                    for (const minFirmwareVersion of ['15.3.0', '16.0.0']) {
+                        const { diagnostics } = validate(`
+                            #const A = true
+                            #const B = A
+                        `, { minFirmwareVersion: minFirmwareVersion });
+                        expectDiagnostics(diagnostics, [
+                            { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 39, 2, 40) } }
+                        ]);
+                    }
+                });
+
+                it('rejects a value that is not a boolean', () => {
+                    const { diagnostics } = validate(`
+                        #const test = 4
+                    `);
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 38, 1, 39) } }
+                    ]);
+                });
+
+                it('rejects an alias of an undeclared name', () => {
+                    const { diagnostics } = validate(`
+                        #const B = NOPE
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(1, 35, 1, 39) } }
+                    ]);
+                });
+
+                it('treats a later #if on the alias as undeclared before firmware 16', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const B = A
+                        #if B
+                        #error alias-resolved
+                        #end if
+                    `, { minFirmwareVersion: '15.3.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } },
+                        { code: 'hash-const-does-not-exist', location: { range: util.createRange(3, 28, 3, 29) } }
+                    ]);
+                });
+
+                it('treats a later #if on the alias as false on firmware 16 and up', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #const B = A
+                        #if B
+                        #error alias-resolved
+                        #end if
+                    `, { minFirmwareVersion: '16.0.0' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-hash-const-value', location: { range: util.createRange(2, 35, 2, 36) } }
+                    ]);
+                });
+
+                it('does not report an alias inside an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #const A = true
+                        #if false
+                        #const B = A
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+            });
+
+            describe('declarations in inactive branches', () => {
+                async function transpile(source: string, options?: { bsConsts?: Record<string, boolean> }) {
+                    const { file, diagnostics } = validate(source, { ...options, destPath: 'source/main.bs' });
+                    const { code } = await evaluationProgram.getTranspiledFileContents(file.srcPath);
+                    return { code: code, diagnostics: diagnostics };
+                }
+
+                it('uses the active const when the inactive #else declares the same name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 1');
+                    expect(code).not.to.include('print 2');
+                });
+
+                it('uses the active enum member when the inactive #else declares the same enum', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        enum Color
+                            red = "active-red"
+                        end enum
+                        #else
+                        enum Color
+                            red = "inactive-red"
+                        end enum
+                        #end if
+                        sub main()
+                            print Color.red
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('active-red');
+                    expect(code).not.to.include('inactive-red');
+                });
+
+                it('uses the active class and interface without duplicate-name diagnostics', () => {
+                    const { file, diagnostics } = validate(`
+                        #if DEBUG
+                        class Widget
+                            activeField = 1
+                        end class
+                        interface Shape
+                            activeMember as integer
+                        end interface
+                        #else
+                        class Widget
+                            inactiveField = 2
+                        end class
+                        interface Shape
+                            inactiveMember as integer
+                        end interface
+                        #end if
+                        sub main()
+                            w = new Widget()
+                            print w.activeField
+                        end sub
+                        function describeShape(item as Shape) as integer
+                            return item.activeMember
+                        end function
+                    `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                    const scope = evaluationProgram.getScopesForFile(file)[0];
+                    const widget = scope.getClassMap().get('widget').item;
+                    expect(widget.fields.map(field => field.tokens.name.text)).to.eql(['activeField']);
+                    const shape = scope.getInterfaceMap().get('shape').item;
+                    expect(shape.fields.map(field => field.tokens.name.text)).to.eql(['activeMember']);
+                });
+
+                it('inlines an inactive enum and const used in the inactive branch that declares them', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub debugOnly()
+                            print Color.red
+                            print LEVEL
+                        end sub
+                        #end if
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                    expect(code).not.to.include('Color.red');
+                    expect(code).not.to.include('print LEVEL');
+                });
+
+                it('inlines an active enum and const used in an inactive branch', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub main()
+                        #if not DEBUG
+                            print Color.red
+                            print LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                });
+
+                it('inlines a namespaced inactive enum and const used in an inactive branch', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            enum Color
+                                red = "r"
+                            end enum
+                            const LEVEL = 3
+                            sub inside()
+                                print Color.red
+                                print LEVEL
+                            end sub
+                        #end if
+                        end namespace
+                        sub main()
+                        #if not DEBUG
+                            print alpha.Color.red
+                            print alpha.LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print "r"');
+                    expect(code).to.include('print 3');
+                    expect(code).not.to.include('alpha_Color_red');
+                    expect(code).not.to.include('alpha_LEVEL');
+                });
+
+                it('links an inactive class to its inactive parent when transpiling', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        class Parent
+                            sub new()
+                            end sub
+                        end class
+                        class Child extends Parent
+                            sub new()
+                                super()
+                            end sub
+                        end class
+                        #end if
+                        sub main()
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('instance = __Parent_builder()');
+                    expect(code).to.include('instance.super0_new = instance.new');
+                    expect(code).to.include('m.super0_new()');
+                });
+
+                it('qualifies an inactive class instantiated by a namespace-relative name', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        namespace alpha
+                        #if not DEBUG
+                            class Widget
+                            end class
+                            sub make()
+                                widget = new Widget()
+                            end sub
+                        #end if
+                        end namespace
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('widget = alpha_Widget()');
+                });
+
+                it('does not capture an inactive enum or const as a ternary closure parameter', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if not DEBUG
+                        enum Color
+                            red = "r"
+                        end enum
+                        const LEVEL = 3
+                        sub debugOnly(flag)
+                            print {k: flag ? Color.red : LEVEL}
+                        end sub
+                        #end if
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('(function(__bsCondition)');
+                    expect(code).to.include('return "r"');
+                    expect(code).to.include('return 3');
+                });
+
+                it('resolves a namespace-relative name to the active global declaration over an inactive namespaced one', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        class Foo
+                        end class
+                        enum Color
+                            red = "active-global"
+                        end enum
+                        const LEVEL = 1
+                        namespace NS
+                            sub main()
+                                f = new Foo()
+                                print Color.red
+                                print LEVEL
+                            end sub
+                        end namespace
+                        #if false
+                        namespace NS
+                            class Foo
+                            end class
+                            enum Color
+                                red = "inactive-ns"
+                            end enum
+                            const LEVEL = 2
+                        end namespace
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('f = Foo()');
+                    expect(code).not.to.include('f = NS_Foo()');
+                    expect(code).to.include('print "active-global"');
+                    expect(code).not.to.include('inactive-ns');
+                    expect(code).to.include('print 1');
+                });
+
+                it('keeps resolving to the inactive namespaced declaration when no active global one exists', async () => {
+                    const { code } = await transpile(`
+                        #if false
+                        namespace NS
+                            enum Color
+                                red = "inactive-ns"
+                            end enum
+                            sub inside()
+                                print Color.red
+                            end sub
+                        end namespace
+                        #end if
+                        sub main()
+                        end sub
+                    `);
+                    expect(code).to.include('print "inactive-ns"');
+                });
+
+                it('does not report a local variable shadowed by an inactive class', () => {
+                    const { diagnostics } = validate(`
+                        #if false
+                        class Foo
+                        end class
+                        #end if
+                        sub main()
+                            foo = 1
+                            print foo
+                        end sub
+                    `, { destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('still reports a local variable shadowed by an active class', () => {
+                    const { diagnostics } = validate(`
+                        class Foo
+                        end class
+                        sub main()
+                            foo = 1
+                            print foo
+                        end sub
+                    `, { destPath: 'source/main.bs' });
+                    expectDiagnostics(diagnostics, ['var-shadows-function']);
+                });
+
+                it('inlines the active enum in both branches when both branches declare it', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        enum Color
+                            red = "active-red"
+                        end enum
+                        #else
+                        enum Color
+                            red = "inactive-red"
+                        end enum
+                        #end if
+                        sub main()
+                        #if DEBUG
+                            print Color.red
+                        #else
+                            print Color.red
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code.match(/print "active-red"/g)).to.have.lengthOf(2);
+                    expect(code).not.to.include('inactive-red');
+                });
+
+                it('inlines the active const in both branches when both branches declare it', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if DEBUG
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                        #if DEBUG
+                            print LEVEL
+                        #else
+                            print LEVEL
+                        #end if
+                        end sub
+                    `, { bsConsts: { DEBUG: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code.match(/print 1/g)).to.have.lengthOf(2);
+                    expect(code).not.to.include('print 2');
+                });
+
+                it('does not report circular consts declared in an inactive branch', () => {
+                    const { diagnostics } = validate(`
+                        #if not DEBUG
+                        const A = B
+                        const B = A
+                        #end if
+                    `, { bsConsts: { DEBUG: true }, destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('picks the declaration using a file-level #const', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #const LOGGING = false
+                        #if LOGGING
+                        const LEVEL = 1
+                        #else
+                        const LEVEL = 2
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 2');
+                    expect(code).not.to.include('print 1');
+                });
+
+                it('picks the declaration from an #else if chain', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if A
+                        const LEVEL = 1
+                        #else if B
+                        const LEVEL = 2
+                        #else
+                        const LEVEL = 3
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { A: false, B: true } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 2');
+                    expect(code).not.to.include('print 1');
+                    expect(code).not.to.include('print 3');
+                });
+
+                it('picks the final #else declaration when every earlier condition is false', async () => {
+                    const { code, diagnostics } = await transpile(`
+                        #if A
+                        const LEVEL = 1
+                        #else if B
+                        const LEVEL = 2
+                        #else
+                        const LEVEL = 3
+                        #end if
+                        sub main()
+                            print LEVEL
+                        end sub
+                    `, { bsConsts: { A: false, B: false } });
+                    expectZeroDiagnostics(diagnostics);
+                    expect(code).to.include('print 3');
+                });
+            });
+
+            describe('declaration location', () => {
+                const chainBranchCases: Array<{ description: string; bsConsts: Record<string, boolean> }> = [
+                    { description: 'the #if branch is active', bsConsts: { A: true, B: false } },
+                    { description: 'the #else if branch is active', bsConsts: { A: false, B: true } },
+                    { description: 'the #else branch is active', bsConsts: { A: false, B: false } }
+                ];
+                for (const chainBranchCase of chainBranchCases) {
+                    it(`allows a function in every branch of a top-level #else if chain when ${chainBranchCase.description}`, () => {
+                        const { diagnostics } = validate(`
+                            #if A
+                            sub one()
+                            end sub
+                            #else if B
+                            sub two()
+                            end sub
+                            #else
+                            sub three()
+                            end sub
+                            #end if
+                        `, { bsConsts: chainBranchCase.bsConsts });
+                        expectZeroDiagnostics(diagnostics);
+                    });
+                }
+
+                it('allows a function in a nested #if at the top level', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #if true
+                        sub inner()
+                        end sub
+                        #end if
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('allows a function in the #else of a nested #if at the top level', () => {
+                    const { diagnostics } = validate(`
+                        #if true
+                        #if false
+                        #else
+                        sub inner()
+                        end sub
+                        #end if
+                        #end if
+                    `);
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('allows a function in a nested #if inside a namespace', () => {
+                    const { diagnostics } = validate(`
+                        namespace alpha
+                            #if true
+                            #if true
+                            sub inner()
+                            end sub
+                            #end if
+                            #end if
+                        end namespace
+                    `, { destPath: 'source/main.bs' });
+                    expectZeroDiagnostics(diagnostics);
+                });
+
+                it('still rejects a namespace in a nested #if inside a function', () => {
+                    const { diagnostics } = validate(`
+                        function f()
+                        #if true
+                        #if true
+                            namespace alpha
+                            end namespace
+                        #end if
+                        #end if
+                        end function
+                    `, { destPath: 'source/main.bs' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
+                });
+
+                it('still rejects a namespace inside an #else if chain within a function', () => {
+                    const { diagnostics } = validate(`
+                        function f()
+                        #if A
+                        #else if B
+                            namespace alpha
+                            end namespace
+                        #end if
+                        end function
+                    `, { bsConsts: { A: false, B: true }, destPath: 'source/main.bs' });
+                    expectDiagnostics(diagnostics, [
+                        { code: 'invalid-declaration-location', location: { range: util.createRange(4, 28, 4, 43) } }
+                    ]);
+                });
+            });
+        });
+    });
+
+    describe('inactive conditional compile branches', () => {
+        afterEach(() => {
+            fsExtra.removeSync(`${rootDir}/manifest`);
+        });
+
+        /**
+         * Validate the given lines in a fresh program and return the `inactive-conditional-compile-branch` diagnostics, those plus the `unreachable-code` ones, and every diagnostic code that was found
+         */
+        function validateLines(lines: string[], options?: { destPath?: string; bsConsts?: Record<string, boolean>; programOptions?: Partial<ConstructorParameters<typeof Program>[0]> }) {
+            fsExtra.removeSync(`${rootDir}/manifest`);
+            if (options?.bsConsts) {
+                const bsConstText = Object.entries(options.bsConsts).map(([name, value]) => `${name}=${value}`).join(';');
+                fsExtra.outputFileSync(`${rootDir}/manifest`, `title=test\nbs_const=${bsConstText}\n`);
+            }
+            const branchProgram = new Program({ rootDir: rootDir, ...options?.programOptions });
+            branchProgram.setFile(options?.destPath ?? 'source/main.bs', lines.join('\n'));
+            branchProgram.validate();
+            const diagnostics = branchProgram.getDiagnostics();
+            return {
+                program: branchProgram,
+                allCodes: diagnostics.map(diagnostic => diagnostic.code),
+                inactive: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.inactiveConditionalCompileBranch),
+                unreachable: diagnostics.filter(diagnostic => diagnostic.code === DiagnosticCodeMap.inactiveConditionalCompileBranch || diagnostic.code === DiagnosticCodeMap.unreachableCode)
+            };
+        }
+
+        function getRanges(diagnostics: BsDiagnostic[]) {
+            return diagnostics.map(diagnostic => diagnostic.location.range);
+        }
+
+        it('defines the diagnostic as a hint tagged unnecessary', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(inactive).to.have.lengthOf(1);
+            expect(inactive[0].severity).to.eql(DiagnosticSeverity.Hint);
+            expect(inactive[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+            expect(inactive[0].message).to.eql(DiagnosticMessages.inactiveConditionalCompileBranch().message);
+        });
+
+        it('carries the tags through to the LSP diagnostic', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(util.toDiagnostic(inactive[0], 'file:///source/main.bs').tags).to.eql([DiagnosticTag.Unnecessary]);
+        });
+
+        it('covers exactly the body lines of an inactive #if', () => {
+            const { inactive, allCodes } = validateLines([
+                'sub main()',
+                'end sub',
+                '#if false',
+                '    print "a"',
+                '    print "bb"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers only the #else body when the #if is active', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
+        });
+
+        it('covers only the #if body when the #else is active', () => {
+            const { inactive } = validateLines([
+                '#if not true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('covers the first and last bodies of an #else if chain when the middle branch is active', () => {
+            const { inactive } = validateLines([
+                '#const A = false',
+                '#const B = true',
+                '#if A',
+                'print "a"',
+                '#else if B',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([
+                util.createRange(3, 0, 4, 0),
+                util.createRange(7, 0, 8, 0)
+            ]);
+        });
+
+        it('covers every later body of an #else if chain once an earlier branch is active', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else if true',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([
+                util.createRange(3, 0, 4, 0),
+                util.createRange(5, 0, 6, 0)
+            ]);
+        });
+
+        it('covers the last body of an #else if chain when every condition is false', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#else if false',
+                'print "b"',
+                '#else',
+                'print "c"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([
+                util.createRange(1, 0, 2, 0),
+                util.createRange(3, 0, 4, 0)
+            ]);
+        });
+
+        it('ignores a comment on the directive line when the body is empty', () => {
+            const { inactive } = validateLines([
+                '#if false \' note',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
+        });
+
+        it('fades a blank body without the comment on the directive line', () => {
+            const { inactive } = validateLines([
+                '#if false \' note',
+                '',
+                '    ',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
+        });
+
+        it('reports the normal range when a directive line comment is followed by real content', () => {
+            const { inactive } = validateLines([
+                '#if false \' note',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('ignores a comment on an #else line when the body is empty', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                'print "a"',
+                '#else \' note',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
+        });
+
+        it('supports single-word #elseif and #endif directives', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a"',
+                '#elseif true',
+                'print "b"',
+                '#endif'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('does not report nested conditional compile statements inside an inactive branch', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                '#if true',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 6, 0)]);
+        });
+
+        it('reports an inactive branch nested inside an active branch', () => {
+            const { inactive } = validateLines([
+                '#if true',
+                '#if false',
+                'print "a"',
+                '#end if',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+        });
+
+        it('reports one range for an inactive body that does not parse', () => {
+            const { inactive, allCodes } = validateLines([
+                '#if false',
+                'x = = 1',
+                'if then',
+                'print "a" +',
+                'y = (',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 5, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers an inactive branch inside a function', () => {
+            const { inactive, allCodes } = validateLines([
+                'sub main()',
+                '    #if false',
+                '        print "a"',
+                '    #end if',
+                'end sub'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers an inactive branch in a class body', () => {
+            const { inactive, allCodes } = validateLines([
+                'class Foo',
+                '    #if false',
+                '        sub hidden()',
+                '        end sub',
+                '    #else',
+                '        sub shown()',
+                '        end sub',
+                '    #end if',
+                'end class'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('covers an inactive branch in a namespace body', () => {
+            const { inactive, allCodes } = validateLines([
+                'namespace alpha',
+                '    #if false',
+                '        sub hidden()',
+                '        end sub',
+                '    #end if',
+                'end namespace'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 4, 0)]);
+            expect(allCodes).to.eql(['inactive-conditional-compile-branch']);
+        });
+
+        it('does not report an inactive body with no lines, but fades one with only blank lines', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                '#end if',
+                '#if true',
+                'print "a"',
+                '#else',
+                '#end if',
+                '#if false',
+                '',
+                '    ',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(7, 0, 9, 0)]);
+        });
+
+        it('covers a body that only contains a comment', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                '\' just a comment',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('handles windows line endings', () => {
+            const { inactive } = validateLines(['#if false\r\nprint "a"\r\nprint "bb"\r\n#end if']);
+            expect(getRanges(inactive)).to.eql([util.createRange(1, 0, 3, 0)]);
+        });
+
+        it('uses a manifest bs_const to decide the branch', () => {
+            const source = [
+                '#if FLAG',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ];
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: true } }).inactive)).to.eql([util.createRange(3, 0, 4, 0)]);
+            expect(getRanges(validateLines(source, { bsConsts: { FLAG: false } }).inactive)).to.eql([util.createRange(1, 0, 2, 0)]);
+        });
+
+        it('uses a file #const to decide the branch', () => {
+            const { inactive } = validateLines([
+                '#const FLAG = false',
+                '#if FLAG',
+                'print "a"',
+                '#else',
+                'print "b"',
+                '#end if'
+            ]);
+            expect(getRanges(inactive)).to.eql([util.createRange(2, 0, 3, 0)]);
+        });
+
+        it('honors diagnosticSeverityOverrides', () => {
+            const { program: overrideProgram } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ], { programOptions: { diagnosticSeverityOverrides: { 'inactive-conditional-compile-branch': 'error' } } });
+            const diagnostics = overrideProgram.getDiagnostics();
+            expect(diagnostics.map(diagnostic => diagnostic.severity)).to.eql([DiagnosticSeverity.Error]);
+            expect(diagnostics[0].tags).to.eql([DiagnosticTag.Unnecessary]);
+        });
+
+        it('honors diagnosticFilters', () => {
+            const { program: filteredProgram } = validateLines([
+                '#if false',
+                'print "a"',
+                '#end if'
+            ], { programOptions: { diagnosticFilters: ['inactive-conditional-compile-branch'] } });
+            expect(filteredProgram.getDiagnostics()).to.eql([]);
+        });
+
+        it('honors bs:disable-line on the first line of the body', () => {
+            const { inactive } = validateLines([
+                '#if false',
+                'print "a" \' bs:disable-line: inactive-conditional-compile-branch',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
+        });
+
+        it('honors a file-level bs:disable', () => {
+            const { inactive } = validateLines([
+                '\' bs:disable: inactive-conditional-compile-branch',
+                '#if false',
+                'print "a"',
+                '#end if'
+            ]);
+            expect(inactive).to.eql([]);
+        });
+
+        describe('control flow', () => {
+            /**
+             * Validate the lines and return each `unreachable-code` diagnostic as `startLine:startCharacter-endLine:endCharacter reason`
+             */
+            function getRegions(lines: string[], destPath?: string, bsConsts?: Record<string, boolean>) {
+                const { unreachable } = validateLines(lines, { destPath: destPath, bsConsts: bsConsts });
+                const sorted = [...unreachable].sort((a, b) => a.location.range.start.line - b.location.range.start.line || a.location.range.start.character - b.location.range.start.character);
+                return sorted.map(diagnostic => {
+                    const range = diagnostic.location.range;
+                    return `${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character} ${diagnostic.message}`;
+                });
+            }
+
+            it('reports code after return with an exact range', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after return']);
+            });
+
+            it('reports Unreachable code after throw', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    throw "error"',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after throw']);
+            });
+
+            describe('select case', () => {
+                it('reports code after exit select within the case', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            exit select',
+                        '            print "a"',
+                        '    end select',
+                        '    print "b"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['4:12-4:21 Unreachable code after exit select']);
+                });
+
+                it('reports code after a select whose cases all exit, including case else', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            return',
+                        '        case else',
+                        '            throw "e"',
+                        '    end select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['7:4-7:13 Unreachable code after a select case whose cases all exit']);
+                });
+
+                it('does not report code after a select with no case else', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            return',
+                        '    end select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('does not report code after a select that an exit select leaves', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    select case x',
+                        '        case 1',
+                        '            if x then',
+                        '                exit select',
+                        '            end if',
+                        '            return',
+                        '        case else',
+                        '            return',
+                        '    end select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('does not let exit select end an infinite while loop', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    while true',
+                        '        select case x',
+                        '            case 1',
+                        '                exit select',
+                        '        end select',
+                        '    end while',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['7:4-7:13 Unreachable code after an infinite loop']);
+                });
+
+                it('lets exit while inside a case end an infinite while loop', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    while true',
+                        '        select case x',
+                        '            case 1',
+                        '                exit while',
+                        '        end select',
+                        '    end while',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('treats a label inside a case as a goto target', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto inside',
+                        '    print "a"',
+                        '    select case x',
+                        '        case 1',
+                        '            inside:',
+                        '            print "b"',
+                        '    end select',
+                        '    print "c"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['2:4-2:13 Unreachable code after goto']);
+                });
+
+                it('does not treat exit select outside of a select as an exit', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    exit select',
+                        '    print "a"',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql([]);
+                });
+
+                it('reports the case bodies of an unreachable select as part of one run', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    return',
+                        '    select case x',
+                        '        case 1',
+                        '            print "a"',
+                        '    end select',
+                        'end sub'
+                    ], 'source/main.bs')).to.eql(['2:4-5:14 Unreachable code after return']);
+                });
+            });
+
+            it('reports Unreachable code after end', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    end',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after end']);
+            });
+
+            it('reports Unreachable code after goto', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    again:',
+                    '    goto again',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['3:4-3:13 Unreachable code after goto']);
+            });
+
+            it('reports code after exit for and exit while', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    for i = 0 to 1',
+                    '        exit for',
+                    '        print "a"',
+                    '    end for',
+                    '    while true',
+                    '        exit while',
+                    '        print "b"',
+                    '    end while',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:17 Unreachable code after exit for',
+                    '7:8-7:17 Unreachable code after exit while'
+                ]);
+            });
+
+            it('reports code after continue for and continue while', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    for i = 0 to 1',
+                    '        continue for',
+                    '        print "a"',
+                    '    end for',
+                    '    while true',
+                    '        continue while',
+                    '        print "b"',
+                    '    end while',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:17 Unreachable code after continue',
+                    '7:8-7:17 Unreachable code after continue'
+                ]);
+            });
+
+            it('reports several statements after a return as one range', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    '    print "bb"',
+                    'end sub'
+                ])).to.eql(['2:4-3:14 Unreachable code after return']);
+            });
+
+            it('makes code reachable again at a label after a return', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    'done:',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after return']);
+            });
+
+            it('keeps code after a label reachable when a goto targets it', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto done',
+                    '    print "a"',
+                    'done:',
+                    '    print "b"',
+                    '    return',
+                    '    print "c"',
+                    'end sub'
+                ])).to.eql([
+                    '2:4-2:13 Unreachable code after goto',
+                    '6:4-6:13 Unreachable code after return'
+                ]);
+            });
+
+            it('does not treat stop as an exit', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    stop',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports code after an if where every branch exits', () => {
+                expect(getRegions([
+                    'sub main(x, y)',
+                    '    if x then',
+                    '        return',
+                    '    else if y then',
+                    '        throw "error"',
+                    '    else',
+                    '        end',
+                    '    end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['8:4-8:13 Unreachable code after an if statement whose branches all exit']);
+            });
+
+            it('does not treat an if without an else as exiting', () => {
+                expect(getRegions([
+                    'sub main(x, y)',
+                    '    if x then',
+                    '        return',
+                    '    else if y then',
+                    '        return',
+                    '    end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('does not treat an if as exiting when one branch continues', () => {
+                expect(getRegions([
+                    'sub main(x, y)',
+                    '    if x then',
+                    '        return',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports Unreachable code after a try/catch whose blocks both exit', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    try',
+                    '        return',
+                    '    catch e',
+                    '        throw e',
+                    '    end try',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['6:4-6:13 Unreachable code after a try/catch whose blocks both exit']);
+            });
+
+            it('does not treat a try/catch as exiting when only one block exits', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    try',
+                    '        return',
+                    '    catch e',
+                    '        print "b"',
+                    '    end try',
+                    '    try',
+                    '        print "c"',
+                    '    catch e',
+                    '        return',
+                    '    end try',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports code after a while true loop with no way out', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        print "x"',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after an infinite loop']);
+            });
+
+            it('sees through parentheses around a literal true loop condition', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while (true)',
+                    '        print "x"',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after an infinite loop']);
+            });
+
+            it('does not treat while true with an exit while as infinite', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true',
+                    '        if x then',
+                    '            exit while',
+                    '        end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('still treats while true as infinite when the only exit while belongs to a nested loop', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true',
+                    '        while x',
+                    '            exit while',
+                    '        end while',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['6:4-6:13 Unreachable code after an infinite loop']);
+            });
+
+            it('does not treat while true containing a goto as infinite', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        goto done',
+                    '    end while',
+                    '    print "a"',
+                    'done:',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('keeps code after while true unreachable when the body returns', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true',
+                    '        if x then',
+                    '            return',
+                    '        end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['6:4-6:13 Unreachable code after an infinite loop']);
+            });
+
+            it('never treats for and for each loops as infinite', () => {
+                expect(getRegions([
+                    'sub main(items)',
+                    '    for i = 0 to 10',
+                    '        print i',
+                    '    end for',
+                    '    print "a"',
+                    '    for each item in items',
+                    '        print item',
+                    '    end for',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('limits exit for inside an if inside a loop to that if block', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    for i = 0 to 10',
+                    '        if x then',
+                    '            exit for',
+                    '            print "a"',
+                    '        end if',
+                    '        print "b"',
+                    '    end for',
+                    '    print "c"',
+                    'end sub'
+                ])).to.eql(['4:12-4:21 Unreachable code after exit for']);
+            });
+
+            it('limits continue for inside an if inside a loop to that if block', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    for i = 0 to 10',
+                    '        if x then',
+                    '            continue for',
+                    '            print "a"',
+                    '        end if',
+                    '        print "b"',
+                    '    end for',
+                    '    print "c"',
+                    'end sub'
+                ])).to.eql(['4:12-4:21 Unreachable code after continue']);
+            });
+
+            it('reports the then branch of if false', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if false then',
+                    '        print "a"',
+                    '    end if',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('reports the then branch of a parenthesized false', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if (false) then',
+                    '        print "a"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('reports every else if and else after if true', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if true then',
+                    '        print "a"',
+                    '    else if x then',
+                    '        print "b"',
+                    '    else',
+                    '        print "c"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([
+                    '4:8-4:17 Unreachable code: an earlier condition is always true',
+                    '6:8-6:17 Unreachable code: an earlier condition is always true'
+                ]);
+            });
+
+            it('reports the body of an else if false', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        print "a"',
+                    '    else if false then',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:17 Unreachable code: condition is always false']);
+            });
+
+            it('does not fold comparisons', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if 1 = 1 then',
+                    '        print "a"',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    '    while 1 = 1',
+                    '        print "c"',
+                    '    end while',
+                    '    print "d"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports the body of while false', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while false',
+                    '        print "a"',
+                    '    end while',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds not', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if not true then',
+                    '        print "a"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds not in an else if', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        print "a"',
+                    '    else if not true then',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds nested parentheses and not', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    if (not (true)) then',
+                    '        print "a"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['2:8-2:17 Unreachable code: condition is always false']);
+            });
+
+            it('folds and with a known false on either side', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x and false then',
+                    '        print "a"',
+                    '    end if',
+                    '    if false and x then',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([
+                    '2:8-2:17 Unreachable code: condition is always false',
+                    '5:8-5:17 Unreachable code: condition is always false'
+                ]);
+            });
+
+            it('does not fold and when one side is unknown and the other is true', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x and true then',
+                    '        print "a"',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('folds or with a known true on either side', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x or true then',
+                    '        print "a"',
+                    '    else',
+                    '        print "b"',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:17 Unreachable code: an earlier condition is always true']);
+            });
+
+            it('treats while with a known true or condition as infinite', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    while true or x',
+                    '        print "a"',
+                    '    end while',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after an infinite loop']);
+            });
+
+            it('analyzes nested anonymous functions separately', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    callback = function()',
+                    '        return 1',
+                    '        print "inner"',
+                    '    end function',
+                    '    print "after"',
+                    'end sub'
+                ])).to.eql(['3:8-3:21 Unreachable code after return']);
+            });
+
+            it('keeps code after an anonymous function that returns reachable', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    callback = function()',
+                    '        return 1',
+                    '    end function',
+                    '    print "after"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports one outer range for an unreachable region containing a nested return', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    return',
+                    '    if x then',
+                    '        return',
+                    '        print "a"',
+                    '    end if',
+                    '    print "b"',
+                    'end sub'
+                ])).to.eql(['2:4-6:13 Unreachable code after return']);
+            });
+
+            it('does not report a function nested in an unreachable region separately', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    callback = function()',
+                    '        return 1',
+                    '        print "inner"',
+                    '    end function',
+                    'end sub'
+                ])).to.eql(['2:4-5:16 Unreachable code after return']);
+            });
+
+            it('ignores a return inside an inactive branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if false',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants']);
+            });
+
+            it('does not report an inactive branch separately inside a run that began before it', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    #if false',
+                    '        print "a"',
+                    '    #end if',
+                    '    print 2',
+                    'end sub'
+                ])).to.eql(['2:4-6:11 Unreachable code after return']);
+            });
+
+            it('reports an inactive branch that no run covers', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    #if false',
+                    '        print "a"',
+                    '    #end if',
+                    '    print 1',
+                    'end sub'
+                ])).to.eql([
+                    '3:0-4:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                    '5:4-5:11 Unreachable code after return'
+                ]);
+            });
+
+            it('analyzes statements inside an active conditional compile branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if true',
+                    '        return',
+                    '        print "a"',
+                    '    #end if',
+                    'end sub'
+                ])).to.eql(['3:8-3:17 Unreachable code after return']);
+            });
+
+            it('excludes trailing comments from the range', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print "a" \' trailing',
+                    '    \' another comment',
+                    'end sub'
+                ])).to.eql(['2:4-2:13 Unreachable code after return']);
+            });
+
+            it('analyzes class methods', () => {
+                expect(getRegions([
+                    'class Foo',
+                    '    sub bar()',
+                    '        return',
+                    '        print "a"',
+                    '    end sub',
+                    'end class'
+                ])).to.eql(['3:8-3:17 Unreachable code after return']);
+            });
+
+            it('analyzes namespace functions', () => {
+                expect(getRegions([
+                    'namespace alpha',
+                    '    sub beta()',
+                    '        return',
+                    '        print "a"',
+                    '    end sub',
+                    'end namespace'
+                ])).to.eql(['3:8-3:17 Unreachable code after return']);
+            });
+
+            it('keeps one range from before an #if through an active branch up to a label', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    #if true',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    #end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql(['2:4-4:15 Unreachable code after return']);
+            });
+
+            it('keeps one range across an active #if when the run continues past #end if', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    #if true',
+                    '        print 2',
+                    '    #else',
+                    '        print 3',
+                    '    #end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql(['2:4-8:11 Unreachable code after return']);
+            });
+
+            it('ends a run that begins inside an active branch at #end if', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if true',
+                    '        return',
+                    '        print 1',
+                    '    #else',
+                    '        print 2',
+                    '    #end if',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:15 Unreachable code after return',
+                    '5:0-6:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                    '7:4-7:11 Unreachable code after return'
+                ]);
+            });
+
+            it('reports code after #end if when the active branch returns', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if true',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql(['4:4-4:13 Unreachable code after return']);
+            });
+
+            it('reports code after #end if when an active else if branch returns', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if false',
+                    '        print 1',
+                    '    #else if true',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([
+                    '2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                    '6:4-6:13 Unreachable code after return'
+                ]);
+            });
+
+            it('follows the manifest bs_const for an exit in an #if branch', () => {
+                const source = [
+                    'sub main()',
+                    '    #if DEBUG',
+                    '        return',
+                    '    #end if',
+                    '    print "a"',
+                    'end sub'
+                ];
+                expect(getRegions(source, undefined, { DEBUG: true })).to.eql(['4:4-4:13 Unreachable code after return']);
+                expect(getRegions(source, undefined, { DEBUG: false })).to.eql(['2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants']);
+            });
+
+            it('ignores a goto inside an inactive branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    #if false',
+                    '        goto done',
+                    '    #end if',
+                    '    print "a"',
+                    'done:',
+                    'end sub'
+                ])).to.eql(['2:0-3:0 Inactive conditional compile branch: this code is not compiled with the current constants']);
+            });
+
+            it('treats while true as infinite when its only exit while is in an inactive branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        #if false',
+                    '            exit while',
+                    '        #end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([
+                    '3:0-4:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                    '6:4-6:13 Unreachable code after an infinite loop'
+                ]);
+            });
+
+            it('does not treat while true as infinite when its exit while is in an active branch', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    while true',
+                    '        #if true',
+                    '            exit while',
+                    '        #end if',
+                    '    end while',
+                    '    print "a"',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('makes code reachable from a label nested inside an if body after a return', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    goto skip',
+                    '    print 1',
+                    '    if x then',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql(['2:4-4:15 Unreachable code after goto']);
+            });
+
+            it('makes code reachable from a label nested inside an else branch', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    return',
+                    '    if x then',
+                    '        print 1',
+                    '    else',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end if',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:15 Unreachable code after return',
+                    '5:8-5:15 Unreachable code after return'
+                ]);
+            });
+
+            it('reports an if false body only up to a label inside it', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        goto skip',
+                    '    end if',
+                    '    if false then',
+                    '        print 1',
+                    'skip:',
+                    '        print 2',
+                    '    end if',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql(['5:8-5:15 Unreachable code: condition is always false']);
+            });
+
+            it('does not report an if false body when a label comes first', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if x then',
+                    '        goto skip',
+                    '    end if',
+                    '    if false then',
+                    'skip:',
+                    '        print 1',
+                    '    end if',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('reports the branches after if true only up to a label', () => {
+                expect(getRegions([
+                    'sub main(x)',
+                    '    if true then',
+                    '        print 1',
+                    '    else',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end if',
+                    'end sub'
+                ])).to.eql(['4:8-4:15 Unreachable code: an earlier condition is always true']);
+            });
+
+            it('keeps code after while true unreachable when a label in its body resumes the body', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    while true',
+                    '        print 1',
+                    'skip:',
+                    '        print 2',
+                    '    end while',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql(['7:4-7:11 Unreachable code after goto']);
+            });
+
+            it('makes code after a loop reachable when a label in its body is followed by an exit while', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    while true',
+                    '        print 1',
+                    'skip:',
+                    '        exit while',
+                    '    end while',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql([]);
+            });
+
+            it('makes code reachable from a label inside a for body', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    for i = 0 to 1',
+                    '        print 1',
+                    'skip:',
+                    '        print 2',
+                    '    end for',
+                    '    print 3',
+                    'end sub'
+                ])).to.eql(['3:8-3:15 Unreachable code after goto']);
+            });
+
+            it('makes code reachable from a label inside a catch block', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    goto skip',
+                    '    try',
+                    '        print 1',
+                    '    catch e',
+                    '        print 2',
+                    'skip:',
+                    '        print 3',
+                    '    end try',
+                    '    print 4',
+                    'end sub'
+                ])).to.eql([
+                    '3:8-3:15 Unreachable code after goto',
+                    '5:8-5:15 Unreachable code after goto'
+                ]);
+            });
+
+            it('does not count a label inside a nested function', () => {
+                expect(getRegions([
+                    'sub main()',
+                    '    return',
+                    '    callback = sub()',
+                    'skip:',
+                    '        print 1',
+                    '    end sub',
+                    '    print 2',
+                    'end sub'
+                ])).to.eql(['2:4-6:11 Unreachable code after return']);
+            });
+
+            describe('loops entered through a label', () => {
+                it('keeps the start of a while body reachable when a goto jumps to a label in it', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto skip',
+                        '    while x',
+                        '        print "a"',
+                        '        skip:',
+                        '        x = x - 1',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('keeps the start of a while body reachable when the label is inside an if', () => {
+                    expect(getRegions([
+                        'sub main(x, y)',
+                        '    goto skip',
+                        '    while x',
+                        '        print "a"',
+                        '        if y then',
+                        '            skip:',
+                        '            print "b"',
+                        '        end if',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('keeps the start of a while body reachable when the body ends with continue while after the label', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    return',
+                        '    while x',
+                        '        print "a"',
+                        '        skip:',
+                        '        continue while',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('keeps the start of a while true body reachable but reports the code after the loop', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto skip',
+                        '    while true',
+                        '        print "a"',
+                        '        skip:',
+                        '        print "b"',
+                        '    end while',
+                        '    print "after"',
+                        'end sub'
+                    ])).to.eql(['7:4-7:17 Unreachable code after goto']);
+                });
+
+                it('does not fade the headers of the statements that lead to a label deep in a while body', () => {
+                    expect(getRegions([
+                        'sub main(x, y)',
+                        '    return',
+                        '    print "dead"',
+                        '    while x',
+                        '        if y then',
+                        '            try',
+                        '                print "a"',
+                        '            catch e',
+                        '                print "b"',
+                        '                deep:',
+                        '                print "c"',
+                        '            end try',
+                        '        end if',
+                        '    end while',
+                        'end sub'
+                    ])).to.eql(['2:4-2:16 Unreachable code after return']);
+                });
+
+                it('keeps the start of a while body reachable inside a dead if false branch', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    goto skip',
+                        '    if false then',
+                        '        while x',
+                        '            print "a"',
+                        '            skip:',
+                        '            print "b"',
+                        '        end while',
+                        '    end if',
+                        'end sub'
+                    ])).to.eql([]);
+                });
+
+                it('still reports code before a label in a for loop body', () => {
+                    expect(getRegions([
+                        'sub main(x)',
+                        '    return',
+                        '    for i = 0 to 3',
+                        '        print "pre"',
+                        '        lbl:',
+                        '        print "post"',
+                        '    end for',
+                        'end sub'
+                    ])).to.eql(['3:8-3:19 Unreachable code after return']);
+                });
+            });
+
+            describe('inactive branches next to a run', () => {
+                const bsConsts = { DEBUG: true, PROD: false };
+
+                it('reports an inactive #if branch after a run that ends before it', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#end if',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql([
+                        '2:4-2:11 Unreachable code after return',
+                        '4:0-5:0 Inactive conditional compile branch: this code is not compiled with the current constants'
+                    ]);
+                });
+
+                it('reports an inactive #if branch when a label right after #end if ends the run', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#end if',
+                        'skip:',
+                        '    print 2',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql([
+                        '2:4-2:11 Unreachable code after return',
+                        '4:0-5:0 Inactive conditional compile branch: this code is not compiled with the current constants'
+                    ]);
+                });
+
+                it('reports the inactive #else after an active #if branch that starts with a label', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if DEBUG',
+                        'skip:',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql([
+                        '2:4-2:11 Unreachable code after return',
+                        '7:0-8:0 Inactive conditional compile branch: this code is not compiled with the current constants'
+                    ]);
+                });
+
+                it('does not report an inactive branch that lies inside a run ending within the chain', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#else',
+                        '    print 2',
+                        'skip:',
+                        '    print 3',
+                        '#end if',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql(['2:4-6:11 Unreachable code after return']);
+                });
+
+                it('keeps one range and no inactive hint when the run continues past #end if', () => {
+                    expect(getRegions([
+                        'sub main()',
+                        '    return',
+                        '    print 1',
+                        '#if PROD',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 2',
+                        'end sub'
+                    ], undefined, bsConsts)).to.eql(['2:4-6:11 Unreachable code after return']);
+                });
+
+                function expectNoOverlap(lines: string[]) {
+                    const ranges = getRanges(validateLines(lines, { bsConsts: bsConsts }).unreachable);
+                    for (let firstIndex = 0; firstIndex < ranges.length; firstIndex++) {
+                        for (let secondIndex = firstIndex + 1; secondIndex < ranges.length; secondIndex++) {
+                            const first = ranges[firstIndex];
+                            const second = ranges[secondIndex];
+                            const isDisjoint = util.comparePosition(first.end, second.start) <= 0 || util.comparePosition(second.end, first.start) <= 0;
+                            expect(isDisjoint, `${JSON.stringify(first)} overlaps ${JSON.stringify(second)}`).to.be.true;
+                        }
+                    }
+                }
+
+                it('ends a run that starts after a label in an active branch at #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    lbl:',
+                        '    return',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 3',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '7:4-7:11 Unreachable code after return',
+                        '9:0-10:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                        '11:4-11:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after a while true containing a label in an active branch at #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    while true',
+                        '        lbl:',
+                        '        print 2',
+                        '    end while',
+                        '    print 3',
+                        '    return',
+                        '    print 4',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 5',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '9:4-11:11 Unreachable code after return',
+                        '13:0-14:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                        '15:4-15:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after an if containing a label in an active branch at #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    if x',
+                        '        lbl:',
+                        '    end if',
+                        '    return',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 3',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '9:4-9:11 Unreachable code after return',
+                        '11:0-12:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                        '13:4-13:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after a label in a nested active branch at its own #end if', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    #if DEBUG',
+                        '        print 2',
+                        '        lbl:',
+                        '        return',
+                        '        print 3',
+                        '    #else',
+                        '        print "inactive inner"',
+                        '    #end if',
+                        '    print 4',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 5',
+                        'end sub'
+                    ];
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-6:15 Unreachable code after return',
+                        '9:8-9:15 Unreachable code after return',
+                        '11:0-12:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                        '13:4-13:11 Unreachable code after return',
+                        '15:0-16:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                        '17:4-17:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+
+                it('ends a run that starts after a label in an active branch at #end if with CRLF line endings', () => {
+                    const lines = [
+                        'sub main(x)',
+                        '    return',
+                        '    print 0',
+                        '#if DEBUG',
+                        '    print 1',
+                        '    lbl:',
+                        '    return',
+                        '    print 2',
+                        '#else',
+                        '    print "inactive"',
+                        '#end if',
+                        '    print 3',
+                        'end sub'
+                    ].map(line => `${line}\r`);
+                    expect(getRegions(lines, undefined, bsConsts)).to.eql([
+                        '2:4-4:11 Unreachable code after return',
+                        '7:4-7:11 Unreachable code after return',
+                        '9:0-10:0 Inactive conditional compile branch: this code is not compiled with the current constants',
+                        '11:4-11:11 Unreachable code after return'
+                    ]);
+                    expectNoOverlap(lines);
+                });
+            });
+
+            it('skips control flow analysis for the outer function when a nested anonymous function has a parse error', () => {
+                const { unreachable } = validateLines([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    inner = sub()',
+                    '        print (',
+                    '    end sub',
+                    'end sub'
+                ]);
+                expect(unreachable).to.eql([]);
+            });
+
+            it('skips control flow analysis for a function with a parse error', () => {
+                const { allCodes, unreachable } = validateLines([
+                    'sub main()',
+                    '    return',
+                    '    print 1',
+                    '    if true then',
+                    '        print 2',
+                    'end sub'
+                ]);
+                expect(allCodes.filter(code => code !== DiagnosticCodeMap.unreachableCode)).to.not.eql([]);
+                expect(unreachable).to.eql([]);
+            });
+
+            it('still analyzes other functions in a file with a parse error', () => {
+                const { unreachable } = validateLines([
+                    'sub first()',
+                    '    return',
+                    '    print 1',
+                    'end sub',
+                    'sub second()',
+                    '    if true then',
+                    '        print 2',
+                    'end sub'
+                ]);
+                expect(unreachable).to.have.lengthOf(1);
+            });
+
+            it('keeps the disable quick fixes available for control flow diagnostics', () => {
+                const { program, unreachable } = validateLines([
+                    'sub main()',
+                    '    return',
+                    '    print "a"',
+                    'end sub'
+                ]);
+                const file = program.getFile('source/main.bs');
+                const actions = program.getCodeActions(file.srcPath, unreachable[0].location.range);
+                expect(actions.some(action => action.title.startsWith('Disable unreachable-code for this file'))).to.be.true;
+            });
         });
     });
 
@@ -2476,6 +5432,660 @@ describe('BrsFileValidator', () => {
             program.setFile('source/main.brs', `sub a()\neval("print 1")\nend sub`);
             program.validate();
             expectNotFlagged();
+        });
+    });
+
+    describe('goto and labels', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(tempDir);
+            fsExtra.emptyDirSync(tempDir);
+        });
+        afterEach(() => {
+            fsExtra.emptyDirSync(tempDir);
+        });
+
+        function validate(code: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, code);
+            program.validate();
+        }
+
+        describe('label-in-try', () => {
+            it('flags a label inside a try block', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            foo:
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(2, 8, 2, 11) }
+                }]);
+            });
+
+            it('allows a label inside a catch block', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            print 1
+                        catch e
+                            foo:
+                        end try
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a label in a catch nested inside a try', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            try
+                                print 2
+                            catch e2
+                                foo:
+                            end try
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(5, 12, 5, 15) }
+                }]);
+            });
+
+            it('flags a label in a try nested inside a catch', () => {
+                validate(trim`
+                    sub main()
+                        try
+                            print 1
+                        catch e
+                            try
+                                foo:
+                            catch e2
+                            end try
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(5, 12, 5, 15) }
+                }]);
+            });
+
+            it('flags a label in a try inside an active #if', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        #if flag
+                            try
+                                foo:
+                            catch e
+                            end try
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(4, 12, 4, 15) }
+                }]);
+            });
+
+            it('does not flag a label in a try inside an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        #if false
+                            try
+                                foo:
+                            catch e
+                            end try
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 6, 0) } }
+                ]);
+            });
+
+            it('flags a label in a try inside an anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        cb = sub()
+                            try
+                                foo:
+                            catch e
+                            end try
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(3, 12, 3, 15) }
+                }]);
+            });
+        });
+
+        describe('edge cases', () => {
+            it('produces no label diagnostics for a goto outside any function', () => {
+                validate('goto foo');
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
+                        location: { range: util.createRange(0, 0, 0, 8) }
+                    }
+                ]);
+            });
+
+            it('reports only expected-label for a goto with no label', () => {
+                validate(trim`
+                    sub main()
+                        goto
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.expectedLabelIdentifierAfterGotoKeyword()
+                ]);
+            });
+
+            it('reports only label-in-try for a goto targeting a label inside a try', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        try
+                            foo:
+                        catch e
+                        end try
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelInTryBlock('foo'),
+                    location: { range: util.createRange(3, 8, 3, 11) }
+                }]);
+            });
+        });
+
+        describe('duplicate-label', () => {
+            it('flags two labels at the top level of a function', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        foo:
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.duplicateLabel('foo'),
+                    location: { range: util.createRange(2, 4, 2, 7) }
+                }]);
+            });
+
+            it('flags nested labels that duplicate a top-level one', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        if true then
+                            foo:
+                        end if
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(3, 8, 3, 11) }
+                    },
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(6, 8, 6, 11) }
+                    }
+                ]);
+            });
+
+            it('is case insensitive', () => {
+                validate(trim`
+                    sub main()
+                        Foo:
+                        FOO:
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.duplicateLabel('FOO'),
+                        location: { range: util.createRange(2, 4, 2, 7) }
+                    }
+                ]);
+            });
+
+            it('reports each later occurrence', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        foo:
+                        foo:
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(2, 4, 2, 7) }
+                    },
+                    {
+                        ...DiagnosticMessages.duplicateLabel('foo'),
+                        location: { range: util.createRange(3, 4, 3, 7) }
+                    }
+                ]);
+            });
+
+            it('allows the same name in different functions', () => {
+                validate(trim`
+                    sub a()
+                        foo:
+                    end sub
+                    sub b()
+                        foo:
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows the same name in an outer and an anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        cb = sub()
+                            foo:
+                        end sub
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows the same name in #if and #else branches', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        #if flag
+                            foo:
+                        #else
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(5, 0, 6, 0) } }
+                ]);
+            });
+        });
+
+        describe('label-not-found', () => {
+            it('flags a goto with no matching label', () => {
+                validate(trim`
+                    sub main()
+                        goto missing
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 9, 1, 16) }
+                }]);
+            });
+
+            it('matches labels case insensitively', () => {
+                validate(trim`
+                    sub main()
+                        goto Done
+                        done:
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('flags a label that only exists in another function', () => {
+                validate(trim`
+                    sub a()
+                        foo:
+                    end sub
+                    sub b()
+                        goto foo
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(4, 9, 4, 12) }
+                }]);
+            });
+
+            it('flags a label that only exists in a nested anonymous function', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        cb = sub()
+                            foo:
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(1, 9, 1, 12) }
+                }, {
+                    ...DiagnosticMessages.unreachableCode('Unreachable code after goto'),
+                    location: { range: util.createRange(2, 4, 4, 11) }
+                }]);
+            });
+
+            it('flags a goto in an anonymous function targeting an outer label', () => {
+                validate(trim`
+                    sub main()
+                        foo:
+                        cb = sub()
+                            goto foo
+                        end sub
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('foo'),
+                    location: { range: util.createRange(3, 13, 3, 16) }
+                }]);
+            });
+
+            it('flags a label that is only in an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if false
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    {
+                        ...DiagnosticMessages.labelNotFound('foo'),
+                        location: { range: util.createRange(1, 9, 1, 12) }
+                    },
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
+                ]);
+            });
+
+            it('finds a label active through a file-level #const', () => {
+                validate(trim`
+                    #const flag = true
+                    sub main()
+                        goto foo
+                        #if flag
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label inside a literal #if true', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if true
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label active through a #const inside the function', () => {
+                validate(trim`
+                    sub main()
+                        #const flag = true
+                        goto foo
+                        #if flag
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('finds a label active through a manifest bs_const', () => {
+                fsExtra.outputFileSync(`${rootDir}/manifest`, 'title=t\nbs_const=FLAG=true');
+                program.dispose();
+                program = new Program({ rootDir: rootDir });
+                validate(trim`
+                    sub main()
+                        goto foo
+                        #if FLAG
+                            foo:
+                        #end if
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not flag a goto inside an inactive #if', () => {
+                validate(trim`
+                    sub main()
+                        #if false
+                            goto missing
+                        #end if
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(2, 0, 3, 0) } }
+                ]);
+            });
+
+            it('flags a single-line if with goto to a missing label', () => {
+                validate(trim`
+                    sub main()
+                        if true then goto missing
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 22, 1, 29) }
+                }]);
+            });
+
+            it('works in brighterscript files', () => {
+                validate(trim`
+                    sub main()
+                        goto missing
+                    end sub
+                `, 'source/main.bs');
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.labelNotFound('missing'),
+                    location: { range: util.createRange(1, 9, 1, 16) }
+                }]);
+            });
+        });
+
+        describe('goto-into-for-loop', () => {
+            function expectIntoFor(code: string, range: Range) {
+                validate(code);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.gotoIntoForLoop('foo'),
+                    location: { range: range }
+                }]);
+            }
+
+            function expectNoDiagnostics(code: string) {
+                validate(code);
+                //code after a `goto` is faded, which says nothing about the jump itself
+                expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== DiagnosticCodeMap.unreachableCode));
+            }
+
+            it('warns when jumping from before a for loop into its body', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('warns when jumping into a for each body', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for each i in [1]
+                            foo:
+                        end for
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('warns when jumping into a for each nested in a while', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        while true
+                            for each i in [1]
+                                foo:
+                            end for
+                        end while
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('allows a jump within the same loop', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                            foo:
+                        end for
+                    end sub
+                `);
+            });
+
+            it('allows a jump from an inner loop to the outer loop body', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            foo:
+                            for j = 0 to 1
+                                goto foo
+                            end for
+                        end for
+                    end sub
+                `);
+            });
+
+            it('warns when jumping from an outer loop body into a nested inner loop', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                            for j = 0 to 1
+                                foo:
+                            end for
+                        end for
+                    end sub
+                `, util.createRange(2, 13, 2, 16));
+            });
+
+            it('warns when jumping from one loop into a sibling loop', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                        end for
+                        for j = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `, util.createRange(2, 13, 2, 16));
+            });
+
+            it('allows jumping into if, else, while and catch bodies', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        goto foo
+                        if true then
+                            foo:
+                        end if
+                        goto bar
+                        if false then
+                            print 1
+                        else
+                            bar:
+                        end if
+                        goto baz
+                        while false
+                            baz:
+                        end while
+                        goto qux
+                        try
+                            print 1
+                        catch e
+                            qux:
+                        end try
+                    end sub
+                `);
+            });
+
+            it('allows jumping into a select case body', () => {
+                validate(trim`
+                    sub main()
+                        x = 1
+                        goto foo
+                        select case x
+                            case 1
+                                foo:
+                            case else
+                                print 2
+                        end select
+                    end sub
+                `, 'source/main.bs');
+                //only the `case else` body is unreachable. The `select` itself is not, since the label makes `case 1` reachable
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unreachableCode('Unreachable code after goto'),
+                    location: { range: util.createRange(7, 12, 7, 19) }
+                }]);
+            });
+
+            it('allows jumping out of a loop', () => {
+                expectNoDiagnostics(trim`
+                    sub main()
+                        for i = 0 to 1
+                            goto foo
+                        end for
+                        foo:
+                    end sub
+                `);
+            });
+
+            it('warns for a label in a while inside a for when the goto is outside the for', () => {
+                expectIntoFor(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            while true
+                                foo:
+                            end while
+                        end for
+                    end sub
+                `, util.createRange(1, 9, 1, 12));
+            });
+
+            it('reports the diagnostic as a warning at the goto label', () => {
+                validate(trim`
+                    sub main()
+                        goto foo
+                        for i = 0 to 1
+                            foo:
+                        end for
+                    end sub
+                `);
+                const diagnostics = program.getDiagnostics().filter(x => x.code === 'goto-into-for-loop');
+                expect(diagnostics).to.have.lengthOf(1);
+                expect(diagnostics[0].severity).to.equal(DiagnosticSeverity.Warning);
+                expect(diagnostics[0].location.range).to.eql(util.createRange(1, 9, 1, 12));
+            });
         });
     });
 });

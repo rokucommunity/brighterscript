@@ -5981,7 +5981,10 @@ describe('ScopeValidator', () => {
                 #end if
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                //the `#else` in main.bs
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+            ]);
         });
     });
 
