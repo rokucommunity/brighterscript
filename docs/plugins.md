@@ -594,11 +594,13 @@ const location = util.getLocation(funcStmt.tokens.name); // { uri, range }
 
 `util.getLocation()` returns `undefined` for synthetic tokens and nodes (ones that were created in code rather than parsed from a file), since they have no position. A synthetic node won't get a source map entry, and diagnostics can't point at it.
 
-To give a synthetic token or node a position:
+A position describes where the code came from in the original source, so it's used as-is for source maps and diagnostics. Don't change the position of a parsed token or node. Only give one to a synthetic token or node you're creating:
 - **Borrow it from a real token or node in the same file** (preferred): `util.setBounds(node, someToken)`. This shares the file's real `source`, so the node combines correctly with the rest of that file's AST. The `create*` functions do the same when given a token or node: `createToken(TokenKind.Identifier, 'name', someToken)`.
-- **From a `Location`** (i.e. one from an xml file): `util.setLocation(node, location)`. To pass one to a `create*` function, convert it first: `createToken(TokenKind.Identifier, 'name', util.setLocation({} as Locatable, location))`.
+- **From a `Location` in a file**: `util.setLocation(node, location, file.sourceInfo)`. This maps the location into that file, so the node combines with the rest of its AST. If the location is in a different file (or its lines aren't in the file), the node is left without a position. To pass one to a `create*` function, convert it first: `createToken(TokenKind.Identifier, 'name', util.setLocation({} as Locatable, location, file.sourceInfo))`.
 
-Tokens and nodes don't have `location` or `range` properties. `Location` is only used for language server output (diagnostics, hovers, etc.), so use `util.getLocation()` when you need one.
+Code parsed from a snippet (i.e. `Parser.parse('...')` without a `srcPath`) has positions, but no uri. Those positions aren't in the file the code is added to, so lookups by position in that file (hover, definition, etc.) skip it, it isn't included in the bounds of nodes that also contain code from a file, and it doesn't get source map entries.
+
+`Location` is only used for language server output (diagnostics, hovers, etc.), so use `util.getLocation()` when you need one. Tokens and nodes still have read-only `location` and `range` properties to help existing plugins migrate, but they're deprecated and will be removed in a future release. They build a new `Location` on every read (so don't compare them with `===`). Tokens created by hand (i.e. `{ kind: ..., text: ... }` or `{ ...token }`) don't have them.
 
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
