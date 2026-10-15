@@ -209,6 +209,22 @@ describe('parser call expressions', () => {
     });
 
     describe('unfinished', () => {
+        it('does not crash on `@` or `?@` without an attribute name, and keeps parsing the function', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                sub doSomething(node)
+                    a = node?@
+                    b = node@
+                    print "still parsed"
+                end sub
+            `, { mode: ParseMode.BrighterScript });
+
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedAttributeNameAfterAtSymbol()
+            ]);
+            const bodyStatements = (ast.statements[0] as FunctionStatement).func.body.statements;
+            expect(bodyStatements.map(x => x.kind)).to.eql(['AssignmentStatement', 'AssignmentStatement', 'PrintStatement']);
+        });
+
         it('continues parsing inside unfinished function calls', () => {
             const { ast, diagnostics } = Parser.parse(`
                 sub doSomething(data)

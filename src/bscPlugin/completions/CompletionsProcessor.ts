@@ -208,8 +208,10 @@ export class CompletionsProcessor {
             beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
             shouldLookForMembers = true;
-        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc)) {
-            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Callfunc);
+        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc) || this.isTokenAdjacentTo(file, currentToken, TokenKind.QuestionCallfunc)) {
+            //`@.` or its optional chaining form `?@.`
+            const callfuncKind = this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc) ? TokenKind.Callfunc : TokenKind.QuestionCallfunc;
+            const dotToken = this.getAdjacentToken(file, currentToken, callfuncKind);
             beforeDotToken = file.getTokenBefore(dotToken);
             expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
             shouldLookForCallFuncMembers = true;

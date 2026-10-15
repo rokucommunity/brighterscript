@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isCallfuncExpression, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -198,6 +198,13 @@ export class BrsFileValidator {
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
                         location: node.tokens.methodName.location
                     });
+                }
+                //optional chaining (`?@.` and `@.name?(`) is emitted as-is, so the device must support it
+                if (node.tokens.operator?.kind === TokenKind.QuestionCallfunc) {
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.operator.location?.range);
+                }
+                if (node.tokens.openingParen?.kind === TokenKind.QuestionLeftParen) {
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.openingParen.location?.range);
                 }
             },
             DottedGetExpression: (node) => {
@@ -1381,7 +1388,9 @@ export class BrsFileValidator {
                 // a.b?[2] = true
                 (isIndexedGetExpression(node) && (node?.tokens.questionDot?.kind === TokenKind.QuestionDot || node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
                 // a?[1] = true
-                (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)
+                (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare) ||
+                // a?@.getChild().b = true or a@.getChild?().b = true
+                (isCallfuncExpression(node) && (node.tokens.operator?.kind === TokenKind.QuestionCallfunc || node.tokens.openingParen?.kind === TokenKind.QuestionLeftParen))
             ) {
                 //try to highlight the entire left-hand-side expression if possible
                 let range: Range;

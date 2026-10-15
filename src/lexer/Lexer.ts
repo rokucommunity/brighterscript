@@ -311,6 +311,10 @@ export class Lexer {
             } else if (this.peek() === '(' && !this.isStartOfStatement()) {
                 this.advance();
                 this.addToken(TokenKind.QuestionLeftParen);
+            } else if (this.peek() === '@' && this.peekNext() === '.') {
+                this.advance();
+                this.advance();
+                this.addToken(TokenKind.QuestionCallfunc);
             } else if (this.peek() === '@') {
                 this.advance();
                 this.addToken(TokenKind.QuestionAt);

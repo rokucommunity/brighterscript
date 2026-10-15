@@ -84,6 +84,7 @@ export enum TokenKind {
     QuestionLeftSquare = 'QuestionLeftSquare', // ?[
     QuestionLeftParen = 'QuestionLeftParen', // ?(
     QuestionAt = 'QuestionAt', // ?@
+    QuestionCallfunc = 'QuestionCallfunc', // ?@.
 
     // conditional compilation
     HashIf = 'HashIf', // #if
@@ -849,6 +850,7 @@ export const FixedTokenText: Partial<Record<TokenKind, string>> = {
     [TokenKind.QuestionLeftSquare]: '?[',
     [TokenKind.QuestionLeftParen]: '?(',
     [TokenKind.QuestionAt]: '?@',
+    [TokenKind.QuestionCallfunc]: '?@.',
     [TokenKind.Dollar]: '$',
     [TokenKind.Eof]: ''
 };

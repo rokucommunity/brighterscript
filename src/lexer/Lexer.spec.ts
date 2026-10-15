@@ -42,6 +42,24 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the optional callfunc operator', () => {
+        expectKinds('node?@.doSomething() node?@id node@.doSomething()', [
+            TokenKind.Identifier,
+            TokenKind.QuestionCallfunc,
+            TokenKind.Identifier,
+            TokenKind.LeftParen,
+            TokenKind.RightParen,
+            TokenKind.Identifier,
+            TokenKind.QuestionAt,
+            TokenKind.Identifier,
+            TokenKind.Identifier,
+            TokenKind.Callfunc,
+            TokenKind.Identifier,
+            TokenKind.LeftParen,
+            TokenKind.RightParen
+        ]);
+    });
+
     it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
         //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
         expectKinds(`?[ ?[ : ?[ ?[`, [

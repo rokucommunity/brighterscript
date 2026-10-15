@@ -4962,6 +4962,34 @@ describe('BrsFileValidator', () => {
                     ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
                 }]);
             });
+
+            it('flags optional chaining (callfunc) in .bs files when minFirmwareVersion is below 11.0.0', () => {
+                program = new Program({ minFirmwareVersion: '10.0.0' });
+                program.setFile('source/main.bs', `
+                    sub main(node)
+                        node?@.doSomething()
+                        node@.doSomething?()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }, {
+                    ...DiagnosticMessages.featureRequiresMinFirmwareVersion('optional chaining', '11.0.0', '10.0.0')
+                }]);
+            });
+
+            it('allows optional chaining (callfunc) in .bs files when minFirmwareVersion is 11.0.0 or above', () => {
+                program = new Program({ minFirmwareVersion: '11.0.0' });
+                program.setFile('source/main.bs', `
+                    sub main(node)
+                        node?@.doSomething()
+                        node@.doSomething?()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
         });
 
         describe('continue', () => {

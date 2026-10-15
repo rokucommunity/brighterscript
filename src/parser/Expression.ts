@@ -2045,7 +2045,9 @@ export class CallfuncExpression extends Expression {
         let result = [] as TranspileResult;
         result.push(
             ...this.callee.transpile(state),
-            state.sourceNode(this.tokens.operator, '.callfunc'),
+            //`?@.` is the optional chaining form of `@.`, so it becomes `?.callfunc`
+            state.sourceNode(this.tokens.operator, this.tokens.operator?.kind === TokenKind.QuestionCallfunc ? '?.callfunc' : '.callfunc'),
+            //this is `?(` when the call itself is optional (i.e. `node@.doSomething?()`)
             state.transpileToken(this.tokens.openingParen, '('),
             //the name of the function
             state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"'])
