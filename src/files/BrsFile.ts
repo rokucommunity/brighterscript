@@ -305,14 +305,14 @@ export class BrsFile implements BscFile {
     public get sourceInfo(): SourceInfo | undefined {
         const tokens = this.parser?.tokens;
         //every token from the same parse shares the same source, and the last token (`Eof`) always exists
-        return tokens?.[tokens.length - 1]?.source;
+        return tokens?.[tokens.length - 1]?.sourceInfo;
     }
 
     /**
      * Does the token contain the given offset (inclusive on both ends, excluding any trailing newline)
      */
     private tokenContainsOffset(token: Token, offset: number) {
-        return token.pos <= offset && offset <= util.getContentEnd(token);
+        return token.startPosition <= offset && offset <= util.getContentEnd(token);
     }
 
     /**
@@ -339,7 +339,7 @@ export class BrsFile implements BscFile {
             return undefined;
         }
         for (let token of this.parser.tokens) {
-            if (offset < token.pos) {
+            if (offset < token.startPosition) {
                 return token;
             }
         }
@@ -362,7 +362,7 @@ export class BrsFile implements BscFile {
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (node.source === source && node.pos <= offset && offset <= node.end) {
+            if (node.sourceInfo === source && node.startPosition <= offset && offset <= node.endPosition) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
@@ -897,7 +897,7 @@ export class BrsFile implements BscFile {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
-            if (offset < token.pos) {
+            if (offset < token.startPosition) {
                 let t = tokens[i - 1];
                 //return the token or the first token
                 return t ? t : tokens[0];

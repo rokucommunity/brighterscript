@@ -582,7 +582,7 @@ export class BrsFileValidator {
         const addVariable = (nameToken: Token | undefined, fallback: Locatable) => {
             const name = nameToken?.text?.toLowerCase();
             if (name && !variableLocatables.has(name)) {
-                variableLocatables.set(name, nameToken.source ? nameToken : fallback);
+                variableLocatables.set(name, nameToken.sourceInfo ? nameToken : fallback);
             }
         };
         // count all the parameters as they count as variables
