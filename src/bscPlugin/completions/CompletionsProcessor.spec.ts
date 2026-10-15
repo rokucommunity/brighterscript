@@ -1361,6 +1361,54 @@ describe('CompletionsProcessor', () => {
         });
     });
 
+    describe('class members in conditional compile branches', () => {
+        function getCompletionLabels(debugValue: boolean) {
+            program.setFile('source/main.bs', `
+                #const DEBUG = ${debugValue}
+                class Foo
+                    #if DEBUG
+                        function onlyDebug() as string
+                            return "debug"
+                        end function
+                    #else
+                        function onlyRelease() as string
+                            return "release"
+                        end function
+                        releaseField as integer
+                    #end if
+                    commonField as integer
+                end class
+                sub typed()
+                    f = new Foo()
+                    f.
+                end sub
+                sub untyped()
+                    thing.
+                end sub
+            `);
+            program.validate();
+            return {
+                typed: program.getCompletions('source/main.bs', util.createPosition(17, 22)).filter(x => !x.sortText).map(x => x.label).sort(),
+                untyped: program.getCompletions('source/main.bs', util.createPosition(20, 26)).map(x => x.label)
+            };
+        }
+
+        it('lists only the members of the active branch', () => {
+            const { typed, untyped } = getCompletionLabels(true);
+            expect(typed).to.eql(['commonField', 'onlyDebug']);
+            expect(untyped).to.include.members(['commonField', 'onlyDebug']);
+            expect(untyped).not.to.include.members(['onlyRelease']);
+            expect(untyped).not.to.include.members(['releaseField']);
+        });
+
+        it('lists the members of the else branch when the #if condition is not met', () => {
+            const { typed, untyped } = getCompletionLabels(false);
+            expect(typed).to.eql(['commonField', 'onlyRelease', 'releaseField']);
+            expect(untyped).to.include.members(['commonField', 'onlyRelease', 'releaseField']);
+            expect(untyped).not.to.include.members(['onlyDebug']);
+        });
+    });
+
     describe('const completions', () => {
         it('shows up in standard completions', () => {
             program.setFile('source/main.bs', `

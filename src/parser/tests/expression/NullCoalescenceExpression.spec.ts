@@ -224,16 +224,12 @@ describe('NullCoalescingExpression', () => {
             `, `
                 sub main()
                     user = {}
-                    a = (function(user)
-                            __bsConsequent = user.getAccount()
-                            if __bsConsequent <> invalid then
-                                return __bsConsequent
-                            else
-                                return {
-                                    "id": "default"
-                                }
-                            end if
-                        end function)(user)
+                    a = user.getAccount()
+                    if a = invalid then
+                        a = {
+                            "id": "default"
+                        }
+                    end if
                 end sub
             `);
         });
@@ -245,14 +241,10 @@ describe('NullCoalescingExpression', () => {
                 end sub
             `, `
                 sub main(obj)
-                    a = (function(obj)
-                            __bsConsequent = obj.link
-                            if __bsConsequent <> invalid then
-                                return __bsConsequent
-                            else
-                                return false
-                            end if
-                        end function)(obj)
+                    a = obj.link
+                    if a = invalid then
+                        a = false
+                    end if
                 end sub
             `);
         });
@@ -318,14 +310,10 @@ describe('NullCoalescingExpression', () => {
                 sub main()
                     user = {}
                     settings = {}
-                    a = (function(m, settings, user)
-                            __bsConsequent = user
-                            if __bsConsequent <> invalid then
-                                return __bsConsequent
-                            else
-                                return m.defaults.getAccount(settings.name)
-                            end if
-                        end function)(m, settings, user)
+                    a = user
+                    if a = invalid then
+                        a = m.defaults.getAccount(settings.name)
+                    end if
                 end sub
             `);
         });
@@ -337,12 +325,12 @@ describe('NullCoalescingExpression', () => {
                 end enum
                 sub main()
                     d = invalid
-                    a = d ?? Direction.up
+                    print d ?? Direction.up
                 end sub
             `, `
                 sub main()
                     d = invalid
-                    a = (function(d)
+                    print (function(d)
                             __bsConsequent = d
                             if __bsConsequent <> invalid then
                                 return __bsConsequent
@@ -359,12 +347,12 @@ describe('NullCoalescingExpression', () => {
                 const USER = "user"
                 sub main()
                     settings = {}
-                    a = m.defaults.getAccount(settings.name) ?? USER
+                    print m.defaults.getAccount(settings.name) ?? USER
                 end sub
             `, `
                 sub main()
                     settings = {}
-                    a = (function(m, settings)
+                    print (function(m, settings)
                             __bsConsequent = m.defaults.getAccount(settings.name)
                             if __bsConsequent <> invalid then
                                 return __bsConsequent
@@ -374,6 +362,223 @@ describe('NullCoalescingExpression', () => {
                         end function)(m, settings)
                 end sub
             `);
+        });
+
+        describe('as the value of an assignment', () => {
+            it('assigns a local target directly when the alternate does not read it', async () => {
+                await testTranspile(`
+                    namespace mc
+                        function getPath(obj, path)
+                        end function
+                    end namespace
+                    sub main(task)
+                        endpoints = mc.getPath(task.output, "data.endpoints") ?? {}
+                    end sub
+                `, `
+                    function mc_getPath(obj, path)
+                    end function
+
+                    sub main(task)
+                        endpoints = mc_getPath(task.output, "data.endpoints")
+                        if endpoints = invalid then
+                            endpoints = {}
+                        end if
+                    end sub
+                `);
+            });
+
+            it('uses a temp when the alternate reads the local being assigned', async () => {
+                await testTranspile(`
+                    sub main(node)
+                        node = node.next ?? node
+                    end sub
+                `, `
+                    sub main(node)
+                        __bsc_tmp_coalesce = node.next
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = node
+                        end if
+                        node = __bsc_tmp_coalesce
+                    end sub
+                `);
+            });
+
+            it('uses a temp for dotted set targets', async () => {
+                await testTranspile(`
+                    sub main(task)
+                        m.value = task.output ?? {}
+                    end sub
+                `, `
+                    sub main(task)
+                        __bsc_tmp_coalesce = task.output
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = {}
+                        end if
+                        m.value = __bsc_tmp_coalesce
+                    end sub
+                `);
+            });
+
+            it('uses a temp for indexed set targets', async () => {
+                await testTranspile(`
+                    sub main(task, arr)
+                        arr[0] = task.output ?? {}
+                    end sub
+                `, `
+                    sub main(task, arr)
+                        __bsc_tmp_coalesce = task.output
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = {}
+                        end if
+                        arr[0] = __bsc_tmp_coalesce
+                    end sub
+                `);
+            });
+
+            it('uses a temp for augmented assignments', async () => {
+                await testTranspile(`
+                    sub main(task)
+                        total = 1
+                        total += task.count ?? 1
+                    end sub
+                `, `
+                    sub main(task)
+                        total = 1
+                        __bsc_tmp_coalesce = task.count
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = 1
+                        end if
+                        total += __bsc_tmp_coalesce
+                    end sub
+                `);
+            });
+
+            it('handles a parenthesized value', async () => {
+                await testTranspile(`
+                    sub main(task)
+                        a = (task.output ?? {})
+                    end sub
+                `, `
+                    sub main(task)
+                        a = task.output
+                        if a = invalid then
+                            a = {}
+                        end if
+                    end sub
+                `);
+            });
+
+            it('flattens a nested coalesce in the consequent', async () => {
+                await testTranspile(`
+                    sub main(task)
+                        a = (task.a ?? task.b) ?? task.c
+                    end sub
+                `, `
+                    sub main(task)
+                        a = task.a
+                        if a = invalid then
+                            a = task.b
+                        end if
+                        if a = invalid then
+                            a = task.c
+                        end if
+                    end sub
+                `);
+            });
+
+            it('only evaluates a nested coalesce in the alternate when needed', async () => {
+                await testTranspile(`
+                    sub main(task)
+                        a = task.a ?? (task.b ?? task.c)
+                    end sub
+                `, `
+                    sub main(task)
+                        a = task.a
+                        if a = invalid then
+                            a = task.b
+                            if a = invalid then
+                                a = task.c
+                            end if
+                        end if
+                    end sub
+                `);
+            });
+
+            it('rewrites a ternary in the alternate', async () => {
+                await testTranspile(`
+                    sub main(task, x)
+                        a = task.a ?? (x > 1 ? "big" : "small")
+                    end sub
+                `, `
+                    sub main(task, x)
+                        a = task.a
+                        if a = invalid then
+                            if x > 1 then
+                                a = "big"
+                            else
+                                a = "small"
+                            end if
+                        end if
+                    end sub
+                `);
+            });
+
+            it('rewrites a coalesce inside a single-line if', async () => {
+                await testTranspile(`
+                    sub main(task, x)
+                        if x then a = task.a ?? 2
+                    end sub
+                `, `
+                    sub main(task, x)
+                        if x then
+                            a = task.a
+                            if a = invalid then
+                                a = 2
+                            end if
+                        end if
+                    end sub
+                `);
+            });
+
+            it('rewrites a coalesce inside a function expression', async () => {
+                await testTranspile(`
+                    sub main(task)
+                        callback = function(task)
+                            return task
+                        end function
+                        result = callback(task) ?? {}
+                    end sub
+                `, `
+                    sub main(task)
+                        callback = function(task)
+                            return task
+                        end function
+                        result = callback(task)
+                        if result = invalid then
+                            result = {}
+                        end if
+                    end sub
+                `);
+            });
+
+            it('leaves a coalesce that is only part of the value as an inline function', async () => {
+                await testTranspile(`
+                    sub main(task)
+                        a = (task.count ?? 0) + 1
+                    end sub
+                `, `
+                    sub main(task)
+                        a = ((function(task)
+                                __bsConsequent = task.count
+                                if __bsConsequent <> invalid then
+                                    return __bsConsequent
+                                else
+                                    return 0
+                                end if
+                            end function)(task)) + 1
+                    end sub
+                `);
+            });
         });
     });
 });
