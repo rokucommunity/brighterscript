@@ -4,8 +4,8 @@ import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
-import type { Location, Position } from 'vscode-languageserver-protocol';
+import { isBlock, isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
+import type { Location, Position, Range } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import type { FinalizedBsConfig } from './BsConfig';
@@ -81,6 +81,11 @@ export class DiagnosticManager {
 
     public program: Program;
 
+    /**
+     * The keys of the diagnostics that came from lexing and parsing
+     */
+    private parseDiagnosticKeys = new Set<string>();
+
     private fileUriMap = new Map<string, Set<string>>();
     private tagMap = new Map<string, Set<string>>();
     private scopeMap = new Map<string, Set<string>>();
@@ -96,6 +101,19 @@ export class DiagnosticManager {
     public register(diagnostics: Array<BsDiagnosticInput>, context?: DiagnosticContext);
     public register(diagnostics: Array<DiagnosticContextPair>);
     public register(diagnosticArg: BsDiagnosticInput | Array<BsDiagnosticInput | DiagnosticContextPair>, context?: DiagnosticContext) {
+        this.registerDiagnostics(diagnosticArg, context, false);
+    }
+
+    /**
+     * Registers the lexer and parser diagnostics of a file.
+     * Unlike other diagnostics, these are dropped while the code they describe is in an inactive `#if` / `#else if` / `#else` branch,
+     * because the device never compiles that code. The branches follow the file's most recent validation.
+     */
+    public registerParseDiagnostics(diagnostics: BsDiagnosticInput[]) {
+        this.registerDiagnostics(diagnostics, undefined, true);
+    }
+
+    private registerDiagnostics(diagnosticArg: BsDiagnosticInput | Array<BsDiagnosticInput | DiagnosticContextPair>, context: DiagnosticContext | undefined, isParseDiagnostic: boolean) {
         const diagnostics = Array.isArray(diagnosticArg) ? diagnosticArg : [{ diagnostic: diagnosticArg, context: context }];
         for (const diagnosticData of diagnostics) {
             const diagnostic = isBsDiagnostic(diagnosticData) ? diagnosticData as BsDiagnosticInput : (diagnosticData as DiagnosticContextPair).diagnostic;
@@ -116,6 +134,11 @@ export class DiagnosticManager {
             });
 
             const cachedDiagnostic = cacheData.diagnostic;
+            if (isParseDiagnostic) {
+                this.parseDiagnosticKeys.add(key);
+            } else {
+                this.parseDiagnosticKeys.delete(key);
+            }
             if (fromCache) {
                 this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, relatedInformation);
             }
@@ -186,8 +209,12 @@ export class DiagnosticManager {
 
     private getNonSuppressedDiagnostics() {
         const results = [] as Array<BsDiagnostic>;
+        const isInInactiveBranch = this.createInactiveBranchDetector();
         for (const cachedDiagnostic of this.diagnosticsCache.values()) {
             const storedDiagnostic = cachedDiagnostic.diagnostic;
+            if (isInInactiveBranch(storedDiagnostic)) {
+                continue;
+            }
             let location = storedDiagnostic.location;
             let message = storedDiagnostic.message;
             if (!this.getUri(location)) {
@@ -241,6 +268,43 @@ export class DiagnosticManager {
     }
 
     /**
+     * Create a function that tells whether a diagnostic is a lexer or parser diagnostic about code the device does not compile (an inactive `#if` / `#else if` / `#else` branch).
+     * Other diagnostics are never about inactive branches because the validators skip them. Each file's inactive branches are collected at most once per call.
+     */
+    private createInactiveBranchDetector() {
+        const inactiveRangesByUri = new Map<string, Range[]>();
+        return (diagnostic: StoredDiagnostic) => {
+            if (!this.parseDiagnosticKeys.has(diagnostic.key)) {
+                return false;
+            }
+            const uri = this.getUri(diagnostic.location);
+            const start = this.getStart(diagnostic.location);
+            if (!uri || !start) {
+                return false;
+            }
+            const uriLower = uri.toLowerCase();
+            let inactiveRanges = inactiveRangesByUri.get(uriLower);
+            if (!inactiveRanges) {
+                const file = this.program?.getFile(uri);
+                inactiveRanges = [];
+                if (isBrsFile(file)) {
+                    // eslint-disable-next-line @typescript-eslint/dot-notation
+                    for (const statement of file['_cachedLookups'].conditionalCompileStatements) {
+                        for (const branch of [statement.thenBranch, statement.elseBranch]) {
+                            if (isBlock(branch) && branch.isActive === false && branch.sourceInfo) {
+                                inactiveRanges.push(util.getLocation(branch).range);
+                            }
+                        }
+                    }
+                }
+                inactiveRangesByUri.set(uriLower, inactiveRanges);
+            }
+            //a branch runs from the end of its opening directive to the start of its closing directive, so only the lines strictly between them are inactive
+            return inactiveRanges.some(range => range.start.line < start.line && start.line < range.end.line);
+        };
+    }
+
+    /**
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      */
     public isDiagnosticSuppressed(diagnostic: BsDiagnostic) {
@@ -261,7 +325,7 @@ export class DiagnosticManager {
         let isStartComputed = false;
         for (let flag of file?.commentFlags ?? []) {
             if (!isStartComputed) {
-                start = this.isDetachedLocatable(location) ? util.getStartPosition(location) : location?.range?.start;
+                start = this.getStart(location);
                 isStartComputed = true;
             }
             if (!start || !util.rangeContains(flag.affectedRange, start)) {
@@ -302,6 +366,7 @@ export class DiagnosticManager {
 
     public clear() {
         this.diagnosticsCache.clear();
+        this.parseDiagnosticKeys.clear();
     }
 
     public clearForFile(fileSrcPath: string) {
@@ -522,6 +587,7 @@ export class DiagnosticManager {
         const cachedData = this.diagnosticsCache.get(key);
         if (cachedData.contexts.size === 0) {
             this.diagnosticsCache.delete(key);
+            this.parseDiagnosticKeys.delete(key);
             this.fileUriMap.get(this.getUri(diagnostic.location)?.toLowerCase())?.delete(key);
         }
     }
@@ -547,9 +613,10 @@ export class DiagnosticManager {
     }
 
     private isDetachedLocatable(location: StoredLocation | DiagnosticLocationInput): location is DetachedLocatable {
-        //a `Location` always has a `uri` and never a `pos`. Tokens and nodes always have a `pos` key (even synthetic ones, where it's undefined),
-        //and may also have deprecated `range`/`location` getters, so those can't be used to tell them apart
-        return !!location && ('pos' in location || !('uri' in location));
+        //a `Location` always has a `uri` and never a `startPosition`. Tokens and nodes always have a `startPosition` key (even synthetic ones, where it's undefined),
+        //and may also have deprecated `range`/`location` getters, so those can't be used to tell them apart.
+        //never check for `source` here: that's the diagnostic's own `source` string (i.e. 'brs' or 'bslint'), not a locatable field
+        return !!location && ('startPosition' in location || !('uri' in location));
     }
 
     /**
@@ -560,9 +627,9 @@ export class DiagnosticManager {
         if (!this.isDetachedLocatable(location)) {
             return location;
         }
-        const detached: DetachedLocatable = { pos: location.pos, end: location.end, source: location.source };
+        const detached: DetachedLocatable = { startPosition: location.startPosition, endPosition: location.endPosition, sourceInfo: location.sourceInfo };
         //`util.getLocation()` keeps a newline-terminated token on its own line by looking at its text, so keep just enough text for that
-        const newlineLength = location.source ? location.end - util.getContentEnd(location) : 0;
+        const newlineLength = location.sourceInfo ? location.endPosition - util.getContentEnd(location) : 0;
         if (newlineLength > 0) {
             detached.text = newlineLength === 2 ? '\r\n' : '\n';
         }
@@ -570,12 +637,16 @@ export class DiagnosticManager {
     }
 
     private getUri(location: StoredLocation | undefined): string | undefined {
-        return this.isDetachedLocatable(location) ? location.source?.uri : location?.uri;
+        return this.isDetachedLocatable(location) ? location.sourceInfo?.uri : location?.uri;
+    }
+
+    private getStart(location: StoredLocation | undefined): Position | undefined {
+        return this.isDetachedLocatable(location) ? util.getStartPosition(location) : location?.range?.start;
     }
 
     private getLocationKey(location: StoredLocation | undefined) {
         if (this.isDetachedLocatable(location)) {
-            return `${location.source?.uri ?? 'No uri'} @${location.pos}-${location.end}`;
+            return `${location.sourceInfo?.uri ?? 'No uri'} @${location.startPosition}-${location.endPosition}`;
         }
         return `${location?.uri ?? 'No uri'} ${util.rangeToString(location?.range)}`;
     }
