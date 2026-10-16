@@ -7,7 +7,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { ExpressionStatement, FunctionStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectDiagnosticsIncludes, testLocatable } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, getDiagnosticRange, testLocatable } from '../../../testHelpers.spec';
 import { isAssignmentStatement, isCallExpression, isDottedGetExpression, isDottedSetStatement, isExpressionStatement, isIndexedGetExpression, isReturnStatement } from '../../../astUtils/reflection';
 import { util } from '../../../util';
 
@@ -37,7 +37,7 @@ describe('parser call expressions', () => {
         expect(ast.statements).to.be.length.greaterThan(0);
 
         //ALL of the diagnostics should be on the `DoThin` line
-        let lineNumbers = diagnostics.map(x => x.location.range.start.line);
+        let lineNumbers = diagnostics.map(x => getDiagnosticRange(x).start.line);
         for (let lineNumber of lineNumbers) {
             expect(lineNumber).to.equal(2);
         }
@@ -60,7 +60,7 @@ describe('parser call expressions', () => {
         ]);
         expect(ast.statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
-        expect(diagnostics[0].location.range.end.character).to.be.lessThan(25);
+        expect(getDiagnosticRange(diagnostics[0]).end.character).to.be.lessThan(25);
     });
 
     it('allows closing parentheses on separate line in BrighterScript mode', () => {

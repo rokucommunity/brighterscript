@@ -1,12 +1,11 @@
 /* eslint-disable func-names */
 import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
-import type { SourceInfo, Token } from './Token';
+import type { Locatable, SourceInfo, Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Location } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
 import { TokenObject } from './TokenObject';
-import type { BsDiagnostic } from '../interfaces';
+import type { BsDiagnosticInput } from '../interfaces';
 
 /**
  * Numeric type designators can only be one of these characters
@@ -37,7 +36,7 @@ export class Lexer {
     /**
      * The errors produced from `source.`
      */
-    public diagnostics: BsDiagnostic[];
+    public diagnostics: BsDiagnosticInput[];
 
     /**
      * The options used to scan this file
@@ -1197,11 +1196,11 @@ export class Lexer {
     }
 
     /**
-     * Creates a `Location` at the lexer's current position
-     * @returns the location of `text`
+     * Creates a `Locatable` at the lexer's current position
+     * @returns the locatable of `text`
      */
-    private locationOf(): Location {
-        return util.getLocation({ startPosition: this.start, endPosition: this.current, sourceInfo: this.sourceInfo });
+    private locationOf(): Locatable {
+        return { startPosition: this.start, endPosition: this.current, sourceInfo: this.sourceInfo };
     }
 }
 

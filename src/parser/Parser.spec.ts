@@ -9,7 +9,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement,
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, getDiagnosticRange, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -169,7 +169,7 @@ describe('parser', () => {
                 sub main()
                     call()a
                 end sub
-            `).diagnostics.map(x => rangeToArray(x.location.range))).to.eql([
+            `).diagnostics.map(x => rangeToArray(getDiagnosticRange(x)))).to.eql([
                 [2, 26, 2, 27],
                 [2, 27, 2, 28]
             ]);
@@ -185,7 +185,7 @@ describe('parser', () => {
                 DiagnosticMessages.expectedStatement().message
             );
 
-            expect(diagnostics[0]?.location.range).to.eql(
+            expect(getDiagnosticRange(diagnostics[0])).to.eql(
                 Range.create(3, 20, 3, 32)
             );
         });
@@ -2527,7 +2527,7 @@ describe('parser', () => {
                 #end if
                 end sub
             `, ParseMode.BrighterScript, { debug: false });
-            expect(diagnostics.map(diagnostic => diagnostic.location.range.start.line)).to.include.members([3, 7]);
+            expect(diagnostics.map(diagnostic => getDiagnosticRange(diagnostic).start.line)).to.include.members([3, 7]);
         });
 
         it('allows a chain with #else if to end at end of file without a trailing newline', () => {

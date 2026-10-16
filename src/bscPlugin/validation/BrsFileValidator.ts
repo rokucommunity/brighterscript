@@ -13,8 +13,8 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
-import type { Location, Position } from 'vscode-languageserver';
-import type { Locatable, Token } from '../../lexer/Token';
+import type { Location } from 'vscode-languageserver';
+import type { Locatable, SourceInfo, Token } from '../../lexer/Token';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
@@ -56,7 +56,7 @@ export class BrsFileValidator {
     /**
      * Parser diagnostics sorted by start position. Each entry also holds the furthest end among the entries up to and including it.
      */
-    private parseDiagnosticIndex: Array<{ start: Position; furthestEnd: Position }> | undefined;
+    private parseDiagnosticIndex: Array<{ startPosition: number; furthestEndPosition: number }> | undefined;
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
@@ -930,36 +930,45 @@ export class BrsFileValidator {
      * The diagnostics are indexed once per validator, so each call is a binary search instead of a scan.
      */
     private hasParseDiagnosticWithin(func: FunctionExpression) {
-        const functionRange = util.getLocation(func)?.range;
-        if (!functionRange) {
+        if (func.startPosition === undefined || !func.sourceInfo) {
             return false;
         }
-        const index = this.getParseDiagnosticIndex();
+        const index = this.getParseDiagnosticIndex(func.sourceInfo);
         let low = 0;
         let high = index.length;
         while (low < high) {
             const middle = Math.floor((low + high) / 2);
-            if (util.comparePosition(index[middle].start, functionRange.end) < 0) {
+            if (index[middle].startPosition < func.endPosition) {
                 low = middle + 1;
             } else {
                 high = middle;
             }
         }
-        return low > 0 && util.comparePosition(index[low - 1].furthestEnd, functionRange.start) > 0;
+        return low > 0 && index[low - 1].furthestEndPosition > func.startPosition;
     }
 
-    private getParseDiagnosticIndex() {
+    private getParseDiagnosticIndex(sourceInfo: SourceInfo) {
         if (!this.parseDiagnosticIndex) {
-            const ranges = this.event.file.parser.diagnostics
-                .map(diagnostic => diagnostic.location?.range)
-                .filter(range => !!range)
-                .sort((rangeA, rangeB) => util.comparePosition(rangeA.start, rangeB.start));
-            let furthestEnd: Position;
-            this.parseDiagnosticIndex = ranges.map(range => {
-                if (!furthestEnd || util.comparePosition(range.end, furthestEnd) > 0) {
-                    furthestEnd = range.end;
-                }
-                return { start: range.start, furthestEnd: furthestEnd };
+            const spans = this.event.file.parser.diagnostics
+                //parser diagnostics are usually Locatables (tokens/nodes). Convert any resolved `Location` into positions too
+                .map(diagnostic => {
+                    const location = diagnostic.location;
+                    if (location && ('startPosition' in location || !('uri' in location))) {
+                        return location as Locatable;
+                    }
+                    const range = (location as Location)?.range;
+                    return {
+                        startPosition: util.getOffset(sourceInfo, range?.start),
+                        endPosition: util.getOffset(sourceInfo, range?.end)
+                    };
+                })
+                //synthetic locatables have no positions
+                .filter(span => span?.startPosition !== undefined && span.endPosition !== undefined)
+                .sort((spanA, spanB) => spanA.startPosition - spanB.startPosition);
+            let furthestEndPosition = -1;
+            this.parseDiagnosticIndex = spans.map(span => {
+                furthestEndPosition = Math.max(furthestEndPosition, span.endPosition);
+                return { startPosition: span.startPosition, furthestEndPosition: furthestEndPosition };
             });
         }
         return this.parseDiagnosticIndex;
