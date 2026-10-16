@@ -916,7 +916,7 @@ describe('AstNode', () => {
                 sub main(order)
                     with order
                         .id = 1
-                        print .name; .items[0]
+                        .first = .items[0]
                         .save()
                         with .customer
                             .name = "Ann"

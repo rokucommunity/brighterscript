@@ -108,7 +108,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression, isWithStatement } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
@@ -3138,14 +3138,20 @@ export class Parser {
         this.consumeStatementSeparators(true);
         const statements: Statement[] = [];
         const flatGlobalTerminators = this.globalTerminators.flat().flat();
+        //only a `with` statement's body ends with `end with`
+        const isWithBody = terminators.includes(TokenKind.EndWith);
         while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators) && !this.checkSelectCaseTerminator()) {
             //grab the location of the current token
             let loopCurrent = this.current;
+            const startToken = this.peek();
             let dec = this.declaration();
             if (dec) {
                 if (!isAnnotationExpression(dec)) {
                     this.consumePendingAnnotations(dec);
                     statements.push(dec);
+                    if (isWithBody) {
+                        this.validateWithBodyStatement(dec, startToken);
+                    }
                 }
 
                 //ensure statement separator. An unterminated inner block (i.e. an `if` missing its `end if`) that stopped at the
@@ -3188,6 +3194,20 @@ export class Parser {
 
         this.exitAnnotationBlock(parentAnnotations);
         return new Block({ statements: statements });
+    }
+
+    /**
+     * A `with` block may only contain leading-dot statements (`.name = 1`, `.save()`, `.count++`) and nested `with` blocks.
+     * Anything else is flagged as an unexpected token, but is kept in the AST so the rest of the block still parses normally
+     */
+    private validateWithBodyStatement(statement: Statement, startToken: Token) {
+        if (startToken.kind === TokenKind.Dot || isWithStatement(statement)) {
+            return;
+        }
+        this.diagnostics.push({
+            ...DiagnosticMessages.unexpectedToken(startToken.text),
+            location: startToken.location
+        });
     }
 
     /**

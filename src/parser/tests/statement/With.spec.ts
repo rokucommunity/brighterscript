@@ -1,11 +1,12 @@
 import { expect } from '../../../chai-config.spec';
 import { ParseMode, Parser } from '../../Parser';
-import type { AssignmentStatement, DottedSetStatement, ExpressionStatement, IncrementStatement, PrintStatement } from '../../Statement';
+import type { DottedSetStatement, ExpressionStatement, IncrementStatement } from '../../Statement';
 import { WithStatement } from '../../Statement';
 import type { CallExpression, DottedGetExpression, FunctionExpression, IndexedGetExpression } from '../../Expression';
 import { WithContextExpression } from '../../Expression';
 import { isFunctionExpression, isWithContextExpression, isWithStatement } from '../../../astUtils/reflection';
 import { expectDiagnostics, expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { util } from '../../../util';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { WalkMode } from '../../../astUtils/visitors';
 
@@ -59,18 +60,17 @@ describe('parser with statement', () => {
                 .save()
                 .count++
                 .total += 5
-                print .name; .email
-                full = .first + .last
-                sendEmail(.email, .name)
-                if .isAdmin then showAdminMenu()
-                item = .items[0]
-                nested = .child.grandchild
-                result = .lookup("key").value
+                .full = .first + .last
+                .send(.email, .name)
+                .isAdmin = not .isGuest
+                .item = .items[0]
+                .nested = .child.grandchild
+                .result = .lookup("key").value
             end with
         `);
         expectZeroDiagnostics(parser);
         const body = (statements[0] as WithStatement).body.statements;
-        expect(body).to.be.lengthOf(10);
+        expect(body).to.be.lengthOf(9);
 
         //.save()
         const call = (body[0] as ExpressionStatement).expression as CallExpression;
@@ -85,13 +85,12 @@ describe('parser with statement', () => {
         //.total += 5
         expect(body[2].kind).to.eql('AugmentedAssignmentStatement');
 
-        //print .name; .email
-        const print = body[3] as PrintStatement;
-        expect(print.kind).to.eql('PrintStatement');
-        expect(((print.expressions[0] as DottedGetExpression).obj)).to.be.instanceof(WithContextExpression);
+        //.send(.email, .name)
+        const send = (body[4] as ExpressionStatement).expression as CallExpression;
+        expect(((send.args[0] as DottedGetExpression).obj)).to.be.instanceof(WithContextExpression);
 
-        //item = .items[0]
-        const indexed = (body[7] as AssignmentStatement).value as IndexedGetExpression;
+        //.item = .items[0]
+        const indexed = (body[6] as DottedSetStatement).value as IndexedGetExpression;
         expect(indexed.kind).to.eql('IndexedGetExpression');
         expect(((indexed.obj as DottedGetExpression).obj)).to.be.instanceof(WithContextExpression);
 
@@ -142,7 +141,7 @@ describe('parser with statement', () => {
     it('flags a leading-dot member inside a function nested in the with block', () => {
         const { parser, statements } = parseBody(`
             with target
-                callback = function()
+                .callback = function()
                     return .name
                 end function
                 .name = "x"
@@ -153,8 +152,10 @@ describe('parser with statement', () => {
         ]);
         //the with statement itself and its own members survive
         const contexts = statements[0].findChildren<WithContextExpression>(isWithContextExpression, { walkMode: WalkMode.visitAllRecursive });
-        expect(contexts).to.be.lengthOf(1);
-        expect(contexts[0].getWithStatement()).to.equal(statements[0]);
+        expect(contexts).to.be.lengthOf(2);
+        for (const context of contexts) {
+            expect(context.getWithStatement()).to.equal(statements[0]);
+        }
     });
 
     it('flags a leading-dot member outside a with block', () => {
@@ -209,7 +210,7 @@ describe('parser with statement', () => {
                 .a = 1
             end with
             with [1, 2]
-                print .count()
+                .push(3)
             end with
             with m.top.findNode("label")
                 .text = "hi"
@@ -310,6 +311,86 @@ describe('parser with statement', () => {
             const inner = (statements[1] as WithStatement).body.statements[0] as WithStatement;
             expect(inner).to.be.instanceof(WithStatement);
             expect((inner.expression as DottedGetExpression).obj).to.be.instanceof(WithContextExpression);
+        });
+    });
+
+    describe('statements allowed in the body', () => {
+        it('flags anything that is not a leading-dot statement or a nested with block', () => {
+            const { parser, statements } = parseBody(`
+                with target
+                    .text = "Hello"
+                    print .text
+                    runFunction()
+                    name = .name
+                    if .isAdmin then .role = "admin"
+                    for each item in .items
+                    end for
+                    goto done
+                    done:
+                    with .child
+                        .name = "Ann"
+                        print .name
+                    end with
+                    .setFocus(true)
+                end with
+            `);
+            expectDiagnostics(parser, [
+                DiagnosticMessages.unexpectedToken('print'),
+                DiagnosticMessages.unexpectedToken('runFunction'),
+                DiagnosticMessages.unexpectedToken('name'),
+                DiagnosticMessages.unexpectedToken('if'),
+                DiagnosticMessages.unexpectedToken('for each'),
+                DiagnosticMessages.unexpectedToken('goto'),
+                DiagnosticMessages.unexpectedToken('done'),
+                DiagnosticMessages.unexpectedToken('print')
+            ]);
+            //the flagged statements are kept, so the rest of the block parses normally
+            const body = (statements[0] as WithStatement).body.statements;
+            expect(body.map(x => x.kind)).to.eql([
+                'DottedSetStatement',
+                'PrintStatement',
+                'ExpressionStatement',
+                'AssignmentStatement',
+                'IfStatement',
+                'ForEachStatement',
+                'GotoStatement',
+                'LabelStatement',
+                'WithStatement',
+                'ExpressionStatement'
+            ]);
+        });
+
+        it('flags only the first token of the offending statement', () => {
+            const { parser } = parseBody(`
+                with target
+                    .text = "Hello"
+                    print .text
+                end with
+            `);
+            expectDiagnostics(parser, [{
+                ...DiagnosticMessages.unexpectedToken('print'),
+                location: { range: util.createRange(5, 20, 5, 25) }
+            }]);
+        });
+
+        it('flags disallowed statements in the single-line colon form', () => {
+            const { parser } = parseBody(`
+                with target: .a = 1: print .a: .b = 2: end with
+            `);
+            expectDiagnostics(parser, [
+                DiagnosticMessages.unexpectedToken('print')
+            ]);
+        });
+
+        it('does not restrict the statements of a function defined in the block', () => {
+            const { parser } = parseBody(`
+                with target
+                    .callback = function()
+                        print "hello"
+                    end function
+                end with
+            `);
+            expectZeroDiagnostics(parser);
         });
     });
 

@@ -63,36 +63,25 @@ describe('with statement', () => {
                     .loginCount++
                     .score += 10
                     .save()
-                    fullName = .firstName + .lastName
-                    print .name; .email
-                    sendEmail(.email, .name)
-                    if .isAdmin then
-                        print "admin"
-                    end if
-                    item = .items[0]
-                    nested = .child.grandchild
-                    result = .lookup("key").value
+                    .fullName = .firstName + .lastName
+                    .send(.email, .name)
+                    .isAdmin = not .isGuest
+                    .item = .items[0]
+                    .nested = .child.grandchild
+                    .result = .lookup("key").value
                 end with
-            end sub
-            sub sendEmail(a, b)
             end sub
         `, `
             sub main(user as object)
                 user.loginCount++
                 user.score += 10
                 user.save()
-                fullName = user.firstName + user.lastName
-                print user.name; user.email
-                sendEmail(user.email, user.name)
-                if user.isAdmin then
-                    print "admin"
-                end if
-                item = user.items[0]
-                nested = user.child.grandchild
-                result = user.lookup("key").value
-            end sub
-
-            sub sendEmail(a, b)
+                user.fullName = user.firstName + user.lastName
+                user.send(user.email, user.name)
+                user.isAdmin = not user.isGuest
+                user.item = user.items[0]
+                user.nested = user.child.grandchild
+                user.result = user.lookup("key").value
             end sub
         `);
     });
@@ -193,9 +182,9 @@ describe('with statement', () => {
                 if c <> invalid
                     with c
                         .a = 1
-                        if .b then
+                        with .b
                             .c = 2
-                        end if
+                        end with
                     end with
                 end if
             end sub
@@ -203,9 +192,8 @@ describe('with statement', () => {
             sub main(c as object)
                 if c <> invalid
                     c.a = 1
-                    if c.b then
-                        c.c = 2
-                    end if
+                    __bsc_tmp_with0 = c.b
+                    __bsc_tmp_with0.c = 2
                 end if
             end sub
         `);
@@ -298,19 +286,19 @@ describe('with statement', () => {
             sub main(items as object)
                 for each item in items
                     with item
-                        if .skip then continue for
                         .done = true
                     end with
+                    if item.skip then continue for
                     print "after"
                 end for
             end sub
         `, `
             sub main(items as object)
                 for each item in items
+                    item.done = true
                     if item.skip then
                         goto BRIGHTERSCRIPT_CONTINUE_0
                     end if
-                    item.done = true
                     print "after"
                     BRIGHTERSCRIPT_CONTINUE_0:
                 end for

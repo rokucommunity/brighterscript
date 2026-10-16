@@ -6160,7 +6160,7 @@ describe('BrsFileValidator', () => {
                     with c
                         .name = "x"
                         .save()
-                        print .name
+                        .label = .name
                         with .child
                             .name = "y"
                         end with
@@ -6192,7 +6192,7 @@ describe('BrsFileValidator', () => {
             program.setFile('source/main.bs', `
                 sub main(c as object)
                     with c
-                        callback = function()
+                        .callback = function()
                             return .name
                         end function
                         .name = "x"
@@ -6244,11 +6244,12 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program.getDiagnostics().filter(x => x.code !== DiagnosticCodeMap.unreachableCode), [
-                DiagnosticMessages.gotoIntoWithBlock('inside')
+                DiagnosticMessages.gotoIntoWithBlock('inside'),
+                DiagnosticMessages.unexpectedToken('inside')
             ]);
         });
 
-        it('allows a goto within the same with block', () => {
+        it('flags a goto and label within the same with block', () => {
             program.setFile('source/main.bs', `
                 sub main(c as object)
                     with c
@@ -6260,7 +6261,10 @@ describe('BrsFileValidator', () => {
                 end sub
             `);
             program.validate();
-            expectZeroDiagnostics(program.getDiagnostics().filter(x => x.code !== DiagnosticCodeMap.unreachableCode));
+            expectDiagnostics(program.getDiagnostics().filter(x => x.code !== DiagnosticCodeMap.unreachableCode), [
+                DiagnosticMessages.unexpectedToken('goto'),
+                DiagnosticMessages.unexpectedToken('done')
+            ]);
         });
 
         it('type checks leading-dot members against the target type', () => {
@@ -6274,7 +6278,7 @@ describe('BrsFileValidator', () => {
                         .name = "ok"
                         .nope = 1
                         .zip = "not a number"
-                        print .name.len()
+                        .zip = .name.len()
                     end with
                 end sub
             `);
@@ -6308,17 +6312,25 @@ describe('BrsFileValidator', () => {
             ]);
         });
 
-        it('makes variables assigned inside the block visible after it', () => {
+        it('flags statements other than leading-dot statements and nested with blocks', () => {
             program.setFile('source/main.bs', `
                 sub main(c as object)
                     with c
+                        .text = "Hello"
                         name = .name
+                        runFunction()
+                        print .text
                     end with
-                    print name
+                end sub
+                sub runFunction()
                 end sub
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                DiagnosticMessages.unexpectedToken('name'),
+                DiagnosticMessages.unexpectedToken('runFunction'),
+                DiagnosticMessages.unexpectedToken('print')
+            ]);
         });
     });
 });
