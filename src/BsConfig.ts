@@ -141,7 +141,7 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<number | string | { src: string; codes: (number | string)[] } | { src: string } | { codes: (number | string)[] }>;
+    diagnosticFilters?: Array<number | string | { src?: string; codes?: (number | string)[]; severities?: ('error' | 'warn' | 'info' | 'hint')[]; severity?: 'error' | 'warn' | 'info' | 'hint' | ('error' | 'warn' | 'info' | 'hint')[] }>;
 
     /**
      * Specify what diagnostic types should be printed to the console. Defaults to 'warn'

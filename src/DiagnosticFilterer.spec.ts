@@ -3,6 +3,7 @@ import { DiagnosticFilterer } from './DiagnosticFilterer';
 import type { BsDiagnostic } from './interfaces';
 import { standardizePath as s } from './util';
 import { createSandbox } from 'sinon';
+import { DiagnosticSeverity } from 'vscode-languageserver-protocol';
 const sinon = createSandbox();
 let rootDir = s`${process.cwd()}/rootDir`;
 
@@ -84,6 +85,116 @@ describe('DiagnosticFilterer', () => {
                     getDiagnostic('X14', `${rootDir}/common/a/b/c/c.brs`) //keep
                 ]).map(x => x.code)
             ).to.eql([11, 12, 13, 'X14']);
+        });
+
+        describe('with severities', () => {
+            it('filters diagnostics globally by severities array', () => {
+                expect(
+                    filterer.filter({
+                        rootDir: rootDir,
+                        diagnosticFilters: [
+                            { severities: ['warn', 'info'] }
+                        ]
+                    }, [
+                        getDiagnostic(1, `${rootDir}/source/common.brs`, DiagnosticSeverity.Error),
+                        getDiagnostic(2, `${rootDir}/source/common.brs`, DiagnosticSeverity.Warning),
+                        getDiagnostic(3, `${rootDir}/source/common.brs`, DiagnosticSeverity.Information),
+                        getDiagnostic(4, `${rootDir}/source/common.brs`, DiagnosticSeverity.Hint)
+                    ]).map(x => x.code)
+                ).to.eql([1, 4]);
+            });
+
+            it('filters diagnostics for specific src by severities array', () => {
+                expect(
+                    filterer.filter({
+                        rootDir: rootDir,
+                        diagnosticFilters: [
+                            { src: 'sdk/**/*.brs', severities: ['warn', 'info', 'hint'] }
+                        ]
+                    }, [
+                        getDiagnostic(1, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Error), //keep
+                        getDiagnostic(2, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Warning), //remove
+                        getDiagnostic(3, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Information), //remove
+                        getDiagnostic(4, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Hint), //remove
+                        getDiagnostic(5, `${rootDir}/source/main.brs`, DiagnosticSeverity.Warning) //keep
+                    ]).map(x => x.code)
+                ).to.eql([1, 5]);
+            });
+
+            it('filters diagnostics using single severity property', () => {
+                expect(
+                    filterer.filter({
+                        rootDir: rootDir,
+                        diagnosticFilters: [
+                            { src: 'sdk/**/*.brs', severity: 'warn' }
+                        ]
+                    }, [
+                        getDiagnostic(1, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Error), //keep
+                        getDiagnostic(2, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Warning), //remove
+                        getDiagnostic(3, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Information) //keep
+                    ]).map(x => x.code)
+                ).to.eql([1, 3]);
+            });
+
+            it('supports negative globs with severities', () => {
+                expect(
+                    filterer.filter({
+                        rootDir: rootDir,
+                        diagnosticFilters: [
+                            { src: 'lib/**/*.brs' },
+                            { src: '!lib/important/**/*.brs', severities: ['error'] }
+                        ]
+                    }, [
+                        getDiagnostic(1, `${rootDir}/lib/important/a.brs`, DiagnosticSeverity.Error), //keep
+                        getDiagnostic(2, `${rootDir}/lib/important/a.brs`, DiagnosticSeverity.Warning), //remove
+                        getDiagnostic(3, `${rootDir}/lib/other/b.brs`, DiagnosticSeverity.Error) //remove
+                    ]).map(x => x.code)
+                ).to.eql([1]);
+            });
+
+            it('matches either codes or severities when both are specified in a single filter', () => {
+                expect(
+                    filterer.filter({
+                        rootDir: rootDir,
+                        diagnosticFilters: [
+                            {
+                                src: 'sdk/**/*.brs',
+                                codes: [1001],
+                                severities: ['warn', 'info']
+                            }
+                        ]
+                    }, [
+                        getDiagnostic(1001, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Error), //remove (matches code 1001)
+                        getDiagnostic(1002, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Error), //keep (neither code nor severity matches)
+                        getDiagnostic(2001, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Warning), //remove (matches severity 'warn')
+                        getDiagnostic(3001, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Information), //remove (matches severity 'info')
+                        getDiagnostic(4001, `${rootDir}/sdk/lib.brs`, DiagnosticSeverity.Hint), //keep (neither code nor severity matches)
+                        getDiagnostic(1001, `${rootDir}/source/main.brs`, DiagnosticSeverity.Error) //keep (outside src glob)
+                    ]).map(x => x.code)
+                ).to.eql([1002, 4001, 1001]);
+            });
+
+            it('supports combined codes and severities with negative globs and sequential override precedence', () => {
+                expect(
+                    filterer.filter({
+                        rootDir: rootDir,
+                        diagnosticFilters: [
+                            // 1. Ignore everything in lib
+                            { src: 'lib/**/*.brs' },
+                            // 2. Un-ignore errors OR code 200 (even if warning) in lib/special
+                            { src: '!lib/special/**/*.brs', codes: [200], severities: ['error'] },
+                            // 3. Re-ignore code 101 in lib/special/sub
+                            { src: 'lib/special/sub/**/*.brs', codes: [101] }
+                        ]
+                    }, [
+                        getDiagnostic(100, `${rootDir}/lib/special/a.brs`, DiagnosticSeverity.Error), //keep (un-ignored by severity 'error')
+                        getDiagnostic(200, `${rootDir}/lib/special/a.brs`, DiagnosticSeverity.Warning), //keep (un-ignored by code 200)
+                        getDiagnostic(300, `${rootDir}/lib/special/a.brs`, DiagnosticSeverity.Warning), //remove (remains suppressed)
+                        getDiagnostic(101, `${rootDir}/lib/special/sub/b.brs`, DiagnosticSeverity.Error), //remove (re-ignored by step 3)
+                        getDiagnostic(102, `${rootDir}/lib/special/sub/b.brs`, DiagnosticSeverity.Error) //keep (un-ignored by step 2, not matched by step 3)
+                    ]).map(x => x.code)
+                ).to.eql([100, 200, 102]);
+            });
         });
 
         describe('with negative globs', () => {
@@ -277,6 +388,24 @@ describe('DiagnosticFilterer', () => {
             ]);
         });
 
+        it('handles severities diagnostic filter objects', () => {
+            expect(filterer.getDiagnosticFilters({
+                diagnosticFilters: [
+                    { severities: ['warn', 'info'] },
+                    { src: 'file.brs', severities: ['warn'] },
+                    { src: '!file.brs', severities: ['error'] },
+                    { severity: 'hint' },
+                    { src: 'file.brs', codes: [1, 2], severities: ['warn'], severity: 'info' }
+                ]
+            })).to.eql([
+                { severities: ['warn', 'info'], isNegative: false },
+                { src: 'file.brs', severities: ['warn'], isNegative: false },
+                { src: 'file.brs', severities: ['error'], isNegative: true },
+                { severities: ['hint'], isNegative: false },
+                { src: 'file.brs', codes: [1, 2], severities: ['warn', 'info'], isNegative: false }
+            ]);
+        });
+
         it('handles string diagnostic filter', () => {
             expect(
                 filterer.getDiagnosticFilters({
@@ -344,11 +473,12 @@ describe('DiagnosticFilterer', () => {
 
 });
 
-function getDiagnostic(code: number | string, srcPath: string) {
+function getDiagnostic(code: number | string, srcPath: string, severity: DiagnosticSeverity = DiagnosticSeverity.Error) {
     return {
         file: {
             srcPath: s`${srcPath}`
         },
-        code: code
+        code: code,
+        severity: severity
     } as BsDiagnostic;
 }

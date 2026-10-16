@@ -3,6 +3,18 @@ import * as path from 'path';
 import * as micromatch from 'micromatch';
 import type { BsConfig } from './BsConfig';
 import { standardizePath as s } from './util';
+import { DiagnosticSeverity } from 'vscode-languageserver-protocol';
+
+type DiagnosticSeverityFilter = 'error' | 'warn' | 'info' | 'hint' | DiagnosticSeverity;
+
+const severityMap: Record<string, DiagnosticSeverity> = {
+    error: DiagnosticSeverity.Error,
+    warn: DiagnosticSeverity.Warning,
+    warning: DiagnosticSeverity.Warning,
+    info: DiagnosticSeverity.Information,
+    information: DiagnosticSeverity.Information,
+    hint: DiagnosticSeverity.Hint
+};
 
 interface DiagnosticWithSuppression {
     diagnostic: BsDiagnostic;
@@ -12,6 +24,7 @@ interface DiagnosticWithSuppression {
 interface NormalizedFilter {
     src?: string;
     codes?: (number | string)[];
+    severities?: DiagnosticSeverityFilter[];
     isNegative: boolean;
 }
 
@@ -122,22 +135,56 @@ export class DiagnosticFilterer {
         }
     }
 
+    private resolveSeverities(filter: NormalizedFilter): DiagnosticSeverity[] | undefined {
+        if (!Array.isArray(filter.severities)) {
+            return undefined;
+        }
+
+        const resolved: DiagnosticSeverity[] = [];
+        for (const item of filter.severities) {
+            if (typeof item === 'number') {
+                resolved.push(item);
+            } else if (typeof item === 'string') {
+                const mapped = severityMap[item.toLowerCase()];
+                if (mapped !== undefined) {
+                    resolved.push(mapped);
+                }
+            }
+        }
+        return resolved;
+    }
+
+    /**
+     * Apply a normalized filter to a single matched file.
+     *
+     * Semantics:
+     * - Positive filters (`isNegative: false`) suppress matching diagnostics (`isSuppressed = true`).
+     * - Negative filters (`isNegative: true`, i.e., `src` prefixed with `!`) un-suppress matching diagnostics (`isSuppressed = false`).
+     * - Filters are evaluated sequentially in configuration order (.gitignore-style last-match-wins precedence).
+     * - When neither `codes` nor `severities`/`severity` is specified, every diagnostic in the matched file is affected.
+     * - When both `codes` and `severities`/`severity` are specified on the same filter object, a diagnostic is matched
+     *   if its code is in `codes` OR its severity is in `severities` (`matchesCode || matchesSeverity`), allowing a single
+     *   filter entry to target both broad severity classes and specific diagnostic codes within the matched `src` scope.
+     */
     private filterFile(filter: NormalizedFilter, filePath: string) {
         //if the filter is negative, we're turning diagnostics on
         //if the filter is not negative we're turning diagnostics off
         const isSuppressing = !filter.isNegative;
+        const severities = this.resolveSeverities(filter);
 
-        //if there is no code, set isSuppressed on every diagnostic in this file
-        if (!filter.codes) {
+        //if there is no code or severity filter, set isSuppressed on every diagnostic in this file
+        if (!filter.codes && !severities) {
             this.byFile[filePath].forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
-            //set isSuppressed for any diagnostics with matching codes
+            //set isSuppressed for any diagnostics with matching codes or severities
         } else {
             let fileDiagnostics = this.byFile[filePath];
             for (const diagnostic of fileDiagnostics) {
-                if (filter.codes.includes(diagnostic.diagnostic.code!)) {
+                const matchesCode = filter.codes ? filter.codes.includes(diagnostic.diagnostic.code!) : false;
+                const matchesSeverity = severities ? severities.includes(diagnostic.diagnostic.severity!) : false;
+                if (matchesCode || matchesSeverity) {
                     diagnostic.isSuppressed = isSuppressing;
                 }
             }
@@ -184,32 +231,38 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            //code-only filter
-            if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
-                result.push({
-                    codes: filter.codes,
-                    isNegative: false
-                });
+            const hasSrc = 'src' in filter && typeof filter.src === 'string';
+            const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
+            const hasSeverities = 'severities' in filter && Array.isArray(filter.severities);
+            const hasSeverity = 'severity' in filter && (typeof filter.severity === 'string' || typeof filter.severity === 'number' || Array.isArray(filter.severity));
+
+            if (!hasSrc && !hasCodes && !hasSeverities && !hasSeverity) {
                 continue;
             }
 
-            if ('src' in filter) {
-                const isNegative = filter.src.startsWith('!');
-                const trimmedFilter = isNegative ? filter.src.slice(1) : filter.src;
+            let isNegative = false;
+            let normalizedFilter: NormalizedFilter = {
+                isNegative: false
+            };
 
-                if ('codes' in filter) {
-                    result.push({
-                        src: trimmedFilter,
-                        codes: filter.codes,
-                        isNegative: isNegative
-                    });
-                } else {
-                    result.push({
-                        src: trimmedFilter,
-                        isNegative: isNegative
-                    });
-                }
+            if (hasSrc) {
+                isNegative = filter.src.startsWith('!');
+                normalizedFilter.src = isNegative ? filter.src.slice(1) : filter.src;
             }
+            if (hasCodes) {
+                normalizedFilter.codes = filter.codes;
+            }
+            if (hasSeverities && !hasSeverity) {
+                normalizedFilter.severities = filter.severities;
+            } else if (hasSeverity) {
+                normalizedFilter.severities = [
+                    ...(hasSeverities ? filter.severities : []),
+                    ...(Array.isArray(filter.severity) ? filter.severity : [filter.severity])
+                ];
+            }
+            normalizedFilter.isNegative = isNegative;
+
+            result.push(normalizedFilter);
         }
         return result;
     }
