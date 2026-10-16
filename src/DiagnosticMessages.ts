@@ -1369,6 +1369,32 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Hint,
         tags: [DiagnosticTag.Unnecessary],
         code: 'unreachable-code'
+    }),
+    /**
+     * A regex literal pattern that PCRE (the engine behind `roRegex`) would fail to compile
+     * @param reason why the pattern is invalid (i.e. `missing closing ')' for group`)
+     */
+    invalidRegexPattern: (reason: string) => ({
+        message: `Invalid regular expression: ${reason}`,
+        severity: DiagnosticSeverity.Error,
+        code: 'invalid-regex-pattern'
+    }),
+    unknownRegexFlag: (flag: string) => ({
+        message: `Unknown regular expression flag '${flag}'. roRegex only supports 'i', 'm', 's', and 'x'`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'unknown-regex-flag'
+    }),
+    /**
+     * The function name passed as the callback to `observeField`/`observeFieldScoped` doesn't exist in the component
+     * @param callbackName the callback name as written in the string literal
+     * @param componentName the name of the component whose scope was searched
+     * @param suggestedName the name the function actually has at runtime, when the callback was written with its namespaced name (i.e. `alpha_onChange` for `alpha.onChange`)
+     */
+    observerCallbackNotFound: (callbackName: string, componentName: string, suggestedName?: string) => ({
+        message: `Cannot find function '${callbackName}' to use as an observer callback in component '${componentName}'` +
+            (suggestedName ? `. Namespaced functions must be referenced by their transpiled name: '${suggestedName}'` : ''),
+        severity: DiagnosticSeverity.Warning,
+        code: 'observer-callback-not-found'
     })
 };
 export const defaultMaximumTruncationLength = 160;
