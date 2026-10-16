@@ -749,6 +749,7 @@ export const PreceedingRegexTypes = new Set([
     TokenKind.To,
     TokenKind.Newline,
     TokenKind.Throw,
+    TokenKind.Return,
     TokenKind.Colon,
     TokenKind.Semicolon,
     TokenKind.Comma,
