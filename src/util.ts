@@ -22,11 +22,12 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { AALiteralExpression, ArrayLiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { AALiteralExpression, ArrayLiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { FunctionScope } from './FunctionScope';
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Locatable, type SourceInfo, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
+import { isAnyReferenceType, isAssignmentStatement, isFunctionExpression, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -2124,17 +2125,36 @@ export class Util {
         const scope = file.program.getFirstScopeForFile(file);
         let filteredVarNames = [...uniqueVarNames];
         if (scope) {
+            //a parameter or local variable can share a namespace's name, so only treat a name as a namespace when the enclosing function doesn't declare it
+            const func = expression?.findAncestor<FunctionExpression>(isFunctionExpression);
+            const functionScope = func ? this.findFunctionScope(file.functionScopes, func) : undefined;
             filteredVarNames = filteredVarNames.filter((varName: string) => {
                 const varNameLower = varName.toLowerCase();
-                // TODO: include namespaces in this filter
+                const isNamespace = scope.namespaceLookup.has(varNameLower) && !functionScope?.getVariableByName(varNameLower);
                 return !scope.getEnumMap().has(varNameLower) &&
-                    !scope.getConstMap().has(varNameLower);
+                    !scope.getConstMap().has(varNameLower) &&
+                    !isNamespace;
             });
         }
 
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: filteredVarNames };
     }
 
+
+    /**
+     * Find the function scope (searching nested function scopes too) for the given function
+     */
+    private findFunctionScope(functionScopes: FunctionScope[], func: FunctionExpression): FunctionScope | undefined {
+        for (const functionScope of functionScopes ?? []) {
+            if (functionScope.func === func) {
+                return functionScope;
+            }
+            const childScope = this.findFunctionScope(functionScope.childrenScopes, func);
+            if (childScope) {
+                return childScope;
+            }
+        }
+    }
 
     public concatAnnotationLeadingTrivia(stmt: Statement): Token[] {
         return [...(stmt.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...stmt.leadingTrivia];

@@ -4085,6 +4085,71 @@ describe('BrsFileValidator', () => {
         });
     });
 
+    describe('type designators on parameters', () => {
+        it('flags an `as` type that does not match the type designator', () => {
+            program.setFile('source/main.brs', `
+                sub test(args! as string, name$ as integer, count% as string, big& as float, precise# as boolean)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeDesignatorMismatch('args!', 'float', 'string'),
+                DiagnosticMessages.typeDesignatorMismatch('name$', 'string', 'integer'),
+                DiagnosticMessages.typeDesignatorMismatch('count%', 'integer', 'string'),
+                DiagnosticMessages.typeDesignatorMismatch('big&', 'longinteger', 'float'),
+                DiagnosticMessages.typeDesignatorMismatch('precise#', 'double', 'boolean')
+            ]);
+        });
+
+        it('flags `as dynamic` and `as object` with a type designator, since those fail to compile on device too', () => {
+            program.setFile('source/main.brs', `
+                sub test(name$ as dynamic, other$ as object)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeDesignatorMismatch('name$', 'string', 'dynamic'),
+                DiagnosticMessages.typeDesignatorMismatch('other$', 'string', 'object')
+            ]);
+        });
+
+        it('allows an `as` type that matches the type designator (case-insensitive), or no `as` type at all', () => {
+            program.setFile('source/main.brs', `
+                sub test(args! as float, name$ as String, count% as INTEGER, big& as longinteger, precise# as double, plain$, other)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('checks parameters of anonymous functions and class methods', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    callback = sub(name$ as integer)
+                    end sub
+                end sub
+                class Person
+                    sub greet(name$ as integer)
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeDesignatorMismatch('name$', 'string', 'integer'),
+                DiagnosticMessages.typeDesignatorMismatch('name$', 'string', 'integer')
+            ]);
+        });
+
+        it('does not check parameters in function type annotations, since those are not emitted', () => {
+            program.setFile('source/main.bs', `
+                sub test(callback as function(name$ as integer) as void)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     describe('types', () => {
         it('sets assignments of invalid as dynamic', () => {
             const file = program.setFile<BrsFile>('source/main.bs', `
