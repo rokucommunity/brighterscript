@@ -1,11 +1,13 @@
 import type { Location } from 'vscode-languageserver';
-import type { Identifier, Token } from '../lexer/Token';
+import type { Identifier, Locatable, Token } from '../lexer/Token';
 import type { SGToken } from '../parser/SGTypes';
 import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Expression, Statement } from '../parser/AstNode';
 import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
 import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
+import { TokenObject } from '../lexer/TokenObject';
+import util from '../util';
 
 const tokenDefaults = {
     [TokenKind.BackTick]: '`',
@@ -78,37 +80,48 @@ const tokenDefaults = {
     [TokenKind.Whitespace]: ' '
 };
 
-export function createToken<T extends TokenKind>(kind: T, text?: string, location?: Location): Token & { kind: T } {
-    return {
-        kind: kind,
-        text: text ?? tokenDefaults[kind as string] ?? kind.toString().toLowerCase(),
-        isReserved: !text || text === kind.toString(),
-        location: location,
-        leadingTrivia: []
-    };
+/**
+ * Where a created item goes: the position of a `Locatable` (such as an existing token or node), or a line/character `Location`
+ */
+export type CreatorPosition = Locatable | Location;
+
+export function createToken<T extends TokenKind>(kind: T, text?: string, position?: CreatorPosition): Token & { kind: T } {
+    const locatable = util.toLocatable(position);
+    return new TokenObject(
+        kind,
+        text ?? (tokenDefaults[kind as string] as string) ?? kind.toString().toLowerCase(),
+        !text || text === kind.toString(),
+        locatable?.startPosition,
+        locatable?.endPosition,
+        locatable?.sourceInfo,
+        []
+    ) as Token as Token & { kind: T };
 }
 
-export function createIdentifier(name: string, location?: Location): Identifier {
-    return {
-        kind: TokenKind.Identifier,
-        text: name,
-        isReserved: false,
-        location: location,
-        leadingTrivia: []
-    };
+export function createIdentifier(name: string, position?: CreatorPosition): Identifier {
+    const locatable = util.toLocatable(position);
+    return new TokenObject(
+        TokenKind.Identifier,
+        name,
+        false,
+        locatable?.startPosition,
+        locatable?.endPosition,
+        locatable?.sourceInfo,
+        []
+    ) as Identifier;
 }
 
-export function createVariableExpression(ident: string, location?: Location): VariableExpression {
-    return new VariableExpression({ name: createToken(TokenKind.Identifier, ident, location) });
+export function createVariableExpression(ident: string, locatable?: CreatorPosition): VariableExpression {
+    return new VariableExpression({ name: createToken(TokenKind.Identifier, ident, locatable) });
 }
 
-export function createDottedIdentifier(path: string[], location?: Location): DottedGetExpression {
+export function createDottedIdentifier(path: string[], locatable?: CreatorPosition): DottedGetExpression {
     const ident = path.pop();
-    const obj = path.length > 1 ? createDottedIdentifier(path, location) : createVariableExpression(path[0], location);
+    const obj = path.length > 1 ? createDottedIdentifier(path, locatable) : createVariableExpression(path[0], locatable);
     return new DottedGetExpression({
         obj: obj,
-        name: createToken(TokenKind.Identifier, ident, location),
-        dot: createToken(TokenKind.Dot, '.', location)
+        name: createToken(TokenKind.Identifier, ident, locatable),
+        dot: createToken(TokenKind.Dot, '.', locatable)
     });
 }
 
@@ -117,30 +130,30 @@ export function createDottedIdentifier(path: string[], location?: Location): Dot
  * Since brightscript doesn't support strings with quotes in them, we can safely auto-detect and wrap the value in quotes in this function.
  * @param value - the string value. (value will be wrapped in quotes if they are missing)
  */
-export function createStringLiteral(value: string, location?: Location) {
+export function createStringLiteral(value: string, locatable?: CreatorPosition) {
     //wrap the value in double quotes
     if (!value.startsWith('"') && !value.endsWith('"')) {
         value = '"' + value + '"';
     }
-    return new LiteralExpression({ value: createToken(TokenKind.StringLiteral, value, location) });
+    return new LiteralExpression({ value: createToken(TokenKind.StringLiteral, value, locatable) });
 }
-export function createIntegerLiteral(value: string, location?: Location) {
-    return new LiteralExpression({ value: createToken(TokenKind.IntegerLiteral, value, location) });
+export function createIntegerLiteral(value: string, locatable?: CreatorPosition) {
+    return new LiteralExpression({ value: createToken(TokenKind.IntegerLiteral, value, locatable) });
 }
-export function createFloatLiteral(value: string, location?: Location) {
-    return new LiteralExpression({ value: createToken(TokenKind.FloatLiteral, value, location) });
+export function createFloatLiteral(value: string, locatable?: CreatorPosition) {
+    return new LiteralExpression({ value: createToken(TokenKind.FloatLiteral, value, locatable) });
 }
-export function createDoubleLiteral(value: string, location?: Location) {
-    return new LiteralExpression({ value: createToken(TokenKind.DoubleLiteral, value, location) });
+export function createDoubleLiteral(value: string, locatable?: CreatorPosition) {
+    return new LiteralExpression({ value: createToken(TokenKind.DoubleLiteral, value, locatable) });
 }
-export function createLongIntegerLiteral(value: string, location?: Location) {
-    return new LiteralExpression({ value: createToken(TokenKind.LongIntegerLiteral, value, location) });
+export function createLongIntegerLiteral(value: string, locatable?: CreatorPosition) {
+    return new LiteralExpression({ value: createToken(TokenKind.LongIntegerLiteral, value, locatable) });
 }
-export function createInvalidLiteral(value?: string, location?: Location) {
-    return new LiteralExpression({ value: createToken(TokenKind.Invalid, value, location) });
+export function createInvalidLiteral(value?: string, locatable?: CreatorPosition) {
+    return new LiteralExpression({ value: createToken(TokenKind.Invalid, value, locatable) });
 }
-export function createBooleanLiteral(value: string, location?: Location) {
-    return new LiteralExpression({ value: createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, location) });
+export function createBooleanLiteral(value: string, locatable?: CreatorPosition) {
+    return new LiteralExpression({ value: createToken(value === 'true' ? TokenKind.True : TokenKind.False, value, locatable) });
 }
 export function createFunctionExpression(kind: TokenKind.Sub | TokenKind.Function) {
     return new FunctionExpression({
