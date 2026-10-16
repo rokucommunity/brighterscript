@@ -1310,6 +1310,16 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
     }),
+    /**
+     * @param count the number of distinct literals of this type found in the file
+     * @param typeName the literal type, one of `integer`, `string`, `float`, `double`, or `longinteger`
+     * @param max the maximum number of distinct literals of one type Roku allows in a single file
+     */
+    tooManyLiterals: (count: number, typeName: string, max: number) => ({
+        message: `File has ${count} distinct ${typeName} literals, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-literal-count'
+    }),
     labelInTryBlock: (name = '') => ({
         message: `Label '${name}' cannot be declared inside a 'try' block`,
         severity: DiagnosticSeverity.Error,

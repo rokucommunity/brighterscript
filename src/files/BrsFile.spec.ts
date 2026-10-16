@@ -10,7 +10,7 @@ import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
-import { TokenKind } from '../lexer/TokenKind';
+import { BrighterScriptSourceLiterals, TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, expectDiagnosticsIncludes, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
@@ -24,10 +24,12 @@ import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import type { AALiteralExpression } from '../parser/Expression';
+import type { AALiteralExpression, SourceLiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
+import { BrsFileValidator, maximumLiteralsPerType } from '../bscPlugin/validation/BrsFileValidator';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Logger } from '@rokucommunity/logger';
-import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile } from '../astUtils/reflection';
+import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile, isSourceLiteralExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 let sinon = sinonImport.createSandbox();
@@ -7802,6 +7804,843 @@ describe('BrsFile', () => {
             validateSource(buildFunction({ labelCount: 300, targetedCount: 300 }));
             expectDiagnostics(program, [
                 DiagnosticMessages.tooManyGotoLabels(300, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+    });
+
+    describe('file literal limit', function() {
+        this.timeout(10000);
+        const limit = maximumLiteralsPerType;
+
+        function buildAssignments(count: number, buildValue: (index: number) => string, startIndex = 0) {
+            const lines = [] as string[];
+            for (let index = startIndex; index < startIndex + count; index++) {
+                lines.push(`v = ${buildValue(index)}`);
+            }
+            return lines;
+        }
+
+        function wrapInFunction(lines: string[], functionName = 'main') {
+            return [`function ${functionName}()`, ...lines, 'end function'].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 65535 distinct integers', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `${index}`)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 65536 distinct integers', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('counts repeated values once', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                ...buildAssignments(100, index => `${index}`)
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('treats decimal and hex spellings of the same integer as one value', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = &h1',
+                'v = &hFFFE',
+                'v = 1%'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('keeps the pools for different types separate', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = "text"',
+                'v = 1.5',
+                'v = 1.5#',
+                'v = 1&'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags the string pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `"s${index}"`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        it('allows the string pool at its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `"s${index}"`)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('treats strings that differ only by case as distinct', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit - 1, index => `"s${index}"`),
+                'v = "a"',
+                'v = "A"'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        it('allows the float pool at its limit and flags one more', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `${index}.5`)));
+            expectZeroDiagnostics(program);
+
+            program.setFile('source/main.brs', wrapInFunction(buildAssignments(limit + 1, index => `${index}.5`)));
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'float', limit)
+            ]);
+        });
+
+        it('flags the double pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}.5#`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'double', limit)
+            ]);
+        });
+
+        it('flags the longinteger pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}&`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'longinteger', limit)
+            ]);
+        });
+
+        it('does not count true, false, or invalid', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = true',
+                'v = false',
+                'v = invalid'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('shares the pool between functions in a file', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(32767, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(32768, index => `${index}`, 32767), 'second')
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags functions whose distinct values sum past the limit', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(32768, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(32768, index => `${index}`, 32768), 'second')
+            ].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('counts the same values in two functions once', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(limit, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(limit, index => `${index}`), 'second')
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('shares the pool with anonymous functions', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'f = function()',
+                'v = 70000',
+                'end function'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('keeps separate files independent', () => {
+            program.setFile('source/first.brs', wrapInFunction(buildAssignments(limit, index => `${index}`), 'first'));
+            program.setFile('source/second.brs', wrapInFunction(buildAssignments(limit, index => `${index}`), 'second'));
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        describe('default parameter values', () => {
+            const tooManyIntegers = () => [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)];
+            const tooManyStrings = () => [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)];
+
+            it('counts a new integer default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `${index}`, 1000)),
+                    'function b(p = 70000)',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count an integer default already in the pool', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `${index}`, 1000)),
+                    'function b(p = 1000)',
+                    'end function'
+                ].join('\n'));
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a new string default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `"s${index}"`)),
+                    'function c(s = "brandNewDefault")',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts the default of an anonymous function', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'f = function(p = 70001)',
+                    'end function'
+                ]));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the literals of an expression default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit - 1, index => `${index}`, 1000)),
+                    'function d(p = 70002 + 1)',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts a nested function default once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'f = function(a = 70000)',
+                    'end function'
+                ]));
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        it('counts equal float values written differently once', () => {
+            validateSource(wrapInFunction([
+                'v = 1.5',
+                'v = 1.50',
+                'v = 15e-1',
+                ...buildAssignments(limit - 1, index => `${index + 2}.5`)
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count literals in a false conditional compile branch', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                '#if false',
+                'v = 70000',
+                '#end if'
+            ]), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
+        });
+
+        describe('brighterscript source literals', () => {
+            const tooManyIntegers = () => [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)];
+            const tooManyStrings = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'string', limit)];
+
+            it('counts SOURCE_LINE_NUM as a new integer', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count SOURCE_LINE_NUM when its line number is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = SOURCE_LINE_NUM',
+                    ...buildAssignments(limit, index => `${index}`)
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts two SOURCE_LINE_NUM on the same line once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'v = [SOURCE_LINE_NUM, SOURCE_LINE_NUM]'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts SOURCE_LINE_NUM on different lines separately', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'v = SOURCE_LINE_NUM',
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts SOURCE_FILE_PATH as new strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_FILE_PATH'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings(65537));
+            });
+
+            it('counts PKG_PATH as a new string', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = PKG_PATH'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count PKG_PATH when its value is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "pkg:/source/main.brs"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'v = PKG_PATH'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the string part of PKG_LOCATION', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = PKG_LOCATION'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts SOURCE_LOCATION as new strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_LOCATION'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings(65537));
+            });
+
+            it('counts FUNCTION_NAME and SOURCE_FUNCTION_NAME as strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count FUNCTION_NAME when the function name is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "main"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'v = FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count source literals in a false conditional compile branch', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    '#if false',
+                    'v = SOURCE_LINE_NUM',
+                    '#end if'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.inactiveConditionalCompileBranch()
+                ]);
+            });
+
+            it('counts a source literal in an anonymous function once, in the shared pool', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'f = function()',
+                    'v = SOURCE_LINE_NUM',
+                    'end function'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts LINE_NUM as a new integer in a .bs file', () => {
+                validateSource(wrapInFunction([
+                    'v = LINE_NUM',
+                    ...buildAssignments(limit, index => `${index}`, 1000)
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the line number of PKG_LOCATION as an integer', () => {
+                validateSource(wrapInFunction([
+                    'v = PKG_LOCATION',
+                    ...buildAssignments(limit, index => `${index}`, 1000)
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count PKG_LOCATION again when its line number is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = PKG_LOCATION',
+                    ...buildAssignments(limit, index => `${index}`, 2)
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            describe('LINE_NUM in a .brs file', () => {
+                it('counts LINE_NUM as a new integer', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit, index => `${index}`, 1000)
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+
+                it('counts two LINE_NUM on the same line once', () => {
+                    validateSource(wrapInFunction([
+                        'x = [LINE_NUM, LINE_NUM]',
+                        ...buildAssignments(limit - 1, index => `${index}`, 1000)
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('counts LINE_NUM on different lines separately', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit - 1, index => `${index}`, 1000)
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+
+                it('does not count LINE_NUM when its line number is already in the pool', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit, index => `${index}`, 2)
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('stores the line number modulo 65536', () => {
+                    //the last fill value sits on line 65536, so LINE_NUM on line 65537 stores 1, which is already in the pool
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit, index => `${index}`, 1),
+                        'x = LINE_NUM'
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('stores 0 for LINE_NUM on line 65536', () => {
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit - 1, index => `${index}`, 1),
+                        'x = LINE_NUM'
+                    ]));
+                    expectZeroDiagnostics(program);
+
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit - 1, index => `${index}`, 1),
+                        'x = LINE_NUM : y = 70000'
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+            });
+
+            it('does not count source literals in a .brs file, where they are not replaced', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.brs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('SOURCE_LINE_NUM')
+                ]);
+            });
+
+            it('counts the same literals that transpile emits', () => {
+                const sourceLiteralLines = [
+                    'v = SOURCE_FILE_PATH',
+                    'v = SOURCE_LINE_NUM',
+                    'v = FUNCTION_NAME',
+                    'v = SOURCE_FUNCTION_NAME',
+                    'v = SOURCE_NAMESPACE_NAME',
+                    'v = SOURCE_NAMESPACE_ROOT_NAME',
+                    'v = SOURCE_LOCATION',
+                    'v = PKG_PATH',
+                    'v = PKG_LOCATION',
+                    'v = LINE_NUM'
+                ];
+                const file = program.setFile<BrsFile>('source/main.bs', [
+                    'function main()',
+                    ...sourceLiteralLines,
+                    '    f = function()',
+                    ...sourceLiteralLines,
+                    '        g = function()',
+                    ...sourceLiteralLines,
+                    '        end function',
+                    '    end function',
+                    'end function',
+                    'namespace alpha.beta',
+                    '    function inNamespace()',
+                    ...sourceLiteralLines,
+                    '        f = function()',
+                    ...sourceLiteralLines,
+                    '        end function',
+                    '    end function',
+                    '    class Widget',
+                    '        sub method()',
+                    ...sourceLiteralLines,
+                    '        end sub',
+                    '    end class',
+                    'end namespace'
+                ].join('\n'));
+                program.validate();
+
+                const sourceLiterals = file.ast.findChildren<SourceLiteralExpression>(isSourceLiteralExpression, { walkMode: WalkMode.visitAllRecursive });
+                expect(sourceLiterals).to.have.lengthOf(sourceLiteralLines.length * 6);
+                //make sure every source literal kind is covered, so a new one can't silently skip this check
+                expect(
+                    [...new Set(sourceLiterals.map(x => x.tokens.value.kind))].sort()
+                ).to.eql(
+                    [...BrighterScriptSourceLiterals, TokenKind.LineNumLiteral].sort()
+                );
+
+                const validator = new BrsFileValidator({ program: program, file: file });
+                for (const sourceLiteral of sourceLiterals) {
+                    const transpiled = sourceLiteral.transpile(new BrsTranspileState(file)).map(x => x.toString()).join('');
+                    const parts = validator['getSourceLiteralReplacements'](sourceLiteral, file);
+                    let expected = parts.length > 0
+                        ? parts.map(part => (part.type === 'string' ? `"${part.value}"` : `${part.value}`)).join(' + ')
+                        : sourceLiteral.tokens.value.text;
+                    if (sourceLiteral.tokens.value.kind === TokenKind.PkgLocationLiteral) {
+                        expected += ' + str(LINE_NUM)';
+                    }
+                    expect(expected, `${sourceLiteral.tokens.value.text} on line ${sourceLiteral.location.range.start.line + 1}`).to.eql(transpiled);
+                }
+            });
+        });
+
+        describe('string keys and indexes', () => {
+            function fillStringPool() {
+                return buildAssignments(limit, index => `"s${index}"`);
+            }
+
+            it('counts a quoted associative array key with a new string', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "newQuotedKey": 1 }']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('does not count an unquoted associative array key', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { newKeyName: 1 }']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count a quoted associative array key that reuses an existing string', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "s5": 1 }']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('dedupes a quoted key against a string literal', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "s5": "s6" }', 'v = "s7"']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a string used as an index in a get', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = m["brandNewKey"]']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('counts a string used as an index in a set', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'm["brandNewKey2"] = true']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('does not count a dotted property name', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'o = {}', 'o.someNewProp = 1']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count quoted keys in a false conditional compile branch', () => {
+                validateSource(wrapInFunction([
+                    ...fillStringPool(),
+                    '#if false',
+                    'v = { "newQuotedKey": 1 }',
+                    '#end if'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.inactiveConditionalCompileBranch()
+                ]);
+            });
+        });
+
+        it('counts template string text parts in a .bs file', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `"s${index}"`),
+                'v = `template`'
+            ]), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        /* eslint-disable no-template-curly-in-string */
+        describe('template strings and tagged templates', () => {
+            const tooManyIntegers = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'integer', limit)];
+            const tooManyStrings = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'string', limit)];
+            //integers 1000 and up, so the char codes of the escapes below are not already in the pool
+            const fillIntegers = () => buildAssignments(limit, index => `${index}`, 1000);
+            const fillStrings = (count = limit) => buildAssignments(count, index => `"s${index}"`);
+            const validateWithTag = (lines: string[]) => {
+                validateSource(wrapInFunction(lines) + '\nfunction tag(strings, values)\nend function', 'source/main.bs');
+            };
+
+            it('does not count the empty text around an expression in a template string', () => {
+                //`${x}` transpiles to `(bslib_toString(x))`, with no empty strings
+                validateSource(wrapInFunction([
+                    ...fillStrings(),
+                    'x = 1',
+                    'v = `${x}`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the text on both sides of an expression in a template string', () => {
+                validateSource(wrapInFunction([
+                    ...fillStrings(limit - 1),
+                    'x = 1',
+                    'v = `before${x}after`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts a string literal inside a template string expression', () => {
+                validateSource(wrapInFunction([
+                    ...fillStrings(),
+                    'v = `${"inner"}`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts an escape in a template string as its char code integer', () => {
+                //`\n` transpiles to `chr(10)`
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `a\\nb`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count an escape whose char code is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = `a\\nb`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the same escape twice once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`, 1000),
+                    'v = `a\\nb\\nc`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a quote in a template string as chr(34)', () => {
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `say "hi"`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts a newline in a multiline template string as chr(10)', () => {
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `one',
+                    'two`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the text of a tagged template', () => {
+                validateWithTag([
+                    ...fillStrings(),
+                    'v = tag`tagged text`'
+                ]);
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts the empty strings a tagged template keeps', () => {
+                //tag`${x}` transpiles to `tag(["", ""], [x])`
+                validateWithTag([
+                    ...fillStrings(),
+                    'x = 1',
+                    'v = tag`${x}`'
+                ]);
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count the empty strings of a tagged template when "" is already in the pool', () => {
+                validateWithTag([
+                    'v = ""',
+                    ...fillStrings(limit - 1),
+                    'x = 1',
+                    'v = tag`${x}`'
+                ]);
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts an escape in a tagged template as its char code integer', () => {
+                validateWithTag([
+                    ...fillIntegers(),
+                    'v = tag`a\\nb`'
+                ]);
+                expectDiagnostics(program, tooManyIntegers());
+            });
+        });
+
+        /* eslint-enable no-template-curly-in-string */
+
+        describe('regex literals', () => {
+            it('counts roRegex, the pattern, and the flags as strings', () => {
+                //`/abc/i` transpiles to `CreateObject("roRegex", "abc", "i")`
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = /abc/i'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65538, 'string', limit)]);
+            });
+
+            it('counts the empty flags string of a regex without flags', () => {
+                validateSource(wrapInFunction([
+                    'v = "roRegex"',
+                    'v = "abc"',
+                    ...buildAssignments(limit - 2, index => `"s${index}"`),
+                    'v = /abc/'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)]);
+            });
+
+            it('counts a quote in a regex pattern as chr(34)', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`, 1000),
+                    'v = /a"b/'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)]);
+            });
+        });
+
+        describe('callfunc', () => {
+            it('counts the callfunc method name as a string', () => {
+                //`m.node@.doThing()` transpiles to `m.node.callfunc("doThing")`
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'm.node@.doThing()'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)]);
+            });
+
+            it('does not count the method name when it is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "doThing"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'm.node@.doThing()'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        it('counts the same literals in a .bs file as the device sees in its transpiled output', async () => {
+            //the device compiles the transpiled .brs, so the .bs pools must match the pools of that output
+            const getPools = (targetProgram: Program, file: BrsFile) => {
+                const validator = new BrsFileValidator({ program: targetProgram, file: file });
+                validator.process();
+                const pools = validator['literalPools'];
+                return Object.keys(pools).sort().map(poolName => {
+                    return { poolName: poolName, values: [...pools[poolName].values].sort() };
+                });
+            };
+            const bsFile = program.setFile<BrsFile>('source/main.bs', `
+                function main()
+                    x = 1
+                    v = \`plain text\`
+                    v = \`a\${x}b\`
+                    v = \`\${x}\`
+                    v = \`line1\\nline2\`
+                    v = \`say "hi"\`
+                    v = \`one
+                    two\`
+                    v = tag\`a\${x}b\`
+                    v = tag\`\\n\${x}\`
+                    v = tag\`\`
+                    v = /abc/ix
+                    v = /a"b/
+                    v = /"start and end"/m
+                    m.node@.doThing(1)
+                    m.node@.doOther()
+                    v = x = 1 ? "yes" : "no"
+                    v = x ?? "fallback"
+                    v = m?.a?["key"]
+                end function
+                function tag(strings, values)
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            const transpiledProgram = new Program({ rootDir: rootDir });
+            try {
+                const brsFile = transpiledProgram.setFile<BrsFile>('source/main.brs', (await program.getTranspiledFileContents(bsFile.srcPath)).code);
+                transpiledProgram.validate();
+                expect(getPools(program, bsFile)).to.eql(getPools(transpiledProgram, brsFile));
+            } finally {
+                transpiledProgram.dispose();
+            }
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}`)), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('reports the range of the first literal over the limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 2, index => `${index}`)));
+            //line 0 is the function line, so the 65536th distinct value (index 65535) sits on line 65536
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyLiterals(65537, 'integer', limit),
+                location: { range: util.createRange(limit + 1, 4, limit + 1, 4 + `${limit}`.length) }
+            }]);
+        });
+
+        it('reports one diagnostic per type that is over', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit + 1, index => `${index}`),
+                ...buildAssignments(limit + 1, index => `"s${index}"`)
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit),
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
             ]);
         });
     });
