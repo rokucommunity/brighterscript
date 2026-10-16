@@ -2000,6 +2000,7 @@ export class Parser {
         TokenKind.PlusPlus,
         TokenKind.MinusMinus,
         TokenKind.Callfunc,
+        TokenKind.QuestionCallfunc,
         TokenKind.QuestionAt
     ];
 
@@ -3342,7 +3343,7 @@ export class Parser {
         if (methodName) {
             // force it into an identifier so the AST makes some sense
             methodName.kind = TokenKind.Identifier;
-            openParen = this.tryConsume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen);
+            openParen = this.tryConsume(DiagnosticMessages.expectedToken(TokenKind.LeftParen), TokenKind.LeftParen, TokenKind.QuestionLeftParen);
             if (openParen) {
                 call = this.finishCall(openParen, callee, false);
             }
@@ -3368,7 +3369,7 @@ export class Parser {
                 expr = this.finishCall(this.previous(), expr);
             } else if (this.matchAny(TokenKind.LeftSquareBracket, TokenKind.QuestionLeftSquare) || this.matchSequence(TokenKind.QuestionDot, TokenKind.LeftSquareBracket)) {
                 expr = this.indexedGet(expr);
-            } else if (this.match(TokenKind.Callfunc)) {
+            } else if (this.matchAny(TokenKind.Callfunc, TokenKind.QuestionCallfunc)) {
                 expr = this.callfunc(expr);
             } else if (this.matchAny(TokenKind.Dot, TokenKind.QuestionDot)) {
                 if (this.match(TokenKind.LeftSquareBracket)) {
@@ -3397,11 +3398,11 @@ export class Parser {
                     ...AllowedProperties
                 );
 
-                // force it into an identifier so the AST makes some sense
-                name.kind = TokenKind.Identifier;
                 if (!name) {
                     break;
                 }
+                // force it into an identifier so the AST makes some sense
+                name.kind = TokenKind.Identifier;
                 expr = new XmlAttributeGetExpression({ obj: expr, name: name as Identifier, at: dot });
                 //only allow a single `@` expression
                 break;

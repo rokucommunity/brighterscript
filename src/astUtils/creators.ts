@@ -12,6 +12,7 @@ const tokenDefaults = {
     [TokenKind.Backslash]: '\\',
     [TokenKind.BackslashEqual]: '\\=',
     [TokenKind.Callfunc]: '@.',
+    [TokenKind.QuestionCallfunc]: '?@.',
     [TokenKind.Caret]: '^',
     [TokenKind.Colon]: ':',
     [TokenKind.Comma]: ',',

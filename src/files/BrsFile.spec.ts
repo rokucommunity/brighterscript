@@ -5026,6 +5026,36 @@ describe('BrsFile', () => {
                 expectZeroDiagnostics(program);
             });
 
+            it('transpiles optional chaining on callfunc', async () => {
+                await testTranspile(`
+                    sub main(focusedRow, m)
+                        a = focusedRow?@.getProgram(m.focusedTime)
+                        b = focusedRow@.getProgram?(m.focusedTime)
+                        c = focusedRow?@.getProgram?(m.focusedTime)
+                        d = m.a?.b?@.getProgram()
+                    end sub
+                `, `
+                    sub main(focusedRow, m)
+                        a = focusedRow?.callfunc("getProgram", m.focusedTime)
+                        b = focusedRow.callfunc?("getProgram", m.focusedTime)
+                        c = focusedRow?.callfunc?("getProgram", m.focusedTime)
+                        d = m.a?.b?.callfunc("getProgram")
+                    end sub
+                `);
+            });
+
+            it('flags optional callfunc on the left side of an assignment', () => {
+                program.setFile('source/main.bs', `
+                    sub main(node)
+                        node?@.getChild().title = "x"
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment()
+                ]);
+            });
+
             it('sets invalid on empty callfunc with legacyCallfuncHandling=true', async () => {
                 program.options.legacyCallfuncHandling = true;
                 await testTranspile(`
