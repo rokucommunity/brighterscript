@@ -1358,22 +1358,28 @@ export class Util {
      * Set the `startPosition`, `endPosition`, and `sourceInfo` of `target` to the bounds of all the locatables.
      * Positions from different sources can't be compared, so only locatables from one source are included: the first one that has a uri,
      * or the first one if none of them do. That way, code parsed from a snippet (which has no uri) never takes over the bounds of real code from a file.
-     * A trailing newline is not included in the bounds, so the target never ends at the start of the next line
+     * A trailing newline is not included in the bounds, so the target never ends at the start of the next line.
+     * Pass a list that can be large (like a block's statements) as an array instead of spreading it, since spreading a huge array overflows the call stack
      */
-    public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | undefined>): T {
+    public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | ReadonlyArray<Locatable | undefined> | undefined>): T {
         let startPosition: number;
         let endPosition: number;
         let sourceInfo: SourceInfo;
-        for (const locatable of locatables) {
-            if (!locatable?.sourceInfo) {
-                continue;
-            } else if (!sourceInfo || (!sourceInfo.uri && locatable.sourceInfo.uri)) {
-                sourceInfo = locatable.sourceInfo;
-                startPosition = locatable.startPosition;
-                endPosition = this.getContentEnd(locatable);
-            } else if (locatable.sourceInfo === sourceInfo) {
-                startPosition = Math.min(startPosition, locatable.startPosition);
-                endPosition = Math.max(endPosition, this.getContentEnd(locatable));
+        for (const item of locatables) {
+            const isGroup = Array.isArray(item);
+            const count = isGroup ? item.length : 1;
+            for (let i = 0; i < count; i++) {
+                const locatable = (isGroup ? item[i] : item) as Locatable | undefined;
+                if (!locatable?.sourceInfo) {
+                    continue;
+                } else if (!sourceInfo || (!sourceInfo.uri && locatable.sourceInfo.uri)) {
+                    sourceInfo = locatable.sourceInfo;
+                    startPosition = locatable.startPosition;
+                    endPosition = this.getContentEnd(locatable);
+                } else if (locatable.sourceInfo === sourceInfo) {
+                    startPosition = Math.min(startPosition, locatable.startPosition);
+                    endPosition = Math.max(endPosition, this.getContentEnd(locatable));
+                }
             }
         }
         target.startPosition = startPosition;

@@ -67,7 +67,7 @@ export class Body extends Statement implements TypedefProvider {
     }) {
         super();
         this.statements = options?.statements ?? [];
-        util.setBounds(this, ...this.statements);
+        util.setBounds(this, this.statements);
     }
 
     public readonly statements: Statement[] = [];
@@ -322,7 +322,7 @@ export class Block extends Statement {
         super();
         this.statements = options.statements;
         this.symbolTable = new SymbolTable('Block', () => this.parent.getSymbolTable());
-        util.setBounds(this, ...this.statements ?? []);
+        util.setBounds(this, this.statements);
     }
 
     public readonly statements: Statement[];

@@ -844,7 +844,7 @@ export class BrsFileValidator {
      */
     private collectFunctionLiterals(func: FunctionExpression) {
         const pools = this.literalPools;
-        const addToPool = (poolName: LiteralPoolName, key: string | number, location: Location) => {
+        const addToPool = (poolName: LiteralPoolName, key: string | number, location: Locatable) => {
             let pool = pools[poolName];
             if (!pool) {
                 pool = { values: new Set<string | number>(), firstOverLimitLocation: undefined };
@@ -865,24 +865,24 @@ export class BrsFileValidator {
                 const text = token.text;
                 switch (token.kind) {
                     case TokenKind.IntegerLiteral:
-                        addToPool('integer', /^&h/i.test(text) ? parseInt(text.slice(2), 16) : Number(text.replace('%', '')), literal.location);
+                        addToPool('integer', /^&h/i.test(text) ? parseInt(text.slice(2), 16) : Number(text.replace('%', '')), literal);
                         break;
                     case TokenKind.LongIntegerLiteral:
-                        addToPool('longinteger', getLongIntegerKey(text), literal.location);
+                        addToPool('longinteger', getLongIntegerKey(text), literal);
                         break;
                     case TokenKind.FloatLiteral:
-                        addToPool('float', Math.fround(getFloatingPointValue(text)), literal.location);
+                        addToPool('float', Math.fround(getFloatingPointValue(text)), literal);
                         break;
                     case TokenKind.DoubleLiteral:
-                        addToPool('double', getFloatingPointValue(text), literal.location);
+                        addToPool('double', getFloatingPointValue(text), literal);
                         break;
                     case TokenKind.StringLiteral:
-                        addToPool('string', getStringLiteralKey(text), literal.location);
+                        addToPool('string', getStringLiteralKey(text), literal);
                         break;
                     case TokenKind.TemplateStringQuasi:
                         //empty quasi strings are dropped from template strings, but tagged templates keep them
                         if (text !== '' || isTaggedTemplateStringExpression(literal.parent?.parent)) {
-                            addToPool('string', text, literal.location);
+                            addToPool('string', text, literal);
                         }
                         break;
                     default:
@@ -894,12 +894,12 @@ export class BrsFileValidator {
                     return;
                 }
                 for (const part of this.getSourceLiteralReplacements(sourceLiteral, this.event.file)) {
-                    addToPool(part.type, part.value, sourceLiteral.location);
+                    addToPool(part.type, part.value, sourceLiteral);
                 }
                 const literalKind = sourceLiteral.tokens.value.kind;
                 const lineRange = sourceLiteral.location?.range;
                 if (lineRange && (literalKind === TokenKind.LineNumLiteral || literalKind === TokenKind.PkgLocationLiteral)) {
-                    addToPool('integer', (lineRange.start.line + 1) % 65536, sourceLiteral.location);
+                    addToPool('integer', (lineRange.start.line + 1) % 65536, sourceLiteral);
                 }
             },
             AAMemberExpression: (member) => {
@@ -907,14 +907,14 @@ export class BrsFileValidator {
                 if (keyToken?.kind !== TokenKind.StringLiteral || member.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                addToPool('string', getStringLiteralKey(keyToken.text), keyToken.location ?? member.location);
+                addToPool('string', getStringLiteralKey(keyToken.text), util.firstLocatable<Locatable>(keyToken, member));
             },
             //template string escapes (like `\n` or `"`) transpile to `chr(charCode)`
             EscapedCharCodeLiteralExpression: (escape) => {
                 if (escape.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                addToPool('integer', escape.tokens.value.charCode, escape.location);
+                addToPool('integer', escape.tokens.value.charCode, escape);
             },
             //`/pattern/flags` transpiles to `CreateObject("roRegex", "pattern", "flags")`, with each `"` in the pattern split out as `chr(34)`
             RegexLiteralExpression: (regex) => {
@@ -929,14 +929,14 @@ export class BrsFileValidator {
                     flags = flagMatch[1];
                 }
                 const patternParts = text.substring(1, text.length - 1).split('"');
-                addToPool('string', 'roRegex', regex.location);
+                addToPool('string', 'roRegex', regex);
                 for (const part of patternParts) {
-                    addToPool('string', part, regex.location);
+                    addToPool('string', part, regex);
                 }
                 if (patternParts.length > 1) {
-                    addToPool('integer', 34, regex.location);
+                    addToPool('integer', 34, regex);
                 }
-                addToPool('string', flags, regex.location);
+                addToPool('string', flags, regex);
             },
             //`node@.method()` transpiles to `node.callfunc("method")`
             CallfuncExpression: (callfunc) => {
@@ -944,7 +944,7 @@ export class BrsFileValidator {
                 if (!callfunc.tokens.methodName || callfunc.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                addToPool('string', callfunc.tokens.methodName.text, callfunc.tokens.methodName.location ?? callfunc.location);
+                addToPool('string', callfunc.tokens.methodName.text, util.firstLocatable<Locatable>(callfunc.tokens.methodName, callfunc));
             }
         });
 
@@ -1067,14 +1067,14 @@ export class BrsFileValidator {
      * Nested functions have their own limit and are not included.
      */
     private validateFunctionGotoLabelCount(func: FunctionExpression) {
-        const labelLocations = new Map<string, Location>();
+        const labelLocations = new Map<string, Locatable>();
         const continueLoops = new Set<AstNode>();
         const continueIsTranspiled = this.event.file.needsTranspiled && !this.event.program.firmwareCapabilities.continueStatement;
         func.body?.walk(createVisitor({
             GotoStatement: (statement) => {
                 const labelName = statement.tokens.label?.text?.toLowerCase();
                 if (labelName && !labelLocations.has(labelName)) {
-                    labelLocations.set(labelName, statement.tokens.label.location ?? statement.location);
+                    labelLocations.set(labelName, util.firstLocatable<Locatable>(statement.tokens.label, statement));
                 }
             },
             ContinueStatement: (statement) => {
@@ -1087,7 +1087,7 @@ export class BrsFileValidator {
                 }
                 if (enclosingLoop && enclosingLoop !== func && !continueLoops.has(enclosingLoop)) {
                     continueLoops.add(enclosingLoop);
-                    labelLocations.set(`continue-loop:${continueLoops.size}`, statement.location);
+                    labelLocations.set(`continue-loop:${continueLoops.size}`, statement);
                 }
             }
         }), { walkMode: WalkMode.visitAll });
@@ -1096,7 +1096,7 @@ export class BrsFileValidator {
             const firstOverLimitLocation = [...labelLocations.values()][FunctionExpression.MaximumGotoLabels];
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyGotoLabels(labelLocations.size, FunctionExpression.MaximumGotoLabels),
-                location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
+                location: firstOverLimitLocation ?? util.firstLocatable<Locatable>(func.tokens.functionType, func)
             });
         }
     }
@@ -1873,7 +1873,7 @@ type LiteralPoolName = 'integer' | 'string' | 'float' | 'double' | 'longinteger'
 
 interface LiteralPool {
     values: Set<string | number>;
-    firstOverLimitLocation: Location | undefined;
+    firstOverLimitLocation: Locatable | undefined;
 }
 
 interface LabelsAndGotos {

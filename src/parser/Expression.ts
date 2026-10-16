@@ -144,7 +144,7 @@ export class CallExpression extends Expression {
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
-        util.setBounds(this, this.callee, this.tokens.openingParen, ...this.args ?? [], this.tokens.closingParen);
+        util.setBounds(this, this.callee, this.tokens.openingParen, this.args, this.tokens.closingParen);
     }
 
     readonly callee: Expression;
@@ -1217,7 +1217,7 @@ export class ArrayLiteralExpression extends Expression {
             close: options.close
         };
         this.elements = options.elements;
-        util.setBounds(this, this.tokens.open, ...this.elements ?? [], this.tokens.close);
+        util.setBounds(this, this.tokens.open, this.elements, this.tokens.close);
     }
 
     public readonly elements: Array<Expression>;
@@ -1442,7 +1442,7 @@ export class AALiteralExpression extends Expression {
             close: options.close
         };
         this.elements = options.elements;
-        util.setBounds(this, this.tokens.open, ...this.elements ?? [], this.tokens.close);
+        util.setBounds(this, this.tokens.open, this.elements, this.tokens.close);
     }
 
     public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression>;
