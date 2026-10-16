@@ -3042,13 +3042,16 @@ export class Parser {
                 if (!isAnnotationExpression(dec)) {
                     this.consumePendingAnnotations(dec);
                     statements.push(dec);
-                }
 
-                //ensure statement separator. An unterminated inner block (i.e. an `if` missing its `end if`) that stopped at the
-                //next `case` already consumed the separator, so don't complain about it a second time
-                this.consumeStatementSeparators(
-                    this.checkSelectCaseTerminator() && this.checkAnyPrevious(TokenKind.Newline, TokenKind.Colon)
-                );
+                    //ensure statement separator. An unterminated inner block (i.e. an `if` missing its `end if`) that stopped at the
+                    //next `case` already consumed the separator, so don't complain about it a second time
+                    this.consumeStatementSeparators(
+                        this.checkSelectCaseTerminator() && this.checkAnyPrevious(TokenKind.Newline, TokenKind.Colon)
+                    );
+                } else {
+                    //annotations may share a line with the next annotation or the statement they decorate (i.e. `@inject m.child = {}`)
+                    this.consumeStatementSeparators(true);
+                }
 
             } else {
                 //something went wrong. reset to the top of the loop
