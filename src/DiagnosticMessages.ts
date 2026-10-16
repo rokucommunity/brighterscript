@@ -1395,6 +1395,17 @@ export let DiagnosticMessages = {
             (suggestedName ? `. Namespaced functions must be referenced by their transpiled name: '${suggestedName}'` : ''),
         severity: DiagnosticSeverity.Warning,
         code: 'observer-callback-not-found'
+    }),
+    /**
+     * A parameter has both a type designator (i.e. `name$`) and an `as` type that isn't the designator's type, which fails to compile on device
+     * @param paramName the parameter name, including its designator (i.e. `name$`)
+     * @param designatorType the type the designator implies (i.e. `string`)
+     * @param declaredType the type written after `as`
+     */
+    typeDesignatorMismatch: (paramName: string, designatorType: string, declaredType: string) => ({
+        message: `Parameter '${paramName}' is declared 'as ${declaredType}', but its type designator makes it '${designatorType}'. Use 'as ${designatorType}' or remove the type designator`,
+        severity: DiagnosticSeverity.Error,
+        code: 'type-designator-mismatch'
     })
 };
 export const defaultMaximumTruncationLength = 160;

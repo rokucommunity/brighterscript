@@ -5,7 +5,7 @@ import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type WithContextExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type WithContextExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
@@ -24,6 +24,17 @@ import * as semver from 'semver';
 import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
 import { globalCallableMap } from '../../globalCallables';
+
+/**
+ * The type implied by each type designator character that can end a variable or parameter name
+ */
+const typeDesignatorTypes: Record<string, string> = {
+    '$': 'string',
+    '%': 'integer',
+    '!': 'float',
+    '#': 'double',
+    '&': 'longinteger'
+};
 
 export class BrsFileValidator {
     constructor(
@@ -409,6 +420,7 @@ export class BrsFileValidator {
                 if (!paramName) {
                     return;
                 }
+                this.validateTypeDesignatorMatchesDeclaredType(node);
                 const data: ExtraSymbolData = {};
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime, data: data });
                 // add param symbol at expression level, so it can be used as default value in other params
@@ -752,6 +764,28 @@ export class BrsFileValidator {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.functionNameTooLong(name, name.length, BrsFileValidator.MaxFunctionNameLength),
                 location: node.tokens.name?.location ?? node.location
+            });
+        }
+    }
+
+    /**
+     * A parameter with a type designator (i.e. `name$`) can only have an `as` type that matches it (i.e. `name$ as string`).
+     * Anything else, including `as dynamic` and `as object`, is a "Type Mismatch" compile error on device.
+     */
+    private validateTypeDesignatorMatchesDeclaredType(param: FunctionParameterExpression) {
+        if (!param.typeExpression) {
+            return;
+        }
+        const paramName = param.tokens.name.text;
+        const designatorType = typeDesignatorTypes[paramName[paramName.length - 1]];
+        if (!designatorType) {
+            return;
+        }
+        const declaredType = param.typeExpression.getName(ParseMode.BrighterScript);
+        if (declaredType?.toLowerCase() !== designatorType) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.typeDesignatorMismatch(paramName, designatorType, declaredType),
+                location: param.location
             });
         }
     }
