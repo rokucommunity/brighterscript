@@ -8183,6 +8183,174 @@ describe('BrsFile', () => {
             ]);
         });
 
+        /* eslint-disable no-template-curly-in-string */
+        describe('template strings and tagged templates', () => {
+            const tooManyIntegers = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'integer', limit)];
+            const tooManyStrings = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'string', limit)];
+            //integers 1000 and up, so the char codes of the escapes below are not already in the pool
+            const fillIntegers = () => buildAssignments(limit, index => `${index}`, 1000);
+            const fillStrings = (count = limit) => buildAssignments(count, index => `"s${index}"`);
+            const validateWithTag = (lines: string[]) => {
+                validateSource(wrapInFunction(lines) + '\nfunction tag(strings, values)\nend function', 'source/main.bs');
+            };
+
+            it('does not count the empty text around an expression in a template string', () => {
+                //`${x}` transpiles to `(bslib_toString(x))`, with no empty strings
+                validateSource(wrapInFunction([
+                    ...fillStrings(),
+                    'x = 1',
+                    'v = `${x}`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the text on both sides of an expression in a template string', () => {
+                validateSource(wrapInFunction([
+                    ...fillStrings(limit - 1),
+                    'x = 1',
+                    'v = `before${x}after`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts a string literal inside a template string expression', () => {
+                validateSource(wrapInFunction([
+                    ...fillStrings(),
+                    'v = `${"inner"}`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts an escape in a template string as its char code integer', () => {
+                //`\n` transpiles to `chr(10)`
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `a\\nb`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count an escape whose char code is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = `a\\nb`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the same escape twice once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`, 1000),
+                    'v = `a\\nb\\nc`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a quote in a template string as chr(34)', () => {
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `say "hi"`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts a newline in a multiline template string as chr(10)', () => {
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `one',
+                    'two`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the text of a tagged template', () => {
+                validateWithTag([
+                    ...fillStrings(),
+                    'v = tag`tagged text`'
+                ]);
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts the empty strings a tagged template keeps', () => {
+                //tag`${x}` transpiles to `tag(["", ""], [x])`
+                validateWithTag([
+                    ...fillStrings(),
+                    'x = 1',
+                    'v = tag`${x}`'
+                ]);
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count the empty strings of a tagged template when "" is already in the pool', () => {
+                validateWithTag([
+                    'v = ""',
+                    ...fillStrings(limit - 1),
+                    'x = 1',
+                    'v = tag`${x}`'
+                ]);
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts an escape in a tagged template as its char code integer', () => {
+                validateWithTag([
+                    ...fillIntegers(),
+                    'v = tag`a\\nb`'
+                ]);
+                expectDiagnostics(program, tooManyIntegers());
+            });
+        });
+
+        /* eslint-enable no-template-curly-in-string */
+
+        describe('regex literals', () => {
+            it('counts roRegex, the pattern, and the flags as strings', () => {
+                //`/abc/i` transpiles to `CreateObject("roRegex", "abc", "i")`
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = /abc/i'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65538, 'string', limit)]);
+            });
+
+            it('counts the empty flags string of a regex without flags', () => {
+                validateSource(wrapInFunction([
+                    'v = "roRegex"',
+                    'v = "abc"',
+                    ...buildAssignments(limit - 2, index => `"s${index}"`),
+                    'v = /abc/'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)]);
+            });
+
+            it('counts a quote in a regex pattern as chr(34)', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`, 1000),
+                    'v = /a"b/'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)]);
+            });
+        });
+
+        describe('callfunc', () => {
+            it('counts the callfunc method name as a string', () => {
+                //`m.node@.doThing()` transpiles to `m.node.callfunc("doThing")`
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'm.node@.doThing()'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)]);
+            });
+
+            it('does not count the method name when it is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "doThing"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'm.node@.doThing()'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+        });
+
         it('counts the same literals in a .bs file as the device sees in its transpiled output', async () => {
             //the device compiles the transpiled .brs, so the .bs pools must match the pools of that output
             const getPools = (targetProgram: Program, file: BrsFile) => {
