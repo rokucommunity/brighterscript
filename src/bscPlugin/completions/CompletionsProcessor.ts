@@ -230,6 +230,15 @@ export class CompletionsProcessor {
             expression = file.getClosestExpression(this.event.position);
         }
 
+        //adjacency to `as` only covers the first name after it. A name deeper inside a type expression
+        //(`string or Per|son`, `[Per|son, integer]`) is still a type name, so use the AST to detect that
+        if (symbolTableLookupFlag === SymbolTypeFlag.runtime && !shouldLookForMembers && !shouldLookForCallFuncMembers && expression && util.isInTypeExpression(expression)) {
+            if (file.parseMode === ParseMode.BrightScript) {
+                return { global: NativeTypeCompletions, scoped: [] };
+            }
+            symbolTableLookupFlag = SymbolTypeFlag.typetime;
+        }
+
         if (isFunctionExpression(expression)) {
             // if completion is the last character of the function, use the completions of the body of the function
             expression = expression.body;

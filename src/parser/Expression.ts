@@ -3061,6 +3061,173 @@ export class TypedArrayExpression extends Expression {
     }
 }
 
+/**
+ * A tuple type, i.e. `[string, integer]`, `[float, float?]` or `[string, ...integer[]]`
+ */
+export class TupleTypeExpression extends Expression {
+    constructor(options: {
+        open?: Token;
+        elements: TupleTypeElementExpression[];
+        close?: Token;
+    }) {
+        super();
+        this.tokens = {
+            open: options.open,
+            close: options.close
+        };
+        this.elements = options.elements ?? [];
+        this.location = util.createBoundingLocation(
+            this.tokens.open,
+            ...this.elements,
+            this.tokens.close
+        );
+    }
+
+    public readonly tokens: {
+        readonly open?: Token;
+        readonly close?: Token;
+    };
+
+    public readonly elements: TupleTypeElementExpression[];
+
+    public readonly kind = AstNodeKind.TupleTypeExpression;
+
+    public readonly location: Location;
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.open?.leadingTrivia ?? [];
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //tuples are arrays at runtime, and BrightScript has no array-of-T type at the language level
+        return ['dynamic'];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.elements, visitor, options, this);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        const elementTypes: BscType[] = [];
+        for (const element of this.elements) {
+            let elementType = element.getType({ ...options, typeChain: undefined });
+            if (element.isRest) {
+                //a rest element's type is an array; the tuple's items are that array's items
+                let restType = elementType;
+                while (isTypeStatementType(restType)) {
+                    restType = restType.wrappedType;
+                }
+                if (isArrayType(restType)) {
+                    elementType = restType.defaultType;
+                }
+            }
+            elementTypes.push(elementType);
+        }
+        return new ArrayType(...elementTypes);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TupleTypeExpression({
+                open: util.cloneToken(this.tokens.open),
+                elements: this.elements?.map(x => x?.clone()),
+                close: util.cloneToken(this.tokens.close)
+            }),
+            ['elements']
+        );
+    }
+}
+
+/**
+ * A single element of a tuple type. Supports the following shapes:
+ *  - `type`
+ *  - `type?` (an optional element)
+ *  - `...type` (a rest element, where the type is an array type)
+ */
+export class TupleTypeElementExpression extends Expression {
+    constructor(options: {
+        dotDotDot?: Token;
+        typeExpression?: TypeExpression;
+        question?: Token;
+        comma?: Token;
+    }) {
+        super();
+        this.tokens = {
+            dotDotDot: options.dotDotDot,
+            question: options.question,
+            comma: options.comma
+        };
+        this.typeExpression = options.typeExpression;
+        this.location = util.createBoundingLocation(
+            this.tokens.dotDotDot,
+            this.typeExpression,
+            this.tokens.question
+        );
+    }
+
+    public readonly tokens: {
+        readonly dotDotDot?: Token;
+        readonly question?: Token;
+        readonly comma?: Token;
+    };
+
+    /**
+     * The element's type. Missing only in BrightScript mode, where a custom type name is skipped (with its own diagnostic)
+     */
+    public readonly typeExpression?: TypeExpression;
+
+    public readonly kind = AstNodeKind.TupleTypeElementExpression;
+
+    public readonly location: Location;
+
+    /**
+     * Is this an optional element (i.e. `integer?`)?
+     */
+    public get isOptional() {
+        return !!this.tokens.question;
+    }
+
+    /**
+     * Is this a rest element (i.e. `...integer[]`)?
+     */
+    public get isRest() {
+        return !!this.tokens.dotDotDot;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.dotDotDot?.leadingTrivia ?? this.typeExpression?.leadingTrivia ?? [];
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //elements are transpiled by their containing TupleTypeExpression
+        return [];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.typeExpression?.getType({ ...options, typeChain: undefined }) ?? DynamicType.instance;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TupleTypeElementExpression({
+                dotDotDot: util.cloneToken(this.tokens.dotDotDot),
+                typeExpression: this.typeExpression?.clone(),
+                question: util.cloneToken(this.tokens.question),
+                comma: util.cloneToken(this.tokens.comma)
+            }),
+            ['typeExpression']
+        );
+    }
+}
+
 export class InlineInterfaceExpression extends Expression {
     constructor(options: {
         open?: Token;

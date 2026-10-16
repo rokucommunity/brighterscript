@@ -31,6 +31,23 @@ describe('CompletionsProcessor', () => {
     });
 
     describe('getCompletions - Program.spec', () => {
+        it('offers type names anywhere inside a type expression, not only right after `as`', () => {
+            program.setFile('source/main.bs', [
+                'interface Person',
+                '    name as string',
+                'end interface',
+                'sub main(a as string or Person, b as [Person, integer])',
+                'end sub'
+            ].join('\n'));
+            program.validate();
+            //in the middle of `Person` inside the union (columns 24-29) and inside the tuple (columns 39-44)
+            for (const character of [26, 41]) {
+                const labels = program.getCompletions(`${rootDir}/source/main.bs`, Position.create(3, character)).map(x => x.label);
+                expect(labels, `column ${character}`).to.include('Person');
+                expect(labels, `column ${character}`).to.not.include('main');
+            }
+        });
+
         it('includes `for each` variable', () => {
             program.setFile('source/main.brs', `
                 sub main()
