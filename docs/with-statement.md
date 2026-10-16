@@ -14,6 +14,8 @@ end with
 
 `<expression>` can be any expression: a variable, a property chain, a function call, and so on.
 
+A `with` block can stand on its own, be the entire value of an assignment (`x = with <expression> ... end with`), or be the entire value of a `return` (`return with <expression> ... end with`). See [Assigning and returning the target](#assigning-and-returning-the-target).
+
 ## Example
 
 ```brighterscript
@@ -44,7 +46,7 @@ The block itself produces no code: every `.member` is rewritten to `target.membe
 
 ## How the target is transpiled
 
-When the target is a plain variable, as above, it is used directly. Any other target (a property chain, a function call, a literal, a nested `.member`) is evaluated **once**, when the block is entered, into a local variable, and every `.member` reads from that local:
+When the target is a plain variable, as above, it is used directly. Any other target (including a constant, which has no variable at runtime) (a property chain, a function call, a literal, a nested `.member`) is evaluated **once**, when the block is entered, into a local variable, and every `.member` reads from that local:
 
 ```brighterscript
 with m.top.findNode("title")
@@ -160,6 +162,66 @@ arr[1] = "Second slot"
 
 `.[index]` works anywhere `.member` does, and can be chained like any other member access: `.[0].title = .[1]`.
 
+## Assigning and returning the target
+
+A `with` block evaluates to its target, so it can be the value of an assignment. The target is assigned to the variable, and the body runs against that variable:
+
+```brighterscript
+chain = with promises.chain()
+    .then()
+    .then()
+end with
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+chain = promises_chain()
+chain.then()
+chain.then()
+```
+</details>
+
+It can also be the value of a `return`. The body runs first, then the target is returned:
+
+```brighterscript
+function createLabel() as object
+    return with CreateObject("roSGNode", "Label")
+        .text = "Hello"
+        .color = "#FFFFFF"
+    end with
+end function
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+function createLabel() as object
+    __bsc_tmp_with0 = CreateObject("roSGNode", "Label")
+    __bsc_tmp_with0.text = "Hello"
+    __bsc_tmp_with0.color = "#FFFFFF"
+    return __bsc_tmp_with0
+end function
+```
+</details>
+
+In both forms the `with` block must be the entire value: nothing may come before `with` or after `end with`. These are errors:
+
+```brighterscript
+total = 1 + with order      ' something before `with`
+end with
+
+name = with order
+end with + "x"              ' something after `end with`
+
+m.order = with order        ' only a plain variable assignment can take a `with` block
+end with
+```
+
+Anywhere else (an argument, an operand, a property assignment, a `print`), `with` is read as a variable named `with`, as it always has been.
+
 ## Nesting
 
 `with` blocks can be nested. Inside the inner block, `.member` refers to the inner target; the outer target is not accessible until the inner block ends.
@@ -203,6 +265,7 @@ end with
 ## Rules
 
 - Every statement in the block must start with a leading `.` (`.member` or `.[index]`), or be a nested `with` block. Anything else is an error.
+- A `with` block can be a statement on its own, or the entire value of a local variable assignment or a `return`. Nothing may come before `with` or after `end with` on those lines.
 - Every `.member` must be inside a `with` block. Using one outside a block is an error.
 - A function defined inside a `with` block (an anonymous `function` or `sub`) cannot use `.member`. BrightScript functions cannot access the local variables of the function that contains them, so the target is not available there. Assign it to a variable and pass that in instead.
 - Labels are not allowed inside a `with` block. A `goto` that targets one is also flagged, because jumping into the block would skip the step that evaluates the target.
