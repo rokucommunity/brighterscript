@@ -1,4 +1,5 @@
 import { util } from '../util';
+import type { Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
@@ -578,17 +579,47 @@ describe('AstNode', () => {
             expect((createToken(TokenKind.Identifier, 'b') as any).location).to.be.undefined;
         });
 
-        it('does not allow setting the location, since it describes where the code came from', () => {
+        it('moves synthetic nodes and tokens to an assigned location', () => {
             const location = util.createLocation(2, 3, 2, 7, 'file:///a.brs');
             const node = createVariableExpression('x');
-            expect(() => {
-                (node as any).location = location;
-            }).to.throw();
+            node.location = location;
+            expect(node.location).to.eql(location);
 
             const token = createToken(TokenKind.Identifier, 'x');
-            expect(() => {
-                (token as any).location = location;
-            }).to.throw();
+            token.location = location;
+            expect(token.location).to.eql(location);
+            expect(util.getLocation(token)).to.eql(location);
+        });
+
+        it('keeps an assigned location in the original source when it is in that source', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            const sourceInfo = name.sourceInfo;
+            name.location = util.createLocation(2, 0, 2, 3, sourceInfo.uri);
+            expect(name.sourceInfo).to.equal(sourceInfo);
+            expect(name.location.range).to.eql(util.createRange(2, 0, 2, 3));
+        });
+
+        it('keeps an assigned location that is outside of the original source', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            name.location = util.createLocation(20, 0, 20, 300, 'file:///other.brs');
+            expect(name.location).to.eql(util.createLocation(20, 0, 20, 300, 'file:///other.brs'));
+        });
+
+        it('clears the location when assigned undefined', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const assignment = ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            assignment.location = undefined;
+            expect(assignment.location).to.be.undefined;
+            assignment.tokens.name.location = undefined;
+            expect(assignment.tokens.name.location).to.be.undefined;
+        });
+
+        it('lets tokens be used where a `{ location: Location }` is expected', () => {
+            const getLine = (item: { text: string; location: Location }) => item.location.range.start.line;
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            expect(getLine(ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name)).to.equal(1);
         });
     });
 

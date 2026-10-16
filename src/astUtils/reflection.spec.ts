@@ -193,6 +193,7 @@ describe('reflection', () => {
             startPosition: undefined,
             endPosition: undefined,
             sourceInfo: undefined,
+            location: undefined,
             charCode: 0,
             leadingTrivia: []
         };

@@ -1,4 +1,5 @@
 import { TokenKind } from './TokenKind';
+import type { Location } from 'vscode-languageserver';
 
 /**
  * Represents a chunk of BrightScript scanned by the lexer.
@@ -21,6 +22,11 @@ export interface Token extends Locatable {
      * Any tokens starting on the next line of the previous token, up to the start of this token
      */
     leadingTrivia?: Token[];
+    /**
+     * Where the token was found. Assigning it moves the token to that location.
+     * @deprecated use `util.getLocation(token)`. This is computed on every read
+     */
+    location: Location;
 }
 
 /**

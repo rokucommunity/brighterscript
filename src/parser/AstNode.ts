@@ -33,10 +33,15 @@ export abstract class AstNode implements Locatable {
     public abstract sourceInfo: SourceInfo | undefined;
 
     /**
+     * The starting and ending location of the node. Assigning it moves the node to that location (see `util.assignLocation()`).
      * @deprecated use `util.getLocation(node)`. This is computed on every read
      */
     public get location(): Location | undefined {
         return util.getLocation(this);
+    }
+
+    public set location(value: Location | undefined) {
+        util.assignLocation(this, value, this.sourceInfo);
     }
 
     /**

@@ -14,6 +14,7 @@ export function token(kind: TokenKind, text?: string): Token {
         startPosition: undefined,
         endPosition: undefined,
         sourceInfo: undefined,
+        location: undefined,
         leadingTrivia: []
     };
 }

@@ -1413,6 +1413,86 @@ export class Util {
     }
 
     /**
+     * Give a locatable the exact position of a line/character `Location`. This supports code written for the `Location`-based api,
+     * like assigning `token.location` or passing a `Location` to a creator.
+     *
+     * The position is in `sourceInfo` when the location is in it, so the item combines with the rest of that source's AST.
+     * Otherwise it's in a placeholder source for the location's uri, which `util.getLocation()` turns back into the same location,
+     * so items given locations this way still combine with each other. The position is cleared if there's no location
+     */
+    public assignLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo?: SourceInfo): T {
+        const range = location?.range;
+        if (!this.isDetachablePosition(range?.start) || !this.isDetachablePosition(range?.end)) {
+            return this.setLocation(target, undefined, undefined);
+        }
+        if (sourceInfo && (!location.uri || location.uri === sourceInfo.uri) && this.isInSource(sourceInfo, range.start) && this.isInSource(sourceInfo, range.end)) {
+            return this.setLocation(target, location, sourceInfo);
+        }
+        target.sourceInfo = this.getDetachedSource(location.uri, Math.max(range.start.line, range.end.line));
+        target.startPosition = (range.start.line * Util.detachedLineLength) + range.start.character;
+        target.endPosition = (range.end.line * Util.detachedLineLength) + range.end.character;
+        return target;
+    }
+
+    /**
+     * Get a `Locatable` for an item that may instead be a line/character `Location` (or an object with a `location`),
+     * for code written against the `Location`-based api. Locatables are returned as-is
+     */
+    public toLocatable(item: Locatable | Location | { location?: Location } | undefined): Locatable | undefined {
+        if (!item || typeof (item as Locatable).startPosition === 'number') {
+            return item as Locatable;
+        }
+        const location = (item as Location).range ? item as Location : (item as { location?: Location }).location;
+        if (location?.range) {
+            return this.assignLocation({} as Locatable, location);
+        }
+        return item as Locatable;
+    }
+
+    /**
+     * Each line in a placeholder source (see `assignLocation`) is this many positions long, so a position there is `(line * detachedLineLength) + character`
+     */
+    private static readonly detachedLineLength = 2 ** 24;
+
+    /**
+     * Placeholder sources for locations that aren't in a parsed source, keyed by uri (see `assignLocation`)
+     */
+    private detachedSources = new Map<string, SourceInfo>();
+
+    /**
+     * Get the placeholder source for the uri, with lines up to at least `lastLine`
+     */
+    private getDetachedSource(uri: string | undefined, lastLine: number): SourceInfo {
+        let source = this.detachedSources.get(uri ?? '');
+        if (!source) {
+            source = { uri: uri, linePositions: [0] };
+            this.detachedSources.set(uri ?? '', source);
+        }
+        const linePositions = source.linePositions;
+        while (linePositions.length <= lastLine) {
+            linePositions.push(linePositions.length * Util.detachedLineLength);
+        }
+        return source;
+    }
+
+    /**
+     * Can this position be represented in a placeholder source (see `assignLocation`)?
+     */
+    private isDetachablePosition(position: Position | undefined) {
+        return Number.isInteger(position?.line) && position.line >= 0 &&
+            Number.isInteger(position.character) && position.character >= 0 && position.character < Util.detachedLineLength;
+    }
+
+    /**
+     * Is the position's line in the source, with the character before the start of the next line?
+     */
+    private isInSource(sourceInfo: SourceInfo, position: Position) {
+        const lineStart = sourceInfo.linePositions[position.line];
+        const nextLineStart = sourceInfo.linePositions[position.line + 1];
+        return lineStart !== undefined && (nextLineStart === undefined || lineStart + position.character < nextLineStart);
+    }
+
+    /**
      * Get the end position of a locatable, excluding any trailing newline (i.e. a `Newline` token, or an escaped newline in a template string)
      */
     public getContentEnd(locatable: Locatable): number {
