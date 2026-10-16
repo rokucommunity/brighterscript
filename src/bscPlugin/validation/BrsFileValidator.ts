@@ -692,7 +692,7 @@ export class BrsFileValidator {
                 if (sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                for (const part of getSourceLiteralReplacements(sourceLiteral, this.event.file)) {
+                for (const part of this.getSourceLiteralReplacements(sourceLiteral, this.event.file)) {
                     addToPool(part.type, part.value, sourceLiteral.location);
                 }
                 const literalKind = sourceLiteral.tokens.value.kind;
@@ -714,6 +714,98 @@ export class BrsFileValidator {
         for (const param of func.parameters ?? []) {
             param.walk(literalVisitor, { walkMode: WalkMode.visitAll });
         }
+    }
+
+    /**
+     * Get the literals a source literal is replaced with when transpiled (mirrors `SourceLiteralExpression.transpile`).
+     * Returns an empty array for source literals that stay native identifiers (like `LINE_NUM`).
+     * `PKG_LOCATION` additionally emits a native `str(LINE_NUM)` that is not part of the returned parts.
+     */
+    private getSourceLiteralReplacements(sourceLiteral: SourceLiteralExpression, file: BrsFile): Array<{ type: LiteralPoolName; value: string | number }> {
+        switch (sourceLiteral.tokens.value.kind) {
+            case TokenKind.SourceFilePathLiteral:
+                const pathUrl = util.fileUrl(file.srcPath);
+                return [
+                    { type: 'string', value: pathUrl.substring(0, 4) },
+                    { type: 'string', value: pathUrl.substring(4) }
+                ];
+            case TokenKind.SourceLineNumLiteral:
+                return [{ type: 'integer', value: this.getClosestLineNumber(sourceLiteral) }];
+            case TokenKind.FunctionNameLiteral:
+                return [{ type: 'string', value: this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrightScript) }];
+            case TokenKind.SourceFunctionNameLiteral:
+                return [{ type: 'string', value: this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript) }];
+            case TokenKind.SourceNamespaceNameLiteral:
+                let namespaceParts = this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript).split('.');
+                namespaceParts.pop(); // remove the function name
+                return [{ type: 'string', value: namespaceParts.join('.') }];
+            case TokenKind.SourceNamespaceRootNameLiteral:
+                let namespaceRootParts = this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript).split('.');
+                namespaceRootParts.pop(); // remove the function name
+                return [{ type: 'string', value: namespaceRootParts.shift() ?? '' }];
+            case TokenKind.SourceLocationLiteral:
+                const locationUrl = util.fileUrl(file.srcPath);
+                return [
+                    { type: 'string', value: locationUrl.substring(0, 4) },
+                    { type: 'string', value: `${locationUrl.substring(4)}:${this.getClosestLineNumber(sourceLiteral)}` }
+                ];
+            case TokenKind.PkgPathLiteral:
+                return [{ type: 'string', value: util.sanitizePkgPath(file.pkgPath) }];
+            case TokenKind.PkgLocationLiteral:
+                return [{ type: 'string', value: `${util.sanitizePkgPath(file.pkgPath)}:` }];
+            default:
+                return [];
+        }
+    }
+
+    /**
+     * Get the line number from the node or from the closest ancestor that has a range (mirrors `SourceLiteralExpression`)
+     */
+    private getClosestLineNumber(node: AstNode) {
+        while (node) {
+            if (node.location?.range) {
+                return node.location.range.start.line + 1;
+            }
+            node = node.parent;
+        }
+        return -1;
+    }
+
+    /**
+     * Get the name of the function a source literal lives in, as `SourceLiteralExpression` computes it when transpiling
+     */
+    private getSourceLiteralFunctionName(sourceLiteral: SourceLiteralExpression, parseMode: ParseMode) {
+        let func = sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression);
+        let nameParts = [] as string[];
+        let parentFunction: FunctionExpression;
+        while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
+            nameParts.unshift(`anon${this.findFunctionIndex(parentFunction, func)}`);
+            func = parentFunction;
+        }
+        if (isFunctionStatement(func.parent)) {
+            nameParts.unshift(
+                func.parent.getName(parseMode)
+            );
+        }
+        return nameParts.join('$');
+    }
+
+    /**
+     * Find the index of the function in its parent
+     */
+    private findFunctionIndex(parentFunction: FunctionExpression, func: FunctionExpression) {
+        let index = -1;
+        parentFunction.findChild((node) => {
+            if (isFunctionExpression(node)) {
+                index++;
+                if (node === func) {
+                    return true;
+                }
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return index;
     }
 
     /**
@@ -1167,98 +1259,6 @@ function getLongIntegerKey(text: string) {
 
 function getFloatingPointValue(text: string) {
     return Number(text.toLowerCase().replace(/[!#%&]$/, '').replace('d', 'e'));
-}
-
-/**
- * Get the literals a source literal is replaced with when transpiled (mirrors `SourceLiteralExpression.transpile`).
- * Returns an empty array for source literals that stay native identifiers (like `LINE_NUM`).
- * `PKG_LOCATION` additionally emits a native `str(LINE_NUM)` that is not part of the returned parts.
- */
-function getSourceLiteralReplacements(sourceLiteral: SourceLiteralExpression, file: BrsFile): Array<{ type: LiteralPoolName; value: string | number }> {
-    switch (sourceLiteral.tokens.value.kind) {
-        case TokenKind.SourceFilePathLiteral:
-            const pathUrl = util.fileUrl(file.srcPath);
-            return [
-                { type: 'string', value: pathUrl.substring(0, 4) },
-                { type: 'string', value: pathUrl.substring(4) }
-            ];
-        case TokenKind.SourceLineNumLiteral:
-            return [{ type: 'integer', value: getClosestLineNumber(sourceLiteral) }];
-        case TokenKind.FunctionNameLiteral:
-            return [{ type: 'string', value: getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrightScript) }];
-        case TokenKind.SourceFunctionNameLiteral:
-            return [{ type: 'string', value: getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript) }];
-        case TokenKind.SourceNamespaceNameLiteral:
-            let namespaceParts = getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript).split('.');
-            namespaceParts.pop(); // remove the function name
-            return [{ type: 'string', value: namespaceParts.join('.') }];
-        case TokenKind.SourceNamespaceRootNameLiteral:
-            let namespaceRootParts = getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript).split('.');
-            namespaceRootParts.pop(); // remove the function name
-            return [{ type: 'string', value: namespaceRootParts.shift() ?? '' }];
-        case TokenKind.SourceLocationLiteral:
-            const locationUrl = util.fileUrl(file.srcPath);
-            return [
-                { type: 'string', value: locationUrl.substring(0, 4) },
-                { type: 'string', value: `${locationUrl.substring(4)}:${getClosestLineNumber(sourceLiteral)}` }
-            ];
-        case TokenKind.PkgPathLiteral:
-            return [{ type: 'string', value: util.sanitizePkgPath(file.pkgPath) }];
-        case TokenKind.PkgLocationLiteral:
-            return [{ type: 'string', value: `${util.sanitizePkgPath(file.pkgPath)}:` }];
-        default:
-            return [];
-    }
-}
-
-/**
- * Get the line number from the node or from the closest ancestor that has a range (mirrors `SourceLiteralExpression`)
- */
-function getClosestLineNumber(node: AstNode) {
-    while (node) {
-        if (node.location?.range) {
-            return node.location.range.start.line + 1;
-        }
-        node = node.parent;
-    }
-    return -1;
-}
-
-/**
- * Get the name of the function a source literal lives in, as `SourceLiteralExpression` computes it when transpiling
- */
-function getSourceLiteralFunctionName(sourceLiteral: SourceLiteralExpression, parseMode: ParseMode) {
-    let func = sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression);
-    let nameParts = [] as string[];
-    let parentFunction: FunctionExpression;
-    while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
-        nameParts.unshift(`anon${findFunctionIndex(parentFunction, func)}`);
-        func = parentFunction;
-    }
-    if (isFunctionStatement(func.parent)) {
-        nameParts.unshift(
-            func.parent.getName(parseMode)
-        );
-    }
-    return nameParts.join('$');
-}
-
-/**
- * Find the index of the function in its parent
- */
-function findFunctionIndex(parentFunction: FunctionExpression, func: FunctionExpression) {
-    let index = -1;
-    parentFunction.findChild((node) => {
-        if (isFunctionExpression(node)) {
-            index++;
-            if (node === func) {
-                return true;
-            }
-        }
-    }, {
-        walkMode: WalkMode.visitAllRecursive
-    });
-    return index;
 }
 
 type LiteralPoolName = 'integer' | 'string' | 'float' | 'double' | 'longinteger';

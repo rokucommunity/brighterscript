@@ -10,7 +10,7 @@ import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
-import { TokenKind } from '../lexer/TokenKind';
+import { BrighterScriptSourceLiterals, TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, expectDiagnosticsIncludes, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
@@ -24,11 +24,12 @@ import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import type { AALiteralExpression } from '../parser/Expression';
+import type { AALiteralExpression, SourceLiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
-import { maximumLiteralsPerType } from '../bscPlugin/validation/BrsFileValidator';
+import { BrsFileValidator, maximumLiteralsPerType } from '../bscPlugin/validation/BrsFileValidator';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Logger } from '@rokucommunity/logger';
-import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile } from '../astUtils/reflection';
+import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile, isSourceLiteralExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 let sinon = sinonImport.createSandbox();
@@ -8028,6 +8029,68 @@ describe('BrsFile', () => {
                 expectDiagnostics(program, [
                     DiagnosticMessages.cannotFindName('SOURCE_LINE_NUM')
                 ]);
+            });
+
+            it('counts the same literals that transpile emits', () => {
+                const sourceLiteralLines = [
+                    'v = SOURCE_FILE_PATH',
+                    'v = SOURCE_LINE_NUM',
+                    'v = FUNCTION_NAME',
+                    'v = SOURCE_FUNCTION_NAME',
+                    'v = SOURCE_NAMESPACE_NAME',
+                    'v = SOURCE_NAMESPACE_ROOT_NAME',
+                    'v = SOURCE_LOCATION',
+                    'v = PKG_PATH',
+                    'v = PKG_LOCATION',
+                    'v = LINE_NUM'
+                ];
+                const file = program.setFile<BrsFile>('source/main.bs', [
+                    'function main()',
+                    ...sourceLiteralLines,
+                    '    f = function()',
+                    ...sourceLiteralLines,
+                    '        g = function()',
+                    ...sourceLiteralLines,
+                    '        end function',
+                    '    end function',
+                    'end function',
+                    'namespace alpha.beta',
+                    '    function inNamespace()',
+                    ...sourceLiteralLines,
+                    '        f = function()',
+                    ...sourceLiteralLines,
+                    '        end function',
+                    '    end function',
+                    '    class Widget',
+                    '        sub method()',
+                    ...sourceLiteralLines,
+                    '        end sub',
+                    '    end class',
+                    'end namespace'
+                ].join('\n'));
+                program.validate();
+
+                const sourceLiterals = file.ast.findChildren<SourceLiteralExpression>(isSourceLiteralExpression, { walkMode: WalkMode.visitAllRecursive });
+                expect(sourceLiterals).to.have.lengthOf(sourceLiteralLines.length * 6);
+                //make sure every source literal kind is covered, so a new one can't silently skip this check
+                expect(
+                    [...new Set(sourceLiterals.map(x => x.tokens.value.kind))].sort()
+                ).to.eql(
+                    [...BrighterScriptSourceLiterals, TokenKind.LineNumLiteral].sort()
+                );
+
+                const validator = new BrsFileValidator({ program: program, file: file });
+                for (const sourceLiteral of sourceLiterals) {
+                    const transpiled = sourceLiteral.transpile(new BrsTranspileState(file)).map(x => x.toString()).join('');
+                    const parts = validator['getSourceLiteralReplacements'](sourceLiteral, file);
+                    let expected = parts.length > 0
+                        ? parts.map(part => (part.type === 'string' ? `"${part.value}"` : `${part.value}`)).join(' + ')
+                        : sourceLiteral.tokens.value.text;
+                    if (sourceLiteral.tokens.value.kind === TokenKind.PkgLocationLiteral) {
+                        expected += ' + str(LINE_NUM)';
+                    }
+                    expect(expected, `${sourceLiteral.tokens.value.text} on line ${sourceLiteral.location.range.start.line + 1}`).to.eql(transpiled);
+                }
             });
         });
 
