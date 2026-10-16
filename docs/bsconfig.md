@@ -515,6 +515,9 @@ With this setting, using optional chaining (`?.`) without the version requiremen
 | Optional chaining (`?.`, `?[`, `?(`) | 11.0.0 |
 | `continue for` / `continue while` | 11.5.0 |
 | Multi-line expressions / line continuation in `.brs` files | 15.3.0 |
+| Undeclared `#const` names in `#if` evaluate to `false` instead of failing the compile | 16.0.0 |
+
+A `#const` value must be the literal `true` or `false` on every firmware version. Using another `#const` name (or anything else) as the value is an error and does not declare the constant.
 
 ### `continue` and older firmware
 

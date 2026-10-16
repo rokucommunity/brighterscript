@@ -1203,7 +1203,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } },
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(8, 0, 9, 0) } }
+                ]);
             });
 
             it('supports single-word #elseif and #endif', () => {
@@ -1218,7 +1221,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('supports multi-word #else if and #end if', () => {
@@ -1233,7 +1238,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
@@ -1245,7 +1252,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                //no parse errors, just the hint that fades the branch
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
+                ]);
             });
 
             it('detects syntax error in #if', () => {
@@ -1258,7 +1268,9 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.hashConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist(),
+                    //an undeclared constant is false, so the branch is inactive
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
                 ]);
             });
 
@@ -1301,12 +1313,13 @@ describe('BrsFile', () => {
                 ]);
             });
 
-            it('detects syntax error in #const', () => {
+            it('detects an invalid #const value', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                         #const someConst = 123
                     end sub
                 `);
+                program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.invalidHashConstValue()
                 ]);
@@ -7561,7 +7574,10 @@ describe('BrsFile', () => {
                 localCount: 253,
                 extraLines: ['#if false', 'hiddenName = 1', '#end if']
             }), 'source/main.bs');
-            expectZeroDiagnostics(program);
+            //no variable limit error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
         });
 
         it('reports the limit for a .bs file', () => {
@@ -7584,14 +7600,14 @@ describe('BrsFile', () => {
         function buildGotos(count: number, prefix = 'label') {
             const lines = [] as string[];
             for (let index = 0; index < count; index++) {
-                lines.push(`goto ${prefix}${index}`);
+                lines.push(`if flag then goto ${prefix}${index}`);
             }
             return lines;
         }
 
         function buildFunction(options: { labelCount: number; targetedCount: number; name?: string; extraLines?: string[] }) {
             return [
-                `function ${options.name ?? 'main'}()`,
+                `function ${options.name ?? 'main'}(flag)`,
                 ...buildGotos(options.targetedCount),
                 ...buildLabels(options.labelCount),
                 ...options.extraLines ?? [],
@@ -7618,9 +7634,9 @@ describe('BrsFile', () => {
 
         it('does not count labels that are never targeted', () => {
             validateSource([
-                'function main()',
-                'goto label0',
-                'goto label1',
+                'function main(flag)',
+                'if flag then goto label0',
+                'if flag then goto label1',
                 ...buildLabels(1000),
                 'end function'
             ].join('\n'));
@@ -7630,10 +7646,10 @@ describe('BrsFile', () => {
         it('allows many gotos to the same label', () => {
             const gotoLines = [] as string[];
             for (let index = 0; index < 2000; index++) {
-                gotoLines.push('goto target');
+                gotoLines.push('if flag then goto target');
             }
             validateSource([
-                'function main()',
+                'function main(flag)',
                 ...gotoLines,
                 'target:',
                 'end function'
@@ -7643,23 +7659,24 @@ describe('BrsFile', () => {
 
         it('counts label name case variants once', () => {
             validateSource([
-                'function main()',
+                'function main(flag)',
                 ...buildGotos(255),
-                'goto Label255',
-                'goto LABEL255',
-                'goto label255',
+                'if flag then goto Label255',
+                'if flag then goto LABEL255',
+                'if flag then goto label255',
                 ...buildLabels(256),
                 'end function'
             ].join('\n'));
             expectZeroDiagnostics(program);
         });
 
-        it('counts the goto in an inline if', () => {
+        it('counts the goto in an if block', () => {
             validateSource([
-                'function main()',
-                'x = true',
+                'function main(flag)',
                 ...buildGotos(256),
-                'if x then goto label256',
+                'if flag then',
+                'goto label256',
+                'end if',
                 ...buildLabels(257),
                 'end function'
             ].join('\n'));
@@ -7671,7 +7688,7 @@ describe('BrsFile', () => {
         it('counts a label for each loop whose continue is transpiled into a goto', () => {
             program.options.minFirmwareVersion = '11.0.0';
             validateSource([
-                'function main()',
+                'function main(flag)',
                 ...buildGotos(255),
                 'for i = 0 to 1',
                 'continue for',
@@ -7690,11 +7707,11 @@ describe('BrsFile', () => {
         it('counts one label for a loop with several continues', () => {
             program.options.minFirmwareVersion = '11.0.0';
             validateSource([
-                'function main()',
+                'function main(flag)',
                 ...buildGotos(255),
                 'for i = 0 to 1',
-                'continue for',
-                'continue for',
+                'if flag then continue for',
+                'if flag then continue for',
                 'end for',
                 ...buildLabels(255),
                 'end function'
@@ -7705,7 +7722,7 @@ describe('BrsFile', () => {
         it('does not count continue when the firmware supports it natively', () => {
             program.options.minFirmwareVersion = '12.0.0';
             validateSource([
-                'function main()',
+                'function main(flag)',
                 ...buildGotos(256),
                 'for i = 0 to 1',
                 'continue for',
@@ -7718,10 +7735,10 @@ describe('BrsFile', () => {
 
         it('counts nested anonymous functions separately', () => {
             validateSource([
-                'function main()',
+                'function main(flag)',
                 ...buildGotos(256),
                 ...buildLabels(256),
-                'inner = function()',
+                'inner = function(flag)',
                 ...buildGotos(256, 'inner'),
                 ...buildLabels(256, 'inner'),
                 'end function',
@@ -7732,10 +7749,10 @@ describe('BrsFile', () => {
 
         it('flags only the anonymous function that is over the limit', () => {
             validateSource([
-                'function main()',
-                'goto outerLabel',
+                'function main(flag)',
+                'if flag then goto outerLabel',
                 'outerLabel:',
-                'inner = function()',
+                'inner = function(flag)',
                 ...buildGotos(257, 'inner'),
                 ...buildLabels(257, 'inner'),
                 'end function',
@@ -7750,9 +7767,11 @@ describe('BrsFile', () => {
             validateSource(buildFunction({
                 labelCount: 257,
                 targetedCount: 256,
-                extraLines: ['#if false', 'goto label256', '#end if']
+                extraLines: ['#if false', 'if flag then goto label256', '#end if']
             }), 'source/main.bs');
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
         });
 
         it('reports the limit for a .bs file', () => {
@@ -7764,18 +7783,18 @@ describe('BrsFile', () => {
 
         it('reports the label token of the first goto to the 257th distinct label', () => {
             validateSource([
-                'function main()',
+                'function main(flag)',
                 ...buildGotos(256),
-                'goto label5',
-                'goto label256',
-                'goto label256',
+                'if flag then goto label5',
+                'if flag then goto label256',
+                'if flag then goto label256',
                 ...buildLabels(257),
                 'end function'
             ].join('\n'));
             // line 0 is the function, gotos 0-255 are lines 1-256, label5 is line 257, first label256 is line 258
             expectDiagnostics(program, [{
                 ...DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels),
-                location: { range: util.createRange(258, 5, 258, 13) }
+                location: { range: util.createRange(258, 18, 258, 26) }
             }]);
         });
 
