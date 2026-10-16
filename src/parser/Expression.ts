@@ -1716,7 +1716,7 @@ export class SourceLiteralExpression extends Expression {
         return index;
     }
 
-    private getFunctionName(parseMode: ParseMode) {
+    private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
         let func = this.findAncestor(isFunctionExpression);
         let nameParts = [] as TranspileResult;
         let parentFunction: FunctionExpression;
@@ -1748,65 +1748,53 @@ export class SourceLiteralExpression extends Expression {
         return -1;
     }
 
-    /**
-     * Get the literals this source literal is replaced with when transpiled, in the order they are emitted.
-     * Returns undefined for source literals that stay native identifiers (like `LINE_NUM`).
-     * `PKG_LOCATION` additionally emits a native `str(LINE_NUM)` that is not part of the returned parts.
-     */
-    public getReplacementLiterals(file: { srcPath: string; pkgPath: string }): SourceLiteralPart[] | undefined {
+    transpile(state: BrsTranspileState) {
+        let text: string;
         switch (this.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
-                const pathUrl = util.fileUrl(file.srcPath);
-                return [
-                    { type: 'string', value: pathUrl.substring(0, 4) },
-                    { type: 'string', value: pathUrl.substring(4) }
-                ];
+                const pathUrl = util.fileUrl(state.srcPath);
+                text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
+                break;
             case TokenKind.SourceLineNumLiteral:
                 //TODO find first parent that has range, or default to -1
-                return [{ type: 'integer', value: this.getClosestLineNumber() }];
+                text = `${this.getClosestLineNumber()}`;
+                break;
             case TokenKind.FunctionNameLiteral:
-                return [{ type: 'string', value: this.getFunctionName(ParseMode.BrightScript) }];
+                text = `"${this.getFunctionName(state, ParseMode.BrightScript)}"`;
+                break;
             case TokenKind.SourceFunctionNameLiteral:
-                return [{ type: 'string', value: this.getFunctionName(ParseMode.BrighterScript) }];
+                text = `"${this.getFunctionName(state, ParseMode.BrighterScript)}"`;
+                break;
             case TokenKind.SourceNamespaceNameLiteral:
-                let namespaceParts = this.getFunctionName(ParseMode.BrighterScript).split('.');
+                let namespaceParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
                 namespaceParts.pop(); // remove the function name
 
-                return [{ type: 'string', value: namespaceParts.join('.') }];
+                text = `"${namespaceParts.join('.')}"`;
+                break;
             case TokenKind.SourceNamespaceRootNameLiteral:
-                let namespaceRootParts = this.getFunctionName(ParseMode.BrighterScript).split('.');
+                let namespaceRootParts = this.getFunctionName(state, ParseMode.BrighterScript).split('.');
                 namespaceRootParts.pop(); // remove the function name
 
-                return [{ type: 'string', value: namespaceRootParts.shift() ?? '' }];
+                let rootNamespace = namespaceRootParts.shift() ?? '';
+                text = `"${rootNamespace}"`;
+                break;
             case TokenKind.SourceLocationLiteral:
-                const locationUrl = util.fileUrl(file.srcPath);
+                const locationUrl = util.fileUrl(state.srcPath);
                 //TODO find first parent that has range, or default to -1
-                return [
-                    { type: 'string', value: locationUrl.substring(0, 4) },
-                    { type: 'string', value: `${locationUrl.substring(4)}:${this.getClosestLineNumber()}` }
-                ];
+                text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
+                break;
             case TokenKind.PkgPathLiteral:
-                return [{ type: 'string', value: util.sanitizePkgPath(file.pkgPath) }];
+                text = `"${util.sanitizePkgPath(state.file.pkgPath)}"`;
+                break;
             case TokenKind.PkgLocationLiteral:
-                return [{ type: 'string', value: `${util.sanitizePkgPath(file.pkgPath)}:` }];
+                text = `"${util.sanitizePkgPath(state.file.pkgPath)}:" + str(LINE_NUM)`;
+                break;
+            case TokenKind.LineNumLiteral:
             default:
-                return undefined;
-        }
-    }
+                //use the original text (because it looks like a variable)
+                text = this.tokens.value.text;
+                break;
 
-    transpile(state: BrsTranspileState) {
-        const parts = this.getReplacementLiterals({ srcPath: state.srcPath, pkgPath: state.file.pkgPath });
-        let text: string;
-        if (parts) {
-            text = parts.map((part) => {
-                return part.type === 'string' ? `"${part.value}"` : `${part.value}`;
-            }).join(' + ');
-            if (this.tokens.value.kind === TokenKind.PkgLocationLiteral) {
-                text += ' + str(LINE_NUM)';
-            }
-        } else {
-            //use the original text (because it looks like a variable)
-            text = this.tokens.value.text;
         }
         return [
             state.sourceNode(this, text)
@@ -3227,8 +3215,3 @@ const nonReferenceableFunctions = [
     'tab',
     'pos'
 ];
-
-export interface SourceLiteralPart {
-    type: 'string' | 'integer';
-    value: string | number;
-}
