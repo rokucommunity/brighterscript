@@ -1002,16 +1002,7 @@ export class Parser {
                 [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
             }
 
-            params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
-                if (haveFoundOptional && !param.defaultValue) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.tokens.name.text),
-                        location: param.location
-                    });
-                }
-
-                return haveFoundOptional || !!param.defaultValue;
-            }, false);
+            this.validateParameterOrder(params);
 
             this.consumeStatementSeparators(true);
 
@@ -1111,6 +1102,22 @@ export class Parser {
             as: asToken,
             typeExpression: typeExpression
         });
+    }
+
+    /**
+     * Flag required parameters that follow optional ones (i.e. `sub foo(a = 1, b)`), which is not allowed
+     */
+    private validateParameterOrder(params: FunctionParameterExpression[]) {
+        params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
+            if (haveFoundOptional && !param.defaultValue) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.tokens.name.text),
+                    location: param.location
+                });
+            }
+
+            return haveFoundOptional || !!param.defaultValue;
+        }, false);
     }
 
     private assignment(allowTypedAssignment = false): AssignmentStatement {
@@ -3162,6 +3169,103 @@ export class Parser {
         }
     }
 
+    /**
+     * Try to parse an arrow function (`(a, b) => a + b`) when the current token is `(`.
+     * Returns undefined, with the parser position and diagnostics untouched, when the parens turn out to be a
+     * grouping expression (`(a + b)`) or a parenthesized typecast (`(a as integer)`) instead
+     */
+    private tryArrowFunction(): FunctionExpression | undefined {
+        //cheap pre-check so ordinary groupings never pay for a backtrack: an arrow function's parens are either empty,
+        //or start with a parameter name followed by `,`, `)`, `=` or `as`
+        const first = this.peekNext();
+        if (first?.kind !== TokenKind.RightParen) {
+            const isParamName = first?.kind === TokenKind.Identifier || this.allowedLocalIdentifiers.includes(first?.kind);
+            const afterFirst = this.tokens[this.current + 2]?.kind;
+            if (!isParamName || ![TokenKind.Comma, TokenKind.RightParen, TokenKind.Equal, TokenKind.As].includes(afterFirst)) {
+                return undefined;
+            }
+        }
+
+        const backtrack = this.current;
+        const diagnosticCount = this.diagnostics.length;
+        //`functionParameter` rewrites the name token's kind, so remember it in case this isn't an arrow function after all
+        const firstKind = first?.kind;
+        const abandon = () => {
+            this.current = backtrack;
+            this.diagnostics.splice(diagnosticCount);
+            if (first) {
+                first.kind = firstKind;
+            }
+            return undefined;
+        };
+
+        //like `functionDeclaration`, an arrow function is its own world for call tracking and nesting depth
+        const previousCallExpressions = this.callExpressions;
+        this.callExpressions = [];
+        this.namespaceAndFunctionDepth++;
+        let arrow: Token;
+        try {
+            const leftParen = this.advance();
+            const params = [] as FunctionParameterExpression[];
+            if (!this.check(TokenKind.RightParen)) {
+                do {
+                    params.push(this.functionParameter());
+                } while (this.match(TokenKind.Comma));
+            }
+            const rightParen = this.consume(
+                DiagnosticMessages.unmatchedLeftToken(leftParen.text, 'function parameter list'),
+                TokenKind.RightParen
+            );
+            let asToken: Token;
+            let returnTypeExpression: TypeExpression;
+            if (this.check(TokenKind.As)) {
+                [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
+            }
+            if (!this.check(TokenKind.Arrow)) {
+                return abandon();
+            }
+            arrow = this.advance();
+            if (this.options.mode !== ParseMode.BrighterScript) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('arrow functions'),
+                    location: arrow.location
+                });
+            }
+            this.validateParameterOrder(params);
+
+            const value = this.checkEndOfStatement() ? undefined : this.expression();
+            if (!value) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedExpressionAfterArrow(),
+                    location: arrow.location
+                });
+                throw this.lastDiagnosticAsError();
+            }
+            //store the body as a `return` statement so the rest of the compiler treats this like any other function
+            const body = new Block({
+                statements: [new ReturnStatement({ value: value })]
+            });
+            return new FunctionExpression({
+                leftParen: leftParen,
+                parameters: params,
+                rightParen: rightParen,
+                as: asToken,
+                returnTypeExpression: returnTypeExpression,
+                arrow: arrow,
+                body: body
+            });
+        } catch (e) {
+            if (arrow) {
+                //this is definitely an arrow function and its body failed to parse: let the statement be scrapped as usual
+                throw e;
+            }
+            return abandon();
+        } finally {
+            this.namespaceAndFunctionDepth--;
+            this.callExpressions = previousCallExpressions;
+        }
+    }
+
     private boolean(): Expression {
         let expr = this.relational();
 
@@ -3731,6 +3835,13 @@ export class Parser {
     }
 
     private primary(): Expression {
+        //`(` might start an arrow function (`(a, b) => a + b`) rather than a grouping expression
+        if (this.check(TokenKind.LeftParen)) {
+            const arrowFunction = this.tryArrowFunction();
+            if (arrowFunction) {
+                return arrowFunction;
+            }
+        }
         switch (true) {
             case this.matchAny(
                 TokenKind.False,

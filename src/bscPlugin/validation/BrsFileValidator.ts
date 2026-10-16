@@ -366,7 +366,8 @@ export class BrsFileValidator {
                     // symbol table should not include any symbols from parent func
                     funcSymbolTable.pushParentProvider(() => node.findAncestor<Body>(isBody).getSymbolTable());
                 }
-                if (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc) {
+                //arrow functions don't get an `m`: what it should mean there is left open until closures are designed (see #1929)
+                if (!node.isArrowFunction && (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc)) {
                     if (!isTypecastStatement(node.body?.statements?.[0])) {
                         // if this is an inline function, or if the function body does not start with a typecast statement, add the `m` symbol to the function scope. If the function body starts with a typecast statement, the `m` symbol will be added in the visitor for TypecastStatement, and it will be typed as the type from the typecast statement
                         funcSymbolTable?.addSymbol('m', { isInstance: true }, new AssociativeArrayType(), SymbolTypeFlag.runtime);
@@ -459,6 +460,11 @@ export class BrsFileValidator {
             },
             ReturnStatement: (node) => {
                 const func = node.findAncestor(isFunctionExpression);
+                if (func?.isArrowFunction) {
+                    //an arrow function's `return` is synthesized from its body expression so it always has a value;
+                    //whether that value fits the return type is checked by ScopeValidator.validateReturnStatement
+                    return;
+                }
                 //these situations cannot have a value next to `return`
                 if (
                     //`function as void`, `sub as void`
@@ -598,6 +604,13 @@ export class BrsFileValidator {
                 ) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.reservedBuiltinUsedAsValue(name),
+                        location: node.tokens.name.location
+                    });
+                }
+                //`m` is not allowed inside arrow functions: what it should mean there is left open until closures are designed (see #1929)
+                if (name?.toLowerCase() === 'm' && node.findAncestor<FunctionExpression>(isFunctionExpression)?.isArrowFunction) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
                         location: node.tokens.name.location
                     });
                 }

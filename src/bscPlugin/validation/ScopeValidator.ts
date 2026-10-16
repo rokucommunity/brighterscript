@@ -891,7 +891,13 @@ export class ScopeValidator {
     private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
         const data: ExtraSymbolData = {};
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
-        let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
+        const func = returnStmt.findAncestor<FunctionExpression>(isFunctionExpression);
+        let funcType = func?.getType({ flags: SymbolTypeFlag.typetime });
+        if (func?.isArrowFunction && isTypedFunctionType(funcType) && isVoidType(funcType.returnType) && isCallExpression(returnStmt.value)) {
+            //a void arrow function (`(x) => list.push(x)`) transpiles to a `sub` that runs its body as a plain statement,
+            //so there is no return value to check
+            return;
+        }
         if (isTypedFunctionType(funcType)) {
             let actualReturnType = returnStmt?.value
                 ? this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions)
@@ -1271,7 +1277,13 @@ export class ScopeValidator {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 const circularReferenceInfo = this.getCircularReference(exprType);
-                if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
+                const arrowFunctionDiagnostic = util.getArrowFunctionCaptureDiagnostic(typeChainScan.astNode);
+                if (arrowFunctionDiagnostic) {
+                    this.addMultiScopeDiagnostic({
+                        ...arrowFunctionDiagnostic,
+                        location: typeChainScan?.location
+                    });
+                } else if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                         location: typeChainScan?.location
