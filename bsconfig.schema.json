@@ -279,6 +279,45 @@
                                         }
                                     ]
                                 }
+                            },
+                            "severities": {
+                                "type": "array",
+                                "description": "A list of severity levels of diagnostics that should be filtered out from the files matched in 'src'",
+                                "items": {
+                                    "type": "string",
+                                    "enum": [
+                                        "error",
+                                        "warn",
+                                        "info",
+                                        "hint"
+                                    ]
+                                }
+                            },
+                            "severity": {
+                                "description": "A severity level or list of severity levels of diagnostics that should be filtered out from the files matched in 'src'",
+                                "anyOf": [
+                                    {
+                                        "type": "string",
+                                        "enum": [
+                                            "error",
+                                            "warn",
+                                            "info",
+                                            "hint"
+                                        ]
+                                    },
+                                    {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "enum": [
+                                                "error",
+                                                "warn",
+                                                "info",
+                                                "hint"
+                                            ]
+                                        }
+                                    }
+                                ]
                             }
                         }
                     }

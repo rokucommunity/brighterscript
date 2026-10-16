@@ -84,19 +84,52 @@ If `true`, after a successful build, the project will be deployed to the Roku sp
 
 ## `diagnosticFilters`
 
-Type: `Array<string | number | {src: string; codes: number[]}`
+Type: `Array<string | number | { src?: string; codes?: (number | string)[]; severities?: ('error' | 'warn' | 'info' | 'hint')[]; severity?: 'error' | 'warn' | 'info' | 'hint' | ('error' | 'warn' | 'info' | 'hint')[] }>`
 
 A list of filters used to hide diagnostics.
 
 - A `string` value should be a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. Any file matching this pattern will have all diagnostics supressed. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well.
     - A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
 - A `number` value should be a diagnostic code. This will supress all diagnostics with that code for the whole project.
-- An object can also be provided to filter specific diagnostic codes for a file pattern. For example,
+- An object can also be provided to filter specific diagnostic `codes` and/or `severities` (or `severity`) globally or for a `src` file pattern.
+    - `codes`: an array of numeric or string diagnostic codes to filter.
+    - `severities`: an array of diagnostic severity levels (`"error"`, `"warn"`, `"info"`, `"hint"`) to filter.
+    - `severity`: a single diagnostic severity level or an array of severity levels (`"error"`, `"warn"`, `"info"`, `"hint"`) to filter.
+
+    For example, to filter specific diagnostic codes for a file pattern:
 
     ```jsonc
     "diagnosticFilters": [{
         "src": "vendor/**/*",
         "codes": [1000, 1011] //ignore these specific codes from vendor libraries
+    }]
+    ```
+
+    To filter diagnostics by severity level (for example, ignoring all non-error messages from third-party libraries):
+
+    ```jsonc
+    "diagnosticFilters": [
+        {
+            "src": "source/roku_modules/**/*",
+            "severities": ["warn", "info", "hint"] //ignore all non-error diagnostics from 3rd party libraries
+        },
+        {
+            "src": "vendor/**/*",
+            "severity": "warn" //single severity shorthand is also supported
+        },
+        {
+            "severities": ["info", "hint"] //omit `src` to ignore these severities across the entire project
+        }
+    ]
+    ```
+
+    When a single filter object specifies both `codes` and `severities` (or `severity`), a diagnostic in a matching file (or across the project when `src` is omitted) is matched if its code is in `codes` **or** its severity is in `severities`. This allows suppressing broad severity classes alongside specific error codes in one filter entry:
+
+    ```jsonc
+    "diagnosticFilters": [{
+        "src": "vendor/**/*",
+        "codes": [1001],
+        "severities": ["warn", "info", "hint"] //ignore all non-error diagnostics PLUS error code 1001 from vendor libraries
     }]
     ```
 
@@ -106,12 +139,21 @@ If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `
 
 ### Negative patterns in `diagnosticFilters`
 
-A negative pattern can be used to un-ignore some files or codes which were previously ignored. For example,
+A negative pattern can be used to un-ignore some files, codes, or severities which were previously ignored. For example,
 
 ```jsonc
 "diagnosticFilters": [
     { "src": "vendor/**/*" }, //ignore all codes from vendor libraries
     { "src": "!vendor/unreliable/**/*" } //EXCEPT do show errors from this one specific library
+]
+```
+
+A negative pattern can also be combined with `severities` (or `severity`) to selectively un-ignore only certain severity levels:
+
+```jsonc
+"diagnosticFilters": [
+    { "src": "vendor/**/*" }, //ignore all diagnostics from vendor libraries
+    { "src": "!vendor/critical/**/*", "severities": ["error"] } //EXCEPT do show error-level diagnostics from this library
 ]
 ```
 
