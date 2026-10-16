@@ -1,11 +1,11 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type AALiteralExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
@@ -25,12 +25,25 @@ import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION }
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
 import { globalCallableMap } from '../../globalCallables';
 
+/**
+ * The type implied by each type designator character that can end a variable or parameter name
+ */
+const typeDesignatorTypes: Record<string, string> = {
+    '$': 'string',
+    '%': 'integer',
+    '!': 'float',
+    '#': 'double',
+    '&': 'longinteger'
+};
+
 export class BrsFileValidator {
     constructor(
         public event: ValidateFileEvent<BrsFile>
     ) {
     }
 
+
+    private literalPools: Partial<Record<LiteralPoolName, LiteralPool>> = {};
 
     /**
      * Labels and gotos collected during `walk()`, grouped by their enclosing function.
@@ -72,7 +85,9 @@ export class BrsFileValidator {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         this.event.file['_cachedLookups'].rehydrate();
 
+        this.literalPools = {};
         this.walk();
+        this.validateFileLiteralCount();
         this.validateGotosAndLabels();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
@@ -359,6 +374,8 @@ export class BrsFileValidator {
                 }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
+                this.collectFunctionLiterals(node);
+                this.validateFunctionGotoLabelCount(node);
                 this.flagControlFlowUnreachableCode(node);
             },
             FunctionParameterExpression: (node) => {
@@ -369,6 +386,7 @@ export class BrsFileValidator {
                 if (!paramName) {
                     return;
                 }
+                this.validateTypeDesignatorMatchesDeclaredType(node);
                 const data: ExtraSymbolData = {};
                 const nodeType = node.getType({ flags: SymbolTypeFlag.typetime, data: data });
                 // add param symbol at expression level, so it can be used as default value in other params
@@ -713,6 +731,28 @@ export class BrsFileValidator {
         }
     }
 
+    /**
+     * A parameter with a type designator (i.e. `name$`) can only have an `as` type that matches it (i.e. `name$ as string`).
+     * Anything else, including `as dynamic` and `as object`, is a "Type Mismatch" compile error on device.
+     */
+    private validateTypeDesignatorMatchesDeclaredType(param: FunctionParameterExpression) {
+        if (!param.typeExpression) {
+            return;
+        }
+        const paramName = param.tokens.name.text;
+        const designatorType = typeDesignatorTypes[paramName[paramName.length - 1]];
+        if (!designatorType) {
+            return;
+        }
+        const declaredType = param.typeExpression.getName(ParseMode.BrighterScript);
+        if (declaredType?.toLowerCase() !== designatorType) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.typeDesignatorMismatch(paramName, designatorType, declaredType),
+                location: param.location
+            });
+        }
+    }
+
     private validateFunctionParameterCount(func: FunctionExpression) {
         if (func.parameters.length > CallExpression.MaximumArguments) {
             //flag every parameter over the limit
@@ -786,6 +826,276 @@ export class BrsFileValidator {
             const firstOverLimitLocation = [...variableLocations.values()][FunctionExpression.MaximumVariables];
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyFunctionVariables(variableLocations.size, FunctionExpression.MaximumVariables),
+                location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
+            });
+        }
+    }
+
+    /**
+     * Add the literals directly inside the function body to the file's literal pools.
+     * Nested functions are collected when they are visited themselves, so every function in the file shares the same pools.
+     * Literals outside functions are not counted. A function's default parameter values count with that function.
+     * Brighterscript source literals (like `SOURCE_LINE_NUM` or `PKG_PATH`) count as the literals they transpile to, in .bs files only.
+     * `LINE_NUM` (and the `str(LINE_NUM)` that `PKG_LOCATION` transpiles to) counts as the integer `line % 65536`; for .bs files this is the source line, which can differ from the transpiled line.
+     * Enum and const values that get inlined are not counted.
+     * Quoted associative array keys count as strings; unquoted keys and dotted property names do not.
+     * Template strings, regex literals and callfunc (`@.`) count as the literals they transpile to: `chr(N)` escapes as integers, the `roRegex` pieces and the callfunc method name as strings.
+     * Values are deduplicated by normalized value: integers by numeric value (`1` and `&h1` match), doubles by numeric value, floats by single-precision numeric value, strings by their content.
+     */
+    private collectFunctionLiterals(func: FunctionExpression) {
+        const pools = this.literalPools;
+        const addToPool = (poolName: LiteralPoolName, key: string | number, location: Location) => {
+            let pool = pools[poolName];
+            if (!pool) {
+                pool = { values: new Set<string | number>(), firstOverLimitLocation: undefined };
+                pools[poolName] = pool;
+            }
+            pool.values.add(key);
+            if (pool.firstOverLimitLocation === undefined && pool.values.size > maximumLiteralsPerType) {
+                pool.firstOverLimitLocation = location;
+            }
+        };
+
+        const literalVisitor = createVisitor({
+            LiteralExpression: (literal) => {
+                if (literal.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                const token = literal.tokens.value;
+                const text = token.text;
+                switch (token.kind) {
+                    case TokenKind.IntegerLiteral:
+                        addToPool('integer', /^&h/i.test(text) ? parseInt(text.slice(2), 16) : Number(text.replace('%', '')), literal.location);
+                        break;
+                    case TokenKind.LongIntegerLiteral:
+                        addToPool('longinteger', getLongIntegerKey(text), literal.location);
+                        break;
+                    case TokenKind.FloatLiteral:
+                        addToPool('float', Math.fround(getFloatingPointValue(text)), literal.location);
+                        break;
+                    case TokenKind.DoubleLiteral:
+                        addToPool('double', getFloatingPointValue(text), literal.location);
+                        break;
+                    case TokenKind.StringLiteral:
+                        addToPool('string', getStringLiteralKey(text), literal.location);
+                        break;
+                    case TokenKind.TemplateStringQuasi:
+                        //empty quasi strings are dropped from template strings, but tagged templates keep them
+                        if (text !== '' || isTaggedTemplateStringExpression(literal.parent?.parent)) {
+                            addToPool('string', text, literal.location);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            },
+            SourceLiteralExpression: (sourceLiteral) => {
+                if (sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                for (const part of this.getSourceLiteralReplacements(sourceLiteral, this.event.file)) {
+                    addToPool(part.type, part.value, sourceLiteral.location);
+                }
+                const literalKind = sourceLiteral.tokens.value.kind;
+                const lineRange = sourceLiteral.location?.range;
+                if (lineRange && (literalKind === TokenKind.LineNumLiteral || literalKind === TokenKind.PkgLocationLiteral)) {
+                    addToPool('integer', (lineRange.start.line + 1) % 65536, sourceLiteral.location);
+                }
+            },
+            AAMemberExpression: (member) => {
+                const keyToken = member.tokens.key;
+                if (keyToken?.kind !== TokenKind.StringLiteral || member.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                addToPool('string', getStringLiteralKey(keyToken.text), keyToken.location ?? member.location);
+            },
+            //template string escapes (like `\n` or `"`) transpile to `chr(charCode)`
+            EscapedCharCodeLiteralExpression: (escape) => {
+                if (escape.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                addToPool('integer', escape.tokens.value.charCode, escape.location);
+            },
+            //`/pattern/flags` transpiles to `CreateObject("roRegex", "pattern", "flags")`, with each `"` in the pattern split out as `chr(34)`
+            RegexLiteralExpression: (regex) => {
+                if (regex.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                let text = regex.tokens.regexLiteral?.text ?? '';
+                let flags = '';
+                const flagMatch = /\/([a-z]+)$/i.exec(text);
+                if (flagMatch) {
+                    text = text.substring(0, flagMatch.index + 1);
+                    flags = flagMatch[1];
+                }
+                const patternParts = text.substring(1, text.length - 1).split('"');
+                addToPool('string', 'roRegex', regex.location);
+                for (const part of patternParts) {
+                    addToPool('string', part, regex.location);
+                }
+                if (patternParts.length > 1) {
+                    addToPool('integer', 34, regex.location);
+                }
+                addToPool('string', flags, regex.location);
+            },
+            //`node@.method()` transpiles to `node.callfunc("method")`
+            CallfuncExpression: (callfunc) => {
+                //skip incomplete code (like `node@.` while typing), which has no method name yet
+                if (!callfunc.tokens.methodName || callfunc.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                addToPool('string', callfunc.tokens.methodName.text, callfunc.tokens.methodName.location ?? callfunc.location);
+            }
+        });
+
+        func.body?.walk(literalVisitor, { walkMode: WalkMode.visitAll });
+        for (const param of func.parameters ?? []) {
+            param.walk(literalVisitor, { walkMode: WalkMode.visitAll });
+        }
+    }
+
+    /**
+     * Get the literals a source literal is replaced with when transpiled (mirrors `SourceLiteralExpression.transpile`).
+     * Returns an empty array for source literals that stay native identifiers (like `LINE_NUM`).
+     * `PKG_LOCATION` additionally emits a native `str(LINE_NUM)` that is not part of the returned parts.
+     */
+    private getSourceLiteralReplacements(sourceLiteral: SourceLiteralExpression, file: BrsFile): Array<{ type: LiteralPoolName; value: string | number }> {
+        switch (sourceLiteral.tokens.value.kind) {
+            case TokenKind.SourceFilePathLiteral:
+                const pathUrl = util.fileUrl(file.srcPath);
+                return [
+                    { type: 'string', value: pathUrl.substring(0, 4) },
+                    { type: 'string', value: pathUrl.substring(4) }
+                ];
+            case TokenKind.SourceLineNumLiteral:
+                return [{ type: 'integer', value: this.getClosestLineNumber(sourceLiteral) }];
+            case TokenKind.FunctionNameLiteral:
+                return [{ type: 'string', value: this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrightScript) }];
+            case TokenKind.SourceFunctionNameLiteral:
+                return [{ type: 'string', value: this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript) }];
+            case TokenKind.SourceNamespaceNameLiteral:
+                let namespaceParts = this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript).split('.');
+                namespaceParts.pop(); // remove the function name
+                return [{ type: 'string', value: namespaceParts.join('.') }];
+            case TokenKind.SourceNamespaceRootNameLiteral:
+                let namespaceRootParts = this.getSourceLiteralFunctionName(sourceLiteral, ParseMode.BrighterScript).split('.');
+                namespaceRootParts.pop(); // remove the function name
+                return [{ type: 'string', value: namespaceRootParts.shift() ?? '' }];
+            case TokenKind.SourceLocationLiteral:
+                const locationUrl = util.fileUrl(file.srcPath);
+                return [
+                    { type: 'string', value: locationUrl.substring(0, 4) },
+                    { type: 'string', value: `${locationUrl.substring(4)}:${this.getClosestLineNumber(sourceLiteral)}` }
+                ];
+            case TokenKind.PkgPathLiteral:
+                return [{ type: 'string', value: util.sanitizePkgPath(file.pkgPath) }];
+            case TokenKind.PkgLocationLiteral:
+                return [{ type: 'string', value: `${util.sanitizePkgPath(file.pkgPath)}:` }];
+            default:
+                return [];
+        }
+    }
+
+    /**
+     * Get the line number from the node or from the closest ancestor that has a range (mirrors `SourceLiteralExpression`)
+     */
+    private getClosestLineNumber(node: AstNode) {
+        while (node) {
+            if (node.location?.range) {
+                return node.location.range.start.line + 1;
+            }
+            node = node.parent;
+        }
+        return -1;
+    }
+
+    /**
+     * Get the name of the function a source literal lives in, as `SourceLiteralExpression` computes it when transpiling
+     */
+    private getSourceLiteralFunctionName(sourceLiteral: SourceLiteralExpression, parseMode: ParseMode) {
+        let func = sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression);
+        let nameParts = [] as string[];
+        let parentFunction: FunctionExpression;
+        while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
+            nameParts.unshift(`anon${this.findFunctionIndex(parentFunction, func)}`);
+            func = parentFunction;
+        }
+        if (isFunctionStatement(func.parent)) {
+            nameParts.unshift(
+                func.parent.getName(parseMode)
+            );
+        }
+        return nameParts.join('$');
+    }
+
+    /**
+     * Find the index of the function in its parent
+     */
+    private findFunctionIndex(parentFunction: FunctionExpression, func: FunctionExpression) {
+        let index = -1;
+        parentFunction.findChild((node) => {
+            if (isFunctionExpression(node)) {
+                index++;
+                if (node === func) {
+                    return true;
+                }
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return index;
+    }
+
+    /**
+     * Flag the file if any literal pool holds more distinct values than the device allows.
+     */
+    private validateFileLiteralCount() {
+        for (const poolName of literalPoolNames) {
+            const pool = this.literalPools[poolName];
+            if (pool && pool.values.size > maximumLiteralsPerType) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.tooManyLiterals(pool.values.size, poolName, maximumLiteralsPerType),
+                    location: pool.firstOverLimitLocation
+                });
+            }
+        }
+    }
+
+    /**
+     * Flag functions that goto more distinct labels than the device allows. Only labels targeted by a goto count, whether or not the label exists.
+     * When `continue` will be transpiled into a goto, each loop containing a continue directly adds one more label.
+     * Nested functions have their own limit and are not included.
+     */
+    private validateFunctionGotoLabelCount(func: FunctionExpression) {
+        const labelLocations = new Map<string, Location>();
+        const continueLoops = new Set<AstNode>();
+        const continueIsTranspiled = this.event.file.needsTranspiled && !this.event.program.firmwareCapabilities.continueStatement;
+        func.body?.walk(createVisitor({
+            GotoStatement: (statement) => {
+                const labelName = statement.tokens.label?.text?.toLowerCase();
+                if (labelName && !labelLocations.has(labelName)) {
+                    labelLocations.set(labelName, statement.tokens.label.location ?? statement.location);
+                }
+            },
+            ContinueStatement: (statement) => {
+                if (!continueIsTranspiled) {
+                    return;
+                }
+                let enclosingLoop = statement.parent;
+                while (enclosingLoop && enclosingLoop !== func && !isForStatement(enclosingLoop) && !isForEachStatement(enclosingLoop) && !isWhileStatement(enclosingLoop)) {
+                    enclosingLoop = enclosingLoop.parent;
+                }
+                if (enclosingLoop && enclosingLoop !== func && !continueLoops.has(enclosingLoop)) {
+                    continueLoops.add(enclosingLoop);
+                    labelLocations.set(`continue-loop:${continueLoops.size}`, statement.location);
+                }
+            }
+        }), { walkMode: WalkMode.visitAll });
+
+        if (labelLocations.size > FunctionExpression.MaximumGotoLabels) {
+            const firstOverLimitLocation = [...labelLocations.values()][FunctionExpression.MaximumGotoLabels];
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.tooManyGotoLabels(labelLocations.size, FunctionExpression.MaximumGotoLabels),
                 location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
             });
         }
@@ -1524,6 +1834,38 @@ export class BrsFileValidator {
         }
         return undefined;
     }
+}
+
+/**
+ * The maximum number of distinct literal values of a single type (integer, string, float, double, longinteger) a file can hold.
+ * Repeated identical values count once, and every function in the file, including anonymous functions, shares the same pools.
+ */
+export const maximumLiteralsPerType = 65535;
+
+const literalPoolNames: LiteralPoolName[] = ['integer', 'string', 'float', 'double', 'longinteger'];
+
+function getStringLiteralKey(text: string) {
+    return text.endsWith('"') && text.length > 1 ? text.slice(1, -1) : text.slice(1);
+}
+
+function getLongIntegerKey(text: string) {
+    const digits = text.replace(/&$/, '');
+    try {
+        return BigInt(/^&h/i.test(digits) ? '0x' + digits.slice(2) : digits).toString();
+    } catch {
+        return digits;
+    }
+}
+
+function getFloatingPointValue(text: string) {
+    return Number(text.toLowerCase().replace(/[!#%&]$/, '').replace('d', 'e'));
+}
+
+type LiteralPoolName = 'integer' | 'string' | 'float' | 'double' | 'longinteger';
+
+interface LiteralPool {
+    values: Set<string | number>;
+    firstOverLimitLocation: Location | undefined;
 }
 
 interface LabelsAndGotos {
