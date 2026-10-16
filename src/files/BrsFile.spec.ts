@@ -3054,6 +3054,66 @@ describe('BrsFile', () => {
 
         describe('shadowing', () => {
 
+            it('prefers type-imported consts and enums over inactive namespace members', async () => {
+                program.setFile('components/lib/types.bs', `
+                    const LIMIT = 1
+                    enum Color
+                        red = "active-import"
+                    end enum
+                `);
+                const main = program.setFile('source/main.bs', `
+                    import type { LIMIT, Color } from "pkg:/components/lib/types.bs"
+                    namespace Foo
+                        sub main()
+                            print LIMIT
+                            print Color.red
+                        end sub
+                    end namespace
+                    #if false
+                    namespace Foo
+                        const LIMIT = 2
+                        enum Color
+                            red = "inactive-ns"
+                        end enum
+                    end namespace
+                    #end if
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.inactiveConditionalCompileBranch()
+                ]);
+                const { code } = await program.getTranspiledFileContents(main.srcPath);
+                expect(code).to.include('print 1');
+                expect(code).to.include('print "active-import"');
+                expect(code).not.to.include('print 2');
+                expect(code).not.to.include('inactive-ns');
+            });
+
+            it('inlines a namespaced const that has the same name as a file-level const', async () => {
+                await testTranspile(`
+                    const LIMIT = "one"
+
+                    namespace Foo
+                        const LIMIT = 2
+                        sub main()
+                            print LIMIT
+                        end sub
+                    end namespace
+
+                    sub outer()
+                        print LIMIT
+                    end sub
+                `, `
+                    sub Foo_main()
+                        print 2
+                    end sub
+
+                    sub outer()
+                        print "one"
+                    end sub
+                `);
+            });
+
             it('does not add underscores when variable shadows namespace', async () => {
                 await testTranspile(`
                     namespace alpha
@@ -5417,6 +5477,23 @@ describe('BrsFile', () => {
                import "pkg:/source/lib.brs"
             `, trim`
                 import "pkg:/source/lib.brs"
+            `);
+        });
+
+        it('includes type-only import statements', () => {
+            //declared in a components file so it is not already part of the source scope
+            program.setFile('components/lib.bs', `
+                interface Alpha
+                    name as string
+                end interface
+                enum Gamma
+                    one = 1
+                end enum
+            `);
+            testTypedef(`
+               import type { Alpha as Beta, Gamma } from "pkg:/components/lib.bs"
+            `, trim`
+                import type { Alpha as Beta, Gamma } from "pkg:/components/lib.brs"
             `);
         });
 

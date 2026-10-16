@@ -177,6 +177,11 @@ export interface FileReference {
      * If the range is null, then this import is derived so skip any location-based logic
      */
     filePathRange?: Range;
+    /**
+     * Is this a type-only import (i.e. `import type { Name } from "pkg:/source/lib.bs"`)?
+     * Type-only imports do not bring the referenced file into the scope, so they are not dependencies of the importing file
+     */
+    isTypeOnly?: boolean;
 }
 
 export interface VariableDeclaration {
@@ -1227,6 +1232,11 @@ export interface ExtraSymbolData {
      * is this symbol an alias?
      */
     isAlias?: boolean;
+    /**
+     * Was this symbol brought into the file by a named type import (i.e. `import type { Name as Alias } from "pkg:/source/lib.bs"`)?
+     * These symbols are local to the importing file and resolve against the imported file directly (which is not part of the scope)
+     */
+    isTypeImport?: boolean;
     /**
      * Is this symbol an instance of the type.
      *

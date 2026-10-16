@@ -17,6 +17,7 @@ import type { DoubleType } from '../types/DoubleType';
 import type { ClassType } from '../types/ClassType';
 import type { Scope } from '../Scope';
 import type { XmlScope } from '../XmlScope';
+import type { TypeImportScope } from '../TypeImportScope';
 import type { DynamicType } from '../types/DynamicType';
 import type { InterfaceType } from '../types/InterfaceType';
 import type { ObjectType } from '../types/ObjectType';
@@ -65,6 +66,10 @@ export function isBscFile(file: (BscFile | BscFile | XmlFile | AssetFile | undef
 
 export function isXmlScope(scope: (Scope | undefined)): scope is XmlScope {
     return scope?.constructor.name === 'XmlScope';
+}
+
+export function isTypeImportScope(scope: (Scope | undefined)): scope is TypeImportScope {
+    return scope?.constructor.name === 'TypeImportScope';
 }
 
 
