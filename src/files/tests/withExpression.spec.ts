@@ -138,44 +138,44 @@ describe('with expression', () => {
 
     it('transpiles namespaced targets to their flattened names', async () => {
         await testTranspile(`
-            namespace promises
-                const DEFAULTS = { timeout: 1 }
-                function chain() as object
-                    return {}
+            namespace utils
+                const COLORS = { primary: "red" }
+                function getScene() as object
+                    return m.top.getScene()
                 end function
-                sub useRelative()
-                    with chain()
-                        .then()
+                sub setBackground()
+                    with getScene()
+                        .backgroundColor = "blue"
                     end with
                 end sub
             end namespace
             sub main()
-                with promises.chain()
-                    .then()
-                    .then()
+                with utils.getScene()
+                    .backgroundColor = "red"
+                    .setFocus(true)
                 end with
-                with promises.DEFAULTS
-                    .timeout = 2
+                with utils.COLORS
+                    .primary = "green"
                 end with
             end sub
         `, `
-            function promises_chain() as object
-                return {}
+            function utils_getScene() as object
+                return m.top.getScene()
             end function
 
-            sub promises_useRelative()
-                __bsc_tmp_with0 = promises_chain()
-                __bsc_tmp_with0.then()
+            sub utils_setBackground()
+                __bsc_tmp_with0 = utils_getScene()
+                __bsc_tmp_with0.backgroundColor = "blue"
             end sub
 
             sub main()
-                __bsc_tmp_with0 = promises_chain()
-                __bsc_tmp_with0.then()
-                __bsc_tmp_with0.then()
+                __bsc_tmp_with0 = utils_getScene()
+                __bsc_tmp_with0.backgroundColor = "red"
+                __bsc_tmp_with0.setFocus(true)
                 __bsc_tmp_with0 = ({
-                    timeout: 1
+                    primary: "red"
                 })
-                __bsc_tmp_with0.timeout = 2
+                __bsc_tmp_with0.primary = "green"
             end sub
         `);
     });
@@ -436,28 +436,28 @@ describe('with expression', () => {
     describe('as the value of an assignment', () => {
         it('assigns the target to the variable and runs the body against it', async () => {
             await testTranspile(`
-                namespace promises
-                    function chain() as object
-                        return {}
+                namespace utils
+                    function getScene() as object
+                        return m.top.getScene()
                     end function
                 end namespace
                 sub main()
-                    chain = with promises.chain()
-                        .then()
-                        .then()
+                    scene = with utils.getScene()
+                        .backgroundColor = "red"
+                        .setFocus(true)
                     end with
-                    print chain
+                    print scene
                 end sub
             `, `
-                function promises_chain() as object
-                    return {}
+                function utils_getScene() as object
+                    return m.top.getScene()
                 end function
 
                 sub main()
-                    chain = promises_chain()
-                    chain.then()
-                    chain.then()
-                    print chain
+                    scene = utils_getScene()
+                    scene.backgroundColor = "red"
+                    scene.setFocus(true)
+                    print scene
                 end sub
             `);
         });
@@ -508,28 +508,28 @@ describe('with expression', () => {
     describe('as the value of a return', () => {
         it('evaluates the target into a local, runs the body, then returns the local', async () => {
             await testTranspile(`
-                namespace promises
-                    function chain() as object
-                        return {}
+                namespace utils
+                    function getScene() as object
+                        return m.top.getScene()
                     end function
                 end namespace
                 function main() as object
                     'above the return
-                    return with promises.chain()
-                        .then()
-                        .then()
+                    return with utils.getScene()
+                        .backgroundColor = "red"
+                        .setFocus(true)
                     end with
                 end function
             `, `
-                function promises_chain() as object
-                    return {}
+                function utils_getScene() as object
+                    return m.top.getScene()
                 end function
 
                 function main() as object
                     'above the return
-                    __bsc_tmp_with0 = promises_chain()
-                    __bsc_tmp_with0.then()
-                    __bsc_tmp_with0.then()
+                    __bsc_tmp_with0 = utils_getScene()
+                    __bsc_tmp_with0.backgroundColor = "red"
+                    __bsc_tmp_with0.setFocus(true)
                     return __bsc_tmp_with0
                 end function
             `);
@@ -539,7 +539,7 @@ describe('with expression', () => {
             await testTranspile(`
                 function main(p as object) as object
                     return with p
-                        .then()
+                        .setFocus(true)
                     end with
                 end function
                 function empty(p as object) as object
@@ -548,7 +548,7 @@ describe('with expression', () => {
                 end function
             `, `
                 function main(p as object) as object
-                    p.then()
+                    p.setFocus(true)
                     return p
                 end function
 

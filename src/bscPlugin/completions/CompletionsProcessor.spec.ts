@@ -2772,7 +2772,7 @@ describe('CompletionsProcessor', () => {
             }]);
         });
     });
-    describe('with statement', () => {
+    describe('with expression', () => {
         it('offers the members of the with target after a leading dot', () => {
             program.setFile('source/main.bs', `
                 interface Customer

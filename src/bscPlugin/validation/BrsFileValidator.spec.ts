@@ -6153,7 +6153,7 @@ describe('BrsFileValidator', () => {
             });
         });
     });
-    describe('with statement', () => {
+    describe('with expression', () => {
         it('allows leading-dot members inside a with block', () => {
             program.setFile('source/main.bs', `
                 sub main(c as object)
@@ -6215,7 +6215,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('with statement')
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('with expression')
             ]);
         });
 
@@ -6291,35 +6291,36 @@ describe('BrsFileValidator', () => {
 
         it('type checks leading-dot members against a namespaced target type', () => {
             program.setFile('source/main.bs', `
-                namespace promises
-                    class Promise
-                        sub then()
+                namespace utils
+                    class Theme
+                        backgroundColor as string
+                        sub apply()
                         end sub
                     end class
-                    function chain() as Promise
-                        return new Promise()
+                    function getTheme() as Theme
+                        return new Theme()
                     end function
-                    sub useRelative()
-                        with chain()
-                            .then()
+                    sub applyTheme()
+                        with getTheme()
+                            .apply()
                             .nope()
                         end with
                     end sub
                 end namespace
                 sub main()
-                    with promises.chain()
-                        .then()
+                    with utils.getTheme()
+                        .backgroundColor = "red"
                         .nope()
                     end with
-                    with new promises.Promise()
-                        .then()
+                    with new utils.Theme()
+                        .apply()
                     end with
                 end sub
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.cannotFindFunction('nope', 'promises.Promise.nope', 'promises.Promise'),
-                DiagnosticMessages.cannotFindFunction('nope', 'promises.Promise.nope', 'promises.Promise')
+                DiagnosticMessages.cannotFindFunction('nope', 'utils.Theme.nope', 'utils.Theme'),
+                DiagnosticMessages.cannotFindFunction('nope', 'utils.Theme.nope', 'utils.Theme')
             ]);
         });
 

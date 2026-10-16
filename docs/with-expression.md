@@ -1,6 +1,6 @@
-# With Statement
+# With Expression
 
-The `with` statement lets you set properties and call methods on a single object without repeating the object's name on every line. Inside the block, any member access that starts with a `.` (`.name`, `.doSomething()`) refers to the object named after `with`.
+The `with` expression lets you set properties and call methods on a single object without repeating the object's name on every line. Inside the block, any member access that starts with a `.` (`.name`, `.doSomething()`) refers to the object named after `with`.
 
 It is modeled on the [`With...End With` statement from Visual Basic](https://learn.microsoft.com/en-us/dotnet/visual-basic/language-reference/statements/with-end-with-statement).
 
@@ -46,7 +46,7 @@ The block itself produces no code: every `.member` is rewritten to `target.membe
 
 ## How the target is transpiled
 
-When the target is a plain variable, as above, it is used directly. Any other target (including a constant, which has no variable at runtime) (a property chain, a function call, a literal, a nested `.member`) is evaluated **once**, when the block is entered, into a local variable, and every `.member` reads from that local:
+When the target is a plain variable, as above, it is used directly. Any other target (a property chain, a function call, a literal, a nested `.member`, or a constant, which has no variable at runtime) is evaluated **once**, when the block is entered, into a local variable, and every `.member` reads from that local:
 
 ```brighterscript
 with m.top.findNode("title")
@@ -69,19 +69,18 @@ So a function call used as the target runs only once, and a property chain is no
 
 ## Namespaces
 
-A target that refers to something in a [namespace](namespaces.md) transpiles the same way it would anywhere else: the namespaced name is flattened (`promises.chain()` becomes `promises_chain()`). Because a call is not a plain variable, its result is stored in a local:
+A target that refers to something in a [namespace](namespaces.md) transpiles the same way it would anywhere else: the namespaced name is flattened (`utils.getScene()` becomes `utils_getScene()`). Because a call is not a plain variable, its result is stored in a local:
 
 ```brighterscript
-namespace promises
-    function chain() as object
-        return {}
+namespace utils
+    function getScene() as object
+        return m.top.getScene()
     end function
 end namespace
 
 sub main()
-    with promises.chain()
-        .then()
-        .then()
+    with utils.getScene()
+        .backgroundColor = "red"
     end with
 end sub
 ```
@@ -90,21 +89,18 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-function promises_chain() as object
-    return {}
+function utils_getScene() as object
+    return m.top.getScene()
 end function
 
 sub main()
-    __bsc_tmp_with0 = promises_chain()
-    __bsc_tmp_with0.then()
-    __bsc_tmp_with0.then()
+    __bsc_tmp_with0 = utils_getScene()
+    __bsc_tmp_with0.backgroundColor = "red"
 end sub
 ```
 </details>
 
-The same applies to a relative name used inside the namespace (`with chain()`), a namespaced class (`with new promises.Promise()`) and a namespaced constant (`with promises.DEFAULTS`). Leading-dot members are type checked against the target's type, so with a `chain() as Promise` return type, `.nope()` is reported as `Cannot find function 'nope' for type 'promises.Promise'`.
-
-Note that every `.then()` is called on the same target, not on the result of the previous call. `with` doesn't build a fluent chain; for that, write `promises.chain().then().then()`.
+The same applies to a relative name used inside the namespace (`with getScene()` inside `namespace utils`), a namespaced class (`with new utils.Theme()`) and a namespaced constant (`with utils.COLORS`). Leading-dot members are type checked against the target's type, just as they are for any other target.
 
 ## What can go inside the block
 
@@ -167,9 +163,8 @@ arr[1] = "Second slot"
 A `with` block evaluates to its target, so it can be the value of an assignment. The target is assigned to the variable, and the body runs against that variable:
 
 ```brighterscript
-chain = with promises.chain()
-    .then()
-    .then()
+scene = with utils.getScene()
+    .backgroundColor = "red"
 end with
 ```
 
@@ -177,9 +172,8 @@ end with
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-chain = promises_chain()
-chain.then()
-chain.then()
+scene = utils_getScene()
+scene.backgroundColor = "red"
 ```
 </details>
 

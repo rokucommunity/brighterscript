@@ -68,7 +68,7 @@ BrighterScript adds several new features to the BrightScript language such as na
     - [Spread operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/spread-operator.md)
       - `merged = [...arr1, ...arr2]`
       - `combined = {...defaults, ...overrides}`
-    - [With statement](https://github.com/rokucommunity/brighterscript/blob/master/docs/with-statement.md)
+    - [With expression](https://github.com/rokucommunity/brighterscript/blob/master/docs/with-expression.md)
       - `with label` … `.text = "Hello"` … `.setFocus(true)` … `end with`
     - [Select case statements](https://github.com/rokucommunity/brighterscript/blob/master/docs/select-case.md)
       - `select case key : case "left", "right" : moveHorizontally() : case else : end select`

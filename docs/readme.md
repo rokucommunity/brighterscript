@@ -237,7 +237,7 @@ end sub
 
 Name resolution rules for various types of shadowing.
 
-## [With Statement](with-statement.md)
+## [With Expression](with-expression.md)
 
 ```brighterscript
 with m.top.findNode("title")

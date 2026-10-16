@@ -116,7 +116,7 @@ describe('parser with expression', () => {
         expect(indexed.kind).to.eql('IndexedGetExpression');
         expect(((indexed.obj as DottedGetExpression).obj)).to.be.instanceof(WithContextExpression);
 
-        //every with context in the block resolves to this with statement
+        //every with context in the block resolves to this with expression
         const contexts = statements[0].findChildren<WithContextExpression>(isWithContextExpression, { walkMode: WalkMode.visitAllRecursive });
         expect(contexts.length).to.be.greaterThan(10);
         for (const context of contexts) {
@@ -195,7 +195,7 @@ describe('parser with expression', () => {
         expectDiagnostics(parser, [
             DiagnosticMessages.withMemberInNestedFunction('name')
         ]);
-        //the with statement itself and its own members survive
+        //the with expression itself and its own members survive
         const contexts = statements[0].findChildren<WithContextExpression>(isWithContextExpression, { walkMode: WalkMode.visitAllRecursive });
         expect(contexts).to.be.lengthOf(2);
         for (const context of contexts) {
@@ -300,7 +300,7 @@ describe('parser with expression', () => {
             end with
         `, ParseMode.BrightScript);
         expectDiagnostics(parser, [
-            DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('with statement')
+            DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('with expression')
         ]);
     });
 
@@ -442,16 +442,16 @@ describe('parser with expression', () => {
     describe('as the value of an assignment or return', () => {
         it('parses a with expression as the value of an assignment', () => {
             const { parser, statements } = parseBody(`
-                chain = with promises.chain()
-                    .then()
-                    .then()
+                scene = with utils.getScene()
+                    .backgroundColor = "red"
+                    .setFocus(true)
                 end with
             `);
             expectZeroDiagnostics(parser);
             expect(statements).to.be.lengthOf(1);
             const assignment = statements[0] as AssignmentStatement;
             expect(assignment.kind).to.eql('AssignmentStatement');
-            expect(assignment.tokens.name.text).to.eql('chain');
+            expect(assignment.tokens.name.text).to.eql('scene');
             const withExpression = assignment.value as WithExpression;
             expect(withExpression).to.be.instanceof(WithExpression);
             expect(withExpression.isAssignmentValue()).to.be.true;
@@ -474,8 +474,8 @@ describe('parser with expression', () => {
 
         it('parses a with expression as the value of a return statement', () => {
             const { parser, statements } = parseBody(`
-                return with promises.chain()
-                    .then()
+                return with utils.getScene()
+                    .backgroundColor = "red"
                 end with
             `);
             expectZeroDiagnostics(parser);

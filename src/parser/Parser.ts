@@ -2272,7 +2272,7 @@ export class Parser {
     }
 
     /**
-     * Is the current token the start of a `with` statement?
+     * Is the current token the start of a standalone `with` block?
      *
      * `with` is not a reserved word in BrightScript, so existing code may use it as a variable
      * (`with = 1`, `print with`, `with.foo`, `with(1)`). Treat it as the keyword only when the next
@@ -2357,7 +2357,7 @@ export class Parser {
      * Parses a `with <expression> ... end with` block.
      */
     private withExpression(): WithExpression {
-        this.warnIfNotBrighterScriptMode('with statement');
+        this.warnIfNotBrighterScriptMode('with expression');
         const withToken = this.advance();
 
         let expression: Expression;
@@ -3188,7 +3188,7 @@ export class Parser {
         this.consumeStatementSeparators(true);
         const statements: Statement[] = [];
         const flatGlobalTerminators = this.globalTerminators.flat().flat();
-        //only a `with` statement's body ends with `end with`
+        //only a `with` expression's body ends with `end with`
         const isWithBody = terminators.includes(TokenKind.EndWith);
         while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators) && !this.checkSelectCaseTerminator()) {
             //grab the location of the current token
