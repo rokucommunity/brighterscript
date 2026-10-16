@@ -911,7 +911,7 @@ describe('AstNode', () => {
             `);
         });
 
-        it('clones with statement', () => {
+        it('clones with expression', () => {
             testClone(`
                 sub main(order)
                     with order
@@ -923,6 +923,19 @@ describe('AstNode', () => {
                         end with
                     end with
                 end sub
+            `);
+        });
+
+        it('clones with expression used as an assignment and return value', () => {
+            testClone(`
+                function main(order)
+                    customer = with order.customer
+                        .name = "Ann"
+                    end with
+                    return with order
+                        .customer = customer
+                    end with
+                end function
             `);
         });
 

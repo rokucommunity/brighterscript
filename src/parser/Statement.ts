@@ -3,14 +3,14 @@ import type { Token, Identifier } from '../lexer/Token';
 import { TokenKind } from '../lexer/TokenKind';
 import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
 import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
-import { CallExpression, VariableExpression, WITH_TEMP_VARIABLE_PREFIX } from './Expression';
+import { CallExpression, VariableExpression } from './Expression';
 import { util } from '../util';
 import type { Location } from 'vscode-languageserver';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isWithStatement } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isWithExpression } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -215,6 +215,9 @@ export class AssignmentStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'typeExpression', visitor, options);
             walk(this, 'value', visitor, options);
+        } else if (options.walkMode & InternalWalkMode.walkStatements && isWithExpression(this.value)) {
+            //a `with` expression holds statements, so a statement-only walk must still reach its body
+            walk(this, 'value', visitor, options);
         }
     }
 
@@ -406,7 +409,7 @@ export class Block extends Statement {
                 this.parent.tokens.while
             );
             firstBitAfter = this.parent.tokens.endWhile?.location;
-        } else if (isWithStatement(this.parent)) {
+        } else if (isWithExpression(this.parent)) {
             lastBitBefore = util.createBoundingLocation(
                 this.parent.tokens.with,
                 this.parent.expression
@@ -558,6 +561,9 @@ export class ExpressionStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        } else if (options.walkMode & InternalWalkMode.walkStatements && isWithExpression(this.expression)) {
+            //a `with` expression holds statements, so a statement-only walk must still reach its body
             walk(this, 'expression', visitor, options);
         }
     }
@@ -1274,6 +1280,20 @@ export class ReturnStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
+        if (isWithExpression(this.value)) {
+            //`return with <target> ... end with`: run the block, then return the target it was run against
+            result.push(...state.transpileLeadingComments(this.tokens.return));
+            const block = this.value.transpile(state);
+            if (block.length > 0) {
+                result.push(...block, state.newline, state.indent());
+            }
+            result.push(
+                state.transpileToken(this.tokens.return, 'return', false, true),
+                ' ',
+                state.sourceNode(this.value, this.value.getContextName(state))
+            );
+            return result;
+        }
         result.push(
             state.transpileToken(this.tokens.return, 'return')
         );
@@ -1286,6 +1306,9 @@ export class ReturnStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        } else if (options.walkMode & InternalWalkMode.walkStatements && isWithExpression(this.value)) {
+            //a `with` expression holds statements, so a statement-only walk must still reach its body
             walk(this, 'value', visitor, options);
         }
     }
@@ -3931,151 +3954,6 @@ export class TryCatchStatement extends Statement {
                 catchStatement: this.catchStatement?.clone()
             }),
             ['tryBranch', 'catchStatement']
-        );
-    }
-}
-
-/**
- * `with <target> ... end with`: every leading-dot member access in the body (`.name`, `.doThing()`) refers to `<target>`.
- *
- * Transpiles to an assignment of the target into a local followed by the body at the same indentation, so the block
- * itself disappears from the output and the target is evaluated exactly once.
- */
-export class WithStatement extends Statement {
-    constructor(options: {
-        with?: Token;
-        endWith?: Token;
-        expression?: Expression;
-        body?: Block;
-    }) {
-        super();
-        this.tokens = {
-            with: options.with,
-            endWith: options.endWith
-        };
-        this.expression = options.expression;
-        this.body = options.body;
-        this.location = util.createBoundingLocation(
-            this.tokens.with,
-            this.expression,
-            this.body,
-            this.tokens.endWith
-        );
-    }
-
-    public readonly tokens: {
-        readonly with?: Token;
-        readonly endWith?: Token;
-    };
-
-    /**
-     * The target object. Evaluated once, when the block is entered.
-     */
-    public readonly expression: Expression;
-
-    public readonly body: Block;
-
-    public readonly kind = AstNodeKind.WithStatement;
-
-    public readonly location: Location | undefined;
-
-    /**
-     * Does the transpiled output need a local to hold the target?
-     * A plain variable is used as-is (`with order` ... `.id = 1` becomes `order.id = 1`). Anything else
-     * (a property chain, a call, a literal, a nested `.member`) is evaluated once into a local so the
-     * expression doesn't run again for every member access.
-     */
-    public usesTempVariable() {
-        return !isVariableExpression(this.expression);
-    }
-
-    /**
-     * Name of the local that holds the evaluated target in the transpiled output (see `usesTempVariable`).
-     * Nested blocks that each need a local get distinct names (suffixed by how many such blocks enclose this one)
-     * so an inner block doesn't clobber the outer target; sibling blocks reuse the same name.
-     */
-    public getTempVariableName() {
-        let depth = 0;
-        let node = this.parent;
-        while (node && !isFunctionExpression(node)) {
-            if (isWithStatement(node) && node.usesTempVariable()) {
-                depth++;
-            }
-            node = node.parent;
-        }
-        return `${WITH_TEMP_VARIABLE_PREFIX}${depth}`;
-    }
-
-    transpile(state: BrsTranspileState): TranspileResult {
-        const result: TranspileResult = [
-            //comments above the `with` line live on the `with` token
-            ...state.transpileLeadingComments(this.tokens.with)
-        ];
-        const usesTempVariable = this.usesTempVariable();
-        if (usesTempVariable) {
-            result.push(
-                state.sourceNode(this.tokens.with, this.getTempVariableName()),
-                ' = ',
-                ...(this.expression?.transpile(state) ?? ['invalid'])
-            );
-        }
-
-        //the block is transparent in the output: its statements sit at the same indent as the `with` line, so emit
-        //them here rather than through `Block.transpile` (which would indent them one level deeper)
-        const statements = this.body?.statements ?? [];
-        for (let i = 0; i < statements.length; i++) {
-            const statement = statements[i];
-            if (i === 0 && !usesTempVariable) {
-                //nothing was emitted for the `with` line, so the first statement takes its place
-            } else if (util.isLeadingCommentOnSameLine(i === 0 ? this.tokens.with?.location : statements[i - 1].location, statement)) {
-                //a trailing comment belongs on the line it followed
-                result.push(' ');
-            } else {
-                result.push(state.newline, state.indent());
-            }
-            state.lineage.unshift(this.body);
-            result.push(...statement.transpile(state));
-            state.lineage.shift();
-        }
-
-        //keep any comments that sat just above `end with` (the keyword itself is dropped)
-        const endComments = state.transpileComments(this.tokens.endWith?.leadingTrivia ?? []);
-        if (endComments.length > 0) {
-            //the next statement adds its own newline
-            if (endComments[endComments.length - 1] === state.newline) {
-                endComments.pop();
-            }
-            result.push(state.newline, state.indent(), ...endComments);
-        }
-        return result;
-    }
-
-    walk(visitor: WalkVisitor, options: WalkOptions) {
-        if (options.walkMode & InternalWalkMode.walkExpressions) {
-            walk(this, 'expression', visitor, options);
-        }
-        if (this.body && options.walkMode & InternalWalkMode.walkStatements) {
-            walk(this, 'body', visitor, options);
-        }
-    }
-
-    public get leadingTrivia(): Token[] {
-        return this.tokens.with?.leadingTrivia ?? [];
-    }
-
-    public get endTrivia(): Token[] {
-        return this.tokens.endWith?.leadingTrivia ?? [];
-    }
-
-    public clone() {
-        return this.finalizeClone(
-            new WithStatement({
-                with: util.cloneToken(this.tokens.with),
-                endWith: util.cloneToken(this.tokens.endWith),
-                expression: this.expression?.clone(),
-                body: this.body?.clone()
-            }),
-            ['expression', 'body']
         );
     }
 }

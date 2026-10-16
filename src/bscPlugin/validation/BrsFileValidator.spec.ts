@@ -6323,6 +6323,48 @@ describe('BrsFileValidator', () => {
             ]);
         });
 
+        it('gives an assigned with expression the type of its target', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                end interface
+                sub main(c as Customer)
+                    customer = with c
+                        .name = "ok"
+                        .nope = 1
+                    end with
+                    customer.alsoNope = 1
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nope', 'Customer.nope', 'Customer'),
+                DiagnosticMessages.cannotFindName('alsoNope', 'Customer.alsoNope', 'Customer')
+            ]);
+        });
+
+        it('checks a returned with expression against the declared return type', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                end interface
+                function ok(c as Customer) as Customer
+                    return with c
+                        .name = "ok"
+                    end with
+                end function
+                function bad(c as Customer) as integer
+                    return with c
+                        .name = "ok"
+                    end with
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('Customer', 'integer').message
+            ]);
+        });
+
         it('resolves the inner target of a nested block against the outer block', () => {
             program.setFile('source/main.bs', `
                 interface Order

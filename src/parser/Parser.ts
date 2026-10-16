@@ -58,7 +58,6 @@ import {
     ThrowStatement,
     TryCatchStatement,
     WhileStatement,
-    WithStatement,
     TypecastStatement,
     ConditionalCompileConstStatement,
     ConditionalCompileErrorStatement,
@@ -83,6 +82,7 @@ import {
     FunctionParameterExpression,
     GroupingExpression,
     WithContextExpression,
+    WithExpression,
     IndexedGetExpression,
     LiteralExpression,
     NewExpression,
@@ -108,7 +108,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression, isWithStatement } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression, isWithExpression, isExpressionStatement } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
@@ -1125,7 +1125,11 @@ export class Parser {
         });
     }
 
-    private assignment(allowTypedAssignment = false): AssignmentStatement {
+    /**
+     * @param allowTypedAssignment support `name as <type> = value`
+     * @param allowWithExpression support a `with` expression as the entire value (`name = with <target> ... end with`)
+     */
+    private assignment(allowTypedAssignment = false, allowWithExpression = false): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add diagnostic if name is a reserved word that cannot be used as an identifier
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
@@ -1150,7 +1154,7 @@ export class Parser {
             DiagnosticMessages.expectedOperator([TokenKind.Equal], name.text),
             ...[TokenKind.Equal]
         );
-        let value = this.expression();
+        let value = allowWithExpression && this.checkWithExpression() ? this.withExpression() : this.expression();
 
         let result = new AssignmentStatement({ equals: operator, name: name, value: value, as: asToken, typeExpression: typeExpression });
 
@@ -1282,7 +1286,7 @@ export class Parser {
         }
 
         if (this.checkWith()) {
-            return this.withStatement();
+            return new ExpressionStatement({ expression: this.withExpression() });
         }
 
         if (this.checkAny(TokenKind.Print, TokenKind.Question)) {
@@ -1347,7 +1351,7 @@ export class Parser {
                 if (this.checkAnyNext(...CompoundAssignmentOperators)) {
                     return this.augmentedAssignment();
                 }
-                return this.assignment();
+                return this.assignment(false, true);
             } else if (this.checkNext(TokenKind.As)) {
                 // may be a typed assignment
                 const backtrack = this.current;
@@ -1365,7 +1369,7 @@ export class Parser {
                 }
                 if (validTypeExpression) {
                     // there is a valid 'as' and type expression
-                    return this.assignment(true);
+                    return this.assignment(true, true);
                 }
             }
         }
@@ -2313,9 +2317,46 @@ export class Parser {
     }
 
     /**
+     * Is the current token the start of a `with` expression that is the entire value of an assignment or return
+     * (`x = with <target>`, `return with <target>`)?
+     *
+     * This is stricter than `checkWith`, because in this position `with` is more likely to be a variable: `x = with`,
+     * `return with + 1` and `x = with or y` all read a variable named `with`. It is only taken as the keyword when it is
+     * followed, on the same line, by something that can only begin the block's target.
+     */
+    private checkWithExpression() {
+        if (!this.checkWith()) {
+            return false;
+        }
+        const next = this.peekNext();
+        if (next.kind === TokenKind.Newline || next.kind === TokenKind.Colon || next.kind === TokenKind.Eof) {
+            return false;
+        }
+        //`checkWith` already told `with (a)` / `with [1]` / `with .a` (a block) apart from `with(a)` / `with[1]` / `with.a` (a variable)
+        return [
+            TokenKind.Identifier,
+            ...this.allowedLocalIdentifiers,
+            TokenKind.New,
+            TokenKind.LeftCurlyBrace,
+            TokenKind.LeftParen,
+            TokenKind.LeftSquareBracket,
+            TokenKind.Dot,
+            TokenKind.StringLiteral,
+            TokenKind.BackTick,
+            TokenKind.IntegerLiteral,
+            TokenKind.LongIntegerLiteral,
+            TokenKind.FloatLiteral,
+            TokenKind.DoubleLiteral,
+            TokenKind.True,
+            TokenKind.False,
+            TokenKind.Invalid
+        ].includes(next.kind);
+    }
+
+    /**
      * Parses a `with <expression> ... end with` block.
      */
-    private withStatement(): WithStatement {
+    private withExpression(): WithExpression {
         this.warnIfNotBrighterScriptMode('with statement');
         const withToken = this.advance();
 
@@ -2351,7 +2392,7 @@ export class Parser {
             }
         }
 
-        return new WithStatement({
+        return new WithExpression({
             with: withToken,
             endWith: endWith,
             expression: expression,
@@ -3054,7 +3095,12 @@ export class Parser {
             return new ReturnStatement(options);
         }
 
-        let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
+        let toReturn: Expression;
+        if (this.checkWithExpression()) {
+            toReturn = this.withExpression();
+        } else if (!this.check(TokenKind.Else)) {
+            toReturn = this.expression();
+        }
         return new ReturnStatement({ ...options, value: toReturn });
     }
 
@@ -3201,7 +3247,7 @@ export class Parser {
      * Anything else is flagged as an unexpected token, but is kept in the AST so the rest of the block still parses normally
      */
     private validateWithBodyStatement(statement: Statement, startToken: Token) {
-        if (startToken.kind === TokenKind.Dot || isWithStatement(statement)) {
+        if (startToken.kind === TokenKind.Dot || (isExpressionStatement(statement) && isWithExpression(statement.expression))) {
             return;
         }
         this.diagnostics.push({

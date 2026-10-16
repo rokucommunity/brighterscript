@@ -3,7 +3,7 @@ import { Program } from '../../Program';
 import { getTestTranspile } from '../../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../../testHelpers.spec';
 
-describe('with statement', () => {
+describe('with expression', () => {
     let program: Program;
     const testTranspile = getTestTranspile(() => [program, rootDir]);
 
@@ -400,6 +400,192 @@ describe('with statement', () => {
         `);
     });
 
+    it('uses a variable that transpiles to something else through a local', async () => {
+        await testTranspile(`
+            const TOP = { a: 1 }
+            namespace alpha
+                const DEFAULTS = { a: 1 }
+                sub go()
+                    with DEFAULTS
+                        .a = 2
+                    end with
+                end sub
+            end namespace
+            sub main()
+                with TOP
+                    .a = 2
+                end with
+            end sub
+        `, `
+            sub alpha_go()
+                __bsc_tmp_with0 = ({
+                    a: 1
+                })
+                __bsc_tmp_with0.a = 2
+            end sub
+
+            sub main()
+                __bsc_tmp_with0 = ({
+                    a: 1
+                })
+                __bsc_tmp_with0.a = 2
+            end sub
+        `);
+    });
+
+    describe('as the value of an assignment', () => {
+        it('assigns the target to the variable and runs the body against it', async () => {
+            await testTranspile(`
+                namespace promises
+                    function chain() as object
+                        return {}
+                    end function
+                end namespace
+                sub main()
+                    chain = with promises.chain()
+                        .then()
+                        .then()
+                    end with
+                    print chain
+                end sub
+            `, `
+                function promises_chain() as object
+                    return {}
+                end function
+
+                sub main()
+                    chain = promises_chain()
+                    chain.then()
+                    chain.then()
+                    print chain
+                end sub
+            `);
+        });
+
+        it('assigns a plain variable target and a typed assignment the same way', async () => {
+            await testTranspile(`
+                sub main(node as object)
+                    label = with node
+                        .text = "x"
+                    end with
+                    other as object = with node.child
+                        .text = "y"
+                    end with
+                end sub
+            `, `
+                sub main(node as object)
+                    label = node
+                    label.text = "x"
+                    other = node.child
+                    other.text = "y"
+                end sub
+            `);
+        });
+
+        it('keeps nested blocks and comments', async () => {
+            await testTranspile(`
+                sub main(order as object)
+                    'above the assignment
+                    customer = with order.customer
+                        .name = "Ann" 'trailing
+                        with .address
+                            .city = "Redmond"
+                        end with
+                    end with
+                end sub
+            `, `
+                sub main(order as object)
+                    'above the assignment
+                    customer = order.customer
+                    customer.name = "Ann" 'trailing
+                    __bsc_tmp_with0 = customer.address
+                    __bsc_tmp_with0.city = "Redmond"
+                end sub
+            `);
+        });
+    });
+
+    describe('as the value of a return', () => {
+        it('evaluates the target into a local, runs the body, then returns the local', async () => {
+            await testTranspile(`
+                namespace promises
+                    function chain() as object
+                        return {}
+                    end function
+                end namespace
+                function main() as object
+                    'above the return
+                    return with promises.chain()
+                        .then()
+                        .then()
+                    end with
+                end function
+            `, `
+                function promises_chain() as object
+                    return {}
+                end function
+
+                function main() as object
+                    'above the return
+                    __bsc_tmp_with0 = promises_chain()
+                    __bsc_tmp_with0.then()
+                    __bsc_tmp_with0.then()
+                    return __bsc_tmp_with0
+                end function
+            `);
+        });
+
+        it('returns a plain variable target directly', async () => {
+            await testTranspile(`
+                function main(p as object) as object
+                    return with p
+                        .then()
+                    end with
+                end function
+                function empty(p as object) as object
+                    return with p
+                    end with
+                end function
+            `, `
+                function main(p as object) as object
+                    p.then()
+                    return p
+                end function
+
+                function empty(p as object) as object
+                    return p
+                end function
+            `);
+        });
+
+        it('keeps nested blocks distinct from the returned target', async () => {
+            await testTranspile(`
+                function main(order as object) as object
+                    if order <> invalid
+                        return with order.customer
+                            with .address
+                                .city = "Redmond"
+                            end with
+                            .name = "Ann"
+                        end with
+                    end if
+                    return invalid
+                end function
+            `, `
+                function main(order as object) as object
+                    if order <> invalid
+                        __bsc_tmp_with0 = order.customer
+                        __bsc_tmp_with1 = __bsc_tmp_with0.address
+                        __bsc_tmp_with1.city = "Redmond"
+                        __bsc_tmp_with0.name = "Ann"
+                        return __bsc_tmp_with0
+                    end if
+                    return invalid
+                end function
+            `);
+        });
+    });
+
     it('leaves `with` alone when it is used as an identifier', async () => {
         await testTranspile(`
             sub main()
@@ -407,7 +593,17 @@ describe('with statement', () => {
                 with.foo = 1
                 with["bar"] = 2
                 print with.foo
+                x = with
             end sub
+
+            function getWith(with)
+                return with
+            end function
+
+            function addWith(with as integer) as integer
+                y = with + 1
+                return with * y
+            end function
         `);
     });
 });

@@ -423,7 +423,7 @@ export enum AstNodeKind {
     ClassFieldStatement = 'ClassFieldStatement',
     TryCatchStatement = 'TryCatchStatement',
     CatchStatement = 'CatchStatement',
-    WithStatement = 'WithStatement',
+    WithExpression = 'WithExpression',
     WithContextExpression = 'WithContextExpression',
     SelectCaseStatement = 'SelectCaseStatement',
     CaseStatement = 'CaseStatement',

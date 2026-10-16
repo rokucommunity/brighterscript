@@ -2,7 +2,7 @@
 import type { Token, Identifier } from '../lexer/Token';
 import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
-import type { Block, NamespaceStatement, WithStatement } from './Statement';
+import type { AssignmentStatement, Block, NamespaceStatement } from './Statement';
 import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isWithContextExpression, isWithStatement } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isWithContextExpression, isWithExpression, isAssignmentStatement, isReturnStatement } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -673,8 +673,211 @@ export class FunctionParameterExpression extends Expression {
 export const WITH_TEMP_VARIABLE_PREFIX = '__bsc_tmp_with';
 
 /**
+ * `with <target> ... end with`: every leading-dot member access in the body (`.name`, `.doThing()`) refers to `<target>`.
+ *
+ * A `with` expression may only appear on its own (wrapped in an `ExpressionStatement`), as the entire value of an
+ * `AssignmentStatement` (`x = with <target> ... end with`), or as the entire value of a `ReturnStatement`. It evaluates
+ * to its target.
+ *
+ * The block itself disappears from the output: the target is evaluated exactly once, then the body is emitted at the
+ * same indentation as the line the `with` sits on.
+ */
+export class WithExpression extends Expression {
+    constructor(options: {
+        with?: Token;
+        endWith?: Token;
+        expression?: Expression;
+        body?: Block;
+    }) {
+        super();
+        this.tokens = {
+            with: options.with,
+            endWith: options.endWith
+        };
+        this.expression = options.expression;
+        this.body = options.body;
+        this.location = util.createBoundingLocation(
+            this.tokens.with,
+            this.expression,
+            this.body,
+            this.tokens.endWith
+        );
+    }
+
+    public readonly tokens: {
+        readonly with?: Token;
+        readonly endWith?: Token;
+    };
+
+    /**
+     * The target object. Evaluated once, when the block is entered.
+     */
+    public readonly expression: Expression;
+
+    public readonly body: Block;
+
+    public readonly kind = AstNodeKind.WithExpression;
+
+    public readonly location: Location | undefined;
+
+    /**
+     * Is this the entire value of an assignment (`x = with <target> ... end with`)? If so, the target is assigned straight
+     * into that variable and the body refers to it.
+     */
+    public isAssignmentValue() {
+        return isAssignmentStatement(this.parent) && this.parent.value === this;
+    }
+
+    /**
+     * Is this the entire value of a return statement (`return with <target> ... end with`)?
+     */
+    public isReturnValue() {
+        return isReturnStatement(this.parent) && this.parent.value === this;
+    }
+
+    /**
+     * Is the target a variable that can be used as-is in the transpiled output? A variable that transpiles to something
+     * else (a constant that gets inlined, a namespace-relative name) can't be, because its name doesn't exist at runtime.
+     * Without a transpile state, only the shape of the target is checked.
+     */
+    private isPlainVariableTarget(state?: BrsTranspileState) {
+        if (!isVariableExpression(this.expression)) {
+            return false;
+        }
+        if (!state) {
+            return true;
+        }
+        const transpiled = util.sourceNodeFromTranspileResult(null, null, null, this.expression.transpile(state)).toString();
+        return transpiled === this.expression.tokens.name.text;
+    }
+
+    /**
+     * Does the transpiled output need a temp local to hold the target?
+     * A plain variable is used as-is (`with order` ... `.id = 1` becomes `order.id = 1`), and an assignment uses the variable
+     * being assigned. Anything else (a property chain, a call, a literal, a nested `.member`) is evaluated once into a local
+     * so the expression doesn't run again for every member access.
+     */
+    public usesTempVariable(state?: BrsTranspileState) {
+        return !this.isAssignmentValue() && !this.isPlainVariableTarget(state);
+    }
+
+    /**
+     * Name of the local that holds the evaluated target in the transpiled output (see `usesTempVariable`).
+     * Nested blocks that each need a local get distinct names (suffixed by how many such blocks enclose this one)
+     * so an inner block doesn't clobber the outer target; sibling blocks reuse the same name.
+     */
+    public getTempVariableName(state?: BrsTranspileState) {
+        let depth = 0;
+        let node = this.parent;
+        while (node && !isFunctionExpression(node)) {
+            if (isWithExpression(node) && node.usesTempVariable(state)) {
+                depth++;
+            }
+            node = node.parent;
+        }
+        return `${WITH_TEMP_VARIABLE_PREFIX}${depth}`;
+    }
+
+    /**
+     * The name that every leading-dot member in the body is rewritten against in the transpiled output
+     */
+    public getContextName(state?: BrsTranspileState) {
+        if (this.isAssignmentValue()) {
+            return (this.parent as AssignmentStatement).tokens.name.text;
+        }
+        if (this.isPlainVariableTarget(state)) {
+            return (this.expression as VariableExpression).tokens.name.text;
+        }
+        return this.getTempVariableName(state);
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        const result: TranspileResult = [
+            //comments above the `with` line live on the `with` token
+            ...state.transpileLeadingComments(this.tokens.with)
+        ];
+        //the line the `with` sits on: the assignment emits `x = ` itself, so it only needs the target
+        let emittedTargetLine = true;
+        if (this.isAssignmentValue()) {
+            result.push(...(this.expression?.transpile(state) ?? ['invalid']));
+        } else if (this.usesTempVariable(state)) {
+            result.push(
+                state.sourceNode(this.tokens.with, this.getTempVariableName(state)),
+                ' = ',
+                ...(this.expression?.transpile(state) ?? ['invalid'])
+            );
+        } else {
+            emittedTargetLine = false;
+        }
+
+        //the block is transparent in the output: its statements sit at the same indent as the `with` line, so emit
+        //them here rather than through `Block.transpile` (which would indent them one level deeper)
+        const statements = this.body?.statements ?? [];
+        for (let i = 0; i < statements.length; i++) {
+            const statement = statements[i];
+            if (i === 0 && !emittedTargetLine) {
+                //nothing was emitted for the `with` line, so the first statement takes its place
+            } else if (util.isLeadingCommentOnSameLine(i === 0 ? this.tokens.with?.location : statements[i - 1].location, statement)) {
+                //a trailing comment belongs on the line it followed
+                result.push(' ');
+            } else {
+                result.push(state.newline, state.indent());
+            }
+            state.lineage.unshift(this.body);
+            result.push(...statement.transpile(state));
+            state.lineage.shift();
+        }
+
+        //keep any comments that sat just above `end with` (the keyword itself is dropped)
+        const endComments = state.transpileComments(this.tokens.endWith?.leadingTrivia ?? []);
+        if (endComments.length > 0) {
+            //the next statement adds its own newline
+            if (endComments[endComments.length - 1] === state.newline) {
+                endComments.pop();
+            }
+            result.push(state.newline, state.indent(), ...endComments);
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+        if (this.body && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        //a `with` expression evaluates to its target
+        return this.expression?.getType(options) ?? DynamicType.instance;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.with?.leadingTrivia ?? [];
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endWith?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new WithExpression({
+                with: util.cloneToken(this.tokens.with),
+                endWith: util.cloneToken(this.tokens.endWith),
+                expression: this.expression?.clone(),
+                body: this.body?.clone()
+            }),
+            ['expression', 'body']
+        );
+    }
+}
+
+/**
  * The implicit object of a leading-dot member access inside a `with` block (i.e. the part before the `.` in `.name = "x"`).
- * It stands in for the target expression of the innermost enclosing `with` statement.
+ * It stands in for the target expression of the innermost enclosing `with` expression.
  *
  * This node owns no tokens: the `.` belongs to the `DottedGetExpression` that wraps it, so this node's location
  * mirrors that dot token.
@@ -699,20 +902,20 @@ export class WithContextExpression extends Expression {
     public readonly location: Location | undefined;
 
     /**
-     * Find the `with` statement this expression refers to: the innermost enclosing one within the current function.
+     * Find the `with` expression this expression refers to: the innermost enclosing one within the current function.
      *
-     * A `with` statement's own target expression is skipped (`with .inner` refers to the *outer* block), and the search
+     * A `with` expression's own target is skipped (`with .inner` refers to the *outer* block), and the search
      * stops at a function boundary because BrightScript functions cannot see the locals of the function that contains them.
-     * Returns `undefined` when there is no such `with` statement, which validation reports as an error.
+     * Returns `undefined` when there is no such `with` expression, which validation reports as an error.
      */
-    public getWithStatement(): WithStatement | undefined {
+    public getWithExpression(): WithExpression | undefined {
         let child: AstNode = this;
         let node = this.parent;
         while (node) {
             if (isFunctionExpression(node)) {
                 return undefined;
             }
-            if (isWithStatement(node) && node.expression !== child) {
+            if (isWithExpression(node) && node.expression !== child) {
                 return node;
             }
             child = node;
@@ -722,15 +925,7 @@ export class WithContextExpression extends Expression {
     }
 
     transpile(state: BrsTranspileState) {
-        const withStatement = this.getWithStatement();
-        let name: string;
-        if (withStatement && !withStatement.usesTempVariable()) {
-            //a plain variable target is used directly
-            name = (withStatement.expression as VariableExpression).tokens.name.text;
-        } else {
-            //the `with` statement evaluated its target into a local; refer to that local
-            name = withStatement?.getTempVariableName() ?? `${WITH_TEMP_VARIABLE_PREFIX}0`;
-        }
+        const name = this.getWithExpression()?.getContextName(state) ?? `${WITH_TEMP_VARIABLE_PREFIX}0`;
         return [
             //this node starts the line, so it owns the line's leading comments (they live on the dot token)
             ...state.transpileLeadingComments(this.tokens.dot),
@@ -744,7 +939,7 @@ export class WithContextExpression extends Expression {
 
     getType(options: GetTypeOptions) {
         //delegate to the target expression so the type chain reads as `target.member` in diagnostics
-        return this.getWithStatement()?.expression?.getType(options) ?? DynamicType.instance;
+        return this.getWithExpression()?.expression?.getType(options) ?? DynamicType.instance;
     }
 
     get leadingTrivia(): Token[] {

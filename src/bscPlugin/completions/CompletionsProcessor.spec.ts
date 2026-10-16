@@ -2797,6 +2797,29 @@ describe('CompletionsProcessor', () => {
             expectCompletionsExcludes(completions, ['main', 'c']);
         });
 
+        it('offers the members of the with target in the assignment and return forms', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                    zip as integer
+                end interface
+                function main(c as Customer) as Customer
+                    customer = with c
+                        .
+                    end with
+                    return with c
+                        .
+                    end with
+                end function
+            `);
+            program.validate();
+            for (const line of [7, 10]) {
+                const completions = program.getCompletions('source/main.bs', util.createPosition(line, 25));
+                expectCompletionsIncludes(completions, ['name', 'zip']);
+                expectCompletionsExcludes(completions, ['main', 'c']);
+            }
+        });
+
         it('offers the inner target members inside a nested with block', () => {
             program.setFile('source/main.bs', `
                 interface Order

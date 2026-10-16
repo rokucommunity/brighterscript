@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement, isWithStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement, isWithExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -192,7 +192,7 @@ export class BrsFileValidator {
      * evaluated into a local when the block is entered, so jumping past that leaves every `.member` unresolved
      */
     private jumpsIntoWithBlock(gotoStatement: GotoStatement, targetLabel: LabelStatement, func: FunctionExpression) {
-        return this.jumpsInto(gotoStatement, targetLabel, func, isWithStatement);
+        return this.jumpsInto(gotoStatement, targetLabel, func, isWithExpression);
     }
 
     /**
@@ -216,12 +216,12 @@ export class BrsFileValidator {
      * function as that block: BrightScript functions cannot see the locals of the function that contains them.
      */
     private validateWithContextExpression(node: WithContextExpression) {
-        if (node.getWithStatement()) {
+        if (node.getWithExpression()) {
             return;
         }
         const memberName = isDottedGetExpression(node.parent) ? node.parent.tokens.name?.text : undefined;
         //is there a `with` block further up, beyond the function boundary that stopped the lookup?
-        const isInsideWithBlock = !!node.findAncestor(isWithStatement);
+        const isInsideWithBlock = !!node.findAncestor(isWithExpression);
         this.event.program.diagnostics.register({
             ...(isInsideWithBlock ? DiagnosticMessages.withMemberInNestedFunction(memberName) : DiagnosticMessages.withMemberOutsideWithBlock(memberName)),
             location: util.createLocationFromRange(
@@ -613,7 +613,7 @@ export class BrsFileValidator {
                         index: node.parent.statementIndex,
                         table: blockSymbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
-                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || isWithStatement(node.parent) || this.isAlwaysExecutedCase(node.parent)
+                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || isWithExpression(node.parent) || this.isAlwaysExecutedCase(node.parent)
                     });
 
                     if (isForStatement(node.parent)) {
