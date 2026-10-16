@@ -1189,29 +1189,6 @@ export class ScopeValidator {
     }
 
 
-    /**
-     * Arrow functions can't capture locals from the function they're written in (closures aren't supported yet, see #530).
-     * When an unresolved name inside an arrow function is such a local, return the arrow-specific diagnostic so the user
-     * learns *why* the name can't be found instead of getting a bare `cannot-find-name`.
-     * (`m` inside an arrow function is flagged by BrsFileValidator, since `m` always resolves through the scope)
-     */
-    private getArrowFunctionNameDiagnostic(node: AstNode) {
-        if (!isVariableExpression(node)) {
-            return undefined;
-        }
-        const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
-        if (!func?.isArrowFunction) {
-            return undefined;
-        }
-        const name = node.tokens.name?.text;
-        //an arrow function sees the same file-level and global names as the function around it, so a name that only
-        //the enclosing function can resolve must be one of its locals or parameters
-        if (name && func.parent?.getSymbolTable()?.hasSymbol(name, SymbolTypeFlag.runtime)) {
-            return DiagnosticMessages.arrowFunctionCannotCaptureVariable(name);
-        }
-        return undefined;
-    }
-
     validateVariableAndDottedGetExpressions(file: BrsFile, expression: VariableExpression | DottedGetExpression) {
         if (isDottedGetExpression(expression.parent)) {
             // We validate dottedGetExpressions at the top-most level
@@ -1300,7 +1277,7 @@ export class ScopeValidator {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 const circularReferenceInfo = this.getCircularReference(exprType);
-                const arrowFunctionDiagnostic = this.getArrowFunctionNameDiagnostic(typeChainScan.astNode);
+                const arrowFunctionDiagnostic = util.getArrowFunctionCaptureDiagnostic(typeChainScan.astNode);
                 if (arrowFunctionDiagnostic) {
                     this.addMultiScopeDiagnostic({
                         ...arrowFunctionDiagnostic,

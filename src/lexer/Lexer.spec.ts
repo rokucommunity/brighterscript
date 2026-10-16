@@ -53,6 +53,25 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the arrow operator without surrounding whitespace', () => {
+        expectKinds('(x)=>x*2', [
+            TokenKind.LeftParen,
+            TokenKind.Identifier,
+            TokenKind.RightParen,
+            TokenKind.Arrow,
+            TokenKind.Identifier,
+            TokenKind.Star,
+            TokenKind.IntegerLiteral
+        ]);
+    });
+
+    it('gives the arrow token its text and location', () => {
+        const tokens = Lexer.scan('a => b').tokens;
+        const arrow = tokens.find(x => x.kind === TokenKind.Arrow);
+        expect(arrow.text).to.eql('=>');
+        expect(arrow.location.range).to.eql(Range.create(0, 2, 0, 4));
+    });
+
     it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
         //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
         expectKinds(`?[ ?[ : ?[ ?[`, [
