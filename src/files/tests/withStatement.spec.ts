@@ -86,6 +86,100 @@ describe('with statement', () => {
         `);
     });
 
+    it('rewrites a leading `.[` into an index on the target', async () => {
+        await testTranspile(`
+            sub main()
+                arr = []
+                with arr
+                    .[0] = "First slot"
+                    .[1] = "Second slot"
+                end with
+                with m.grid
+                    .[0].title = .[1]
+                end with
+            end sub
+        `, `
+            sub main()
+                arr = []
+                arr[0] = "First slot"
+                arr[1] = "Second slot"
+                __bsc_tmp_with0 = m.grid
+                __bsc_tmp_with0[0].title = __bsc_tmp_with0[1]
+            end sub
+        `);
+    });
+
+    it('keeps optional chaining on leading-dot members', async () => {
+        await testTranspile(`
+            sub main(myClass)
+                with myClass
+                    .doSomething?()
+                    .c = .d?.e
+                    .f = .g?.[0]
+                    .h?.i?.j()
+                    .k = .l?@m
+                end with
+                with m.thing
+                    .doSomething?()
+                end with
+            end sub
+        `, `
+            sub main(myClass)
+                myClass.doSomething?()
+                myClass.c = myClass.d?.e
+                myClass.f = myClass.g?.[0]
+                myClass.h?.i?.j()
+                myClass.k = myClass.l?@m
+                __bsc_tmp_with0 = m.thing
+                __bsc_tmp_with0.doSomething?()
+            end sub
+        `);
+    });
+
+    it('transpiles namespaced targets to their flattened names', async () => {
+        await testTranspile(`
+            namespace promises
+                const DEFAULTS = { timeout: 1 }
+                function chain() as object
+                    return {}
+                end function
+                sub useRelative()
+                    with chain()
+                        .then()
+                    end with
+                end sub
+            end namespace
+            sub main()
+                with promises.chain()
+                    .then()
+                    .then()
+                end with
+                with promises.DEFAULTS
+                    .timeout = 2
+                end with
+            end sub
+        `, `
+            function promises_chain() as object
+                return {}
+            end function
+
+            sub promises_useRelative()
+                __bsc_tmp_with0 = promises_chain()
+                __bsc_tmp_with0.then()
+            end sub
+
+            sub main()
+                __bsc_tmp_with0 = promises_chain()
+                __bsc_tmp_with0.then()
+                __bsc_tmp_with0.then()
+                __bsc_tmp_with0 = ({
+                    timeout: 1
+                })
+                __bsc_tmp_with0.timeout = 2
+            end sub
+        `);
+    });
+
     it('lets a nested block target a member of the outer block', async () => {
         await testTranspile(`
             sub main(order as object)

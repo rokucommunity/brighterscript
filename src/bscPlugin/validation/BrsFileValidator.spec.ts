@@ -6289,6 +6289,40 @@ describe('BrsFileValidator', () => {
             ]);
         });
 
+        it('type checks leading-dot members against a namespaced target type', () => {
+            program.setFile('source/main.bs', `
+                namespace promises
+                    class Promise
+                        sub then()
+                        end sub
+                    end class
+                    function chain() as Promise
+                        return new Promise()
+                    end function
+                    sub useRelative()
+                        with chain()
+                            .then()
+                            .nope()
+                        end with
+                    end sub
+                end namespace
+                sub main()
+                    with promises.chain()
+                        .then()
+                        .nope()
+                    end with
+                    with new promises.Promise()
+                        .then()
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('nope', 'promises.Promise.nope', 'promises.Promise'),
+                DiagnosticMessages.cannotFindFunction('nope', 'promises.Promise.nope', 'promises.Promise')
+            ]);
+        });
+
         it('resolves the inner target of a nested block against the outer block', () => {
             program.setFile('source/main.bs', `
                 interface Order

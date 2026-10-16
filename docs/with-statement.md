@@ -31,7 +31,7 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub configureLabel(label as object)
+sub configureLabel(label as dynamic)
     label.text = "Hello"
     label.color = "#FFFFFF"
     label.font.size = 32
@@ -65,9 +65,48 @@ __bsc_tmp_with0.visible = true
 
 So a function call used as the target runs only once, and a property chain is not re-read for every member.
 
+## Namespaces
+
+A target that refers to something in a [namespace](namespaces.md) transpiles the same way it would anywhere else: the namespaced name is flattened (`promises.chain()` becomes `promises_chain()`). Because a call is not a plain variable, its result is stored in a local:
+
+```brighterscript
+namespace promises
+    function chain() as object
+        return {}
+    end function
+end namespace
+
+sub main()
+    with promises.chain()
+        .then()
+        .then()
+    end with
+end sub
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+function promises_chain() as object
+    return {}
+end function
+
+sub main()
+    __bsc_tmp_with0 = promises_chain()
+    __bsc_tmp_with0.then()
+    __bsc_tmp_with0.then()
+end sub
+```
+</details>
+
+The same applies to a relative name used inside the namespace (`with chain()`), a namespaced class (`with new promises.Promise()`) and a namespaced constant (`with promises.DEFAULTS`). Leading-dot members are type checked against the target's type, so with a `chain() as Promise` return type, `.nope()` is reported as `Cannot find function 'nope' for type 'promises.Promise'`.
+
+Note that every `.then()` is called on the same target, not on the result of the previous call. `with` doesn't build a fluent chain; for that, write `promises.chain().then().then()`.
+
 ## What can go inside the block
 
-Every statement in a `with` block must start with a leading-dot member, or be a nested `with` block. Within those statements, `.member` can appear anywhere an expression is allowed:
+Every statement in a `with` block must start with a leading `.`, or be a nested `with` block. Within those statements, `.member` can appear anywhere an expression is allowed:
 
 ```brighterscript
 with m.user
@@ -77,8 +116,12 @@ with m.user
     .save()                               ' method call
     .fullName = .firstName + .lastName    ' in an expression
     .sendEmail(.email, .name)             ' as an argument
+    .onReady?()                           ' with optional chaining
+    .title = .metadata?.title             ' optional chaining in an expression
 end with
 ```
+
+Optional chaining after a leading-dot member (`.doSomething?()`, `.a?.b`, `.items?[0]`) is kept as written, so `.doSomething?()` becomes `target.doSomething?()`.
 
 Any other statement (`print`, a call to a function that is not a member of the target, an assignment to a local variable, `if`, loops, `goto`, labels, and so on) is flagged as an unexpected token:
 
@@ -92,6 +135,30 @@ end with
 ```
 
 A function defined in the block (for example `.callback = function() ... end function`) is its own body and can contain any statements.
+
+## Indexing the target
+
+Use `.[index]` to index into the target itself, for example when the target is an array:
+
+```brighterscript
+arr = []
+with arr
+    .[0] = "First slot"
+    .[1] = "Second slot"
+end with
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+arr = []
+arr[0] = "First slot"
+arr[1] = "Second slot"
+```
+</details>
+
+`.[index]` works anywhere `.member` does, and can be chained like any other member access: `.[0].title = .[1]`.
 
 ## Nesting
 
@@ -135,10 +202,10 @@ end with
 
 ## Rules
 
-- Every statement in the block must start with a `.member`, or be a nested `with` block. Anything else is an error.
+- Every statement in the block must start with a leading `.` (`.member` or `.[index]`), or be a nested `with` block. Anything else is an error.
 - Every `.member` must be inside a `with` block. Using one outside a block is an error.
 - A function defined inside a `with` block (an anonymous `function` or `sub`) cannot use `.member`. BrightScript functions cannot access the local variables of the function that contains them, so the target is not available there. Assign it to a variable and pass that in instead.
-- You cannot `goto` a label inside a `with` block from outside the block, because that would skip the step that evaluates the target.
+- Labels are not allowed inside a `with` block. A `goto` that targets one is also flagged, because jumping into the block would skip the step that evaluates the target.
 - Type checking, hover and completions work on `.member` just as they would on `target.member`. Typing `.` inside a block offers the target's members.
 
 ## `with` as an identifier

@@ -1,6 +1,6 @@
 import { expect } from '../../../chai-config.spec';
 import { ParseMode, Parser } from '../../Parser';
-import type { DottedSetStatement, ExpressionStatement, IncrementStatement } from '../../Statement';
+import type { DottedSetStatement, ExpressionStatement, IncrementStatement, IndexedSetStatement } from '../../Statement';
 import { WithStatement } from '../../Statement';
 import type { CallExpression, DottedGetExpression, FunctionExpression, IndexedGetExpression } from '../../Expression';
 import { WithContextExpression } from '../../Expression';
@@ -100,6 +100,29 @@ describe('parser with statement', () => {
         for (const context of contexts) {
             expect(context.getWithStatement()).to.equal(statements[0]);
         }
+    });
+
+    it('supports indexing the target with a leading `.[`', () => {
+        const { parser, statements } = parseBody(`
+            with target
+                .[0] = "First slot"
+                .[1] = .[0]
+            end with
+        `);
+        expectZeroDiagnostics(parser);
+        const body = (statements[0] as WithStatement).body.statements;
+        expect(body).to.be.lengthOf(2);
+
+        //.[0] = "First slot"
+        const set = body[0] as IndexedSetStatement;
+        expect(set.kind).to.eql('IndexedSetStatement');
+        expect(set.obj).to.be.instanceof(WithContextExpression);
+        expect(set.indexes).to.be.lengthOf(1);
+
+        //.[1] = .[0]
+        const get = (body[1] as IndexedSetStatement).value as IndexedGetExpression;
+        expect(get.kind).to.eql('IndexedGetExpression');
+        expect(get.obj).to.be.instanceof(WithContextExpression);
     });
 
     it('supports nested with blocks, where the inner target can reference the outer block', () => {
