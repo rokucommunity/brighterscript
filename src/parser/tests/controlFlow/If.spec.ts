@@ -123,6 +123,42 @@ describe('parser if statements', () => {
         expect(ast.statements).to.be.length.greaterThan(0);
     });
 
+    describe('colon before if', () => {
+        //verified on device (Roku OS 16.0.4): a colon before a single-line `if` compiles, a colon before a multi-line `if` is a syntax error
+        it('allows a colon before a single-line if', () => {
+            const { diagnostics } = Parser.parse(`
+                sub test()
+                    x = 1 : if x = 1 then print "a"
+                    x = 1 : if x = 1 then print "a" else print "b"
+                    : if x = 1 then print "a"
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('flags a colon before a multi-line if', () => {
+            const { diagnostics } = Parser.parse(`
+                sub test()
+                    x = 1 : if x = 1 then
+                        print "a"
+                    end if
+                    x = 1 : if x = 1
+                        print "a"
+                    end if
+                    print "z" : if x = 1 then
+                        print "a"
+                    else
+                        print "b"
+                    end if
+                    x = 1 : if x = 1 then : print "a" : end if
+                end sub
+            `);
+            expect(
+                diagnostics.filter(x => x.code === DiagnosticMessages.unexpectedColonBeforeIfStatement().code)
+            ).to.be.lengthOf(4);
+        });
+    });
+
     describe('single-line if', () => {
         it('parses if only', () => {
             let { ast, diagnostics } = Parser.parse([

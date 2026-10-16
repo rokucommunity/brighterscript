@@ -2295,16 +2295,13 @@ export class Parser {
     private nestedInlineConditionalCount = 0;
 
     private ifStatement(incrementNestedCount = true): IfStatement {
-        // colon before `if` is usually not allowed, unless it's after `then`
-        if (this.current > 0) {
+        // a colon before `if` is allowed for a single-line `if` (`x = 1 : if x then print x`), but is a syntax error on device
+        // for a multi-line `if`. We don't know which kind this is until after the condition, so just remember the colon for now
+        let colonBeforeIf: Token | undefined;
+        if (this.current > 1) {
             const prev = this.previous();
-            if (prev.kind === TokenKind.Colon) {
-                if (this.current > 1 && this.tokens[this.current - 2].kind !== TokenKind.Then && this.nestedInlineConditionalCount === 0) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.unexpectedColonBeforeIfStatement(),
-                        location: prev
-                    });
-                }
+            if (prev.kind === TokenKind.Colon && this.tokens[this.current - 2].kind !== TokenKind.Then && this.nestedInlineConditionalCount === 0) {
+                colonBeforeIf = prev;
             }
         }
 
@@ -2325,6 +2322,13 @@ export class Parser {
 
         //is it inline or multi-line if?
         const isInlineIfThen = !this.checkAny(TokenKind.Newline, TokenKind.Colon, TokenKind.Comment);
+
+        if (colonBeforeIf && !isInlineIfThen) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unexpectedColonBeforeIfStatement(),
+                location: colonBeforeIf
+            });
+        }
 
         if (isInlineIfThen) {
             /*** PARSE INLINE IF STATEMENT ***/

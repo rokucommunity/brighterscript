@@ -376,7 +376,7 @@ export let DiagnosticMessages = {
         code: 'expected-loop-expression'
     }),
     unexpectedColonBeforeIfStatement: () => ({
-        message: `Colon before 'if' statement is not allowed`,
+        message: `Colon before a multi-line 'if' statement is not allowed`,
         legacyCode: 1054,
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-leading-colon'
