@@ -8183,6 +8183,54 @@ describe('BrsFile', () => {
             ]);
         });
 
+        it('counts the same literals in a .bs file as the device sees in its transpiled output', async () => {
+            //the device compiles the transpiled .brs, so the .bs pools must match the pools of that output
+            const getPools = (targetProgram: Program, file: BrsFile) => {
+                const validator = new BrsFileValidator({ program: targetProgram, file: file });
+                validator.process();
+                const pools = validator['literalPools'];
+                return Object.keys(pools).sort().map(poolName => {
+                    return { poolName: poolName, values: [...pools[poolName].values].sort() };
+                });
+            };
+            const bsFile = program.setFile<BrsFile>('source/main.bs', `
+                function main()
+                    x = 1
+                    v = \`plain text\`
+                    v = \`a\${x}b\`
+                    v = \`\${x}\`
+                    v = \`line1\\nline2\`
+                    v = \`say "hi"\`
+                    v = \`one
+                    two\`
+                    v = tag\`a\${x}b\`
+                    v = tag\`\\n\${x}\`
+                    v = tag\`\`
+                    v = /abc/ix
+                    v = /a"b/
+                    v = /"start and end"/m
+                    m.node@.doThing(1)
+                    m.node@.doOther()
+                    v = x = 1 ? "yes" : "no"
+                    v = x ?? "fallback"
+                    v = m?.a?["key"]
+                end function
+                function tag(strings, values)
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            const transpiledProgram = new Program({ rootDir: rootDir });
+            try {
+                const brsFile = transpiledProgram.setFile<BrsFile>('source/main.brs', (await program.getTranspiledFileContents(bsFile.srcPath)).code);
+                transpiledProgram.validate();
+                expect(getPools(program, bsFile)).to.eql(getPools(transpiledProgram, brsFile));
+            } finally {
+                transpiledProgram.dispose();
+            }
+        });
+
         it('reports the limit for a .bs file', () => {
             validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}`)), 'source/main.bs');
             expectDiagnostics(program, [

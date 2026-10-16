@@ -1,4 +1,4 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -804,6 +804,7 @@ export class BrsFileValidator {
      * `LINE_NUM` (and the `str(LINE_NUM)` that `PKG_LOCATION` transpiles to) counts as the integer `line % 65536`; for .bs files this is the source line, which can differ from the transpiled line.
      * Enum and const values that get inlined are not counted.
      * Quoted associative array keys count as strings; unquoted keys and dotted property names do not.
+     * Template strings, regex literals and callfunc (`@.`) count as the literals they transpile to: `chr(N)` escapes as integers, the `roRegex` pieces and the callfunc method name as strings.
      * Values are deduplicated by normalized value: integers by numeric value (`1` and `&h1` match), doubles by numeric value, floats by single-precision numeric value, strings by their content.
      */
     private collectFunctionLiterals(func: FunctionExpression) {
@@ -844,7 +845,8 @@ export class BrsFileValidator {
                         addToPool('string', getStringLiteralKey(text), literal.location);
                         break;
                     case TokenKind.TemplateStringQuasi:
-                        if (text !== '') {
+                        //empty quasi strings are dropped from template strings, but tagged templates keep them
+                        if (text !== '' || isTaggedTemplateStringExpression(literal.parent?.parent)) {
                             addToPool('string', text, literal.location);
                         }
                         break;
@@ -871,6 +873,43 @@ export class BrsFileValidator {
                     return;
                 }
                 addToPool('string', getStringLiteralKey(keyToken.text), keyToken.location ?? member.location);
+            },
+            //template string escapes (like `\n` or `"`) transpile to `chr(charCode)`
+            EscapedCharCodeLiteralExpression: (escape) => {
+                if (escape.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                addToPool('integer', escape.tokens.value.charCode, escape.location);
+            },
+            //`/pattern/flags` transpiles to `CreateObject("roRegex", "pattern", "flags")`, with each `"` in the pattern split out as `chr(34)`
+            RegexLiteralExpression: (regex) => {
+                if (regex.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                let text = regex.tokens.regexLiteral?.text ?? '';
+                let flags = '';
+                const flagMatch = /\/([a-z]+)$/i.exec(text);
+                if (flagMatch) {
+                    text = text.substring(0, flagMatch.index + 1);
+                    flags = flagMatch[1];
+                }
+                const patternParts = text.substring(1, text.length - 1).split('"');
+                addToPool('string', 'roRegex', regex.location);
+                for (const part of patternParts) {
+                    addToPool('string', part, regex.location);
+                }
+                if (patternParts.length > 1) {
+                    addToPool('integer', 34, regex.location);
+                }
+                addToPool('string', flags, regex.location);
+            },
+            //`node@.method()` transpiles to `node.callfunc("method")`
+            CallfuncExpression: (callfunc) => {
+                //skip incomplete code (like `node@.` while typing), which has no method name yet
+                if (!callfunc.tokens.methodName || callfunc.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
+                    return;
+                }
+                addToPool('string', callfunc.tokens.methodName.text, callfunc.tokens.methodName.location ?? callfunc.location);
             }
         });
 
