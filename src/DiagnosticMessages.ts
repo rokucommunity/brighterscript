@@ -1396,6 +1396,11 @@ export let DiagnosticMessages = {
         message: `Parameter '${paramName}' is declared 'as ${declaredType}', but its type designator makes it '${designatorType}'. Use 'as ${designatorType}' or remove the type designator`,
         severity: DiagnosticSeverity.Error,
         code: 'type-designator-mismatch'
+    }),
+    tooManyGotoLabels: (count: number, max: number) => ({
+        message: `Function has ${count} labels used by goto, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-goto-label-count'
     })
 };
 export const defaultMaximumTruncationLength = 160;
