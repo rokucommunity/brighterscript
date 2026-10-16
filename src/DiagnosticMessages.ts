@@ -376,7 +376,7 @@ export let DiagnosticMessages = {
         code: 'expected-loop-expression'
     }),
     unexpectedColonBeforeIfStatement: () => ({
-        message: `Colon before 'if' statement is not allowed`,
+        message: `Colon before a multi-line 'if' statement is not allowed`,
         legacyCode: 1054,
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-leading-colon'
@@ -1325,6 +1325,16 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-variable-count'
     }),
+    /**
+     * @param count the number of distinct literals of this type found in the file
+     * @param typeName the literal type, one of `integer`, `string`, `float`, `double`, or `longinteger`
+     * @param max the maximum number of distinct literals of one type Roku allows in a single file
+     */
+    tooManyLiterals: (count: number, typeName: string, max: number) => ({
+        message: `File has ${count} distinct ${typeName} literals, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-literal-count'
+    }),
     labelInTryBlock: (name = '') => ({
         message: `Label '${name}' cannot be declared inside a 'try' block`,
         severity: DiagnosticSeverity.Error,
@@ -1378,6 +1388,34 @@ export let DiagnosticMessages = {
         message: `Unknown regular expression flag '${flag}'. roRegex only supports 'i', 'm', 's', and 'x'`,
         severity: DiagnosticSeverity.Warning,
         code: 'unknown-regex-flag'
+    }),
+    /**
+     * The function name passed as the callback to `observeField`/`observeFieldScoped` doesn't exist in the component
+     * @param callbackName the callback name as written in the string literal
+     * @param componentName the name of the component whose scope was searched
+     * @param suggestedName the name the function actually has at runtime, when the callback was written with its namespaced name (i.e. `alpha_onChange` for `alpha.onChange`)
+     */
+    observerCallbackNotFound: (callbackName: string, componentName: string, suggestedName?: string) => ({
+        message: `Cannot find function '${callbackName}' to use as an observer callback in component '${componentName}'` +
+            (suggestedName ? `. Namespaced functions must be referenced by their transpiled name: '${suggestedName}'` : ''),
+        severity: DiagnosticSeverity.Warning,
+        code: 'observer-callback-not-found'
+    }),
+    /**
+     * A parameter has both a type designator (i.e. `name$`) and an `as` type that isn't the designator's type, which fails to compile on device
+     * @param paramName the parameter name, including its designator (i.e. `name$`)
+     * @param designatorType the type the designator implies (i.e. `string`)
+     * @param declaredType the type written after `as`
+     */
+    typeDesignatorMismatch: (paramName: string, designatorType: string, declaredType: string) => ({
+        message: `Parameter '${paramName}' is declared 'as ${declaredType}', but its type designator makes it '${designatorType}'. Use 'as ${designatorType}' or remove the type designator`,
+        severity: DiagnosticSeverity.Error,
+        code: 'type-designator-mismatch'
+    }),
+    tooManyGotoLabels: (count: number, max: number) => ({
+        message: `Function has ${count} labels used by goto, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-goto-label-count'
     })
 };
 export const defaultMaximumTruncationLength = 160;
