@@ -1797,11 +1797,12 @@ export class ScopeValidator {
         if (selectCaseStmt.elseCase) {
             return;
         }
-        const headerLocation = util.createBoundingLocation(selectCaseStmt.tokens.select, selectCaseStmt.tokens.case);
+        //the `select case` keywords, without the subject
+        const header = util.setBounds({} as Locatable, selectCaseStmt.tokens.select, selectCaseStmt.tokens.case);
         if (!enumMembers) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.selectCaseMissingCaseElse(),
-                location: headerLocation
+                location: header
             });
             return;
         }
@@ -1814,7 +1815,7 @@ export class ScopeValidator {
         if (missingMembers.length > 0) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.selectCaseMissingEnumMembers(enumType.name, missingMembers.map(x => x.tokens.name.text)),
-                location: headerLocation
+                location: header
             });
         }
     }
