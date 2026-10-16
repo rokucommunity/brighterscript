@@ -166,6 +166,10 @@ export class Lexer {
             // are allowed
             if (isDecimalDigit(this.peek())) {
                 this.decimalNumber(true);
+            } else if (this.peek() === '.' && this.peekNext() === '.') {
+                this.advance();
+                this.advance();
+                this.addToken(TokenKind.DotDotDot);
             } else {
                 this.addToken(TokenKind.Dot);
             }

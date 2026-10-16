@@ -1205,7 +1205,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } },
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(8, 0, 9, 0) } }
+                ]);
             });
 
             it('supports single-word #elseif and #endif', () => {
@@ -1220,7 +1223,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('supports multi-word #else if and #end if', () => {
@@ -1235,7 +1240,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
@@ -1247,7 +1254,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                //no parse errors, just the hint that fades the branch
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
+                ]);
             });
 
             it('detects syntax error in #if', () => {
@@ -1260,7 +1270,9 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.hashConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist(),
+                    //an undeclared constant is false, so the branch is inactive
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
                 ]);
             });
 
@@ -1303,12 +1315,13 @@ describe('BrsFile', () => {
                 ]);
             });
 
-            it('detects syntax error in #const', () => {
+            it('detects an invalid #const value', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                         #const someConst = 123
                     end sub
                 `);
+                program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.invalidHashConstValue()
                 ]);
@@ -7563,7 +7576,10 @@ describe('BrsFile', () => {
                 localCount: 253,
                 extraLines: ['#if false', 'hiddenName = 1', '#end if']
             }), 'source/main.bs');
-            expectZeroDiagnostics(program);
+            //no variable limit error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
         });
 
         it('reports the limit for a .bs file', () => {
@@ -7815,7 +7831,9 @@ describe('BrsFile', () => {
                 'v = 70000',
                 '#end if'
             ]), 'source/main.bs');
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
         });
 
         describe('brighterscript source literals', () => {
@@ -7926,7 +7944,9 @@ describe('BrsFile', () => {
                     'v = SOURCE_LINE_NUM',
                     '#end if'
                 ]), 'source/main.bs');
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.inactiveConditionalCompileBranch()
+                ]);
             });
 
             it('counts a source literal in an anonymous function once, in the shared pool', () => {
@@ -8147,7 +8167,9 @@ describe('BrsFile', () => {
                     'v = { "newQuotedKey": 1 }',
                     '#end if'
                 ]), 'source/main.bs');
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.inactiveConditionalCompileBranch()
+                ]);
             });
         });
 

@@ -18,6 +18,7 @@ const tokenDefaults = {
     [TokenKind.Comment]: '\'',
     [TokenKind.Dollar]: '$',
     [TokenKind.Dot]: '.',
+    [TokenKind.DotDotDot]: '...',
     [TokenKind.EndClass]: 'end class',
     [TokenKind.EndEnum]: 'end enum',
     [TokenKind.EndFor]: 'end for',

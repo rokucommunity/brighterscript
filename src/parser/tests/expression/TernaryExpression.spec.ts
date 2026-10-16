@@ -784,6 +784,144 @@ describe('ternary expressions', () => {
             `);
         });
 
+        describe('namespace names in scope capturing', () => {
+            beforeEach(() => {
+                program.setFile('source/lib.bs', `
+                    namespace promises
+                        function isPromise(value)
+                            return false
+                        end function
+                        function resolve(value)
+                            return value
+                        end function
+                    end namespace
+                    namespace alpha.beta
+                        function isReady(value)
+                            return true
+                        end function
+                        function getValue()
+                            return 1
+                        end function
+                        class Thing
+                        end class
+                    end namespace
+                `);
+            });
+
+            it('does not capture a namespace', async () => {
+                await testTranspile(`
+                    sub main(value)
+                        print promises.isPromise(value) ? value : promises.resolve(value)
+                    end sub
+                `, `
+                    sub main(value)
+                        print (function(__bsCondition, value)
+                                if __bsCondition then
+                                    return value
+                                else
+                                    return promises_resolve(value)
+                                end if
+                            end function)(promises_isPromise(value), value)
+                    end sub
+                `);
+            });
+
+            it('does not capture a nested namespace', async () => {
+                await testTranspile(`
+                    sub main(value)
+                        print alpha.beta.isReady(value) ? alpha.beta.getValue() : value
+                    end sub
+                `, `
+                    sub main(value)
+                        print (function(__bsCondition, value)
+                                if __bsCondition then
+                                    return alpha_beta_getValue()
+                                else
+                                    return value
+                                end if
+                            end function)(alpha_beta_isReady(value), value)
+                    end sub
+                `);
+            });
+
+            it('does not capture the namespace of a namespaced class', async () => {
+                await testTranspile(`
+                    sub main(value)
+                        print value.ok ? new alpha.beta.Thing() : invalid
+                    end sub
+                `, `
+                    sub main(value)
+                        print (function(__bsCondition)
+                                if __bsCondition then
+                                    return alpha_beta_Thing()
+                                else
+                                    return invalid
+                                end if
+                            end function)(value.ok)
+                    end sub
+                `);
+            });
+
+            it('still captures a parameter that shadows a namespace name', async () => {
+                await testTranspile(`
+                    sub main(promises, value)
+                        print value.ok ? promises : value.fallback()
+                    end sub
+                `, `
+                    sub main(promises, value)
+                        print (function(__bsCondition, promises, value)
+                                if __bsCondition then
+                                    return promises
+                                else
+                                    return value.fallback()
+                                end if
+                            end function)(value.ok, promises, value)
+                    end sub
+                `);
+            });
+
+            it('still captures a local variable that shadows a namespace name', async () => {
+                await testTranspile(`
+                    sub main(value)
+                        promises = [1, 2]
+                        print value.ok ? promises : value.fallback()
+                    end sub
+                `, `
+                    sub main(value)
+                        promises = [
+                            1
+                            2
+                        ]
+                        print (function(__bsCondition, promises, value)
+                                if __bsCondition then
+                                    return promises
+                                else
+                                    return value.fallback()
+                                end if
+                            end function)(value.ok, promises, value)
+                    end sub
+                `);
+            });
+
+            it('still captures a shadowing parameter used with a dotted get', async () => {
+                await testTranspile(`
+                    sub main(promises as object, value)
+                        print value.ok ? promises.first : value.fallback()
+                    end sub
+                `, `
+                    sub main(promises as object, value)
+                        print (function(__bsCondition, promises, value)
+                                if __bsCondition then
+                                    return promises.first
+                                else
+                                    return value.fallback()
+                                end if
+                            end function)(value.ok, promises, value)
+                    end sub
+                `);
+            });
+        });
+
         it('supports scope-captured outer, and simple inner', async () => {
             await testTranspile(
                 `
