@@ -3516,34 +3516,10 @@ export class MethodStatement extends FunctionStatement {
         const superCall = new ExpressionStatement({
             expression: new CallExpression({
                 callee: new VariableExpression({
-                    name: {
-                        kind: TokenKind.Identifier,
-                        text: 'super',
-                        isReserved: false,
-                        startPosition: state.classStatement.tokens.name.startPosition,
-                        endPosition: state.classStatement.tokens.name.endPosition,
-                        sourceInfo: state.classStatement.tokens.name.sourceInfo,
-                        leadingTrivia: []
-                    }
+                    name: createIdentifier('super', state.classStatement.tokens.name)
                 }),
-                openingParen: {
-                    kind: TokenKind.LeftParen,
-                    text: '(',
-                    isReserved: false,
-                    startPosition: state.classStatement.tokens.name.startPosition,
-                    endPosition: state.classStatement.tokens.name.endPosition,
-                    sourceInfo: state.classStatement.tokens.name.sourceInfo,
-                    leadingTrivia: []
-                },
-                closingParen: {
-                    kind: TokenKind.RightParen,
-                    text: ')',
-                    isReserved: false,
-                    startPosition: state.classStatement.tokens.name.startPosition,
-                    endPosition: state.classStatement.tokens.name.endPosition,
-                    sourceInfo: state.classStatement.tokens.name.sourceInfo,
-                    leadingTrivia: []
-                },
+                openingParen: createToken(TokenKind.LeftParen, '(', state.classStatement.tokens.name),
+                closingParen: createToken(TokenKind.RightParen, ')', state.classStatement.tokens.name),
                 args: []
             })
         });

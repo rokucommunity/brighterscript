@@ -42,8 +42,10 @@ const testSource: SourceInfo = { uri: undefined, linePositions: Array.from({ len
 /**
  * Create a `Locatable` for a hand-built test token from line/character positions
  */
-export function testLocatable(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Locatable {
-    return { startPosition: (startLine * 1000) + startCharacter, endPosition: (endLine * 1000) + endCharacter, sourceInfo: testSource };
+export function testLocatable(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Locatable & { location: Location } {
+    const locatable: Locatable = { startPosition: (startLine * 1000) + startCharacter, endPosition: (endLine * 1000) + endCharacter, sourceInfo: testSource };
+    //hand-built tokens are plain objects without the deprecated `location` getter, so give them the matching value
+    return { ...locatable, location: util.getLocation(locatable) };
 }
 const sinon = createSandbox();
 

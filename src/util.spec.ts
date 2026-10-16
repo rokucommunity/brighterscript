@@ -1235,8 +1235,8 @@ describe('util', () => {
 
         it('clears the position when given no location or source', () => {
             const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
-            expect(util.setLocation(testLocatable(0, 0, 0, 1), undefined, sourceInfo)).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
-            expect(util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1), undefined)).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), undefined, sourceInfo)).to.include({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1), undefined)).to.include({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
         });
 
         it('clears the position for a location in a different file', () => {

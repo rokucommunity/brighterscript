@@ -19,10 +19,15 @@ export class TokenObject implements Token {
     ) { }
 
     /**
+     * Where the token was found. Assigning it moves the token to that location (see `util.assignLocation()`).
      * @deprecated use `util.getLocation(token)`. This is computed on every read
      */
     public get location(): Location | undefined {
         return util.getLocation(this);
+    }
+
+    public set location(value: Location | undefined) {
+        util.assignLocation(this, value, this.sourceInfo);
     }
 
     /**
