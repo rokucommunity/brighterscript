@@ -908,7 +908,7 @@ export class CrossScopeValidator {
             for (const scope of scopeList) {
                 this.program.diagnostics.register({
                     ...this.getCannotFindDiagnostic(scope, symbol, typeChainResult),
-                    location: typeChainResult.location
+                    location: typeChainResult.locatable
                 }, {
                     scope: scope,
                     tags: [CrossScopeValidatorDiagnosticTag]
@@ -927,7 +927,7 @@ export class CrossScopeValidator {
                 const scopeList = [...incompatibleScopes.values()].map(s => s.name);
                 this.program.diagnostics.register({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, { scopes: scopeList }),
-                    location: typeChainResult.location
+                    location: typeChainResult.locatable
                 }, {
                     tags: [CrossScopeValidatorDiagnosticTag]
                 });

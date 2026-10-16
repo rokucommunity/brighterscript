@@ -2077,10 +2077,11 @@ export class ImportStatement extends Statement implements TypedefProvider {
         if (this.tokens.path) {
             //remove quotes
             this.filePath = this.tokens.path.text.replace(/"/g, '');
-            if (this.tokens.path.sourceInfo) {
-                //adjust the range to exclude the quotes
-                this.tokens.path.startPosition++;
-                this.tokens.path.endPosition--;
+            //adjust the range to exclude the quotes (but only if that hasn't already been done, such as for a cloned token)
+            const path = this.tokens.path;
+            if (path.sourceInfo && path.text.startsWith('"') && path.endPosition - path.startPosition === path.text.length) {
+                path.startPosition++;
+                path.endPosition--;
             }
         }
     }
