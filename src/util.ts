@@ -2653,7 +2653,7 @@ export class Util {
         let itemTypeKind = '';
         let parentTypeKind = '';
         let astNode: AstNode;
-        let errorLocation: Location;
+        let errorLocatable: Locatable;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
         let crossedCallFunc = false;
@@ -2704,7 +2704,7 @@ export class Util {
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 crossedCallFunc = crossedCallFunc || chainItem.data?.isFromCallFunc;
                 if (!chainItem.isResolved) {
-                    errorLocation = chainItem.location;
+                    errorLocatable = chainItem.locatable;
                     continueResolvingAllItems = false;
                 }
             }
@@ -2716,7 +2716,10 @@ export class Util {
             itemParentTypeKind: parentTypeKind,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
-            location: errorLocation,
+            get location() {
+                return util.getLocation(errorLocatable);
+            },
+            locatable: errorLocatable,
             containsDynamic: containsDynamic,
             astNode: astNode,
             crossedCallFunc: crossedCallFunc
