@@ -14,6 +14,13 @@ sub doSomething()
 end sub
 ```
 
+## [Arrow Functions](arrow-functions.md)
+
+```brighterscript
+' a short way to write a single-expression callback
+adults = filter(people, (p) => p.age >= 18)
+```
+
 ## [Assignments](assigments.md)
 
 ```brighterscript

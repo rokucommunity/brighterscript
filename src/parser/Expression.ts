@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isReturnStatement, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -278,6 +278,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         returnTypeExpression?: TypeExpression;
         body: Block;
         endFunctionType?: Token;
+        /**
+         * The `=>` of an arrow function (`(a, b) => a + b`). When set, this is an arrow function: it has no `function`/`end function`
+         * keywords and its body is a single synthesized `return` statement holding the body expression
+         */
+        arrow?: Token;
     }) {
         super();
         this.tokens = {
@@ -285,7 +290,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             leftParen: options.leftParen,
             rightParen: options.rightParen,
             as: options.as,
-            endFunctionType: options.endFunctionType
+            endFunctionType: options.endFunctionType,
+            arrow: options.arrow
         };
         this.parameters = options.parameters ?? [];
         this.body = options.body;
@@ -309,10 +315,63 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         readonly leftParen?: Token;
         readonly rightParen?: Token;
         readonly as?: Token;
+        readonly arrow?: Token;
     };
 
+    /**
+     * Is this an arrow function (`(a, b) => a + b`)? Arrow functions are ordinary functions whose body is a single expression,
+     * stored as a synthesized `return` statement so hover, validation and transpile treat them like any other function
+     */
+    public get isArrowFunction() {
+        return !!this.tokens.arrow;
+    }
+
+    /**
+     * The expression that forms the body of an arrow function (the `a + b` in `(a, b) => a + b`). Undefined for regular functions
+     */
+    public get arrowBody(): Expression | undefined {
+        const statement = this.isArrowFunction ? this.body?.statements?.[0] : undefined;
+        return isReturnStatement(statement) ? statement.value : undefined;
+    }
+
+    /**
+     * For an arrow function with no declared return type: the type its body expression produces, or `void` when the body
+     * is a call to something that returns nothing (a `sub`, or a built-in like `push`). Undefined for regular functions
+     * and for arrow functions with a declared return type
+     */
+    private getInferredArrowReturnType(): BscType | undefined {
+        const body = this.arrowBody;
+        if (!body || this.returnTypeExpression) {
+            return undefined;
+        }
+        //a call to a user-defined sub evaluates to `invalid` at runtime (so that's its type), but it still produces nothing worth returning
+        if (isCallExpression(body)) {
+            const calleeType = body.callee.getType({ flags: SymbolTypeFlag.runtime });
+            if (isTypedFunctionType(calleeType) && (calleeType.isSub || isVoidType(calleeType.returnType))) {
+                return VoidType.instance;
+            }
+        }
+        const bodyType = body.getType({ flags: SymbolTypeFlag.runtime });
+        return isUninitializedType(bodyType) ? VoidType.instance : bodyType;
+    }
+
+    /**
+     * Does this arrow function produce no value? True when its return type is explicitly `void`, or when it has no declared
+     * return type and its body is a call to something that returns nothing (i.e. `(x) => list.push(x)`).
+     * These transpile to a `sub` whose body is a plain statement, since `return list.push(x)` fails on device
+     */
+    private get isVoidArrowFunction() {
+        if (!this.isArrowFunction) {
+            return false;
+        }
+        const returnType = this.returnTypeExpression
+            ? this.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime })
+            : this.getInferredArrowReturnType();
+        return isVoidType(returnType);
+    }
+
     public get leadingTrivia(): Token[] {
-        return this.tokens.functionType?.leadingTrivia;
+        return this.tokens.functionType?.leadingTrivia ?? this.tokens.leftParen?.leadingTrivia;
     }
 
     public get endTrivia(): Token[] {
@@ -321,7 +380,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     /**
      * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
-     * and ending with the last n' in 'end function' or 'b' in 'end sub'
+     * and ending with the last n' in 'end function' or 'b' in 'end sub' (or the end of the body expression for an arrow function)
      */
     public get location(): Location {
         return util.createBoundingLocation(
@@ -331,15 +390,22 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.tokens.rightParen,
             this.tokens.as,
             this.returnTypeExpression,
+            this.tokens.arrow,
+            this.isArrowFunction ? this.body : undefined,
             this.tokens.endFunctionType
         );
     }
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
         let results = [] as TranspileResult;
+        let functionTypeText = this.tokens.functionType?.text;
+        if (this.isArrowFunction) {
+            //an arrow function has no keyword of its own, so pick one based on whether its body produces a value
+            functionTypeText = this.isVoidArrowFunction ? 'sub' : 'function';
+        }
         //'function'|'sub'
         results.push(
-            state.transpileToken(this.tokens.functionType, 'function', false, state.skipLeadingComments)
+            state.transpileToken(this.tokens.functionType, functionTypeText ?? 'function', false, state.skipLeadingComments)
         );
         //functionName?
         if (name) {
@@ -381,7 +447,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         let hasBody = false;
         if (includeBody) {
             state.lineage.unshift(this);
-            let body = this.body.transpile(state);
+            let body: TranspileResult;
+            if (this.isArrowFunction && functionTypeText === 'sub') {
+                //a `sub` can't `return` a value, so emit the body expression as a plain statement
+                state.blockDepth++;
+                body = [state.newline, state.indent(), ...this.arrowBody.transpile(state)];
+                state.blockDepth--;
+            } else {
+                body = this.body.transpile(state);
+            }
             hasBody = body.length > 0;
             state.lineage.shift();
             results.push(...body);
@@ -389,7 +463,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
         results.push(
-            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
+            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${functionTypeText ?? 'function'}`)
         );
         return results;
     }
@@ -455,7 +529,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             options
         );
 
-        const isSub = this.tokens.functionType?.kind === TokenKind.Sub;
+        let isSub = this.tokens.functionType?.kind === TokenKind.Sub;
+        if (this.isArrowFunction && !returnType) {
+            //an arrow function with no declared return type returns whatever its body expression evaluates to
+            returnType = this.getInferredArrowReturnType();
+            if (isVoidType(returnType)) {
+                isSub = true;
+            }
+        }
         //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
         if (!returnType) {
             returnType = isSub ? VoidType.instance : DynamicType.instance;
@@ -530,7 +611,8 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 leftParen: util.cloneToken(this.tokens.leftParen),
                 rightParen: util.cloneToken(this.tokens.rightParen),
                 as: util.cloneToken(this.tokens.as),
-                returnTypeExpression: this.returnTypeExpression?.clone()
+                returnTypeExpression: this.returnTypeExpression?.clone(),
+                arrow: util.cloneToken(this.tokens.arrow)
             }),
             ['body', 'returnTypeExpression']
         );

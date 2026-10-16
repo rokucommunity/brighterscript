@@ -42,6 +42,17 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the arrow operator without disturbing equals and greater-than', () => {
+        expectKinds('=> = > >= = >', [
+            TokenKind.Arrow,
+            TokenKind.Equal,
+            TokenKind.Greater,
+            TokenKind.GreaterEqual,
+            TokenKind.Equal,
+            TokenKind.Greater
+        ]);
+    });
+
     it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
         //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
         expectKinds(`?[ ?[ : ?[ ?[`, [

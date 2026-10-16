@@ -891,7 +891,13 @@ export class ScopeValidator {
     private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
         const data: ExtraSymbolData = {};
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
-        let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
+        const func = returnStmt.findAncestor<FunctionExpression>(isFunctionExpression);
+        let funcType = func?.getType({ flags: SymbolTypeFlag.typetime });
+        if (func?.isArrowFunction && isTypedFunctionType(funcType) && isVoidType(funcType.returnType) && isCallExpression(returnStmt.value)) {
+            //a void arrow function (`(x) => list.push(x)`) transpiles to a `sub` that runs its body as a plain statement,
+            //so there is no return value to check
+            return;
+        }
         if (isTypedFunctionType(funcType)) {
             let actualReturnType = returnStmt?.value
                 ? this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions)
@@ -1183,6 +1189,29 @@ export class ScopeValidator {
     }
 
 
+    /**
+     * Arrow functions can't capture locals from the function they're written in (closures aren't supported yet, see #530).
+     * When an unresolved name inside an arrow function is such a local, return the arrow-specific diagnostic so the user
+     * learns *why* the name can't be found instead of getting a bare `cannot-find-name`.
+     * (`m` inside an arrow function is flagged by BrsFileValidator, since `m` always resolves through the scope)
+     */
+    private getArrowFunctionNameDiagnostic(node: AstNode) {
+        if (!isVariableExpression(node)) {
+            return undefined;
+        }
+        const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+        if (!func?.isArrowFunction) {
+            return undefined;
+        }
+        const name = node.tokens.name?.text;
+        //an arrow function sees the same file-level and global names as the function around it, so a name that only
+        //the enclosing function can resolve must be one of its locals or parameters
+        if (name && func.parent?.getSymbolTable()?.hasSymbol(name, SymbolTypeFlag.runtime)) {
+            return DiagnosticMessages.arrowFunctionCannotCaptureVariable(name);
+        }
+        return undefined;
+    }
+
     validateVariableAndDottedGetExpressions(file: BrsFile, expression: VariableExpression | DottedGetExpression) {
         if (isDottedGetExpression(expression.parent)) {
             // We validate dottedGetExpressions at the top-most level
@@ -1271,7 +1300,13 @@ export class ScopeValidator {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 const circularReferenceInfo = this.getCircularReference(exprType);
-                if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
+                const arrowFunctionDiagnostic = this.getArrowFunctionNameDiagnostic(typeChainScan.astNode);
+                if (arrowFunctionDiagnostic) {
+                    this.addMultiScopeDiagnostic({
+                        ...arrowFunctionDiagnostic,
+                        location: typeChainScan?.location
+                    });
+                } else if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                         location: typeChainScan?.location

@@ -275,6 +275,14 @@ export class Lexer {
                     break;
             }
         },
+        '=': function (this: Lexer) {
+            if (this.peek() === '>') {
+                this.advance();
+                this.addToken(TokenKind.Arrow);
+            } else {
+                this.addToken(TokenKind.Equal);
+            }
+        },
         '>': function (this: Lexer) {
             switch (this.peek()) {
                 case '=':
@@ -348,7 +356,6 @@ export class Lexer {
     private static tokenKindMap = {
         '(': TokenKind.LeftParen,
         ')': TokenKind.RightParen,
-        '=': TokenKind.Equal,
         ',': TokenKind.Comma,
         '{': TokenKind.LeftCurlyBrace,
         '}': TokenKind.RightCurlyBrace,
