@@ -81,6 +81,8 @@ import {
     FunctionExpression,
     FunctionParameterExpression,
     GroupingExpression,
+    WithContextExpression,
+    WithExpression,
     IndexedGetExpression,
     LiteralExpression,
     NewExpression,
@@ -106,7 +108,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression, isWithExpression, isExpressionStatement } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnostic, DeepWriteable } from '../interfaces';
@@ -153,6 +155,13 @@ export class Parser {
      * The depth of the calls to function declarations. Helps some checks know if they are at the root or not.
      */
     private namespaceAndFunctionDepth: number;
+
+    /**
+     * How many `with` blocks enclose the current position, one entry per enclosing function (last = innermost function).
+     * A function body is its own world, so it starts a new entry at 0: the locals of the function that contains it,
+     * including the `with` target, are not visible to it.
+     */
+    private withDepthStack: number[];
 
     /**
      * The options used to parse the file
@@ -241,6 +250,7 @@ export class Parser {
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
         this.selectCaseDepth = 0;
+        this.withDepthStack = [0];
         this.pendingAnnotations = [];
 
         this.ast = this.body();
@@ -1020,11 +1030,13 @@ export class Parser {
             //a function body is its own world, so don't let an enclosing `select case` end it early on `case`
             const selectCaseDepth = this.selectCaseDepth;
             this.selectCaseDepth = 0;
+            this.withDepthStack.push(0);
             let body: Block;
             try {
                 body = this.block();
             } finally {
                 this.selectCaseDepth = selectCaseDepth;
+                this.withDepthStack.pop();
             }
             //if the parser was unable to produce a block, make an empty one so the AST makes some sense...
 
@@ -1113,7 +1125,11 @@ export class Parser {
         });
     }
 
-    private assignment(allowTypedAssignment = false): AssignmentStatement {
+    /**
+     * @param allowTypedAssignment support `name as <type> = value`
+     * @param allowWithExpression support a `with` expression as the entire value (`name = with <target> ... end with`)
+     */
+    private assignment(allowTypedAssignment = false, allowWithExpression = false): AssignmentStatement {
         let name = this.advance() as Identifier;
         //add diagnostic if name is a reserved word that cannot be used as an identifier
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
@@ -1138,7 +1154,7 @@ export class Parser {
             DiagnosticMessages.expectedOperator([TokenKind.Equal], name.text),
             ...[TokenKind.Equal]
         );
-        let value = this.expression();
+        let value = allowWithExpression && this.checkWithExpression() ? this.withExpression() : this.expression();
 
         let result = new AssignmentStatement({ equals: operator, name: name, value: value, as: asToken, typeExpression: typeExpression });
 
@@ -1269,6 +1285,10 @@ export class Parser {
             return this.throwStatement();
         }
 
+        if (this.checkWith()) {
+            return new ExpressionStatement({ expression: this.withExpression() });
+        }
+
         if (this.checkAny(TokenKind.Print, TokenKind.Question)) {
             return this.printStatement();
         }
@@ -1331,7 +1351,7 @@ export class Parser {
                 if (this.checkAnyNext(...CompoundAssignmentOperators)) {
                     return this.augmentedAssignment();
                 }
-                return this.assignment();
+                return this.assignment(false, true);
             } else if (this.checkNext(TokenKind.As)) {
                 // may be a typed assignment
                 const backtrack = this.current;
@@ -1349,7 +1369,7 @@ export class Parser {
                 }
                 if (validTypeExpression) {
                     // there is a valid 'as' and type expression
-                    return this.assignment(true);
+                    return this.assignment(true, true);
                 }
             }
         }
@@ -2251,6 +2271,135 @@ export class Parser {
         return statement;
     }
 
+    /**
+     * Is the current token the start of a standalone `with` block?
+     *
+     * `with` is not a reserved word in BrightScript, so existing code may use it as a variable
+     * (`with = 1`, `print with`, `with.foo`, `with(1)`). Treat it as the keyword only when the next
+     * token begins a new expression rather than continuing one that starts with the identifier `with`.
+     * A bare `with` at the end of a line is also taken as the keyword (an incomplete statement) so the
+     * user gets a useful diagnostic while typing.
+     */
+    private checkWith() {
+        if (!this.check(TokenKind.With)) {
+            return false;
+        }
+        //these can only continue an expression that began with the identifier `with`
+        if (this.checkAnyNext(
+            ...AssignmentOperators,
+            ...CompoundAssignmentOperators,
+            TokenKind.PlusPlus,
+            TokenKind.MinusMinus,
+            TokenKind.Callfunc,
+            TokenKind.At,
+            TokenKind.QuestionAt,
+            TokenKind.As,
+            TokenKind.BackTick
+        )) {
+            return false;
+        }
+        //`with.foo`, `with(1)` and `with[0]` operate on a variable named `with`, but `with .foo`, `with (a)` and
+        //`with [1]` open a block whose target starts with that token. Only the whitespace tells them apart
+        if (this.checkAnyNext(
+            TokenKind.Dot,
+            TokenKind.QuestionDot,
+            TokenKind.LeftParen,
+            TokenKind.QuestionLeftParen,
+            TokenKind.LeftSquareBracket,
+            TokenKind.QuestionLeftSquare
+        )) {
+            const withEnd = this.peek().location?.range?.end;
+            const nextStart = this.peekNext().location?.range?.start;
+            const isAdjacent = withEnd && nextStart && withEnd.line === nextStart.line && withEnd.character === nextStart.character;
+            return !isAdjacent;
+        }
+        return true;
+    }
+
+    /**
+     * Is the current token the start of a `with` expression that is the entire value of an assignment or return
+     * (`x = with <target>`, `return with <target>`)?
+     *
+     * This is stricter than `checkWith`, because in this position `with` is more likely to be a variable: `x = with`,
+     * `return with + 1` and `x = with or y` all read a variable named `with`. It is only taken as the keyword when it is
+     * followed, on the same line, by something that can only begin the block's target.
+     */
+    private checkWithExpression() {
+        if (!this.checkWith()) {
+            return false;
+        }
+        const next = this.peekNext();
+        if (next.kind === TokenKind.Newline || next.kind === TokenKind.Colon || next.kind === TokenKind.Eof) {
+            return false;
+        }
+        //`checkWith` already told `with (a)` / `with [1]` / `with .a` (a block) apart from `with(a)` / `with[1]` / `with.a` (a variable)
+        return [
+            TokenKind.Identifier,
+            ...this.allowedLocalIdentifiers,
+            TokenKind.New,
+            TokenKind.LeftCurlyBrace,
+            TokenKind.LeftParen,
+            TokenKind.LeftSquareBracket,
+            TokenKind.Dot,
+            TokenKind.StringLiteral,
+            TokenKind.BackTick,
+            TokenKind.IntegerLiteral,
+            TokenKind.LongIntegerLiteral,
+            TokenKind.FloatLiteral,
+            TokenKind.DoubleLiteral,
+            TokenKind.True,
+            TokenKind.False,
+            TokenKind.Invalid
+        ].includes(next.kind);
+    }
+
+    /**
+     * Parses a `with <expression> ... end with` block.
+     */
+    private withExpression(): WithExpression {
+        this.warnIfNotBrighterScriptMode('with expression');
+        const withToken = this.advance();
+
+        let expression: Expression;
+        if (this.checkEndOfStatement()) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedExpressionAfterWith(),
+                location: withToken.location
+            });
+        } else {
+            expression = this.expression();
+        }
+
+        this.consumeStatementSeparators();
+
+        let body: Block;
+        this.withDepthStack[this.withDepthStack.length - 1]++;
+        try {
+            body = this.block(TokenKind.EndWith);
+        } finally {
+            this.withDepthStack[this.withDepthStack.length - 1]--;
+        }
+        let endWith: Token;
+        if (body && this.peek().kind === TokenKind.EndWith) {
+            endWith = this.advance();
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.couldNotFindMatchingEndKeyword('with'),
+                location: this.peek()?.location
+            });
+            if (!body) {
+                throw this.lastDiagnosticAsError();
+            }
+        }
+
+        return new WithExpression({
+            with: withToken,
+            endWith: endWith,
+            expression: expression,
+            body: body
+        });
+    }
+
     private throwStatement() {
         const throwToken = this.advance();
         let expression: Expression;
@@ -2950,7 +3099,12 @@ export class Parser {
             return new ReturnStatement(options);
         }
 
-        let toReturn = this.check(TokenKind.Else) ? undefined : this.expression();
+        let toReturn: Expression;
+        if (this.checkWithExpression()) {
+            toReturn = this.withExpression();
+        } else if (!this.check(TokenKind.Else)) {
+            toReturn = this.expression();
+        }
         return new ReturnStatement({ ...options, value: toReturn });
     }
 
@@ -3034,14 +3188,20 @@ export class Parser {
         this.consumeStatementSeparators(true);
         const statements: Statement[] = [];
         const flatGlobalTerminators = this.globalTerminators.flat().flat();
+        //only a `with` expression's body ends with `end with`
+        const isWithBody = terminators.includes(TokenKind.EndWith);
         while (!this.isAtEnd() && !this.checkAny(TokenKind.EndSub, TokenKind.EndFunction, ...terminators, ...flatGlobalTerminators) && !this.checkSelectCaseTerminator()) {
             //grab the location of the current token
             let loopCurrent = this.current;
+            const startToken = this.peek();
             let dec = this.declaration();
             if (dec) {
                 if (!isAnnotationExpression(dec)) {
                     this.consumePendingAnnotations(dec);
                     statements.push(dec);
+                    if (isWithBody) {
+                        this.validateWithBodyStatement(dec, startToken);
+                    }
                 }
 
                 //ensure statement separator. An unterminated inner block (i.e. an `if` missing its `end if`) that stopped at the
@@ -3084,6 +3244,20 @@ export class Parser {
 
         this.exitAnnotationBlock(parentAnnotations);
         return new Block({ statements: statements });
+    }
+
+    /**
+     * A `with` block may only contain leading-dot statements (`.name = 1`, `.save()`, `.count++`) and nested `with` blocks.
+     * Anything else is flagged as an unexpected token, but is kept in the AST so the rest of the block still parses normally
+     */
+    private validateWithBodyStatement(statement: Statement, startToken: Token) {
+        if (startToken.kind === TokenKind.Dot || (isExpressionStatement(statement) && isWithExpression(statement.expression))) {
+            return;
+        }
+        this.diagnostics.push({
+            ...DiagnosticMessages.unexpectedToken(startToken.text),
+            location: startToken.location
+        });
     }
 
     /**
@@ -3730,6 +3904,35 @@ export class Parser {
         });
     }
 
+    /**
+     * The implicit target of a leading-dot member access (`.name`) inside a `with` block. The dot is left in
+     * place: `call()` consumes it along with the member name to build the DottedGetExpression.
+     *
+     * Outside a `with` block (in this function) a leading dot is a syntax error, reported here so the line is
+     * discarded the same way as any other unexpected token
+     */
+    private withContextExpression(): WithContextExpression {
+        const dot = this.peek();
+        if (this.withDepthStack[this.withDepthStack.length - 1] > 0) {
+            return new WithContextExpression({ dot: dot });
+        }
+        if (this.options.mode === ParseMode.BrighterScript) {
+            const nameToken = this.checkAnyNext(TokenKind.Identifier, ...AllowedProperties) ? this.peekNext() : undefined;
+            //a `with` block in an enclosing function doesn't count, but deserves a more specific message
+            const isInsideOuterWith = this.withDepthStack.some(depth => depth > 0);
+            this.diagnostics.push({
+                ...(isInsideOuterWith ? DiagnosticMessages.withMemberInNestedFunction(nameToken?.text) : DiagnosticMessages.withMemberOutsideWithBlock(nameToken?.text)),
+                location: util.createBoundingLocation(dot, nameToken)
+            });
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unexpectedToken(dot.text),
+                location: dot.location
+            });
+        }
+        throw this.lastDiagnosticAsError();
+    }
+
     private primary(): Expression {
         switch (true) {
             case this.matchAny(
@@ -3794,6 +3997,10 @@ export class Parser {
 
             case this.check(TokenKind.RegexLiteral):
                 return this.regexLiteralExpression();
+
+            //a leading `.` is a member access on the target of the enclosing `with` block (`.name`)
+            case this.check(TokenKind.Dot):
+                return this.withContextExpression();
 
             default:
                 //if we found an expected terminator, don't throw a diagnostic...just return undefined

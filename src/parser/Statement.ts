@@ -10,7 +10,7 @@ import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../astUtils/visitors';
-import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../astUtils/reflection';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isCatchStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTryCatchStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement, isWithExpression } from '../astUtils/reflection';
 import type { GetTypeOptions } from '../interfaces';
 import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../interfaces';
 import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../astUtils/creators';
@@ -215,6 +215,9 @@ export class AssignmentStatement extends Statement {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'typeExpression', visitor, options);
             walk(this, 'value', visitor, options);
+        } else if (options.walkMode & InternalWalkMode.walkStatements && isWithExpression(this.value)) {
+            //a `with` expression holds statements, so a statement-only walk must still reach its body
+            walk(this, 'value', visitor, options);
         }
     }
 
@@ -406,6 +409,12 @@ export class Block extends Statement {
                 this.parent.tokens.while
             );
             firstBitAfter = this.parent.tokens.endWhile?.location;
+        } else if (isWithExpression(this.parent)) {
+            lastBitBefore = util.createBoundingLocation(
+                this.parent.tokens.with,
+                this.parent.expression
+            );
+            firstBitAfter = this.parent.tokens.endWith?.location;
         } else if (isTryCatchStatement(this.parent)) {
             lastBitBefore = util.createBoundingLocation(
                 this.parent.tokens.try
@@ -552,6 +561,9 @@ export class ExpressionStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        } else if (options.walkMode & InternalWalkMode.walkStatements && isWithExpression(this.expression)) {
+            //a `with` expression holds statements, so a statement-only walk must still reach its body
             walk(this, 'expression', visitor, options);
         }
     }
@@ -1268,6 +1280,20 @@ export class ReturnStatement extends Statement {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
+        if (isWithExpression(this.value)) {
+            //`return with <target> ... end with`: run the block, then return the target it was run against
+            result.push(...state.transpileLeadingComments(this.tokens.return));
+            const block = this.value.transpile(state);
+            if (block.length > 0) {
+                result.push(...block, state.newline, state.indent());
+            }
+            result.push(
+                state.transpileToken(this.tokens.return, 'return', false, true),
+                ' ',
+                state.sourceNode(this.value, this.value.getContextName(state))
+            );
+            return result;
+        }
         result.push(
             state.transpileToken(this.tokens.return, 'return')
         );
@@ -1280,6 +1306,9 @@ export class ReturnStatement extends Statement {
 
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        } else if (options.walkMode & InternalWalkMode.walkStatements && isWithExpression(this.value)) {
+            //a `with` expression holds statements, so a statement-only walk must still reach its body
             walk(this, 'value', visitor, options);
         }
     }

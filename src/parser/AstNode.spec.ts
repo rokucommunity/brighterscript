@@ -911,6 +911,34 @@ describe('AstNode', () => {
             `);
         });
 
+        it('clones with expression', () => {
+            testClone(`
+                sub main(order)
+                    with order
+                        .id = 1
+                        .first = .items[0]
+                        .save()
+                        with .customer
+                            .name = "Ann"
+                        end with
+                    end with
+                end sub
+            `);
+        });
+
+        it('clones with expression used as an assignment and return value', () => {
+            testClone(`
+                function main(order)
+                    customer = with order.customer
+                        .name = "Ann"
+                    end with
+                    return with order
+                        .customer = customer
+                    end with
+                end function
+            `);
+        });
+
         it('clones tryCatch statement when missing branches', () => {
             const original = Parser.parse(`
                sub main()

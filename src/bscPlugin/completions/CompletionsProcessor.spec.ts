@@ -2772,4 +2772,75 @@ describe('CompletionsProcessor', () => {
             }]);
         });
     });
+    describe('with expression', () => {
+        it('offers the members of the with target after a leading dot', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                    zip as integer
+                end interface
+                sub main(c as Customer)
+                    with c
+                        .
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            //the bare dot
+            let completions = program.getCompletions('source/main.bs', util.createPosition(7, 25));
+            expectCompletionsIncludes(completions, ['name', 'zip']);
+            expectCompletionsExcludes(completions, ['main', 'c']);
+            //partway through a member name
+            completions = program.getCompletions('source/main.bs', util.createPosition(8, 26));
+            expectCompletionsIncludes(completions, ['name', 'zip']);
+            expectCompletionsExcludes(completions, ['main', 'c']);
+        });
+
+        it('offers the members of the with target in the assignment and return forms', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                    zip as integer
+                end interface
+                function main(c as Customer) as Customer
+                    customer = with c
+                        .
+                    end with
+                    return with c
+                        .
+                    end with
+                end function
+            `);
+            program.validate();
+            for (const line of [7, 10]) {
+                const completions = program.getCompletions('source/main.bs', util.createPosition(line, 25));
+                expectCompletionsIncludes(completions, ['name', 'zip']);
+                expectCompletionsExcludes(completions, ['main', 'c']);
+            }
+        });
+
+        it('offers the inner target members inside a nested with block', () => {
+            program.setFile('source/main.bs', `
+                interface Order
+                    customer as Customer
+                    total as float
+                end interface
+                interface Customer
+                    name as string
+                end interface
+                sub main(order as Order)
+                    with order
+                        with .customer
+                            .
+                        end with
+                    end with
+                end sub
+            `);
+            program.validate();
+            const completions = program.getCompletions('source/main.bs', util.createPosition(11, 29));
+            expectCompletionsIncludes(completions, ['name']);
+            expectCompletionsExcludes(completions, ['total', 'customer']);
+        });
+    });
 });

@@ -6153,4 +6153,261 @@ describe('BrsFileValidator', () => {
             });
         });
     });
+    describe('with expression', () => {
+        it('allows leading-dot members inside a with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        .name = "x"
+                        .save()
+                        .label = .name
+                        with .child
+                            .name = "y"
+                        end with
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags leading-dot members outside a with block', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    .name = "x"
+                    print .other
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                {
+                    ...DiagnosticMessages.withMemberOutsideWithBlock('name'),
+                    location: util.createLocation(2, 20, 2, 25, util.pathToUri(s`${rootDir}/source/main.bs`))
+                },
+                DiagnosticMessages.withMemberOutsideWithBlock('other')
+            ]);
+        });
+
+        it('flags leading-dot members inside a function nested in the with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        .callback = function()
+                            return .name
+                        end function
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.withMemberInNestedFunction('name')
+            ]);
+        });
+
+        it('flags `with` in BrightScript files', () => {
+            program.setFile('source/main.brs', `
+                sub main(c as object)
+                    with c
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('with expression')
+            ]);
+        });
+
+        it('allows `with` as an identifier in BrightScript files', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    with = {}
+                    with.foo = 1
+                    with["bar"] = 2
+                    print with.foo
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a goto that jumps into a with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    goto inside
+                    with c
+                        inside:
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program.getDiagnostics().filter(x => x.code !== DiagnosticCodeMap.unreachableCode), [
+                DiagnosticMessages.gotoIntoWithBlock('inside'),
+                DiagnosticMessages.unexpectedToken('inside')
+            ]);
+        });
+
+        it('flags a goto and label within the same with block', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        goto done
+                        .skipped = true
+                        done:
+                        .name = "x"
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program.getDiagnostics().filter(x => x.code !== DiagnosticCodeMap.unreachableCode), [
+                DiagnosticMessages.unexpectedToken('goto'),
+                DiagnosticMessages.unexpectedToken('done')
+            ]);
+        });
+
+        it('type checks leading-dot members against the target type', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                    zip as integer
+                end interface
+                sub main(c as Customer)
+                    with c
+                        .name = "ok"
+                        .nope = 1
+                        .zip = "not a number"
+                        .zip = .name.len()
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nope', 'Customer.nope', 'Customer'),
+                DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('type checks leading-dot members against a namespaced target type', () => {
+            program.setFile('source/main.bs', `
+                namespace utils
+                    class Theme
+                        backgroundColor as string
+                        sub apply()
+                        end sub
+                    end class
+                    function getTheme() as Theme
+                        return new Theme()
+                    end function
+                    sub applyTheme()
+                        with getTheme()
+                            .apply()
+                            .nope()
+                        end with
+                    end sub
+                end namespace
+                sub main()
+                    with utils.getTheme()
+                        .backgroundColor = "red"
+                        .nope()
+                    end with
+                    with new utils.Theme()
+                        .apply()
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('nope', 'utils.Theme.nope', 'utils.Theme'),
+                DiagnosticMessages.cannotFindFunction('nope', 'utils.Theme.nope', 'utils.Theme')
+            ]);
+        });
+
+        it('gives an assigned with expression the type of its target', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                end interface
+                sub main(c as Customer)
+                    customer = with c
+                        .name = "ok"
+                        .nope = 1
+                    end with
+                    customer.alsoNope = 1
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nope', 'Customer.nope', 'Customer'),
+                DiagnosticMessages.cannotFindName('alsoNope', 'Customer.alsoNope', 'Customer')
+            ]);
+        });
+
+        it('checks a returned with expression against the declared return type', () => {
+            program.setFile('source/main.bs', `
+                interface Customer
+                    name as string
+                end interface
+                function ok(c as Customer) as Customer
+                    return with c
+                        .name = "ok"
+                    end with
+                end function
+                function bad(c as Customer) as integer
+                    return with c
+                        .name = "ok"
+                    end with
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.returnTypeMismatch('Customer', 'integer').message
+            ]);
+        });
+
+        it('resolves the inner target of a nested block against the outer block', () => {
+            program.setFile('source/main.bs', `
+                interface Order
+                    customer as Customer
+                end interface
+                interface Customer
+                    name as string
+                end interface
+                sub main(order as Order)
+                    with order
+                        with .customer
+                            .name = "Ann"
+                            .nope = 1
+                        end with
+                    end with
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('nope', 'Customer.nope', 'Customer')
+            ]);
+        });
+
+        it('flags statements other than leading-dot statements and nested with blocks', () => {
+            program.setFile('source/main.bs', `
+                sub main(c as object)
+                    with c
+                        .text = "Hello"
+                        name = .name
+                        runFunction()
+                        print .text
+                    end with
+                end sub
+                sub runFunction()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.unexpectedToken('name'),
+                DiagnosticMessages.unexpectedToken('runFunction'),
+                DiagnosticMessages.unexpectedToken('print')
+            ]);
+        });
+    });
 });

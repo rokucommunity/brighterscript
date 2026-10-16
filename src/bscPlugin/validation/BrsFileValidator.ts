@@ -1,11 +1,11 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement, isWithExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression, type WithContextExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
@@ -154,6 +154,11 @@ export class BrsFileValidator {
                         ...DiagnosticMessages.gotoIntoForLoop(labelToken.text),
                         location: labelToken.location
                     });
+                } else if (this.jumpsIntoWithBlock(gotoStatement, targetLabel, func)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.gotoIntoWithBlock(labelToken.text),
+                        location: labelToken.location
+                    });
                 }
             }
         }
@@ -179,16 +184,51 @@ export class BrsFileValidator {
      * Does the goto land inside a `for` / `for each` loop that does not also contain the goto?
      */
     private jumpsIntoForLoop(gotoStatement: GotoStatement, targetLabel: LabelStatement, func: FunctionExpression) {
+        return this.jumpsInto(gotoStatement, targetLabel, func, (node) => isForStatement(node) || isForEachStatement(node));
+    }
+
+    /**
+     * Does the goto land inside a `with` block that does not also contain the goto? The block's target is
+     * evaluated into a local when the block is entered, so jumping past that leaves every `.member` unresolved
+     */
+    private jumpsIntoWithBlock(gotoStatement: GotoStatement, targetLabel: LabelStatement, func: FunctionExpression) {
+        return this.jumpsInto(gotoStatement, targetLabel, func, isWithExpression);
+    }
+
+    /**
+     * Does the label have an ancestor matching `matcher` (within the function) that is not also an ancestor of the goto?
+     */
+    private jumpsInto(gotoStatement: GotoStatement, targetLabel: LabelStatement, func: FunctionExpression, matcher: (node: AstNode) => boolean) {
         const gotoAncestors = new Set<AstNode>();
         for (let ancestor = gotoStatement.parent; ancestor && ancestor !== func; ancestor = ancestor.parent) {
             gotoAncestors.add(ancestor);
         }
         for (let ancestor = targetLabel.parent; ancestor && ancestor !== func; ancestor = ancestor.parent) {
-            if ((isForStatement(ancestor) || isForEachStatement(ancestor)) && !gotoAncestors.has(ancestor)) {
+            if (matcher(ancestor) && !gotoAncestors.has(ancestor)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * A leading-dot member access (`.name`) is only meaningful inside a `with` block, and only in the same
+     * function as that block: BrightScript functions cannot see the locals of the function that contains them.
+     */
+    private validateWithContextExpression(node: WithContextExpression) {
+        if (node.getWithExpression()) {
+            return;
+        }
+        const memberName = isDottedGetExpression(node.parent) ? node.parent.tokens.name?.text : undefined;
+        //is there a `with` block further up, beyond the function boundary that stopped the lookup?
+        const isInsideWithBlock = !!node.findAncestor(isWithExpression);
+        this.event.program.diagnostics.register({
+            ...(isInsideWithBlock ? DiagnosticMessages.withMemberInNestedFunction(memberName) : DiagnosticMessages.withMemberOutsideWithBlock(memberName)),
+            location: util.createLocationFromRange(
+                node.location?.uri,
+                util.createBoundingRange(node.tokens.dot, isDottedGetExpression(node.parent) ? node.parent.tokens.name : undefined)
+            )
+        });
     }
 
     /**
@@ -487,6 +527,9 @@ export class BrsFileValidator {
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
             },
+            WithContextExpression: (node) => {
+                this.validateWithContextExpression(node);
+            },
             TypecastStatement: (node) => {
                 const obj = node.typecastExpression.obj;
                 if (isVariableExpression(obj)) {
@@ -570,7 +613,7 @@ export class BrsFileValidator {
                         index: node.parent.statementIndex,
                         table: blockSymbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
-                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || this.isAlwaysExecutedCase(node.parent)
+                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || isWithExpression(node.parent) || this.isAlwaysExecutedCase(node.parent)
                     });
 
                     if (isForStatement(node.parent)) {
