@@ -1184,6 +1184,20 @@ describe('util', () => {
         });
     });
 
+    describe('firstLocatable', () => {
+        it('returns the first item that has a sourceInfo', () => {
+            const [a, b] = Lexer.scan('a b').tokens;
+            const synthetic = createToken(TokenKind.Identifier, 'c');
+            expect(util.firstLocatable(undefined, synthetic, a, b)).to.equal(a);
+            expect(util.firstLocatable(b, a)).to.equal(b);
+        });
+
+        it('returns undefined when nothing has a sourceInfo', () => {
+            expect(util.firstLocatable(undefined, createToken(TokenKind.Identifier, 'c'))).to.be.undefined;
+            expect(util.firstLocatable()).to.be.undefined;
+        });
+    });
+
     describe('getOffset', () => {
         const source = Lexer.scan('ab\ncd\nef').tokens[0].sourceInfo;
 

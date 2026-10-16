@@ -89,9 +89,29 @@ export interface DiagnosticContext {
 }
 
 export interface DiagnosticContextPair {
-    diagnostic: BsDiagnostic;
+    diagnostic: BsDiagnosticInput;
     context?: DiagnosticContext;
 }
+
+/**
+ * A location as accepted by the `DiagnosticManager`: either an already-resolved `Location`, or a `Locatable` that is resolved
+ * into a `Location` only when diagnostics are retrieved
+ */
+export type DiagnosticLocationInput = Location | Locatable;
+
+export interface BsDiagnosticRelatedInformationInput {
+    message: string;
+    location: DiagnosticLocationInput;
+}
+
+/**
+ * A diagnostic as accepted by `DiagnosticManager.register()`. Locations may be `Locatable`s (such as a node or token),
+ * which are not retained: only their position details are kept until `getDiagnostics()` resolves them
+ */
+export type BsDiagnosticInput = Omit<BsDiagnostic, 'location' | 'relatedInformation'> & {
+    location: DiagnosticLocationInput;
+    relatedInformation?: BsDiagnosticRelatedInformationInput[];
+};
 
 export interface Callable {
     file: BscFile;
@@ -1298,20 +1318,27 @@ export class TypeChainEntry {
         // make a copy of this data
         this.data = { ...options.data };
         this.type = options.type;
-        this.locatable = options.locatable;
+        this.locatableOverride = options.locatable;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
         this.astNode = options.astNode;
         this.isResolved = this.type?.isResolvable();
     }
 
+    /**
+     * The item to get the location from: the `locatable` passed in, or `astNode` if that has no location
+     */
+    get locatable(): Locatable {
+        return util.firstLocatable(this.locatableOverride, this.astNode);
+    }
+
     get location(): Location {
-        return util.getLocation(this.locatable) ?? util.getLocation(this.astNode);
+        return util.getLocation(this.locatable);
     }
 
     public readonly name: string;
     public readonly type: BscType;
     public readonly data: ExtraSymbolData;
-    private readonly locatable: Locatable;
+    private readonly locatableOverride: Locatable;
     public readonly separatorToken: Token;
     public isResolved: boolean;
     public astNode: AstNode;
@@ -1346,6 +1373,10 @@ export interface TypeChainProcessResult {
      * the range of the first unresolved item
      */
     location: Location;
+    /**
+     * The first unresolved item (the locatable equivalent of `location`)
+     */
+    locatable: Locatable;
     /**
      * Does the chain contain a dynamic type?
      */

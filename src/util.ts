@@ -1424,6 +1424,19 @@ export class Util {
     }
 
     /**
+     * Get the first item that has a real location (a `sourceInfo`), skipping `undefined` and synthetic items.
+     * The locatable equivalent of `util.getLocation(a) ?? util.getLocation(b)`
+     */
+    public firstLocatable<T extends Locatable>(...items: Array<T | undefined>): T | undefined {
+        for (const item of items) {
+            if (item?.sourceInfo) {
+                return item;
+            }
+        }
+        return undefined;
+    }
+
+    /**
      * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `sourceInfo`)
      */
     public getLocation(locatable: Locatable): Location | undefined {
@@ -2640,7 +2653,7 @@ export class Util {
         let itemTypeKind = '';
         let parentTypeKind = '';
         let astNode: AstNode;
-        let errorLocation: Location;
+        let errorLocatable: Locatable;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
         let crossedCallFunc = false;
@@ -2691,7 +2704,7 @@ export class Util {
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 crossedCallFunc = crossedCallFunc || chainItem.data?.isFromCallFunc;
                 if (!chainItem.isResolved) {
-                    errorLocation = chainItem.location;
+                    errorLocatable = chainItem.locatable;
                     continueResolvingAllItems = false;
                 }
             }
@@ -2703,7 +2716,10 @@ export class Util {
             itemParentTypeKind: parentTypeKind,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
-            location: errorLocation,
+            get location() {
+                return util.getLocation(errorLocatable);
+            },
+            locatable: errorLocatable,
             containsDynamic: containsDynamic,
             astNode: astNode,
             crossedCallFunc: crossedCallFunc
