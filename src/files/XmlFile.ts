@@ -153,6 +153,11 @@ export class XmlFile implements BscFile {
     readonly canBePruned = false;
 
     /**
+     * Should this file be excluded when generating the project output (i.e. a virtual component that only exists for the type system)
+     */
+    public excludeFromOutput = false;
+
+    /**
      * The list of script imports delcared in the XML of this file.
      * This excludes parent imports and auto codebehind imports
      */

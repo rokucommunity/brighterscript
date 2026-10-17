@@ -1745,7 +1745,8 @@ export class Program {
                 standardizedPath
             ] as T;
         } else if (util.isUriLike(filePath)) {
-            const path = URI.parse(filePath).fsPath;
+            //`virtual:/` paths become `file:///virtual%3A/...` uris, so drop the leading slash to get the `virtual:/` path back
+            const path = URI.parse(filePath).fsPath.replace(/^[\/\\](virtual:[\/\\])/i, '$1');
             const standardizedPath = (normalizePath ? util.standardizePath(path) : path).toLowerCase();
             this.getFilePathCache.set(filePath, { path: standardizedPath });
 
@@ -2481,6 +2482,9 @@ export class Program {
             });
 
             await this.plugins.emitAsync('buildProgram', event);
+
+            //files flagged as `excludeFromOutput` are never transpiled, copied, or written
+            event.files = event.files.filter(x => x.excludeFromOutput !== true);
 
             //prepare the program (and files) for building
             event.files = await this.prepare(event.files);
