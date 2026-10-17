@@ -5891,6 +5891,49 @@ describe('ScopeValidator', () => {
             //currently no error
             expectZeroDiagnostics(program);
         });
+
+        it('keeps scope-specific diagnostics for a file shared by multiple scopes after it changes', () => {
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    onlyInA()
+                end sub
+            `);
+            program.setFile('components/a.brs', `
+                sub onlyInA()
+                end sub
+            `);
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="shared.brs" />
+                    <script uri="a.brs" />
+                </component>
+            `);
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="shared.brs" />
+                </component>
+            `);
+            program.validate();
+            //`onlyInA` is not available in component B's scope
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('onlyInA')
+            ]);
+
+            //make an edit to the shared file that does not change its behavior
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    onlyInA()
+                    print "changed"
+                end sub
+            `);
+            program.validate();
+            //the diagnostic from component B's scope should still be present
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('onlyInA')
+            ]);
+        });
     });
 
 
