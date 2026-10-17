@@ -1517,7 +1517,7 @@ export class Program {
                 }
                 const didComponentChange = changedComponentTypes.length > 0;
                 const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.typetime).size > 0;
-                const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
+                const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange, filesToBeValidatedInScopeContext);
 
                 this.crossScopeValidation.buildComponentsMap();
                 this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
@@ -1639,16 +1639,24 @@ export class Program {
         }
     }
 
-    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean) {
+    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean, changedFiles: Set<BscFile>) {
+        //changing a file clears all of its diagnostics (including cross-scope ones), so every scope containing a changed file must be rechecked
+        const scopesWithChangedFiles = new Set<Scope>();
+        for (const file of changedFiles) {
+            for (const scope of this.getScopesForFile(file)) {
+                scopesWithChangedFiles.add(scope);
+            }
+        }
         const scopesForCrossScopeValidation: Scope[] = [];
         for (let scope of this.getAllUserScopes()) {
             if (this.globalScope === scope) {
                 continue;
             }
-            if (someComponentTypeChanged) {
-                scopesForCrossScopeValidation.push(scope);
-            }
-            if (didProvidedSymbolChange && !scope.isValidated) {
+            if (
+                someComponentTypeChanged ||
+                (didProvidedSymbolChange && !scope.isValidated) ||
+                scopesWithChangedFiles.has(scope)
+            ) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }

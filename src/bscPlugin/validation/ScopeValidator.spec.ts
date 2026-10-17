@@ -5934,6 +5934,51 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.cannotFindFunction('onlyInA')
             ]);
         });
+
+        it('keeps incompatible definition diagnostics for a file shared by multiple scopes after it changes', () => {
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    doThing("hello")
+                end sub
+            `);
+            program.setFile('components/a.brs', `
+                sub doThing(x as string)
+                end sub
+            `);
+            program.setFile('components/b.brs', `
+                sub doThing(x as integer)
+                end sub
+            `);
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="shared.brs" />
+                    <script uri="a.brs" />
+                </component>
+            `);
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="shared.brs" />
+                    <script uri="b.brs" />
+                </component>
+            `);
+            program.validate();
+            const expected = [
+                DiagnosticMessages.incompatibleSymbolDefinition('doThing', { scopes: ['components/A.xml', 'components/B.xml'] })
+            ];
+            expectDiagnostics(program, expected);
+
+            //make an edit to the shared file that does not change its behavior
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    doThing("hello")
+                    print "changed"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, expected);
+        });
     });
 
 
