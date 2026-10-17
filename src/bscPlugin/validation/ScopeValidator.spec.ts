@@ -13,6 +13,7 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
+import * as path from 'path';
 import { tempDir, rootDir } from '../../testHelpers.spec';
 import { isFunctionStatement, isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
@@ -5965,7 +5966,7 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             const expected = [
-                DiagnosticMessages.incompatibleSymbolDefinition('doThing', { scopes: ['components/A.xml', 'components/B.xml'] })
+                DiagnosticMessages.incompatibleSymbolDefinition('doThing', { scopes: [`components${path.sep}A.xml`, `components${path.sep}B.xml`] })
             ];
             expectDiagnostics(program, expected);
 
