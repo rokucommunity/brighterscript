@@ -838,7 +838,8 @@ describe('LanguageServer', () => {
                         projectDiscoveryExclude: undefined,
                         logLevel: 'info',
                         projectActivationConcurrencyLimit: undefined,
-                        maxWorkerThreads: undefined
+                        maxWorkerThreads: undefined,
+                        lazyProjectActivation: false
                     }
                 }
             ]);
