@@ -1203,10 +1203,13 @@ describe('arrow functions', () => {
                         end sub
                     `);
                     program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotUseM(),
-                        DiagnosticMessages.arrowFunctionCannotUseM()
-                    ]);
+                    expectDiagnostics(program, [{
+                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
+                        location: { range: util.createRange(2, 47, 2, 48) }
+                    }, {
+                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
+                        location: { range: util.createRange(3, 41, 3, 42) }
+                    }]);
                 });
 
                 it('flags m regardless of case', () => {

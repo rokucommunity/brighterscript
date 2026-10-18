@@ -642,9 +642,10 @@ describe('closures', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.closureCapturedVariableReassigned('count')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.closureCapturedVariableReassigned('count'),
+                    location: { range: util.createRange(4, 24, 4, 29) }
+                }]);
             });
 
             it('flags augmented assignment and increment of a captured variable', () => {
@@ -658,10 +659,13 @@ describe('closures', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.closureCapturedVariableReassigned('count'),
-                    DiagnosticMessages.closureCapturedVariableReassigned('count')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.closureCapturedVariableReassigned('count'),
+                    location: { range: util.createRange(4, 24, 4, 29) }
+                }, {
+                    ...DiagnosticMessages.closureCapturedVariableReassigned('count'),
+                    location: { range: util.createRange(5, 24, 5, 29) }
+                }]);
             });
 
             it('flags re-declaring a captured variable in a later loop', () => {
@@ -676,9 +680,10 @@ describe('closures', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.closureCapturedVariableReassigned('item')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.closureCapturedVariableReassigned('item'),
+                    location: { range: util.createRange(4, 33, 4, 37) }
+                }]);
             });
 
             it('allows assignments before the closure and inside other functions', () => {
@@ -725,9 +730,11 @@ describe('closures', () => {
                     end sub
                 `);
                 program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.closureNotCompatibleWithParameter('function (x as integer) as integer')
-                ]);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.closureNotCompatibleWithParameter('function (x as integer) as integer'),
+                    //the whole arrow function is flagged
+                    location: { range: util.createRange(5, 30, 5, 58) }
+                }]);
             });
 
             it('cannot be passed to untyped, dynamic, object or function params', () => {
@@ -836,9 +843,10 @@ describe('closures', () => {
                 end sub
             `);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.arrowFunctionCannotUseM()
-            ]);
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.arrowFunctionCannotUseM(),
+                location: { range: util.createRange(3, 31, 3, 32) }
+            }]);
         });
     });
 });

@@ -172,6 +172,14 @@ export class CachedLookups {
     }
 
     invalidate() {
+        //which variables an arrow function captures is memoized on the node (see util.getClosureCapturedVariables). Drop that
+        //along with the rest of the lookups, so a plugin's changes to the AST are seen the next time the file is validated
+        const functionExpressions = this.cache.get('functionExpressions') as FunctionExpression[] | undefined;
+        for (const func of functionExpressions ?? []) {
+            if (func.isArrowFunction) {
+                util.clearClosureCaptureCache(func);
+            }
+        }
         this.cache.clear();
     }
 

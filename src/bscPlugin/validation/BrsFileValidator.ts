@@ -86,7 +86,6 @@ export class BrsFileValidator {
         this.event.file['_cachedLookups'].rehydrate();
 
         this.literalPools = {};
-        this.resetClosureCaptures();
         this.walk();
         this.validateClosureCaptures();
         this.validateFileLiteralCount();
@@ -794,17 +793,8 @@ export class BrsFileValidator {
     }
 
     /**
-     * Forget which variables each arrow function captures, since a plugin may have changed the AST since the last validation.
-     * The walk recomputes them on demand (the first time an arrow function's type is needed)
-     */
-    private resetClosureCaptures() {
-        for (const arrow of this.arrowFunctions) {
-            util.clearClosureCaptureCache(arrow);
-        }
-    }
-
-    /**
-     * Flag captured variables that are reassigned after their closure is created
+     * Flag captured variables that are reassigned after their closure is created. (Which variables those are is memoized per
+     * arrow function and dropped by `CachedLookups.invalidate()` at the start of each validation)
      */
     private validateClosureCaptures() {
         for (const arrow of this.arrowFunctions) {
