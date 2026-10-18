@@ -1,4 +1,4 @@
-import { isCallableType, isDynamicType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
+import { isCallableType, isClosureType, isDynamicType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -12,6 +12,10 @@ export class FunctionType extends BaseFunctionType {
     public static instance = new FunctionType();
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        //a closure is an AA at runtime, not a function
+        if (isClosureType(targetType)) {
+            return false;
+        }
         if (
             isDynamicType(targetType) ||
             isCallableType(targetType) ||

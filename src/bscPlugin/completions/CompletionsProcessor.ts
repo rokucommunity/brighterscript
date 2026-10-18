@@ -318,6 +318,16 @@ export class CompletionsProcessor {
                         currentSymbols.push(...containingFunctionExpression.body.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
                     }
                     currentSymbols.push(...containingFunctionExpression.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+
+                    //an arrow function can capture the locals of the functions around it (becoming a closure), so offer those too
+                    let enclosingFunction = containingFunctionExpression;
+                    while (enclosingFunction?.isArrowFunction) {
+                        enclosingFunction = enclosingFunction.parent?.findAncestor<FunctionExpression>(isFunctionExpression);
+                        if (enclosingFunction) {
+                            currentSymbols.push(...enclosingFunction.body.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+                            currentSymbols.push(...enclosingFunction.getSymbolTable().getOwnSymbols(symbolTableLookupFlag));
+                        }
+                    }
                 }
 
                 if (shouldLookInNamespace) {

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isClosureType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
@@ -867,7 +867,13 @@ export class ScopeValidator {
 
             const compatibilityData: TypeCompatibilityData = {};
             const isAllowedArgConversion = this.checkAllowedArgConversions(paramType, argType);
-            if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
+            if (isClosureType(argType) && !isClosureType(paramType) && !isUnionType(paramType)) {
+                //a closure is an AA at runtime, so a parameter that isn't declared as a closure would try to call it like a plain function
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.closureNotCompatibleWithParameter(paramType?.toString() ?? 'unknown'),
+                    location: arg.location
+                });
+            } else if (!isAllowedArgConversion && !paramType?.isTypeCompatible(argType, compatibilityData)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.argumentTypeMismatch(argType?.toString() ?? 'unknown', paramType?.toString() ?? 'unknown', compatibilityData),
                     location: arg.location
@@ -1277,13 +1283,7 @@ export class ScopeValidator {
                 // only show "cannot find... " errors if the type is not defined from a doc comment
                 const typeChainScan = util.processTypeChain(typeChain);
                 const circularReferenceInfo = this.getCircularReference(exprType);
-                const arrowFunctionDiagnostic = util.getArrowFunctionCaptureDiagnostic(typeChainScan.astNode);
-                if (arrowFunctionDiagnostic) {
-                    this.addMultiScopeDiagnostic({
-                        ...arrowFunctionDiagnostic,
-                        location: typeChainScan?.location
-                    });
-                } else if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
+                if (isCallExpression(typeChainScan.astNode.parent) && typeChainScan.astNode.parent.callee === expression) {
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.cannotFindFunction(typeChainScan.itemName, typeChainScan.fullNameOfItem, typeChainScan.itemParentTypeName, this.getParentTypeDescriptor(typeChainScan)),
                         location: typeChainScan?.location

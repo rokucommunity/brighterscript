@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isObjectType } from '../astUtils/reflection';
+import { isClosureType, isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -14,7 +14,8 @@ export class ObjectType extends BscType {
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         //Brightscript allows anything passed "as object", so as long as a type is provided, this is true
-        return !!targetType;
+        //(except closures, which would then be called like plain functions, which they are not)
+        return !!targetType && !isClosureType(targetType);
     }
 
     public static instance = new ObjectType();

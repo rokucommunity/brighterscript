@@ -86,23 +86,19 @@ apply((x as integer) => x * 2)
 apply((x as string) => x + "!")
 ```
 
-## No closures (yet)
+## Closures
 
-Arrow functions do **not** capture variables from the function they are written in. They follow the same scoping rules as regular anonymous functions: they can see parameters, file-level functions, namespaces, classes and globals, but not the locals of the enclosing function. Referencing one is a compile error:
+An arrow function that uses a variable from the function it is written in becomes a **closure**: it captures a copy of that variable when it is created, transpiles to an object instead of a plain function, and can only be passed where a `closure(...)` type is declared. See [closures](closures.md) for the details and the rules that come with it.
 
 ```brighterscript
 sub main()
     factor = 2
-    ' error: Arrow functions cannot use variable 'factor' from the enclosing function
-    scale = (x) => x * factor
-
-    ' pass it in as a parameter instead
-    scale = (x, by) => x * by
-    print scale(10, factor)
+    scale = (x) => x * factor ' a closure: captures `factor`
+    print scale(10)
 end sub
 ```
 
-`m` is also not allowed inside an arrow function. Pass the value you need in as an argument instead:
+`m` is not allowed inside an arrow function (closure or not). Pass the value you need in as an argument instead:
 
 ```brighterscript
 ' error: 'm' cannot be used inside an arrow function
@@ -112,8 +108,6 @@ render = (data) => m.view.setData(data)
 render = (data, view) => view.setData(data)
 render(data, m.view)
 ```
-
-Both restrictions are deliberate. Closures are being designed separately (see [#530](https://github.com/rokucommunity/brighterscript/issues/530)) and will most likely reuse the `=>` syntax, so what "capturing a variable" and `m` mean inside an arrow function is left open until then. Code that works today will keep working unchanged once closures exist.
 
 An arrow function that captures nothing and does not use `m` is a plain BrightScript function. It can be passed anywhere a function can: parameters typed `as function` or with a function type, untyped (`dynamic`) parameters, and compiled `.brs` libraries that simply call `callback(x)`.
 

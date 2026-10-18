@@ -1,4 +1,4 @@
-import { isCallableType, isDynamicType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
+import { isCallableType, isClosureType, isDynamicType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
@@ -9,6 +9,10 @@ export class roFunctionType extends BaseFunctionType {
     public readonly kind = BscTypeKind.RoFunctionType;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        //a closure is an AA at runtime, not a function
+        if (isClosureType(targetType)) {
+            return false;
+        }
         if (
             isDynamicType(targetType) ||
             isCallableType(targetType) ||

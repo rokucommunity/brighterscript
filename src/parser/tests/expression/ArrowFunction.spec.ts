@@ -59,18 +59,18 @@ describe('arrow functions', () => {
 
             it('parses a single param', () => {
                 const func = parseArrow('twice = (x) => x * 2');
-                expect(func.parameters.map(p => p.tokens.name.text)).to.eql(['x']);
+                expect(func.parameters.map(param => param.tokens.name.text)).to.eql(['x']);
                 expect(isBinaryExpression(func.arrowBody)).to.be.true;
             });
 
             it('parses multiple untyped params', () => {
                 const func = parseArrow('add = (a, b, c) => a + b + c');
-                expect(func.parameters.map(p => p.tokens.name.text)).to.eql(['a', 'b', 'c']);
+                expect(func.parameters.map(param => param.tokens.name.text)).to.eql(['a', 'b', 'c']);
             });
 
             it('parses typed params and a return type', () => {
                 const func = parseArrow('add = (a as integer, b as integer) as integer => a + b');
-                expect(func.parameters.map(p => p.tokens.name.text)).to.eql(['a', 'b']);
+                expect(func.parameters.map(param => param.tokens.name.text)).to.eql(['a', 'b']);
                 expect(func.parameters[0].typeExpression.getType({ flags: SymbolTypeFlag.typetime }).toString()).to.eql('integer');
                 expect(func.tokens.as).to.exist;
                 expect(func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime }).toString()).to.eql('integer');
@@ -117,13 +117,13 @@ describe('arrow functions', () => {
 
             it('parses without any whitespace', () => {
                 const func = parseArrow('f=(x)=>x*2');
-                expect(func.parameters.map(p => p.tokens.name.text)).to.eql(['x']);
+                expect(func.parameters.map(param => param.tokens.name.text)).to.eql(['x']);
                 expect(isBinaryExpression(func.arrowBody)).to.be.true;
             });
 
             it('parses with extra whitespace', () => {
                 const func = parseArrow('f = (  x ,  y  )   =>   x');
-                expect(func.parameters.map(p => p.tokens.name.text)).to.eql(['x', 'y']);
+                expect(func.parameters.map(param => param.tokens.name.text)).to.eql(['x', 'y']);
             });
 
             it('stops the body at a colon statement separator', () => {
@@ -170,7 +170,7 @@ describe('arrow functions', () => {
             it('parses nested arrow functions', () => {
                 const outer = parseArrow('f = (a) => (b) => b');
                 const inner = expectArrow(outer.arrowBody);
-                expect(inner.parameters.map(p => p.tokens.name.text)).to.eql(['b']);
+                expect(inner.parameters.map(param => param.tokens.name.text)).to.eql(['b']);
             });
 
             it('parses a body that immediately invokes another arrow function', () => {
@@ -462,7 +462,7 @@ describe('arrow functions', () => {
         function getDiagnosticCodes(code: string) {
             program.setFile('source/main.bs', code);
             program.validate();
-            return program.getDiagnostics().map(x => x.code);
+            return program.getDiagnostics().map(diagnostic => diagnostic.code);
         }
 
         describe('transpile', () => {
@@ -1036,12 +1036,12 @@ describe('arrow functions', () => {
 
             it('stays a function when the body calls something of unknown type', async () => {
                 await testTranspile(`
-                    sub main(callback)
-                        run = (x) => callback(x)
+                    sub main()
+                        run = (callback, x) => callback(x)
                     end sub
                 `, `
-                    sub main(callback)
-                        run = function(x)
+                    sub main()
+                        run = function(callback, x)
                             return callback(x)
                         end function
                     end sub
@@ -1074,7 +1074,7 @@ describe('arrow functions', () => {
                 expectZeroDiagnostics(program);
                 const file = program.getFile<BrsFile>('source/main.bs');
                 const arrows = file.ast.findChildren<FunctionExpression>((node) => isFunctionExpression(node) && node.isArrowFunction, { walkMode: WalkMode.visitAllRecursive });
-                const returnTypes = arrows.map(x => x.getType({ flags: SymbolTypeFlag.runtime }).returnType.toString());
+                const returnTypes = arrows.map(arrow => arrow.getType({ flags: SymbolTypeFlag.runtime }).returnType.toString());
                 expect(returnTypes).to.eql(['string', 'boolean', 'Person']);
             });
 
@@ -1122,156 +1122,30 @@ describe('arrow functions', () => {
 
         describe('validation', () => {
             describe('captured variables', () => {
-                it('flags a captured local variable', () => {
-                    program.setFile('source/main.bs', `
+                it('becomes a closure when it uses a local of the enclosing function (see Closure.spec.ts)', () => {
+                    const func = getArrowFunction(`
                         sub main()
                             factor = 2
-                            scale = (x) => x * factor
+                            scale = (x as integer) => x * factor
+                            print scale(1)
                         end sub
                     `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('factor')
-                    ]);
+                    expect(func.isClosure).to.be.true;
+                    expect(util.getClosureCapturedVariables(func)).to.eql(['factor']);
                 });
 
-                it('flags a captured parameter', () => {
-                    program.setFile('source/main.bs', `
-                        sub main(factor)
-                            scale = (x) => x * factor
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('factor')
-                    ]);
-                });
-
-                it('flags a captured variable that is called as a function', () => {
-                    program.setFile('source/main.bs', `
+                it('is not a closure when it only uses its own params and file-level names', () => {
+                    const func = getArrowFunction(`
                         sub main()
-                            callback = function(x)
-                                return x
-                            end function
-                            f = (x) => callback(x)
+                            twice = (x as integer) => helper(x) * 2
+                            print twice(1)
                         end sub
+                        function helper(x as integer) as integer
+                            return x
+                        end function
                     `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('callback')
-                    ]);
-                });
-
-                it('flags a captured variable used through a member access', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            config = { factor: 2 }
-                            scale = (x) => x * config.factor
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('config')
-                    ]);
-                });
-
-                it('flags a variable captured from an enclosing arrow function', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            f = (a) => (b) => a + b
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('a')
-                    ]);
-                });
-
-                it('flags a variable captured from an enclosing anonymous function', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            g = function()
-                                inner = 1
-                                f = (x) => x + inner
-                                return f
-                            end function
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('inner')
-                    ]);
-                });
-
-                it('flags a local declared after the arrow function exactly once', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            f = (x) => x + later
-                            later = 1
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('later')
-                    ]);
-                });
-
-                it('flags a captured loop variable', () => {
-                    program.setFile('source/main.bs', `
-                        sub main(items)
-                            for each item in items
-                                f = (x) => item
-                            end for
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('item')
-                    ]);
-                });
-
-                it('flags a captured exception variable', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            try
-                                print 1
-                            catch e
-                                f = () => e
-                            end try
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('e')
-                    ]);
-                });
-
-                it('flags a captured variable used in a default param value', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            factor = 2
-                            f = (x = factor) => x
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('factor')
-                    ]);
-                });
-
-                it('flags each captured variable', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            a = 1
-                            b = 2
-                            f = () => a + b
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('a'),
-                        DiagnosticMessages.arrowFunctionCannotCaptureVariable('b')
-                    ]);
+                    expect(func.isClosure).to.be.false;
+                    expect(util.getClosureCapturedVariables(func)).to.eql([]);
                 });
 
                 it('still reports unknown names as cannot-find-name', () => {
@@ -1286,15 +1160,14 @@ describe('arrow functions', () => {
                     ]);
                 });
 
-                it('allows a param that shadows an enclosing local', () => {
-                    program.setFile('source/main.bs', `
+                it('does not treat a param that shadows an enclosing local as a capture', () => {
+                    const func = getArrowFunction(`
                         sub main()
                             factor = 2
                             f = (factor) => factor * 2
                         end sub
                     `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
+                    expect(func.isClosure).to.be.false;
                 });
 
                 it('allows a default value that refers to an earlier param', () => {
@@ -1491,7 +1364,7 @@ describe('arrow functions', () => {
                         end sub
                     `);
                     program.validate();
-                    expect(program.getDiagnostics().map(x => x.code)).to.eql(['argument-type-mismatch']);
+                    expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql(['argument-type-mismatch']);
                 });
 
                 it('validates the param count against function types', () => {
@@ -1665,7 +1538,7 @@ describe('arrow functions', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const hoverText = (line: number, character: number) => {
-                    return program.getHover(file.srcPath, util.createPosition(line, character)).map(x => x.contents).flat().join('\n');
+                    return program.getHover(file.srcPath, util.createPosition(line, character)).map(hover => hover.contents).flat().join('\n');
                 };
                 expect(hoverText(1, 6)).to.include('function (count as integer) as integer');
                 expect(hoverText(2, 11)).to.include('function twice(count as integer) as integer');
@@ -1673,7 +1546,7 @@ describe('arrow functions', () => {
                 expect(hoverText(1, 36)).to.include('count as integer');
             });
 
-            it('offers params but not enclosing locals in completions inside the body', () => {
+            it('offers params and enclosing locals in completions inside the body', () => {
                 const file = program.setFile<BrsFile>('source/main.bs', [
                     'sub main()',
                     '    factor = 2',
@@ -1683,12 +1556,11 @@ describe('arrow functions', () => {
                     'end function'
                 ].join('\n'));
                 program.validate();
-                //inside the second `count`
-                const labels = program.getCompletions(file.srcPath, util.createPosition(2, 44)).map(x => x.label);
+                //inside the second `count`. Enclosing locals are offered too, since using one makes the arrow a closure
+                const labels = program.getCompletions(file.srcPath, util.createPosition(2, 44)).map(item => item.label);
                 expect(labels).to.include('count');
                 expect(labels).to.include('helper');
-                expect(labels).not.to.include('factor');
-                expect(labels).not.to.include('twice');
+                expect(labels).to.include('factor');
             });
 
             it('offers member completions on typed params', () => {
@@ -1701,7 +1573,7 @@ describe('arrow functions', () => {
                     'end sub'
                 ].join('\n'));
                 program.validate();
-                const labels = program.getCompletions(file.srcPath, util.createPosition(4, 33)).map(x => x.label);
+                const labels = program.getCompletions(file.srcPath, util.createPosition(4, 33)).map(item => item.label);
                 expect(labels).to.include('name');
             });
 
@@ -1716,10 +1588,10 @@ describe('arrow functions', () => {
                 expectZeroDiagnostics(program);
                 //`count` usage in the body -> the param
                 let definitions = program.getDefinition(file.srcPath, util.createPosition(1, 36));
-                expect(definitions.map(x => (x as any).range ?? (x as any).targetRange)).to.eql([Range.create(1, 13, 1, 18)]);
+                expect(definitions.map(definition => (definition as any).range ?? (definition as any).targetRange)).to.eql([Range.create(1, 13, 1, 18)]);
                 //`twice` at the call site -> the assignment
                 definitions = program.getDefinition(file.srcPath, util.createPosition(2, 11));
-                expect(definitions.map(x => (x as any).range ?? (x as any).targetRange)).to.eql([Range.create(1, 4, 1, 9)]);
+                expect(definitions.map(definition => (definition as any).range ?? (definition as any).targetRange)).to.eql([Range.create(1, 4, 1, 9)]);
             });
 
             it('marks params as parameters in semantic tokens', () => {
@@ -1730,7 +1602,7 @@ describe('arrow functions', () => {
                 ].join('\n'));
                 program.validate();
                 const tokens = program.getSemanticTokens(file.srcPath) ?? [];
-                const paramToken = tokens.find(x => x.range.start.line === 1 && x.range.start.character === 13);
+                const paramToken = tokens.find(token => token.range.start.line === 1 && token.range.start.character === 13);
                 expect(paramToken?.tokenType).to.eql('parameter');
             });
         });

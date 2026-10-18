@@ -10,7 +10,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isReturnStatement, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssignmentStatement, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isClosureType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isReturnStatement, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -167,6 +167,53 @@ export class CallExpression extends Expression {
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result: TranspileResult = [];
+
+        //a closure is an AA, so invoke its function with its captured values as the first argument: `f.fn(f.ctx, ...args)`
+        const calleeType = nameOverride ? undefined : this.callee.getType({ flags: SymbolTypeFlag.runtime });
+        if (isClosureType(calleeType)) {
+            if (isVariableExpression(this.callee) || isDottedGetExpression(this.callee)) {
+                //a simple callee is safe to evaluate twice
+                result.push(
+                    ...this.callee.transpile(state),
+                    '.fn',
+                    state.transpileToken(this.tokens.openingParen, '('),
+                    ...this.callee.transpile(state),
+                    '.ctx'
+                );
+                for (const arg of this.args) {
+                    result.push(', ', ...arg.transpile(state));
+                }
+                result.push(
+                    state.transpileToken(this.tokens.closingParen, ')')
+                );
+            } else {
+                //any other callee (i.e. `makeScaler(2)(5)`) is evaluated once, inside a small wrapper function that makes the call
+                const argNames = this.args.map((arg, i) => `__bsc_arg${i}`);
+                const innerCall = `__bsc_closure.fn(${['__bsc_closure.ctx', ...argNames].join(', ')})`;
+                state.blockDepth++;
+                const innerIndent = state.indent();
+                state.blockDepth--;
+                result.push(
+                    `(function(${['__bsc_closure', ...argNames].join(', ')})`,
+                    state.newline,
+                    innerIndent,
+                    //a closure that returns nothing is a `sub`, whose result can't be returned
+                    isVoidType(calleeType.returnType) ? innerCall : `return ${innerCall}`,
+                    state.newline,
+                    state.indent(),
+                    'end function)',
+                    state.transpileToken(this.tokens.openingParen, '('),
+                    ...this.callee.transpile(state)
+                );
+                for (const arg of this.args) {
+                    result.push(', ', ...arg.transpile(state));
+                }
+                result.push(
+                    state.transpileToken(this.tokens.closingParen, ')')
+                );
+            }
+            return result;
+        }
 
         //transpile the name
         if (nameOverride) {
@@ -335,6 +382,36 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     /**
+     * Is this arrow function a closure? An arrow function becomes a closure when it captures variables from the function it is
+     * written in, or when it is passed/assigned somewhere that expects a `closure(...)` type. Closures transpile to an AA
+     * (`{ ctx: {...captured values}, fn: function(__bsc_ctx, ...params) }`) instead of a plain function, and callers that know
+     * the type invoke them as `x.fn(x.ctx, ...args)`. Captured values are copied at the moment the closure is created
+     */
+    public get isClosure(): boolean {
+        if (!this.isArrowFunction) {
+            return false;
+        }
+        return util.getClosureCapturedVariables(this).length > 0 || this.isInClosureContext();
+    }
+
+    /**
+     * Is this arrow function being passed to a parameter, or assigned to a variable, declared as a `closure(...)` type?
+     */
+    private isInClosureContext(): boolean {
+        const parent = this.parent;
+        if (isCallExpression(parent)) {
+            const index = parent.args.indexOf(this);
+            if (index >= 0) {
+                const calleeType = parent.callee.getType({ flags: SymbolTypeFlag.runtime });
+                return isTypedFunctionType(calleeType) && isClosureType(calleeType.params[index]?.type);
+            }
+        } else if (isAssignmentStatement(parent) && parent.typeExpression) {
+            return isClosureType(parent.typeExpression.getType({ flags: SymbolTypeFlag.typetime }));
+        }
+        return false;
+    }
+
+    /**
      * For an arrow function with no declared return type: the type its body expression produces, or `void` when the body
      * is a call to something that returns nothing (a `sub`, or a built-in like `push`). Undefined for regular functions
      * and for arrow functions with a declared return type
@@ -397,6 +474,62 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
+        if (this.isClosure) {
+            return this.transpileClosure(state);
+        }
+        return this.transpileFunction(state, name, includeBody);
+    }
+
+    /**
+     * Transpile a closure into an AA holding the captured values (`ctx`) and a function that receives them as its first
+     * argument (`fn`) and unpacks them into locals, so the body transpiles exactly as it would for a plain function:
+     * ```
+     * {
+     *     ctx: {
+     *         factor: factor
+     *     }
+     *     fn: function(__bsc_ctx, x)
+     *         factor = __bsc_ctx.factor
+     *         return x * factor
+     *     end function
+     * }
+     * ```
+     */
+    private transpileClosure(state: BrsTranspileState): TranspileResult {
+        const captured = util.getClosureCapturedVariables(this);
+        const results: TranspileResult = [];
+        results.push(state.sourceNode(this.tokens.leftParen, '{'));
+        state.blockDepth++;
+        results.push(state.newline, state.indent(), 'ctx: {');
+        state.blockDepth++;
+        for (const name of captured) {
+            results.push(state.newline, state.indent(), `${name}: ${name}`);
+        }
+        state.blockDepth--;
+        if (captured.length > 0) {
+            results.push(state.newline, state.indent());
+        }
+        results.push('}');
+        results.push(
+            state.newline,
+            state.indent(),
+            'fn: ',
+            ...this.transpileFunction(state, undefined, true, '__bsc_ctx', captured.map(name => `${name} = __bsc_ctx.${name}`))
+        );
+        state.blockDepth--;
+        results.push(state.newline, state.indent(), '}');
+        return results;
+    }
+
+    /**
+     * Transpile this function as a plain BrightScript function
+     * @param state the transpile state
+     * @param name the function's name, for function statements and class methods
+     * @param includeBody whether to emit the body (typedefs don't)
+     * @param leadingParameter an extra first parameter to declare before the function's own parameters (a closure's `__bsc_ctx`)
+     * @param leadingStatements statements to emit at the top of the body before the function's own statements
+     */
+    private transpileFunction(state: BrsTranspileState, name?: Identifier, includeBody = true, leadingParameter?: string, leadingStatements: string[] = []) {
         let results = [] as TranspileResult;
         let functionTypeText = this.tokens.functionType?.text;
         if (this.isArrowFunction) {
@@ -419,10 +552,13 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.transpileToken(this.tokens.leftParen, '(')
         );
         //parameters
+        if (leadingParameter) {
+            results.push(leadingParameter);
+        }
         for (let i = 0; i < this.parameters.length; i++) {
             let param = this.parameters[i];
             //add commas
-            if (i > 0) {
+            if (i > 0 || leadingParameter) {
                 results.push(', ');
             }
             //add parameter
@@ -455,6 +591,15 @@ export class FunctionExpression extends Expression implements TypedefProvider {
                 state.blockDepth--;
             } else {
                 body = this.body.transpile(state);
+            }
+            if (leadingStatements.length > 0) {
+                state.blockDepth++;
+                const prefix: TranspileResult = [];
+                for (const statement of leadingStatements) {
+                    prefix.push(state.newline, state.indent(), statement);
+                }
+                state.blockDepth--;
+                body = [...prefix, ...body];
             }
             hasBody = body.length > 0;
             state.lineage.shift();
@@ -544,6 +689,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
+        resultType.isClosure = this.isClosure;
         for (let param of this.parameters) {
             resultType.addParameter(param.tokens.name.text, param.getType(innerOptions()), !!param.defaultValue);
         }
@@ -3354,6 +3500,8 @@ export class TypedFunctionTypeExpression extends Expression {
             functionType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
         }
         functionType.setSub(this.tokens.functionType?.kind === TokenKind.Sub);
+        //`closure(...)` describes an arrow function that captures variables (an AA at runtime), see FunctionExpression.isClosure
+        functionType.isClosure = this.tokens.functionType?.text?.toLowerCase() === 'closure';
 
         options.typeChain?.push(new TypeChainEntry({
             name: '',

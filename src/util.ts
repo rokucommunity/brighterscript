@@ -28,7 +28,7 @@ import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
 import { isAnyReferenceType, isAssignmentStatement, isFunctionExpression, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
-import { WalkMode } from './astUtils/visitors';
+import { createVisitor, WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import * as requireRelative from 'require-relative';
@@ -2542,26 +2542,104 @@ export class Util {
     }
 
     /**
-     * Arrow functions can't capture locals from the function they're written in (closures aren't supported yet, see #530).
-     * When an unresolved variable inside an arrow function is such a local, return the arrow-specific diagnostic so the user
-     * learns *why* the name can't be found instead of getting a bare `cannot-find-name`. Returns undefined in every other case.
-     * (`m` inside an arrow function is flagged by BrsFileValidator, since `m` always resolves through the scope)
+     * Which variables each arrow function captures (see `getClosureCapturedVariables`). Keyed weakly by the node so a re-parse
+     * starts fresh; `BrsFileValidator` clears a file's entries before re-validating in case a plugin changed the AST
      */
-    public getArrowFunctionCaptureDiagnostic(node: AstNode) {
-        if (!isVariableExpression(node)) {
-            return undefined;
+    private closureCaptureCache = new WeakMap<FunctionExpression, string[]>();
+
+    public clearClosureCaptureCache(arrow: FunctionExpression) {
+        this.closureCaptureCache.delete(arrow);
+    }
+
+    /**
+     * The enclosing-function locals and parameters an arrow function references, which make it a closure. They are listed in
+     * the order they are first referenced, so the transpiled `ctx` reads like the source, and include whatever any arrow
+     * function nested inside captures, since that nested closure is built from these. The analysis is purely syntactic (it
+     * looks at the declarations in the enclosing function, not symbol tables), so it is safe to call at any point after parsing
+     */
+    public getClosureCapturedVariables(arrow: FunctionExpression): string[] {
+        let captured = this.closureCaptureCache.get(arrow);
+        if (captured) {
+            return captured;
         }
-        const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
-        if (!func?.isArrowFunction) {
-            return undefined;
+        //every name the arrow refers to, keyed by lower-case name so the first spelling wins
+        const referenced = new Map<string, string>();
+        const visitor = createVisitor({
+            VariableExpression: (node) => {
+                const name = node.tokens.name?.text;
+                if (name) {
+                    referenced.set(name.toLowerCase(), name);
+                }
+            },
+            FunctionExpression: (node) => {
+                if (node.isArrowFunction) {
+                    for (const name of this.getClosureCapturedVariables(node)) {
+                        referenced.set(name.toLowerCase(), name);
+                    }
+                }
+            }
+        });
+        //default param values and the body (the body walk does not step into nested functions; the visitor above handles nested arrows)
+        for (const param of arrow.parameters) {
+            param.walk(visitor, { walkMode: WalkMode.visitExpressions });
         }
-        const name = node.tokens.name?.text;
-        //an arrow function sees the same file-level and global names as the function around it, so a name that only
-        //the enclosing function can resolve must be one of its locals or parameters
-        if (name && func.parent?.getSymbolTable()?.hasSymbol(name, SymbolTypeFlag.runtime)) {
-            return DiagnosticMessages.arrowFunctionCannotCaptureVariable(name);
+        arrow.body?.walk(visitor, { walkMode: WalkMode.visitExpressions });
+
+        const ownParams = new Set(arrow.parameters.map(param => param.tokens.name?.text?.toLowerCase()));
+        const enclosingNames = this.getClosureEnclosingLocalNames(arrow);
+        captured = [];
+        for (const [lowerName, name] of referenced) {
+            //`m` is not allowed in arrow functions at all (flagged separately), and the arrow's own params are not captures
+            if (lowerName === 'm' || ownParams.has(lowerName)) {
+                continue;
+            }
+            if (enclosingNames.has(lowerName)) {
+                captured.push(name);
+            }
         }
-        return undefined;
+        this.closureCaptureCache.set(arrow, captured);
+        return captured;
+    }
+
+    /**
+     * The (lower-cased) names of every local variable and parameter an arrow function could capture: the params of each arrow
+     * function between it and the nearest regular function, plus that function's params and every local it declares anywhere
+     * in its body (BrightScript locals are function-scoped). File-level and global names are never included, so they are never
+     * treated as captures
+     */
+    private getClosureEnclosingLocalNames(arrow: FunctionExpression) {
+        const names = new Set<string>();
+        const add = (token: Token | undefined) => {
+            if (token?.text) {
+                names.add(token.text.toLowerCase());
+            }
+        };
+        let enclosingFunction: FunctionExpression;
+        let node: AstNode = arrow.parent;
+        while (node) {
+            if (isFunctionExpression(node)) {
+                for (const param of node.parameters) {
+                    add(param.tokens.name);
+                }
+                if (!node.isArrowFunction) {
+                    enclosingFunction = node;
+                    break;
+                }
+            }
+            node = node.parent;
+        }
+        //does not step into child functions, whose locals belong to them
+        enclosingFunction?.body?.walk(createVisitor({
+            AssignmentStatement: (statement) => add(statement.tokens.name),
+            ForEachStatement: (statement) => add(statement.tokens.item),
+            DimStatement: (statement) => add(statement.tokens.name),
+            CatchStatement: (statement) => {
+                if (isVariableExpression(statement.exceptionVariableExpression)) {
+                    add(statement.exceptionVariableExpression.tokens.name);
+                }
+            }
+        }), { walkMode: WalkMode.visitAll });
+        return names;
     }
 
     public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {

@@ -86,7 +86,9 @@ export class BrsFileValidator {
         this.event.file['_cachedLookups'].rehydrate();
 
         this.literalPools = {};
+        this.resetClosureCaptures();
         this.walk();
+        this.validateClosureCaptures();
         this.validateFileLiteralCount();
         this.validateGotosAndLabels();
         this.flagTopLevelStatements();
@@ -362,8 +364,9 @@ export class BrsFileValidator {
             FunctionExpression: (node) => {
                 const funcSymbolTable = node.getSymbolTable();
                 const isInlineFunc = !(isFunctionStatement(node.parent) || isMethodStatement(node.parent));
-                if (isInlineFunc) {
+                if (isInlineFunc && !node.isArrowFunction) {
                     // symbol table should not include any symbols from parent func
+                    // (arrow functions keep the enclosing function's scope, since they may capture its variables and become closures)
                     funcSymbolTable.pushParentProvider(() => node.findAncestor<Body>(isBody).getSymbolTable());
                 }
                 //arrow functions don't get an `m`: what it should mean there is left open until closures are designed (see #1929)
@@ -783,6 +786,69 @@ export class BrsFileValidator {
             param.walk(visitor, { walkMode: WalkMode.visitExpressions });
         }
         arrow.body?.walk(visitor, { walkMode: WalkMode.visitExpressions });
+    }
+
+    private get arrowFunctions() {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        return (this.event.file['_cachedLookups'].functionExpressions as FunctionExpression[]).filter(func => func.isArrowFunction);
+    }
+
+    /**
+     * Forget which variables each arrow function captures, since a plugin may have changed the AST since the last validation.
+     * The walk recomputes them on demand (the first time an arrow function's type is needed)
+     */
+    private resetClosureCaptures() {
+        for (const arrow of this.arrowFunctions) {
+            util.clearClosureCaptureCache(arrow);
+        }
+    }
+
+    /**
+     * Flag captured variables that are reassigned after their closure is created
+     */
+    private validateClosureCaptures() {
+        for (const arrow of this.arrowFunctions) {
+            for (const name of util.getClosureCapturedVariables(arrow)) {
+                this.validateCapturedVariableNotReassigned(arrow, name);
+            }
+        }
+    }
+
+    /**
+     * Closures copy captured values when they are created, so flag any assignment to a captured variable that comes after
+     * the closure in its enclosing function (the closure would never see the new value)
+     */
+    private validateCapturedVariableNotReassigned(arrow: FunctionExpression, name: string) {
+        const enclosingFunction = arrow.parent?.findAncestor<FunctionExpression>((node) => isFunctionExpression(node) && !node.isArrowFunction);
+        const closureEnd = arrow.location?.range?.end;
+        if (!enclosingFunction || !closureEnd) {
+            return;
+        }
+        const lowerName = name.toLowerCase();
+        const check = (token: Token | undefined) => {
+            if (token?.text?.toLowerCase() === lowerName && util.comparePosition(token.location?.range?.start, closureEnd) > 0) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.closureCapturedVariableReassigned(name),
+                    location: token.location
+                });
+            }
+        };
+        //does not step into child functions, so the closure's own body (and other functions' locals) are never checked
+        enclosingFunction.body?.walk(createVisitor({
+            AssignmentStatement: (node) => check(node.tokens.name),
+            AugmentedAssignmentStatement: (node) => {
+                if (isVariableExpression(node.item)) {
+                    check(node.item.tokens.name);
+                }
+            },
+            IncrementStatement: (node) => {
+                if (isVariableExpression(node.value)) {
+                    check(node.value.tokens.name);
+                }
+            },
+            ForEachStatement: (node) => check(node.tokens.item),
+            DimStatement: (node) => check(node.tokens.name)
+        }), { walkMode: WalkMode.visitAll });
     }
 
     private validateFunctionParameterCount(func: FunctionExpression) {
