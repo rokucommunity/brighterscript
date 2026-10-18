@@ -3170,40 +3170,78 @@ export class Parser {
     }
 
     /**
-     * Try to parse an arrow function (`(a, b) => a + b`) when the current token is `(`.
-     * Returns undefined, with the parser position and diagnostics untouched, when the parens turn out to be a
-     * grouping expression (`(a + b)`) or a parenthesized typecast (`(a as integer)`) instead
+     * Tokens that end the line an arrow function's parameter list is on. `(` and `=>` must be on the same line, so hitting
+     * one of these while scanning means the parens are not an arrow function's
      */
-    private tryArrowFunction(): FunctionExpression | undefined {
-        //cheap pre-check so ordinary groupings never pay for a backtrack: an arrow function's parens are either empty,
-        //or start with a parameter name followed by `,`, `)`, `=` or `as`
-        const first = this.peekNext();
-        if (first?.kind !== TokenKind.RightParen) {
-            const isParamName = first?.kind === TokenKind.Identifier || this.allowedLocalIdentifiers.includes(first?.kind);
-            const afterFirst = this.tokens[this.current + 2]?.kind;
-            if (!isParamName || ![TokenKind.Comma, TokenKind.RightParen, TokenKind.Equal, TokenKind.As].includes(afterFirst)) {
-                return undefined;
+    private static arrowScanTerminators = new Set([TokenKind.Newline, TokenKind.Colon, TokenKind.Comment, TokenKind.Eof]);
+
+    /**
+     * Does an arrow function (`(a, b) => a + b`) start at the current `(`? Decided by scanning tokens rather than by
+     * speculatively parsing, since `=>` is a single token that never appears inside a parameter list or a type expression
+     * and has to be on the same line as the closing `)`: find the matching `)`, then look for `=>` either right after it
+     * or after an `as <type>` clause. Costs a handful of token reads and no allocations, so every grouping expression
+     * (`(a + b)`, `(a as integer)`) can afford it
+     */
+    private isArrowFunctionAhead(): boolean {
+        //find the `)` that matches the `(` at the current position
+        let index = this.current;
+        let depth = 0;
+        for (; index < this.tokens.length; index++) {
+            const kind = this.tokens[index].kind;
+            if (kind === TokenKind.LeftParen || kind === TokenKind.QuestionLeftParen) {
+                depth++;
+            } else if (kind === TokenKind.RightParen) {
+                depth--;
+                if (depth === 0) {
+                    break;
+                }
+            } else if (Parser.arrowScanTerminators.has(kind)) {
+                return false;
             }
         }
-
-        const backtrack = this.current;
-        const diagnosticCount = this.diagnostics.length;
-        //`functionParameter` rewrites the name token's kind, so remember it in case this isn't an arrow function after all
-        const firstKind = first?.kind;
-        const abandon = () => {
-            this.current = backtrack;
-            this.diagnostics.splice(diagnosticCount);
-            if (first) {
-                first.kind = firstKind;
+        if (depth !== 0) {
+            return false;
+        }
+        index++;
+        if (this.tokens[index]?.kind === TokenKind.Arrow) {
+            return true;
+        }
+        if (this.tokens[index]?.kind !== TokenKind.As) {
+            return false;
+        }
+        //`) as <type> =>`: the return type may contain brackets of its own (function types, typed arrays, inline interfaces),
+        //so only a `=>` outside of them counts, and a `,` or an unmatched closing bracket outside of them ends the type
+        depth = 0;
+        for (index++; index < this.tokens.length; index++) {
+            const kind = this.tokens[index].kind;
+            if (kind === TokenKind.LeftParen || kind === TokenKind.LeftSquareBracket || kind === TokenKind.LeftCurlyBrace) {
+                depth++;
+            } else if (kind === TokenKind.RightParen || kind === TokenKind.RightSquareBracket || kind === TokenKind.RightCurlyBrace) {
+                if (depth === 0) {
+                    return false;
+                }
+                depth--;
+            } else if (depth === 0 && kind === TokenKind.Arrow) {
+                return true;
+            } else if ((depth === 0 && kind === TokenKind.Comma) || Parser.arrowScanTerminators.has(kind)) {
+                return false;
             }
-            return undefined;
-        };
+        }
+        return false;
+    }
 
+    /**
+     * Parse an arrow function (`(a, b) => a + b`) when one starts at the current `(`, otherwise return undefined without
+     * consuming anything so the caller parses the parens as a grouping expression (`(a + b)`, `(a as integer)`) instead
+     */
+    private tryArrowFunction(): FunctionExpression | undefined {
+        if (!this.isArrowFunctionAhead()) {
+            return undefined;
+        }
         //like `functionDeclaration`, an arrow function is its own world for call tracking and nesting depth
         const previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
         this.namespaceAndFunctionDepth++;
-        let arrow: Token;
         try {
             const leftParen = this.advance();
             const params = [] as FunctionParameterExpression[];
@@ -3221,10 +3259,7 @@ export class Parser {
             if (this.check(TokenKind.As)) {
                 [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
             }
-            if (!this.check(TokenKind.Arrow)) {
-                return abandon();
-            }
-            arrow = this.advance();
+            const arrow = this.consume(DiagnosticMessages.expectedToken(TokenKind.Arrow), TokenKind.Arrow);
             if (this.options.mode !== ParseMode.BrighterScript) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('arrow functions'),
@@ -3254,12 +3289,6 @@ export class Parser {
                 arrow: arrow,
                 body: body
             });
-        } catch (e) {
-            if (arrow) {
-                //this is definitely an arrow function and its body failed to parse: let the statement be scrapped as usual
-                throw e;
-            }
-            return abandon();
         } finally {
             this.namespaceAndFunctionDepth--;
             this.callExpressions = previousCallExpressions;

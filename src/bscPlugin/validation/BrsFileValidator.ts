@@ -378,6 +378,9 @@ export class BrsFileValidator {
                 this.collectFunctionLiterals(node);
                 this.validateFunctionGotoLabelCount(node);
                 this.flagControlFlowUnreachableCode(node);
+                if (node.isArrowFunction) {
+                    this.validateArrowFunctionDoesNotUseM(node);
+                }
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -607,13 +610,6 @@ export class BrsFileValidator {
                         location: node.tokens.name.location
                     });
                 }
-                //`m` is not allowed inside arrow functions: what it should mean there is left open until closures are designed (see #1929)
-                if (name?.toLowerCase() === 'm' && node.findAncestor<FunctionExpression>(isFunctionExpression)?.isArrowFunction) {
-                    this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
-                        location: node.tokens.name.location
-                    });
-                }
             },
             AstNode: (node) => {
                 //check for doc comments
@@ -764,6 +760,29 @@ export class BrsFileValidator {
                 location: param.location
             });
         }
+    }
+
+    /**
+     * `m` is not allowed inside arrow functions: what it should mean there (BrightScript's call-site `m` or a captured outer `m`)
+     * is left open until closures are designed (see #1929). Checked per arrow function rather than for every `m` in the file, so
+     * only arrow function bodies pay for it. Does not step into nested functions: a nested arrow function is checked on its own
+     * visit, and a nested regular function may use `m` as usual
+     */
+    private validateArrowFunctionDoesNotUseM(arrow: FunctionExpression) {
+        const visitor = createVisitor({
+            VariableExpression: (node) => {
+                if (node.tokens.name?.text?.toLowerCase() === 'm') {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
+                        location: node.tokens.name.location
+                    });
+                }
+            }
+        });
+        for (const param of arrow.parameters) {
+            param.walk(visitor, { walkMode: WalkMode.visitExpressions });
+        }
+        arrow.body?.walk(visitor, { walkMode: WalkMode.visitExpressions });
     }
 
     private validateFunctionParameterCount(func: FunctionExpression) {
