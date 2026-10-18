@@ -1,0 +1,82 @@
+import { expect } from '../chai-config.spec';
+import { Program } from '../Program';
+import { rootDir } from '../testHelpers.spec';
+import type { BrsFile } from './BrsFile';
+import { ParseMode } from '../parser/Parser';
+
+describe('BrsCode', () => {
+    let program: Program;
+
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir });
+    });
+
+    afterEach(() => {
+        program.dispose();
+    });
+
+    it('belongs to the file it lives in', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            sub main()
+            end sub
+        `);
+        expect(file.code).to.exist;
+        expect(file.code.document).to.equal(file);
+        expect(file.code.srcPath).to.equal(file.srcPath);
+        expect(file.code.destPath).to.equal(file.destPath);
+        expect(file.code.pkgPath).to.equal(file.pkgPath);
+    });
+
+    it('holds the parsed code for its file', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            sub main()
+            end sub
+        `);
+        expect(file.code.ast.statements).to.be.lengthOf(1);
+        expect(file.ast).to.equal(file.code.ast);
+        expect(file.parser).to.equal(file.code.parser);
+        expect(file.callables.map(x => x.name)).to.eql(['main']);
+        expect(file.code.callables).to.equal(file.callables);
+    });
+
+    it('uses brighterscript mode for .bs files', () => {
+        const brsFile = program.setFile<BrsFile>('source/main.brs', '');
+        const bsFile = program.setFile<BrsFile>('source/lib.bs', '');
+        expect(brsFile.code.parseMode).to.equal(ParseMode.BrightScript);
+        expect(bsFile.code.parseMode).to.equal(ParseMode.BrighterScript);
+    });
+
+    it('re-parses when its file is re-parsed', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            sub main()
+            end sub
+        `);
+        const code = file.code;
+        file.parse(`
+            sub a()
+            end sub
+            sub b()
+            end sub
+        `);
+        expect(file.code).to.equal(code);
+        expect(code.callables.map(x => x.name)).to.eql(['a', 'b']);
+    });
+
+    it('parses on demand when its file has a typedef', () => {
+        program.setFile('source/main.d.bs', `
+            sub main()
+            end sub
+        `);
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            sub main()
+            end sub
+        `);
+        //the parse was skipped because the typedef describes this file
+        expect(file.code['_parser']).not.to.exist;
+
+        //asking the code for its parser forces the parse
+        expect(file.code.parser.ast.statements).to.be.lengthOf(1);
+        //the typedef link is restored afterwards
+        expect(file.hasTypedef).to.be.true;
+    });
+});
