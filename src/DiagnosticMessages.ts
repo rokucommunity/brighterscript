@@ -1401,6 +1401,30 @@ export let DiagnosticMessages = {
         message: `Function has ${count} labels used by goto, max is ${max}.`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-goto-label-count'
+    }),
+    /**
+     * An arrow function references a local variable of the function it is written inside. Arrow functions are plain
+     * functions (closures are not supported yet, see #530), so that variable is not visible to them
+     * @param name the name of the variable being referenced
+     */
+    arrowFunctionCannotCaptureVariable: (name: string) => ({
+        message: `Arrow functions cannot use variable '${name}' from the enclosing function. Capturing outer variables is not supported yet, so pass it in as a parameter instead`,
+        severity: DiagnosticSeverity.Error,
+        code: 'arrow-function-cannot-capture-variable'
+    }),
+    /**
+     * `m` is not allowed inside arrow functions: what it should mean there (BrightScript's call-site `m` or a captured outer `m`)
+     * is left open until closures are designed, so allowing either now would lock that decision in
+     */
+    arrowFunctionCannotUseM: () => ({
+        message: `'m' cannot be used inside an arrow function. Pass the value in as a parameter instead`,
+        severity: DiagnosticSeverity.Error,
+        code: 'arrow-function-cannot-use-m'
+    }),
+    expectedExpressionAfterArrow: () => ({
+        message: `Expected an expression after '=>'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-expression-after-arrow'
     })
 };
 export const defaultMaximumTruncationLength = 160;

@@ -1002,16 +1002,7 @@ export class Parser {
                 [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
             }
 
-            params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
-                if (haveFoundOptional && !param.defaultValue) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.tokens.name.text),
-                        location: param.location
-                    });
-                }
-
-                return haveFoundOptional || !!param.defaultValue;
-            }, false);
+            this.validateParameterOrder(params);
 
             this.consumeStatementSeparators(true);
 
@@ -1111,6 +1102,22 @@ export class Parser {
             as: asToken,
             typeExpression: typeExpression
         });
+    }
+
+    /**
+     * Flag required parameters that follow optional ones (i.e. `sub foo(a = 1, b)`), which is not allowed
+     */
+    private validateParameterOrder(params: FunctionParameterExpression[]) {
+        params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
+            if (haveFoundOptional && !param.defaultValue) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.tokens.name.text),
+                    location: param.location
+                });
+            }
+
+            return haveFoundOptional || !!param.defaultValue;
+        }, false);
     }
 
     private assignment(allowTypedAssignment = false): AssignmentStatement {
@@ -3162,6 +3169,132 @@ export class Parser {
         }
     }
 
+    /**
+     * Tokens that end the line an arrow function's parameter list is on. `(` and `=>` must be on the same line, so hitting
+     * one of these while scanning means the parens are not an arrow function's
+     */
+    private static arrowScanTerminators = new Set([TokenKind.Newline, TokenKind.Colon, TokenKind.Comment, TokenKind.Eof]);
+
+    /**
+     * Does an arrow function (`(a, b) => a + b`) start at the current `(`? Decided by scanning tokens rather than by
+     * speculatively parsing, since `=>` is a single token that never appears inside a parameter list or a type expression
+     * and has to be on the same line as the closing `)`: find the matching `)`, then look for `=>` either right after it
+     * or after an `as <type>` clause. Costs a handful of token reads and no allocations, so every grouping expression
+     * (`(a + b)`, `(a as integer)`) can afford it
+     */
+    private isArrowFunctionAhead(): boolean {
+        //find the `)` that matches the `(` at the current position
+        let index = this.current;
+        let depth = 0;
+        for (; index < this.tokens.length; index++) {
+            const kind = this.tokens[index].kind;
+            if (kind === TokenKind.LeftParen || kind === TokenKind.QuestionLeftParen) {
+                depth++;
+            } else if (kind === TokenKind.RightParen) {
+                depth--;
+                if (depth === 0) {
+                    break;
+                }
+            } else if (Parser.arrowScanTerminators.has(kind)) {
+                return false;
+            }
+        }
+        if (depth !== 0) {
+            return false;
+        }
+        index++;
+        if (this.tokens[index]?.kind === TokenKind.Arrow) {
+            return true;
+        }
+        if (this.tokens[index]?.kind !== TokenKind.As) {
+            return false;
+        }
+        //`) as <type> =>`: the return type may contain brackets of its own (function types, typed arrays, inline interfaces),
+        //so only a `=>` outside of them counts, and a `,` or an unmatched closing bracket outside of them ends the type
+        depth = 0;
+        for (index++; index < this.tokens.length; index++) {
+            const kind = this.tokens[index].kind;
+            if (kind === TokenKind.LeftParen || kind === TokenKind.LeftSquareBracket || kind === TokenKind.LeftCurlyBrace) {
+                depth++;
+            } else if (kind === TokenKind.RightParen || kind === TokenKind.RightSquareBracket || kind === TokenKind.RightCurlyBrace) {
+                if (depth === 0) {
+                    return false;
+                }
+                depth--;
+            } else if (depth === 0 && kind === TokenKind.Arrow) {
+                return true;
+            } else if ((depth === 0 && kind === TokenKind.Comma) || Parser.arrowScanTerminators.has(kind)) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Parse an arrow function (`(a, b) => a + b`) when one starts at the current `(`, otherwise return undefined without
+     * consuming anything so the caller parses the parens as a grouping expression (`(a + b)`, `(a as integer)`) instead
+     */
+    private tryArrowFunction(): FunctionExpression | undefined {
+        if (!this.isArrowFunctionAhead()) {
+            return undefined;
+        }
+        //like `functionDeclaration`, an arrow function is its own world for call tracking and nesting depth
+        const previousCallExpressions = this.callExpressions;
+        this.callExpressions = [];
+        this.namespaceAndFunctionDepth++;
+        try {
+            const leftParen = this.advance();
+            const params = [] as FunctionParameterExpression[];
+            if (!this.check(TokenKind.RightParen)) {
+                do {
+                    params.push(this.functionParameter());
+                } while (this.match(TokenKind.Comma));
+            }
+            const rightParen = this.consume(
+                DiagnosticMessages.unmatchedLeftToken(leftParen.text, 'function parameter list'),
+                TokenKind.RightParen
+            );
+            let asToken: Token;
+            let returnTypeExpression: TypeExpression;
+            if (this.check(TokenKind.As)) {
+                [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
+            }
+            const arrow = this.consume(DiagnosticMessages.expectedToken(TokenKind.Arrow), TokenKind.Arrow);
+            if (this.options.mode !== ParseMode.BrighterScript) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('arrow functions'),
+                    location: arrow.location
+                });
+            }
+            this.validateParameterOrder(params);
+
+            const value = this.checkEndOfStatement() ? undefined : this.expression();
+            if (!value) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.expectedExpressionAfterArrow(),
+                    location: arrow.location
+                });
+                throw this.lastDiagnosticAsError();
+            }
+            //store the body as a `return` statement so the rest of the compiler treats this like any other function
+            const body = new Block({
+                statements: [new ReturnStatement({ value: value })]
+            });
+            return new FunctionExpression({
+                leftParen: leftParen,
+                parameters: params,
+                rightParen: rightParen,
+                as: asToken,
+                returnTypeExpression: returnTypeExpression,
+                arrow: arrow,
+                body: body
+            });
+        } finally {
+            this.namespaceAndFunctionDepth--;
+            this.callExpressions = previousCallExpressions;
+        }
+    }
+
     private boolean(): Expression {
         let expr = this.relational();
 
@@ -3731,6 +3864,13 @@ export class Parser {
     }
 
     private primary(): Expression {
+        //`(` might start an arrow function (`(a, b) => a + b`) rather than a grouping expression
+        if (this.check(TokenKind.LeftParen)) {
+            const arrowFunction = this.tryArrowFunction();
+            if (arrowFunction) {
+                return arrowFunction;
+            }
+        }
         switch (true) {
             case this.matchAny(
                 TokenKind.False,

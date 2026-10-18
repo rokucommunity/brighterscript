@@ -2541,6 +2541,29 @@ export class Util {
         }
     }
 
+    /**
+     * Arrow functions can't capture locals from the function they're written in (closures aren't supported yet, see #530).
+     * When an unresolved variable inside an arrow function is such a local, return the arrow-specific diagnostic so the user
+     * learns *why* the name can't be found instead of getting a bare `cannot-find-name`. Returns undefined in every other case.
+     * (`m` inside an arrow function is flagged by BrsFileValidator, since `m` always resolves through the scope)
+     */
+    public getArrowFunctionCaptureDiagnostic(node: AstNode) {
+        if (!isVariableExpression(node)) {
+            return undefined;
+        }
+        const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+        if (!func?.isArrowFunction) {
+            return undefined;
+        }
+        const name = node.tokens.name?.text;
+        //an arrow function sees the same file-level and global names as the function around it, so a name that only
+        //the enclosing function can resolve must be one of its locals or parameters
+        if (name && func.parent?.getSymbolTable()?.hasSymbol(name, SymbolTypeFlag.runtime)) {
+            return DiagnosticMessages.arrowFunctionCannotCaptureVariable(name);
+        }
+        return undefined;
+    }
+
     public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
         let fullChainName = '';
         let fullErrorName = '';
