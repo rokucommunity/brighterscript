@@ -1195,74 +1195,51 @@ describe('arrow functions', () => {
             });
 
             describe('m', () => {
-                it('flags m', () => {
-                    program.setFile('source/main.bs', `
+                it('captures m like any other variable, which makes the arrow function a closure', () => {
+                    const func = getArrowFunction(`
                         sub main()
-                            render = (data) => m.view.setData(data)
-                            getM = () => m
+                            render = (data as object) => m.view.setData(data)
                         end sub
                     `);
-                    program.validate();
-                    expectDiagnostics(program, [{
-                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
-                        location: { range: util.createRange(2, 47, 2, 48) }
-                    }, {
-                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
-                        location: { range: util.createRange(3, 41, 3, 42) }
-                    }]);
+                    expect(func.isClosure).to.be.true;
+                    expect(util.getClosureCapturedVariables(func)).to.eql(['m']);
                 });
 
-                it('flags m regardless of case', () => {
-                    program.setFile('source/main.bs', `
+                it('captures m regardless of case', () => {
+                    const func = getArrowFunction(`
                         sub main()
                             getM = () => M
                         end sub
                     `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotUseM()
-                    ]);
+                    expect(util.getClosureCapturedVariables(func)).to.eql(['M']);
                 });
 
-                it('flags m inside an arrow function in a class', () => {
+                it('captures m inside a class, typed as the class', () => {
                     program.setFile('source/main.bs', `
                         class Person
                             name as string
-                            callback = () => m.name
-                            sub test()
-                                f = () => m.name
-                            end sub
+                            function greeter() as closure() as string
+                                return () => "Hi " + m.name
+                            end function
+                            function broken() as closure() as string
+                                return () => m.nope
+                            end function
                         end class
                     `);
                     program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotUseM(),
-                        DiagnosticMessages.arrowFunctionCannotUseM()
-                    ]);
+                    //\`m\` resolves to the class instance inside the arrow, so unknown members are flagged
+                    expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql(['cannot-find-name']);
                 });
 
-                it('flags m inside a nested arrow function', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            f = (x) => (y) => m.value
-                        end sub
-                    `);
-                    program.validate();
-                    expectDiagnostics(program, [
-                        DiagnosticMessages.arrowFunctionCannotUseM()
-                    ]);
-                });
-
-                it('allows m inside a regular anonymous function nested in an arrow function', () => {
-                    program.setFile('source/main.bs', `
+                it('does not capture m that is only used by a regular anonymous function nested in the arrow function', () => {
+                    const func = getArrowFunction(`
                         sub main()
                             f = (x) => function()
                                 return m.value
                             end function
                         end sub
                     `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
+                    expect(func.isClosure).to.be.false;
                 });
 
                 it('allows m in the enclosing function around an arrow function', () => {
@@ -1270,17 +1247,6 @@ describe('arrow functions', () => {
                         sub main()
                             m.callback = (x) => x
                             print m.callback(1)
-                        end sub
-                    `);
-                    program.validate();
-                    expectZeroDiagnostics(program);
-                });
-
-                it('allows a param named like a member of m to be passed in instead', () => {
-                    program.setFile('source/main.bs', `
-                        sub main()
-                            render = (data, view) => view.setData(data)
-                            render({}, m.view)
                         end sub
                     `);
                     program.validate();

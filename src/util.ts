@@ -2589,8 +2589,8 @@ export class Util {
         const enclosingNames = this.getClosureEnclosingLocalNames(arrow);
         captured = [];
         for (const [lowerName, name] of referenced) {
-            //`m` is not allowed in arrow functions at all (flagged separately), and the arrow's own params are not captures
-            if (lowerName === 'm' || ownParams.has(lowerName)) {
+            //the arrow's own params are not captures
+            if (ownParams.has(lowerName)) {
                 continue;
             }
             if (enclosingNames.has(lowerName)) {
@@ -2602,13 +2602,14 @@ export class Util {
     }
 
     /**
-     * The (lower-cased) names of every local variable and parameter an arrow function could capture: the params of each arrow
-     * function between it and the nearest regular function, plus that function's params and every local it declares anywhere
-     * in its body (BrightScript locals are function-scoped). File-level and global names are never included, so they are never
-     * treated as captures
+     * The (lower-cased) names of every variable an arrow function could capture: `m`, the params of each arrow function between
+     * it and the nearest regular function, plus that function's params and every local it declares anywhere in its body
+     * (BrightScript locals are function-scoped). File-level and global names are never included, so they are never treated as captures
      */
     private getClosureEnclosingLocalNames(arrow: FunctionExpression) {
-        const names = new Set<string>();
+        //`m` is captured like any other variable: a closure sees the `m` of the function it is written in (the component's `m`,
+        //or the class instance), the way an arrow function in JavaScript sees the enclosing `this`
+        const names = new Set<string>(['m']);
         const add = (token: Token | undefined) => {
             if (token?.text) {
                 names.add(token.text.toLowerCase());

@@ -368,7 +368,8 @@ export class BrsFileValidator {
                     // (arrow functions keep the enclosing function's scope, since they may capture its variables and become closures)
                     funcSymbolTable.pushParentProvider(() => node.findAncestor<Body>(isBody).getSymbolTable());
                 }
-                //arrow functions don't get an `m`: what it should mean there is left open until closures are designed (see #1929)
+                //arrow functions don't get an `m` of their own: they see the enclosing function's `m` through the symbol chain
+                //(and capture it, becoming a closure, when they use it)
                 if (!node.isArrowFunction && (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc)) {
                     if (!isTypecastStatement(node.body?.statements?.[0])) {
                         // if this is an inline function, or if the function body does not start with a typecast statement, add the `m` symbol to the function scope. If the function body starts with a typecast statement, the `m` symbol will be added in the visitor for TypecastStatement, and it will be typed as the type from the typecast statement
@@ -380,9 +381,6 @@ export class BrsFileValidator {
                 this.collectFunctionLiterals(node);
                 this.validateFunctionGotoLabelCount(node);
                 this.flagControlFlowUnreachableCode(node);
-                if (node.isArrowFunction) {
-                    this.validateArrowFunctionDoesNotUseM(node);
-                }
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -762,29 +760,6 @@ export class BrsFileValidator {
                 location: param.location
             });
         }
-    }
-
-    /**
-     * `m` is not allowed inside arrow functions: what it should mean there (BrightScript's call-site `m` or a captured outer `m`)
-     * is left open until closures are designed (see #1929). Checked per arrow function rather than for every `m` in the file, so
-     * only arrow function bodies pay for it. Does not step into nested functions: a nested arrow function is checked on its own
-     * visit, and a nested regular function may use `m` as usual
-     */
-    private validateArrowFunctionDoesNotUseM(arrow: FunctionExpression) {
-        const visitor = createVisitor({
-            VariableExpression: (node) => {
-                if (node.tokens.name?.text?.toLowerCase() === 'm') {
-                    this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
-                        location: node.tokens.name.location
-                    });
-                }
-            }
-        });
-        for (const param of arrow.parameters) {
-            param.walk(visitor, { walkMode: WalkMode.visitExpressions });
-        }
-        arrow.body?.walk(visitor, { walkMode: WalkMode.visitExpressions });
     }
 
     private get arrowFunctions() {

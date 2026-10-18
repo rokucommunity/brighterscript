@@ -98,18 +98,18 @@ sub main()
 end sub
 ```
 
-`m` is not allowed inside an arrow function (closure or not). Pass the value you need in as an argument instead:
+`m` inside an arrow function refers to the `m` of the function it is written in, and using it captures `m` the same way, so an arrow function that uses `m` is also a closure (see [closures](closures.md#m-inside-a-closure)):
 
 ```brighterscript
-' error: 'm' cannot be used inside an arrow function
+' a closure: captures `m`
 render = (data) => m.view.setData(data)
 
-' ok
+' a plain function: receives the view as an argument instead
 render = (data, view) => view.setData(data)
 render(data, m.view)
 ```
 
-An arrow function that captures nothing and does not use `m` is a plain BrightScript function. It can be passed anywhere a function can: parameters typed `as function` or with a function type, untyped (`dynamic`) parameters, and compiled `.brs` libraries that simply call `callback(x)`.
+An arrow function that captures nothing (including `m`) is a plain BrightScript function. It can be passed anywhere a function can: parameters typed `as function` or with a function type, untyped (`dynamic`) parameters, and compiled `.brs` libraries that simply call `callback(x)`.
 
 ## Limitations
 

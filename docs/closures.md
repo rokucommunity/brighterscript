@@ -292,6 +292,52 @@ print (function(__bsc_closure, __bsc_arg0)
 end function)(makeScaler(2), 5)
 ```
 
+## `m` inside a closure
+
+`m` is captured like any other variable: an arrow function that uses `m` sees the `m` of the function it is written in (the component's `m`, or the class instance inside a method), the way an arrow function in JavaScript sees the enclosing `this`. Using `m` therefore makes the arrow function a closure.
+
+```brighterscript
+sub init()
+    render = (data as object) => m.view.setData(data)
+end sub
+```
+
+transpiles to
+
+```brightscript
+sub init()
+    render = {
+        ctx: {
+            m: m
+        }
+        fn: function(__bsc_ctx, data as object)
+            m = __bsc_ctx.m
+            return m.view.setData(data)
+        end function
+    }
+end sub
+```
+
+Because `m` resolves through the enclosing function, a `typecast m as MyComponent` statement, or the class type inside a method, applies inside the closure too, so members of `m` are validated and completed there like anywhere else. A regular `function ... end function` nested inside an arrow function keeps BrightScript's usual call-site `m`.
+
+### Why `m` is captured
+
+In BrightScript, `m` is decided by *how* a function is called, not where it is written: `obj.fn()` runs `fn` with `m = obj`. A closure is invoked as `render.fn(render.ctx, data)`, so without capture, `m` inside the body would be the closure's own `{ ctx, fn }` object: never the component or class instance the author meant, and useless. Call-site `m` is not an option for closures, only a wrong answer, so the question is only *which* `m` to provide, and the one from the function the arrow is written in is the one every reader assumes.
+
+That is also what the languages this syntax comes from do. A JavaScript arrow function has no `this` of its own and sees the enclosing one; VB lambdas lift `Me` into the generated closure class as a field. `ctx.m` is the same mechanism, and it needs nothing new: `m` goes through the same capture analysis, the same `ctx` entry and the same unpacking as any other variable, which is why `typecast` and class types reach into the body for free.
+
+The trade-off is that using `m` makes an arrow function a closure, with everything that implies (see below): it cannot be handed to a parameter declared `as function` or left untyped. When a plain function is what is needed, pass the object in instead of reaching for `m`:
+
+```brighterscript
+' a closure: captures `m`, so it can only go where a closure is expected
+render = (data as object) => m.view.setData(data)
+
+' a plain function: the view arrives as an argument
+render = (data as object, view as object) => view.setData(data)
+```
+
+A regular `function ... end function` nested inside an arrow function is still an ordinary BrightScript function, so it keeps call-site `m`; only arrow functions capture it.
+
 ## The `closure` type
 
 Code that receives a closure must say so, using the same syntax as [function types](function-types.md) with the `closure` keyword:
@@ -354,6 +400,5 @@ This is deliberate: it keeps closures free of any runtime type checks, and keeps
 
 ## Not supported
 
-- `m` inside an arrow function is still an error, closure or not (what it should mean is a separate decision).
 - Multi-statement bodies. A closure body is a single expression, so a closure can never *assign* to a captured variable; the "copied at creation" rule only matters for the enclosing function.
 - Passing a closure to compiled `.brs` libraries, string-named callbacks (`observeField`, Task `functionName`) or node fields. Those need a plain function name or value.

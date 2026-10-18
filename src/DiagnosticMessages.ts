@@ -1422,15 +1422,6 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'closure-not-compatible-with-parameter'
     }),
-    /**
-     * `m` is not allowed inside arrow functions: what it should mean there (BrightScript's call-site `m` or a captured outer `m`)
-     * is left open until closures are designed, so allowing either now would lock that decision in
-     */
-    arrowFunctionCannotUseM: () => ({
-        message: `'m' cannot be used inside an arrow function. Pass the value in as a parameter instead`,
-        severity: DiagnosticSeverity.Error,
-        code: 'arrow-function-cannot-use-m'
-    }),
     expectedExpressionAfterArrow: () => ({
         message: `Expected an expression after '=>'`,
         severity: DiagnosticSeverity.Error,

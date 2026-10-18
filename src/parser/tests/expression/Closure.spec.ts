@@ -835,18 +835,52 @@ describe('closures', () => {
             });
         });
 
-        it('still does not allow m inside a closure', () => {
-            program.setFile('source/main.bs', `
-                sub main()
-                    factor = 2
-                    f = (x) => m.value * factor
-                end sub
-            `);
-            program.validate();
-            expectDiagnostics(program, [{
-                ...DiagnosticMessages.arrowFunctionCannotUseM(),
-                location: { range: util.createRange(3, 31, 3, 32) }
-            }]);
+        describe('m', () => {
+            it('transpiles a captured m like any other captured variable', async () => {
+                await testTranspile(`
+                    sub init()
+                        render = (data as object) => m.view.setData(data)
+                    end sub
+                `, `
+                    sub init()
+                        render = {
+                            ctx: {
+                                m: m
+                            }
+                            fn: function(__bsc_ctx, data as object)
+                                m = __bsc_ctx.m
+                                return m.view.setData(data)
+                            end function
+                        }
+                    end sub
+                `);
+            });
+
+            it('types m inside the closure from a typecast statement', () => {
+                program.setFile('source/main.bs', `
+                    typecast m as Widget
+                    interface Widget
+                        label as object
+                    end interface
+                    sub init()
+                        f = () => m.label
+                        g = () => m.missing
+                    end sub
+                `);
+                program.validate();
+                expect(program.getDiagnostics().map(diagnostic => diagnostic.code)).to.eql(['cannot-find-name']);
+            });
+
+            it('captures m alongside other variables', () => {
+                const [func] = getArrowFunctions(`
+                    sub init(prefix as string)
+                        show = (text as string) => setText(m, prefix + text)
+                    end sub
+                    sub setText(target as object, text as string)
+                    end sub
+                `);
+                expect(util.getClosureCapturedVariables(func)).to.eql(['m', 'prefix']);
+            });
         });
     });
 });
