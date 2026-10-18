@@ -309,6 +309,30 @@ describe('Program', () => {
         });
     });
 
+    describe('getSymbolProvider', () => {
+        it('returns the typedef for a .brs file that has one', () => {
+            const brsFile = program.setFile('source/lib.brs', '');
+            const typedef = program.setFile('source/lib.d.bs', '');
+            expect(program.getSymbolProvider(brsFile)).to.equal(typedef);
+        });
+
+        it('returns the file itself when it has no typedef', () => {
+            const brsFile = program.setFile('source/lib.brs', '');
+            const bsFile = program.setFile('source/other.bs', '');
+            const typedef = program.setFile('source/lonely.d.bs', '');
+            expect(program.getSymbolProvider(brsFile)).to.equal(brsFile);
+            expect(program.getSymbolProvider(bsFile)).to.equal(bsFile);
+            expect(program.getSymbolProvider(typedef)).to.equal(typedef);
+        });
+
+        it('goes back to the .brs file when its typedef is removed', () => {
+            const brsFile = program.setFile('source/lib.brs', '');
+            program.setFile('source/lib.d.bs', '');
+            program.removeFile('source/lib.d.bs');
+            expect(program.getSymbolProvider(brsFile)).to.equal(brsFile);
+        });
+    });
+
     describe('getFile', () => {
         it('can get a file from the srcPath', () => {
             const file = program.setFile({

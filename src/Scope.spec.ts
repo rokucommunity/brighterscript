@@ -2653,6 +2653,62 @@ describe('Scope', () => {
         });
     });
 
+    describe('getSymbolFiles', () => {
+        it('replaces a .brs file with its typedef', () => {
+            program.setFile('source/lib.brs', `
+                sub libFunc()
+                end sub
+            `);
+            const typedef = program.setFile('source/lib.d.bs', `
+                sub libFunc()
+                end sub
+            `);
+            const main = program.setFile('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            const scope = program.getScopeByName('source');
+            expect(scope.getAllFiles().map(x => x.destPath)).to.include(s`source/lib.brs`);
+            expect(scope.getSymbolFiles()).to.include.members([typedef, main]);
+            expect(scope.getSymbolFiles().map(x => x.destPath)).not.to.include(s`source/lib.brs`);
+        });
+
+        it('picks up a typedef added after the scope has cached its files', () => {
+            const lib = program.setFile('source/lib.brs', `
+                sub libFunc()
+                end sub
+            `);
+            const scope = program.getScopeByName('source');
+            expect(scope.getSymbolFiles()).to.include(lib);
+
+            const typedef = program.setFile('source/lib.d.bs', `
+                sub libFunc()
+                end sub
+            `);
+            expect(scope.getSymbolFiles()).to.include(typedef);
+            expect(scope.getSymbolFiles()).not.to.include(lib);
+        });
+
+        it('replaces a typedef-described script imported by a component', () => {
+            program.setFile('source/lib.brs', `
+                sub libFunc()
+                end sub
+            `);
+            const typedef = program.setFile('source/lib.d.bs', `
+                sub libFunc()
+                end sub
+            `);
+            const xmlFile = program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                </component>
+            `);
+            const scope = program.getComponentScope('Widget');
+            expect(scope.getOwnSymbolFiles()).to.eql([xmlFile, typedef]);
+        });
+    });
+
     describe('detachParent', () => {
         it('does not attach global to itself', () => {
             expect(program.globalScope.getParentScope()).not.to.exist;

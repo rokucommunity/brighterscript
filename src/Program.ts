@@ -1761,6 +1761,18 @@ export class Program {
         }
     }
 
+    /**
+     * Get the file that provides the symbols for the given file.
+     * A `.brs` file that has a typedef (`.d.bs`) is described by that typedef, so the typedef is returned instead.
+     * Every other file provides its own symbols.
+     */
+    public getSymbolProvider(file: BscFile): BscFile {
+        if (isBrsFile(file) && file.hasTypedef && file.typedefFile) {
+            return file.typedefFile;
+        }
+        return file;
+    }
+
     private sortedScopeNames: string[] = undefined;
 
     /**

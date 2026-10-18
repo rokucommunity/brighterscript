@@ -66,8 +66,8 @@ export class Scope {
      */
     public get namespaceLookup() {
         let allFilesValidated = true;
-        for (const file of this.getAllFiles()) {
-            if (isBrsFile(file) && !file.hasTypedef) {
+        for (const file of this.getSymbolFiles()) {
+            if (isBrsFile(file)) {
                 allFilesValidated = allFilesValidated && file.isValidated;
                 if (!allFilesValidated) {
                     break;
@@ -647,6 +647,26 @@ export class Scope {
     }
 
     /**
+     * Get the files in this scope that provide symbols, including files from ancestor scopes.
+     * This is `getAllFiles()` without the files that are described by a typedef (the typedef is in the list instead).
+     *
+     * Not cached, because a file's typedef can change without this scope being invalidated.
+     */
+    public getSymbolFiles(): BscFile[] {
+        return this.getAllFiles().filter(file => this.program.getSymbolProvider(file) === file);
+    }
+
+    /**
+     * Get the files directly in this scope that provide symbols (excluding files from ancestor scopes).
+     * This is `getOwnFiles()` without the files that are described by a typedef (the typedef is in the list instead).
+     *
+     * Not cached, because a file's typedef can change without this scope being invalidated.
+     */
+    public getOwnSymbolFiles(): BscFile[] {
+        return this.getOwnFiles().filter(file => this.program.getSymbolProvider(file) === file);
+    }
+
+    /**
      * Get the list of files referenced by this scope that are actually loaded in the program.
      * Includes files from this scope and all ancestor scopes
      */
@@ -754,10 +774,9 @@ export class Scope {
      * Iterate over Brs files not shadowed by typedefs
      */
     public enumerateBrsFiles(callback: (file: BrsFile) => void) {
-        const files = this.getAllFiles();
+        const files = this.getSymbolFiles();
         for (const file of files) {
-            //only brs files without a typedef
-            if (isBrsFile(file) && !file.hasTypedef) {
+            if (isBrsFile(file)) {
                 callback(file);
             }
         }
@@ -767,10 +786,9 @@ export class Scope {
      * Iterate over Brs files not shadowed by typedefs
      */
     public enumerateBrsFilesWithBreak(callback: (file: BrsFile) => boolean) {
-        const files = this.getAllFiles();
+        const files = this.getSymbolFiles();
         for (const file of files) {
-            //only brs files without a typedef
-            if (isBrsFile(file) && !file.hasTypedef) {
+            if (isBrsFile(file)) {
                 if (callback(file)) {
                     break;
                 }
@@ -782,10 +800,9 @@ export class Scope {
      * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
      */
     public enumerateOwnFiles(callback: (file: BscFile) => void) {
-        const files = this.getOwnFiles();
+        const files = this.getOwnSymbolFiles();
         for (const file of files) {
-            //either XML components or files without a typedef
-            if (isXmlFile(file) || (isBrsFile(file) && !file.hasTypedef)) {
+            if (isXmlFile(file) || isBrsFile(file)) {
                 callback(file);
             }
         }
