@@ -1,7 +1,8 @@
 import type { BsDiagnostic } from './interfaces';
+import { DiagnosticSeverity } from 'vscode-languageserver-protocol';
 import * as path from 'path';
 import * as micromatch from 'micromatch';
-import type { BsConfig } from './BsConfig';
+import type { BsConfig, BsDiagnosticSeverity } from './BsConfig';
 import util, { standardizePath as s } from './util';
 import { URI } from 'vscode-uri';
 import type { Program } from './Program';
@@ -15,6 +16,7 @@ interface NormalizedFilter {
     src?: string;
     dest?: string;
     codes?: (number | string)[];
+    severities?: BsDiagnosticSeverity[];
     isNegative: boolean;
 }
 
@@ -99,7 +101,7 @@ export class DiagnosticFilterer {
         let isMatch = false;
         //filter each matched file
         for (let filter of this.filters) {
-            if (filter.codes?.length > 0) {
+            if (filter.codes?.length > 0 || Array.isArray(filter.severities)) {
                 continue;
             }
             let srcMatch = false;
@@ -242,24 +244,90 @@ export class DiagnosticFilterer {
         //if the filter is not negative we're turning diagnostics off
         const isSuppressing = !filter.isNegative;
         const lowerFileUri = fileUri.toLowerCase();
-        //if there is no code, set isSuppressed on every diagnostic in this file
-        if (!filter.codes) {
+        const hasCodes = Array.isArray(filter.codes);
+        const hasSeverities = Array.isArray(filter.severities);
+        //if there is no code or severity filter, set isSuppressed on every diagnostic in this file
+        if (!hasCodes && !hasSeverities) {
             this.byFile[lowerFileUri].forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
-            //set isSuppressed for any diagnostics with matching codes
+            //set isSuppressed for any diagnostics with matching codes and/or severities
         } else {
             let fileDiagnostics = this.byFile[lowerFileUri];
             for (const diagnostic of fileDiagnostics) {
-                if (filter.codes.includes(diagnostic.diagnostic.code!) ||
-                    (diagnostic.diagnostic.legacyCode &&
-                        (filter.codes.includes(diagnostic.diagnostic.legacyCode) ||
-                            filter.codes.includes(diagnostic.diagnostic.legacyCode.toString())))) {
+                const codeMatches = hasCodes ? this.matchesCode(filter, diagnostic.diagnostic) : true;
+                const severityMatches = hasSeverities ? this.matchesSeverity(filter, diagnostic.diagnostic) : true;
+                if (codeMatches && severityMatches) {
                     diagnostic.isSuppressed = isSuppressing;
                 }
             }
         }
+    }
+
+    private matchesCode(filter: NormalizedFilter, diagnostic: BsDiagnostic): boolean {
+        return !!(
+            filter.codes?.includes(diagnostic.code!) ||
+            (diagnostic.legacyCode &&
+                (filter.codes?.includes(diagnostic.legacyCode) ||
+                    filter.codes?.includes(diagnostic.legacyCode.toString())))
+        );
+    }
+
+    private matchesSeverity(filter: NormalizedFilter, diagnostic: BsDiagnostic): boolean {
+        const diagnosticSeverity = this.toDiagnosticSeverity(diagnostic.severity);
+        if (diagnosticSeverity === undefined) {
+            return false;
+        }
+        return !!filter.severities?.some(s => this.toDiagnosticSeverity(s) === diagnosticSeverity);
+    }
+
+    private toDiagnosticSeverity(value: unknown): DiagnosticSeverity | undefined {
+        if (typeof value === 'number') {
+            if (
+                value === DiagnosticSeverity.Error ||
+                value === DiagnosticSeverity.Warning ||
+                value === DiagnosticSeverity.Information ||
+                value === DiagnosticSeverity.Hint
+            ) {
+                return value;
+            }
+            return undefined;
+        }
+        if (typeof value === 'string') {
+            switch (value.toLowerCase()) {
+                case 'error':
+                    return DiagnosticSeverity.Error;
+                case 'warn':
+                case 'warning':
+                    return DiagnosticSeverity.Warning;
+                case 'info':
+                case 'information':
+                    return DiagnosticSeverity.Information;
+                case 'hint':
+                    return DiagnosticSeverity.Hint;
+            }
+        }
+        return undefined;
+    }
+
+    private extractSeverities(filter: { severities?: unknown; severity?: unknown }): BsDiagnosticSeverity[] | undefined {
+        let rawSeverities: unknown[] | undefined;
+        if (Array.isArray(filter.severities)) {
+            rawSeverities = filter.severities;
+        } else if (filter.severities !== undefined) {
+            rawSeverities = [filter.severities];
+        } else if (Array.isArray(filter.severity)) {
+            rawSeverities = filter.severity;
+        } else if (filter.severity !== undefined) {
+            rawSeverities = [filter.severity];
+        }
+        if (!rawSeverities) {
+            return undefined;
+        }
+        return rawSeverities.filter(
+            (s): s is BsDiagnosticSeverity => this.toDiagnosticSeverity(s) !== undefined
+        );
     }
 
     public getDiagnosticFilters(config: BsConfig) {
@@ -295,12 +363,21 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            //code-only filter
-            if ('codes' in filter && !('files' in filter) && Array.isArray(filter.codes)) {
-                result.push({
-                    codes: filter.codes,
+            const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
+            const severities = this.extractSeverities(filter);
+
+            //code/severity-only filter
+            if (!('files' in filter) && (hasCodes || severities !== undefined)) {
+                const normalized: NormalizedFilter = {
                     isNegative: false
-                });
+                };
+                if (hasCodes) {
+                    normalized.codes = filter.codes;
+                }
+                if (severities !== undefined) {
+                    normalized.severities = severities;
+                }
+                result.push(normalized);
                 continue;
             }
 
@@ -373,12 +450,21 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            //code-only filter
-            if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
-                result.push({
-                    codes: filter.codes,
+            const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
+            const severities = this.extractSeverities(filter as { severities?: unknown; severity?: unknown });
+
+            //code/severity-only filter
+            if (!('src' in filter) && (hasCodes || severities !== undefined)) {
+                const normalized: NormalizedFilter = {
                     isNegative: false
-                });
+                };
+                if (hasCodes) {
+                    normalized.codes = filter.codes;
+                }
+                if (severities !== undefined) {
+                    normalized.severities = severities;
+                }
+                result.push(normalized);
                 continue;
             }
 
@@ -386,56 +472,42 @@ export class DiagnosticFilterer {
                 const isNegative = filter.src.startsWith('!');
                 const trimmedFilter = isNegative ? filter.src.slice(1) : filter.src;
 
+                const normalized: NormalizedFilter = {
+                    src: trimmedFilter,
+                    isNegative: isNegative
+                };
                 if ('codes' in filter) {
-                    result.push({
-                        src: trimmedFilter,
-                        codes: filter.codes,
-                        isNegative: isNegative
-                    });
-                } else {
-                    result.push({
-                        src: trimmedFilter,
-                        isNegative: isNegative
-                    });
+                    normalized.codes = filter.codes;
                 }
+                if (severities !== undefined) {
+                    normalized.severities = severities;
+                }
+                result.push(normalized);
             }
         }
         return result;
     }
 
 
-    private getNormalizedFilter(fileGlob: string, filter: { files: string } | { codes?: (number | string)[] }, locationKey: 'src' | 'dest' = 'src'): NormalizedFilter {
+    private getNormalizedFilter(
+        fileGlob: string,
+        filter: { files?: any; codes?: (number | string)[]; severities?: BsDiagnosticSeverity[]; severity?: BsDiagnosticSeverity | BsDiagnosticSeverity[] },
+        locationKey: 'src' | 'dest' = 'src'
+    ): NormalizedFilter {
         const isNegative = fileGlob.startsWith('!');
         const trimmedFilter = isNegative ? fileGlob.slice(1) : fileGlob;
-        if (locationKey === 'src') {
-            if ('codes' in filter && Array.isArray(filter.codes)) {
-                return {
-                    src: trimmedFilter,
-                    codes: filter.codes,
-                    isNegative: isNegative
-                };
-            } else {
-                return {
-                    src: trimmedFilter,
-                    isNegative: isNegative
-                };
-            }
-        } else {
-            // dest
-            if ('codes' in filter && Array.isArray(filter.codes)) {
-                return {
-                    dest: trimmedFilter,
-                    codes: filter.codes,
-                    isNegative: isNegative
-                };
-            } else {
-                return {
-                    dest: trimmedFilter,
-                    isNegative: isNegative
-                };
-            }
+        const normalized: NormalizedFilter = {
+            [locationKey]: trimmedFilter,
+            isNegative: isNegative
+        };
+        if ('codes' in filter && Array.isArray(filter.codes)) {
+            normalized.codes = filter.codes;
         }
-
+        const severities = this.extractSeverities(filter);
+        if (severities !== undefined) {
+            normalized.severities = severities;
+        }
+        return normalized;
     }
 
     /**
