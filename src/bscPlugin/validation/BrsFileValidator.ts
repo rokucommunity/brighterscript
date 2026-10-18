@@ -87,6 +87,7 @@ export class BrsFileValidator {
 
         this.literalPools = {};
         this.walk();
+        this.validateClosureCaptures();
         this.validateFileLiteralCount();
         this.validateGotosAndLabels();
         this.flagTopLevelStatements();
@@ -362,11 +363,13 @@ export class BrsFileValidator {
             FunctionExpression: (node) => {
                 const funcSymbolTable = node.getSymbolTable();
                 const isInlineFunc = !(isFunctionStatement(node.parent) || isMethodStatement(node.parent));
-                if (isInlineFunc) {
+                if (isInlineFunc && !node.isArrowFunction) {
                     // symbol table should not include any symbols from parent func
+                    // (arrow functions keep the enclosing function's scope, since they may capture its variables and become closures)
                     funcSymbolTable.pushParentProvider(() => node.findAncestor<Body>(isBody).getSymbolTable());
                 }
-                //arrow functions don't get an `m`: what it should mean there is left open until closures are designed (see #1929)
+                //arrow functions don't get an `m` of their own: they see the enclosing function's `m` through the symbol chain
+                //(and capture it, becoming a closure, when they use it)
                 if (!node.isArrowFunction && (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc)) {
                     if (!isTypecastStatement(node.body?.statements?.[0])) {
                         // if this is an inline function, or if the function body does not start with a typecast statement, add the `m` symbol to the function scope. If the function body starts with a typecast statement, the `m` symbol will be added in the visitor for TypecastStatement, and it will be typed as the type from the typecast statement
@@ -378,9 +381,6 @@ export class BrsFileValidator {
                 this.collectFunctionLiterals(node);
                 this.validateFunctionGotoLabelCount(node);
                 this.flagControlFlowUnreachableCode(node);
-                if (node.isArrowFunction) {
-                    this.validateArrowFunctionDoesNotUseM(node);
-                }
             },
             FunctionParameterExpression: (node) => {
                 if (isTypedFunctionTypeExpression(node.parent)) {
@@ -762,27 +762,58 @@ export class BrsFileValidator {
         }
     }
 
+    private get arrowFunctions() {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        return (this.event.file['_cachedLookups'].functionExpressions as FunctionExpression[]).filter(func => func.isArrowFunction);
+    }
+
     /**
-     * `m` is not allowed inside arrow functions: what it should mean there (BrightScript's call-site `m` or a captured outer `m`)
-     * is left open until closures are designed (see #1929). Checked per arrow function rather than for every `m` in the file, so
-     * only arrow function bodies pay for it. Does not step into nested functions: a nested arrow function is checked on its own
-     * visit, and a nested regular function may use `m` as usual
+     * Flag captured variables that are reassigned after their closure is created. (Which variables those are is memoized per
+     * arrow function and dropped by `CachedLookups.invalidate()` at the start of each validation)
      */
-    private validateArrowFunctionDoesNotUseM(arrow: FunctionExpression) {
-        const visitor = createVisitor({
-            VariableExpression: (node) => {
-                if (node.tokens.name?.text?.toLowerCase() === 'm') {
-                    this.event.program.diagnostics.register({
-                        ...DiagnosticMessages.arrowFunctionCannotUseM(),
-                        location: node.tokens.name.location
-                    });
-                }
+    private validateClosureCaptures() {
+        for (const arrow of this.arrowFunctions) {
+            for (const name of util.getClosureCapturedVariables(arrow)) {
+                this.validateCapturedVariableNotReassigned(arrow, name);
             }
-        });
-        for (const param of arrow.parameters) {
-            param.walk(visitor, { walkMode: WalkMode.visitExpressions });
         }
-        arrow.body?.walk(visitor, { walkMode: WalkMode.visitExpressions });
+    }
+
+    /**
+     * Closures copy captured values when they are created, so flag any assignment to a captured variable that comes after
+     * the closure in its enclosing function (the closure would never see the new value)
+     */
+    private validateCapturedVariableNotReassigned(arrow: FunctionExpression, name: string) {
+        const enclosingFunction = arrow.parent?.findAncestor<FunctionExpression>((node) => isFunctionExpression(node) && !node.isArrowFunction);
+        const closureEnd = arrow.location?.range?.end;
+        if (!enclosingFunction || !closureEnd) {
+            return;
+        }
+        const lowerName = name.toLowerCase();
+        const check = (token: Token | undefined) => {
+            if (token?.text?.toLowerCase() === lowerName && util.comparePosition(token.location?.range?.start, closureEnd) > 0) {
+                this.event.program.diagnostics.register({
+                    ...DiagnosticMessages.closureCapturedVariableReassigned(name),
+                    location: token.location
+                });
+            }
+        };
+        //does not step into child functions, so the closure's own body (and other functions' locals) are never checked
+        enclosingFunction.body?.walk(createVisitor({
+            AssignmentStatement: (node) => check(node.tokens.name),
+            AugmentedAssignmentStatement: (node) => {
+                if (isVariableExpression(node.item)) {
+                    check(node.item.tokens.name);
+                }
+            },
+            IncrementStatement: (node) => {
+                if (isVariableExpression(node.value)) {
+                    check(node.value.tokens.name);
+                }
+            },
+            ForEachStatement: (node) => check(node.tokens.item),
+            DimStatement: (node) => check(node.tokens.name)
+        }), { walkMode: WalkMode.visitAll });
     }
 
     private validateFunctionParameterCount(func: FunctionExpression) {

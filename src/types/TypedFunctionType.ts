@@ -30,6 +30,13 @@ export class TypedFunctionType extends BaseFunctionType {
      */
     public isVariadic = false;
 
+    /**
+     * Is this a closure: an arrow function that captures variables from the function it is written in?
+     * Closures are associative arrays at runtime (`{ ctx: {...}, fn: function(__bsc_ctx, ...) }`) rather than plain functions,
+     * so they are never interchangeable with `function` types, `dynamic` or `object`
+     */
+    public isClosure = false;
+
     public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
 
     public setName(name: string) {
@@ -70,6 +77,12 @@ export class TypedFunctionType extends BaseFunctionType {
             if (this === targetType) {
                 return true;
             }
+            //a closure is an AA at runtime and a plain function is not, so neither can stand in for the other
+            if (this.isClosure !== targetType.isClosure) {
+                data.expectedType = data.expectedType ?? this;
+                data.actualType = data.actualType ?? targetType;
+                return false;
+            }
             return this.checkParamsAndReturnValue(targetType, true, (t1, t2, d) => t1.isTypeCompatible(t2, d), data);
         }
         return false;
@@ -87,15 +100,23 @@ export class TypedFunctionType extends BaseFunctionType {
             }
             variadicText += '...';
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
+        let keyword = this.isSub ? 'sub' : 'function';
+        if (this.isClosure) {
+            keyword = 'closure';
+        }
+        return `${keyword} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
     }
 
     public toTypeString(): string {
-        return 'Function';
+        //closures are associative arrays at runtime
+        return this.isClosure ? 'object' : 'Function';
     }
 
     isEqual(targetType: BscType, data: TypeCompatibilityData = {}) {
         if (isTypedFunctionType(targetType)) {
+            if (this.isClosure !== targetType.isClosure) {
+                return false;
+            }
             const checkNames = data?.allowNameEquality ?? true;
             if (checkNames && this.toString().toLowerCase() === targetType.toString().toLowerCase()) {
                 // this function has the same param names and types and return type as the target

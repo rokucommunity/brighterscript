@@ -3679,8 +3679,8 @@ export class Parser {
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
         let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression;
 
-        if (this.checkAny(TokenKind.Sub, TokenKind.Function) && this.checkNext(TokenKind.LeftParen)) {
-            // this is a tyyed function type expression, eg. "function(type1, type2) as type3"
+        if ((this.checkAny(TokenKind.Sub, TokenKind.Function) || this.checkClosureTypeKeyword()) && this.checkNext(TokenKind.LeftParen)) {
+            // this is a tyyed function type expression, eg. "function(type1, type2) as type3" or "closure(type1) as type2"
             this.warnIfNotBrighterScriptMode('typed function types');
             expr = this.typedFunctionTypeExpression();
         } else if (this.checkAny(...DeclarableTypes)) {
@@ -3741,6 +3741,15 @@ export class Parser {
         }
 
         return expr;
+    }
+
+    /**
+     * Is the current token the `closure` type keyword (i.e. `callback as closure(x as integer) as integer`)?
+     * `closure` is contextual: it is only a keyword when it starts a type expression and is followed by `(`,
+     * so variables named `closure` keep working
+     */
+    private checkClosureTypeKeyword() {
+        return this.check(TokenKind.Identifier) && this.peek().text.toLowerCase() === 'closure';
     }
 
     private typedFunctionTypeExpression() {

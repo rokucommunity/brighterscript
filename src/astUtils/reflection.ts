@@ -373,6 +373,14 @@ export function isTypedFunctionType(value: any): value is TypedFunctionType {
     return value?.kind === BscTypeKind.TypedFunctionType;
 }
 
+/**
+ * Is this the type of a closure (an arrow function that captures variables from its enclosing function)?
+ * Closures are `TypedFunctionType`s flagged with `isClosure`, since they are called like functions but are AAs at runtime
+ */
+export function isClosureType(value: any): value is TypedFunctionType {
+    return isTypedFunctionType(value) && value.isClosure === true;
+}
+
 export function isTypedFunctionTypeLike(value: any): value is TypedFunctionType | TypeStatementType | UnionType {
     return isTypedFunctionType(value) || isTypeStatementTypeOf(value, isTypedFunctionTypeLike) || isUnionTypeOf(value, isTypedFunctionTypeLike);
 }

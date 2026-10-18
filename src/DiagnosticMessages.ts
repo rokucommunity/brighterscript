@@ -1403,23 +1403,24 @@ export let DiagnosticMessages = {
         code: 'exceeds-max-goto-label-count'
     }),
     /**
-     * An arrow function references a local variable of the function it is written inside. Arrow functions are plain
-     * functions (closures are not supported yet, see #530), so that variable is not visible to them
-     * @param name the name of the variable being referenced
+     * A variable captured by a closure is assigned again after the closure was created. Closures copy the value a variable
+     * has at the moment they are created, so the later assignment would not be visible to the closure
+     * @param name the name of the captured variable
      */
-    arrowFunctionCannotCaptureVariable: (name: string) => ({
-        message: `Arrow functions cannot use variable '${name}' from the enclosing function. Capturing outer variables is not supported yet, so pass it in as a parameter instead`,
+    closureCapturedVariableReassigned: (name: string) => ({
+        message: `Variable '${name}' is captured by a closure and cannot be reassigned afterwards: closures capture the value a variable has when they are created`,
         severity: DiagnosticSeverity.Error,
-        code: 'arrow-function-cannot-capture-variable'
+        code: 'closure-captured-variable-reassigned'
     }),
     /**
-     * `m` is not allowed inside arrow functions: what it should mean there (BrightScript's call-site `m` or a captured outer `m`)
-     * is left open until closures are designed, so allowing either now would lock that decision in
+     * A closure is passed to a parameter that is not typed as a closure. Closures are AAs at runtime, so code that treats the
+     * parameter as a plain function (`callback(x)`) would fail
+     * @param parameterType the declared type of the parameter
      */
-    arrowFunctionCannotUseM: () => ({
-        message: `'m' cannot be used inside an arrow function. Pass the value in as a parameter instead`,
+    closureNotCompatibleWithParameter: (parameterType: string) => ({
+        message: `A closure (an arrow function that captures outer variables) cannot be passed to a parameter of type '${parameterType}'. Closures are objects at runtime, so the parameter must be declared as 'closure(...)'`,
         severity: DiagnosticSeverity.Error,
-        code: 'arrow-function-cannot-use-m'
+        code: 'closure-not-compatible-with-parameter'
     }),
     expectedExpressionAfterArrow: () => ({
         message: `Expected an expression after '=>'`,

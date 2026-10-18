@@ -21,6 +21,14 @@ end sub
 adults = filter(people, (p) => p.age >= 18)
 ```
 
+transpiles to
+
+```brightscript
+adults = filter(people, function(p)
+    return p.age >= 18
+end function)
+```
+
 ## [Assignments](assigments.md)
 
 ```brighterscript
@@ -54,6 +62,37 @@ class Movie
         return m._actors
     end sub
 end class
+```
+
+## [Closures](closures.md)
+
+```brighterscript
+' an arrow function that uses enclosing variables captures a copy of each one it references
+offset = 1
+factor = 2
+unused = 3
+scale = (x) => x * factor + offset
+print scale(10)
+```
+
+transpiles to
+
+```brightscript
+offset = 1
+factor = 2
+unused = 3
+scale = {
+    ctx: {
+        factor: factor
+        offset: offset
+    }
+    fn: function(__bsc_ctx, x)
+        factor = __bsc_ctx.factor
+        offset = __bsc_ctx.offset
+        return x * factor + offset
+    end function
+}
+print scale.fn(scale.ctx, 10)
 ```
 
 ## [Constants](constants.md)

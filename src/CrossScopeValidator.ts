@@ -988,11 +988,6 @@ export class CrossScopeValidator {
             }
         }
 
-        //an arrow function reaching for a local of its enclosing function gets a diagnostic that says why the name is unavailable
-        const arrowFunctionDiagnostic = util.getArrowFunctionCaptureDiagnostic(typeChainResult.astNode);
-        if (arrowFunctionDiagnostic) {
-            return arrowFunctionDiagnostic;
-        }
         if (isCallExpression(typeChainResult.astNode?.parent) && typeChainResult.astNode?.parent.callee === typeChainResult.astNode) {
             return DiagnosticMessages.cannotFindFunction(typeChainResult.itemName, typeChainResult.fullNameOfItem, typeChainResult.itemParentTypeName, parentDescriptor);
         }
