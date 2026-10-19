@@ -89,6 +89,17 @@ export class XmlCode implements BscCode {
         return this.document.destPath;
     }
 
+    /**
+     * A key that identifies this code in the program. Defaults to the file's `pkgPath`, which is right for code that covers the whole file.
+     */
+    public get key() {
+        return this._key ?? this.document.pkgPath;
+    }
+    public set key(value: string) {
+        this._key = value;
+    }
+    private _key: string;
+
     public get pkgPath() {
         return this.document.pkgPath;
     }

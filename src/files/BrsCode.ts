@@ -99,6 +99,17 @@ export class BrsCode implements BscCode {
         return this.document.destPath;
     }
 
+    /**
+     * A key that identifies this code in the program. Defaults to the file's `pkgPath`, which is right for code that covers the whole file.
+     */
+    public get key() {
+        return this._key ?? this.document.pkgPath;
+    }
+    public set key(value: string) {
+        this._key = value;
+    }
+    private _key: string;
+
     public get pkgPath() {
         return this.document.pkgPath;
     }
@@ -840,7 +851,7 @@ export class BrsCode implements BscCode {
         const nsTable = this.getNamespaceSymbolTable(false);
         this.linkSymbolTableDisposables.push(this.ast.symbolTable.addSibling(nsTable));
         this.validationSegmenter.processTree(this.ast);
-        this.program.addFileSymbolInfo(this.file);
+        this.program.addCodeSymbolInfo(this);
         this.unlinkNamespaceSymbolTables();
     }
 
@@ -1045,7 +1056,7 @@ export class BrsCode implements BscCode {
         const changes = new Map<SymbolTypeFlag, Set<string>>();
         changes.set(SymbolTypeFlag.runtime, new Set<string>());
         changes.set(SymbolTypeFlag.typetime, new Set<string>());
-        const previouslyProvidedSymbols = this.program.getFileSymbolInfo(this.file)?.provides.symbolMap;
+        const previouslyProvidedSymbols = this.program.getCodeSymbolInfo(this)?.provides.symbolMap;
         const previousSymbolsChecked = new Map<SymbolTypeFlag, Set<string>>();
         previousSymbolsChecked.set(SymbolTypeFlag.runtime, new Set<string>());
         previousSymbolsChecked.set(SymbolTypeFlag.typetime, new Set<string>());

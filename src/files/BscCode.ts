@@ -19,6 +19,12 @@ export interface BscCode {
     document: BscFile;
     program: Program;
     /**
+     * A key that identifies this code in the program. It stays the same when the code is re-parsed or its file is replaced,
+     * so information about the code (i.e. the symbols it provides) can be compared across validations.
+     * Code that covers a whole file uses the file's `pkgPath`.
+     */
+    readonly key: string;
+    /**
      * The absolute path to the file this code lives in
      */
     readonly srcPath: string;

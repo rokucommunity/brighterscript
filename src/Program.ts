@@ -25,7 +25,7 @@ import type { FirmwareCapabilities } from './RokuConstants';
 import { DEFAULT_MIN_FIRMWARE_VERSION, getFirmwareCapabilities, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
+import { isBrsCode, isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
@@ -299,7 +299,10 @@ export class Program {
      */
     public plugins: PluginInterface;
 
-    private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
+    /**
+     * The symbols each piece of code provides and requires, keyed by the code's `key`
+     */
+    private codeSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
     private currentScopeValidationOptions: ScopeValidationOptions;
 
@@ -317,15 +320,29 @@ export class Program {
      */
     private componentsTable = new SymbolTable('Custom Components');
 
-    public addFileSymbolInfo(file: BrsFile) {
-        this.fileSymbolInformation.set(file.pkgPath, {
-            provides: file.providedSymbols,
-            requires: file.requiredSymbols
+    public addCodeSymbolInfo(code: BrsCode) {
+        this.codeSymbolInformation.set(code.key, {
+            provides: code.providedSymbols,
+            requires: code.requiredSymbols
         });
     }
 
+    public getCodeSymbolInfo(code: BrsCode) {
+        return this.codeSymbolInformation.get(code.key);
+    }
+
+    /**
+     * @deprecated use `addCodeSymbolInfo` instead
+     */
+    public addFileSymbolInfo(file: BrsFile) {
+        this.addCodeSymbolInfo(file.code);
+    }
+
+    /**
+     * @deprecated use `getCodeSymbolInfo` instead
+     */
     public getFileSymbolInfo(file: BrsFile) {
-        return this.fileSymbolInformation.get(file.pkgPath);
+        return this.getCodeSymbolInfo(file.code);
     }
 
     /**
@@ -1198,14 +1215,17 @@ export class Program {
             if (this.isSourceBrsFile(file)) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
-            if (isBrsFile(file)) {
-                this.logger.debug('Removing file symbol info', file.srcPath);
-
-                if (!keepSymbolInformation) {
-                    //the symbols this file provided are gone, so anything that required them needs to be revalidated
-                    this.addRemovedFileSymbolsToChangedSymbols(file);
-                    this.fileSymbolInformation.delete(file.pkgPath);
+            if (!keepSymbolInformation) {
+                for (const code of file.codes ?? []) {
+                    if (isBrsCode(code)) {
+                        this.logger.debug('Removing code symbol info', code.key);
+                        //the symbols this code provided are gone, so anything that required them needs to be revalidated
+                        this.addRemovedCodeSymbolsToChangedSymbols(code);
+                        this.codeSymbolInformation.delete(code.key);
+                    }
                 }
+            }
+            if (isBrsFile(file)) {
                 this.crossScopeValidation.clearResolutionsForFile(file);
             }
 
@@ -1231,11 +1251,11 @@ export class Program {
     }
 
     /**
-     * Record every symbol a removed file previously provided as changed, so the next validation
-     * revalidates the files and scopes that depended on them
+     * Record every symbol removed code previously provided as changed, so the next validation
+     * revalidates the code and scopes that depended on them
      */
-    private addRemovedFileSymbolsToChangedSymbols(file: BrsFile) {
-        const previouslyProvidedSymbols = this.fileSymbolInformation.get(file.pkgPath)?.provides.symbolMap;
+    private addRemovedCodeSymbolsToChangedSymbols(code: BrsCode) {
+        const previouslyProvidedSymbols = this.codeSymbolInformation.get(code.key)?.provides.symbolMap;
         if (!previouslyProvidedSymbols) {
             return;
         }

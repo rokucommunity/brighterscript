@@ -418,7 +418,7 @@ describe('Program', () => {
                 program.plugins.add({
                     name: 'test',
                     afterValidateFile: (event) => {
-                        hadSymbolInfo = !!program.getFileSymbolInfo(event.file as BrsFile);
+                        hadSymbolInfo = !!program.getCodeSymbolInfo((event.file as BrsFile).code);
                     }
                 });
                 program.validate();

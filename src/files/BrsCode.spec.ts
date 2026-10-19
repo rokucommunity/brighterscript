@@ -4,6 +4,7 @@ import { rootDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
 import { ParseMode } from '../parser/Parser';
 import { util } from '../util';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 describe('BrsCode', () => {
     let program: Program;
@@ -81,6 +82,21 @@ describe('BrsCode', () => {
             expect(file.code.getText(util.createRange(4, 4, 4, 9))).to.equal('print');
             expect(file.code.getText(util.createRange(3, 44, 4, 9))).to.equal('main()\n    print');
         });
+    });
+
+    it('is keyed by its file\'s pkgPath unless given its own key', () => {
+        const file = program.setFile<BrsFile>('source/lib.bs', '');
+        expect(file.code.key).to.equal(file.pkgPath);
+        file.code.key = 'components/Widget.xml#script-1';
+        expect(file.code.key).to.equal('components/Widget.xml#script-1');
+    });
+
+    it('stores its symbol info under its key', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `sub main()\nend sub`);
+        program.validate();
+        expect(program.getCodeSymbolInfo(file.code).provides.symbolMap.get(SymbolTypeFlag.runtime).has('main')).to.be.true;
+        //the deprecated file-based lookup finds the same info
+        expect(program.getFileSymbolInfo(file)).to.equal(program.getCodeSymbolInfo(file.code));
     });
 
     it('knows where it starts in its document', () => {
