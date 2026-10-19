@@ -1,9 +1,9 @@
 import * as path from 'path';
 import { DiagnosticTag, type Range } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isBrsCode, isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCode } from '../../files/BrsCode';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
@@ -19,7 +19,7 @@ import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
 import type { ClassType } from '../../types/ClassType';
-import type { BscFile } from '../../files/BscFile';
+import type { BscCode } from '../../files/BscCode';
 import { InsideSegmentWalkMode } from '../../AstValidationSegmenter';
 import { TokenKind } from '../../lexer/TokenKind';
 import { ParseMode } from '../../parser/Parser';
@@ -154,42 +154,49 @@ export class ScopeValidator {
         this.event = undefined;
     }
 
+    /**
+     * Is this code from a typedef file (`.d.bs`)? Typedefs are ambient declarations, so they are never validated for diagnostics
+     */
+    private isTypedefCode(code: BrsCode) {
+        return isBrsFile(code.document) && code.document.isTypedef;
+    }
+
     private walkFiles() {
         const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
         //do many per-file checks for every file in this (and parent) scopes
-        this.event.scope.enumerateBrsFiles((file) => {
-            if (!isBrsFile(file) || file.isTypedef) {
+        this.event.scope.enumerateBrsCode((code) => {
+            if (this.isTypedefCode(code)) {
                 return;
             }
 
-            const thisFileHasChanges = this.event.changedFiles.includes(file);
+            const thisFileHasChanges = this.event.changedFiles.includes(code.document);
 
-            if (thisFileHasChanges || this.doesFileProvideChangedSymbol(file, this.event.changedSymbols)) {
-                this.diagnosticDetectFunctionCollisions(file);
+            if (thisFileHasChanges || this.doesFileProvideChangedSymbol(code, this.event.changedSymbols)) {
+                this.diagnosticDetectFunctionCollisions(code);
             }
         });
         const fileWalkStopWatch = new Stopwatch();
 
-        this.event.scope.enumerateOwnFiles((file) => {
-            if (isBrsFile(file)) {
+        this.event.scope.enumerateOwnCode((code) => {
+            if (isBrsCode(code)) {
 
                 //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics
-                if (file.isTypedef) {
+                if (this.isTypedefCode(code)) {
                     return;
                 }
 
-                if (this.event.program.diagnostics.canSkipScopeValidationForFile(file)) {
+                if (this.event.program.diagnostics.canSkipScopeValidationForFile(code)) {
                     return;
                 }
 
                 fileWalkStopWatch.reset();
                 fileWalkStopWatch.start();
 
-                const fileUri = util.pathToUri(file.srcPath);
-                const thisFileHasChanges = this.event.changedFiles.includes(file);
+                const fileUri = util.pathToUri(code.srcPath);
+                const thisFileHasChanges = this.event.changedFiles.includes(code.document);
 
-                const hasUnvalidatedSegments = file.validationSegmenter.hasUnvalidatedSegments();
+                const hasUnvalidatedSegments = code.validationSegmenter.hasUnvalidatedSegments();
 
                 if (hasChangeInfo && !hasUnvalidatedSegments) {
                     return;
@@ -198,95 +205,95 @@ export class ScopeValidator {
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
                         this.addValidationKindMetric('VariableExpression', () => {
-                            this.validateVariableAndDottedGetExpressions(file, varExpr);
+                            this.validateVariableAndDottedGetExpressions(code, varExpr);
                         });
                     },
                     DottedGetExpression: (dottedGet) => {
                         this.addValidationKindMetric('DottedGetExpression', () => {
-                            this.validateVariableAndDottedGetExpressions(file, dottedGet);
+                            this.validateVariableAndDottedGetExpressions(code, dottedGet);
                         });
                     },
                     CallExpression: (functionCall) => {
                         this.addValidationKindMetric('CallExpression', () => {
-                            this.validateCallExpression(file, functionCall);
-                            this.validateCreateObjectCall(file, functionCall);
-                            this.validateComponentMethods(file, functionCall);
+                            this.validateCallExpression(code, functionCall);
+                            this.validateCreateObjectCall(code, functionCall);
+                            this.validateComponentMethods(code, functionCall);
                         });
                     },
                     CallfuncExpression: (functionCall) => {
                         this.addValidationKindMetric('CallfuncExpression', () => {
-                            this.validateCallFuncExpression(file, functionCall);
+                            this.validateCallFuncExpression(code, functionCall);
                         });
                     },
                     ReturnStatement: (returnStatement) => {
                         this.addValidationKindMetric('ReturnStatement', () => {
-                            this.validateReturnStatement(file, returnStatement);
+                            this.validateReturnStatement(code, returnStatement);
                         });
                     },
                     DottedSetStatement: (dottedSetStmt) => {
                         this.addValidationKindMetric('DottedSetStatement', () => {
-                            this.validateDottedSetStatement(file, dottedSetStmt);
+                            this.validateDottedSetStatement(code, dottedSetStmt);
                         });
                     },
                     BinaryExpression: (binaryExpr) => {
                         this.addValidationKindMetric('BinaryExpression', () => {
-                            this.validateBinaryExpression(file, binaryExpr);
+                            this.validateBinaryExpression(code, binaryExpr);
                         });
                     },
                     UnaryExpression: (unaryExpr) => {
                         this.addValidationKindMetric('UnaryExpression', () => {
-                            this.validateUnaryExpression(file, unaryExpr);
+                            this.validateUnaryExpression(code, unaryExpr);
                         });
                     },
                     SpreadExpression: (spreadExpr) => {
                         this.addValidationKindMetric('SpreadExpression', () => {
-                            this.validateSpreadExpression(file, spreadExpr);
+                            this.validateSpreadExpression(code, spreadExpr);
                         });
                     },
                     AssignmentStatement: (assignStmt) => {
                         this.addValidationKindMetric('AssignmentStatement', () => {
-                            this.validateAssignmentStatement(file, assignStmt);
+                            this.validateAssignmentStatement(code, assignStmt);
                             // Note: this also includes For statements
-                            this.detectShadowedLocalVar(file, {
+                            this.detectShadowedLocalVar(code, {
                                 expr: assignStmt,
                                 name: assignStmt.tokens.name.text,
-                                type: this.getNodeTypeWrapper(file, assignStmt, { flags: SymbolTypeFlag.runtime }),
+                                type: this.getNodeTypeWrapper(code, assignStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: assignStmt.tokens.name.location?.range
                             });
                         });
                     },
                     AugmentedAssignmentStatement: (binaryExpr) => {
                         this.addValidationKindMetric('AugmentedAssignmentStatement', () => {
-                            this.validateBinaryExpression(file, binaryExpr);
+                            this.validateBinaryExpression(code, binaryExpr);
                         });
                     },
                     IncrementStatement: (stmt) => {
                         this.addValidationKindMetric('IncrementStatement', () => {
-                            this.validateIncrementStatement(file, stmt);
+                            this.validateIncrementStatement(code, stmt);
                         });
                     },
                     NewExpression: (newExpr) => {
                         this.addValidationKindMetric('NewExpression', () => {
-                            this.validateNewExpression(file, newExpr);
+                            this.validateNewExpression(code, newExpr);
                         });
                     },
                     ForEachStatement: (forEachStmt) => {
                         this.addValidationKindMetric('ForEachStatement', () => {
-                            this.detectShadowedLocalVar(file, {
+                            this.detectShadowedLocalVar(code, {
                                 expr: forEachStmt,
                                 name: forEachStmt.tokens.item.text,
-                                type: this.getNodeTypeWrapper(file, forEachStmt, { flags: SymbolTypeFlag.runtime }),
+                                type: this.getNodeTypeWrapper(code, forEachStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: forEachStmt.tokens.item.location?.range
                             });
-                            this.validateForEachStatement(file, forEachStmt);
+                            this.validateForEachStatement(code, forEachStmt);
                         });
                     },
                     FunctionParameterExpression: (funcParam) => {
                         this.addValidationKindMetric('FunctionParameterExpression', () => {
-                            this.detectShadowedLocalVar(file, {
+                            this.detectShadowedLocalVar(code, {
                                 expr: funcParam,
                                 name: funcParam.tokens.name.text,
-                                type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
+                                type: this.getNodeTypeWrapper(code, funcParam, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: funcParam.tokens.name.location?.range
                             });
                         });
@@ -298,17 +305,17 @@ export class ScopeValidator {
                     },
                     ForStatement: (forStmt) => {
                         this.addValidationKindMetric('ForStatement', () => {
-                            this.validateForStatement(file, forStmt);
+                            this.validateForStatement(code, forStmt);
                         });
                     },
                     SelectCaseStatement: (selectCaseStmt) => {
                         this.addValidationKindMetric('SelectCaseStatement', () => {
-                            this.validateSelectCaseStatement(file, selectCaseStmt);
+                            this.validateSelectCaseStatement(code, selectCaseStmt);
                         });
                     },
                     AAIndexedMemberExpression: (member) => {
                         this.addValidationKindMetric('AAIndexedMemberExpression', () => {
-                            this.validateAAIndexedMemberExpression(file, member);
+                            this.validateAAIndexedMemberExpression(code, member);
                         });
                     },
                     AstNode: (node) => {
@@ -324,8 +331,8 @@ export class ScopeValidator {
                 // validate only what's needed in the file
 
                 const segmentsToWalkForValidation = thisFileHasChanges
-                    ? file.validationSegmenter.getAllUnvalidatedSegments()
-                    : file.validationSegmenter.getSegmentsWithChangedSymbols(this.event.changedSymbols);
+                    ? code.validationSegmenter.getAllUnvalidatedSegments()
+                    : code.validationSegmenter.getSegmentsWithChangedSymbols(this.event.changedSymbols);
 
                 let segmentsValidated = 0;
 
@@ -336,7 +343,7 @@ export class ScopeValidator {
 
 
                 for (const segment of segmentsToWalkForValidation) {
-                    if (!thisFileHasChanges && !file.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
+                    if (!thisFileHasChanges && !code.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
                         continue;
                     }
                     this.currentSegmentBeingValidated = segment;
@@ -348,12 +355,12 @@ export class ScopeValidator {
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
-                    file.markSegmentAsValidated(segment);
+                    code.markSegmentAsValidated(segment);
                     this.currentSegmentBeingValidated = null;
                 }
                 fileWalkStopWatch.stop();
                 const timeString = fileWalkStopWatch.getDurationText();
-                this.segmentsMetrics.set(file.pkgPath, { segments: segmentsValidated, time: timeString });
+                this.segmentsMetrics.set(code.pkgPath, { segments: segmentsValidated, time: timeString });
             }
         });
     }
@@ -371,7 +378,7 @@ export class ScopeValidator {
     }
 
 
-    private validateAAIndexedMemberExpression(file: BrsFile, member: AAIndexedMemberExpression) {
+    private validateAAIndexedMemberExpression(code: BrsCode, member: AAIndexedMemberExpression) {
         const scope = this.event.scope;
         // Direct string literal (e.g. ["my-key"]) is valid
         if (isLiteralExpression(member.key)) {
@@ -455,12 +462,12 @@ export class ScopeValidator {
     }
 
 
-    private doesFileProvideChangedSymbol(file: BrsFile, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+    private doesFileProvideChangedSymbol(code: BrsCode, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         if (!changedSymbols) {
             return true;
         }
         for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-            const providedSymbolKeysFlag = file.providedSymbols.symbolMap.get(flag).keys();
+            const providedSymbolKeysFlag = code.providedSymbols.symbolMap.get(flag).keys();
             const changedSymbolSetForFlag = changedSymbols.get(flag);
 
             for (let providedKey of providedSymbolKeysFlag) {
@@ -541,7 +548,7 @@ export class ScopeValidator {
                 processedNames.push(part.tokens.name?.text?.toLowerCase());
                 const link = scope.getConstFileLink(processedNames.join('.'), namespace);
                 if (link) {
-                    walkConst(link.item, link.file, chain);
+                    walkConst(link.item, link.code, chain);
                     return;
                 }
             }
@@ -549,7 +556,7 @@ export class ScopeValidator {
 
         const walkConst = (
             constStatement: ConstStatement,
-            file: BrsFile,
+            code: BrsCode,
             chain: ConstStatement[]
         ) => {
             const cycleStart = chain.indexOf(constStatement);
@@ -590,7 +597,7 @@ export class ScopeValidator {
         for (const [, link] of scope.getConstMap()) {
             //an inactive const is not compiled, so it can not take part in a cycle
             if (link.item.isActive !== false) {
-                walkConst(link.item, link.file, []);
+                walkConst(link.item, link.code, []);
             }
         }
     }
@@ -601,7 +608,7 @@ export class ScopeValidator {
      * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
      * do this manually for now.
      */
-    protected validateCreateObjectCall(file: BrsFile, call: CallExpression) {
+    protected validateCreateObjectCall(code: BrsCode, call: CallExpression) {
 
         //skip non CreateObject function calls
         if (!isVariableExpression(call.callee)) {
@@ -681,7 +688,7 @@ export class ScopeValidator {
     /**
      * Validate every method call to `component.callfunc()`, `component.createChild()`, etc.
      */
-    protected validateComponentMethods(file: BrsFile, call: CallExpression) {
+    protected validateComponentMethods(code: BrsCode, call: CallExpression) {
         const lowerMethodNamesChecked = ['callfunc', 'createchild'];
         if (!isDottedGetExpression(call.callee)) {
             return;
@@ -709,25 +716,25 @@ export class ScopeValidator {
                     location: firstArgToken?.location
                 });
             } else {
-                this.validateFunctionCall(file, call, funcType, firstArgToken.location, call.args, 1);
+                this.validateFunctionCall(code, call, funcType, firstArgToken.location, call.args, 1);
             }
         }
     }
 
 
-    private validateCallExpression(file: BrsFile, expression: CallExpression) {
+    private validateCallExpression(code: BrsCode, expression: CallExpression) {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
-        let funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
+        let funcType = this.getNodeTypeWrapper(code, expression?.callee, getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
         }
         const callErrorLocation = expression?.callee?.location;
-        return this.validateFunctionCall(file, expression.callee, funcType, callErrorLocation, expression.args);
+        return this.validateFunctionCall(code, expression.callee, funcType, callErrorLocation, expression.args);
 
     }
 
-    private validateCallFuncExpression(file: BrsFile, expression: CallfuncExpression) {
+    private validateCallFuncExpression(code: BrsCode, expression: CallfuncExpression) {
         const callerType = expression.callee?.getType({ flags: SymbolTypeFlag.runtime });
         if (isDynamicType(callerType)) {
             return;
@@ -752,13 +759,13 @@ export class ScopeValidator {
             });
         }
 
-        return this.validateFunctionCall(file, expression, funcType, callErrorLocation, expression.args);
+        return this.validateFunctionCall(code, expression, funcType, callErrorLocation, expression.args);
     }
 
     /**
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
-    private validateFunctionCall(file: BrsFile, callee: Expression, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
+    private validateFunctionCall(code: BrsCode, callee: Expression, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
         while (isTypeStatementType(funcType)) {
             funcType = funcType.wrappedType;
         }
@@ -860,7 +867,7 @@ export class ScopeValidator {
                 break;
             }
             const data = {} as ExtraSymbolData;
-            let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
+            let argType = this.getNodeTypeWrapper(code, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
             }
@@ -888,13 +895,13 @@ export class ScopeValidator {
     /**
      * Detect return statements with incompatible types vs. declared return type
      */
-    private validateReturnStatement(file: BrsFile, returnStmt: ReturnStatement) {
+    private validateReturnStatement(code: BrsCode, returnStmt: ReturnStatement) {
         const data: ExtraSymbolData = {};
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
         let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
             let actualReturnType = returnStmt?.value
-                ? this.getNodeTypeWrapper(file, returnStmt?.value, getTypeOptions)
+                ? this.getNodeTypeWrapper(code, returnStmt?.value, getTypeOptions)
                 : VoidType.instance;
             if (!actualReturnType) {
                 // the type of the returned value could not be determined. A separate diagnostic
@@ -924,12 +931,12 @@ export class ScopeValidator {
     /**
      * Detect assigned type different from expected member type
      */
-    private validateDottedSetStatement(file: BrsFile, dottedSetStmt: DottedSetStatement) {
+    private validateDottedSetStatement(code: BrsCode, dottedSetStmt: DottedSetStatement) {
         const typeChainExpectedLHS = [] as TypeChainEntry[];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
-        const actualRHSType = this.getNodeTypeWrapper(file, dottedSetStmt?.value, getTypeOpts);
+        const expectedLHSType = this.getNodeTypeWrapper(code, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = this.getNodeTypeWrapper(code, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         // check if anything in typeChain is an AA - if so, just allow it
         if (typeChainExpectedLHS.find(typeChainItem => isAssociativeArrayType(typeChainItem.type))) {
@@ -946,7 +953,7 @@ export class ScopeValidator {
             return;
         }
 
-        let accessibilityIsOk = this.checkMemberAccessibility(file, dottedSetStmt, typeChainExpectedLHS);
+        let accessibilityIsOk = this.checkMemberAccessibility(code, dottedSetStmt, typeChainExpectedLHS);
 
         //Most Component fields can be set with strings
         //TODO: be more precise about which fields can actually accept strings
@@ -968,7 +975,7 @@ export class ScopeValidator {
     /**
      * Detect when declared type does not match rhs type
      */
-    private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
+    private validateAssignmentStatement(code: BrsCode, assignStmt: AssignmentStatement) {
         if (!assignStmt?.typeExpression) {
             // nothing to check
             return;
@@ -976,8 +983,8 @@ export class ScopeValidator {
 
         const typeChainExpectedLHS = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
-        const expectedLHSType = this.getNodeTypeWrapper(file, assignStmt.typeExpression, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
-        const actualRHSType = this.getNodeTypeWrapper(file, assignStmt.value, getTypeOpts);
+        const expectedLHSType = this.getNodeTypeWrapper(code, assignStmt.typeExpression, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = this.getNodeTypeWrapper(code, assignStmt.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         if (!expectedLHSType || !expectedLHSType.isResolvable()) {
             // LHS is not resolvable... handled elsewhere
@@ -992,7 +999,7 @@ export class ScopeValidator {
     /**
      * Detect invalid use of a binary operator
      */
-    private validateBinaryExpression(file: BrsFile, binaryExpr: BinaryExpression | AugmentedAssignmentStatement) {
+    private validateBinaryExpression(code: BrsCode, binaryExpr: BinaryExpression | AugmentedAssignmentStatement) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
         if (util.isInTypeExpression(binaryExpr)) {
@@ -1000,11 +1007,11 @@ export class ScopeValidator {
         }
 
         let leftType = isBinaryExpression(binaryExpr)
-            ? this.getNodeTypeWrapper(file, binaryExpr.left, getTypeOpts)
-            : this.getNodeTypeWrapper(file, binaryExpr.item, getTypeOpts);
+            ? this.getNodeTypeWrapper(code, binaryExpr.left, getTypeOpts)
+            : this.getNodeTypeWrapper(code, binaryExpr.item, getTypeOpts);
         let rightType = isBinaryExpression(binaryExpr)
-            ? this.getNodeTypeWrapper(file, binaryExpr.right, getTypeOpts)
-            : this.getNodeTypeWrapper(file, binaryExpr.value, getTypeOpts);
+            ? this.getNodeTypeWrapper(code, binaryExpr.right, getTypeOpts)
+            : this.getNodeTypeWrapper(code, binaryExpr.value, getTypeOpts);
 
         if (!leftType || !rightType || !leftType.isResolvable() || !rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -1065,7 +1072,7 @@ export class ScopeValidator {
      * array-like value and an AA literal needs an AA-like value. Unknown, unresolvable, `dynamic` and `object`
      * values are left alone.
      */
-    private validateSpreadExpression(file: BrsFile, spreadExpr: SpreadExpression) {
+    private validateSpreadExpression(code: BrsCode, spreadExpr: SpreadExpression) {
         const literal = spreadExpr.parent;
         const isArray = isArrayLiteralExpression(literal);
         if (!isArray && !isAALiteralExpression(literal)) {
@@ -1075,7 +1082,7 @@ export class ScopeValidator {
             //the spread is in an unsupported position, which is already reported; don't stack a type error on it
             return;
         }
-        const valueType = this.getNodeTypeWrapper(file, spreadExpr.expression, { flags: SymbolTypeFlag.runtime });
+        const valueType = this.getNodeTypeWrapper(code, spreadExpr.expression, { flags: SymbolTypeFlag.runtime });
         if (!valueType?.isResolvable()) {
             return;
         }
@@ -1118,10 +1125,10 @@ export class ScopeValidator {
         return isAllowedConcreteType(type);
     }
 
-    private validateUnaryExpression(file: BrsFile, unaryExpr: UnaryExpression) {
+    private validateUnaryExpression(code: BrsCode, unaryExpr: UnaryExpression) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        let rightType = this.getNodeTypeWrapper(file, unaryExpr.right, getTypeOpts);
+        let rightType = this.getNodeTypeWrapper(code, unaryExpr.right, getTypeOpts);
 
         if (!rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -1156,10 +1163,10 @@ export class ScopeValidator {
         }
     }
 
-    private validateIncrementStatement(file: BrsFile, incStmt: IncrementStatement) {
+    private validateIncrementStatement(code: BrsCode, incStmt: IncrementStatement) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        let rightType = this.getNodeTypeWrapper(file, incStmt.value, getTypeOpts);
+        let rightType = this.getNodeTypeWrapper(code, incStmt.value, getTypeOpts);
 
         if (!rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -1183,7 +1190,7 @@ export class ScopeValidator {
     }
 
 
-    validateVariableAndDottedGetExpressions(file: BrsFile, expression: VariableExpression | DottedGetExpression) {
+    validateVariableAndDottedGetExpressions(code: BrsCode, expression: VariableExpression | DottedGetExpression) {
         if (isDottedGetExpression(expression.parent)) {
             // We validate dottedGetExpressions at the top-most level
             return;
@@ -1216,7 +1223,7 @@ export class ScopeValidator {
         // this will create a diagnostic if an invalid member is accessed
         const typeChain: TypeChainEntry[] = [];
         const typeData = {} as ExtraSymbolData;
-        let exprType = this.getNodeTypeWrapper(file, expression, {
+        let exprType = this.getNodeTypeWrapper(code, expression, {
             flags: symbolType,
             typeChain: typeChain,
             data: typeData
@@ -1234,9 +1241,9 @@ export class ScopeValidator {
         }
 
         if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
-            if (this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
+            if (this.getNodeTypeWrapper(code, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
                 const oppoSiteTypeChain: TypeChainEntry[] = [];
-                const invalidlyUsedResolvedType = this.getNodeTypeWrapper(file, expression, { flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
+                const invalidlyUsedResolvedType = this.getNodeTypeWrapper(code, expression, { flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
                 const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                 if (isUsedAsType) {
                     this.addMultiScopeDiagnostic({
@@ -1314,7 +1321,7 @@ export class ScopeValidator {
         const lastTypeInfo = typeChain[typeChain.length - 1];
         const parentTypeInfo = typeChain[typeChain.length - 2];
 
-        this.checkMemberAccessibility(file, expression, typeChain);
+        this.checkMemberAccessibility(code, expression, typeChain);
 
         if (isNamespaceType(exprType) && !isAliasStatement(expression.parent)) {
             this.addMultiScopeDiagnostic({
@@ -1341,7 +1348,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Enum declared here',
                         location: util.createLocationFromRange(
-                            util.pathToUri(enumFileLink?.file.srcPath),
+                            util.pathToUri(enumFileLink?.code.srcPath),
                             enumFileLink?.item?.tokens.name.location?.range
                         )
                     }]
@@ -1378,12 +1385,12 @@ export class ScopeValidator {
     /**
      * Adds diagnostics for accibility mismatches
      *
-     * @param file file
+     * @param code the code being validated
      * @param expression containing expression
      * @param typeChain type chain to check
      * @returns true if member accesiibility is okay
      */
-    private checkMemberAccessibility(file: BscFile, expression: Expression, typeChain: TypeChainEntry[]) {
+    private checkMemberAccessibility(code: BscCode, expression: Expression, typeChain: TypeChainEntry[]) {
         for (let i = 0; i < typeChain.length - 1; i++) {
             const parentChainItem = typeChain[i];
             const childChainItem = typeChain[i + 1];
@@ -1432,8 +1439,8 @@ export class ScopeValidator {
      * Find all "new" statements in the program,
      * and make sure we can find a class with that name
      */
-    private validateNewExpression(file: BrsFile, newExpression: NewExpression) {
-        const newExprType = this.getNodeTypeWrapper(file, newExpression, { flags: SymbolTypeFlag.typetime });
+    private validateNewExpression(code: BrsCode, newExpression: NewExpression) {
+        const newExprType = this.getNodeTypeWrapper(code, newExpression, { flags: SymbolTypeFlag.typetime });
         if (isClassType(newExprType)) {
             return;
         }
@@ -1503,7 +1510,7 @@ export class ScopeValidator {
                     //skip the init function (because every component will have one of those){
                     if (lowerName !== 'init') {
                         let shadowedCallable = ancestorNonGlobalCallables[ancestorNonGlobalCallables.length - 1];
-                        if (!!shadowedCallable && shadowedCallable.callable.file === container.callable.file) {
+                        if (!!shadowedCallable && shadowedCallable.callable.code === container.callable.code) {
                             //same file: skip redundant imports
                             continue;
                         }
@@ -1511,11 +1518,11 @@ export class ScopeValidator {
                             ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
                                 container.scope.name,
-                                shadowedCallable.callable.file.destPath,
+                                shadowedCallable.callable.code.destPath,
                                 //grab the last item in the list, which should be the closest ancestor's version
                                 shadowedCallable.scope.name
                             ),
-                            location: util.createLocationFromFileRange(container.callable.file, container.callable.nameRange)
+                            location: util.createLocationFromFileRange(container.callable.code, container.callable.nameRange)
                         }, ScopeValidatorDiagnosticTag.DuplicateFunctionDeclaration);
                     }
                 }
@@ -1534,7 +1541,7 @@ export class ScopeValidator {
                             related.push({
                                 message: `Function declared here`,
                                 location: util.createLocationFromRange(
-                                    util.pathToUri(ownCallable.callable.file?.srcPath),
+                                    util.pathToUri(ownCallable.callable.code?.srcPath),
                                     thatNameRange
                                 )
                             });
@@ -1543,7 +1550,7 @@ export class ScopeValidator {
 
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.duplicateFunctionImplementation(callable.name),
-                        location: util.createLocationFromFileRange(callable.file, callable.nameRange),
+                        location: util.createLocationFromFileRange(callable.code, callable.nameRange),
                         relatedInformation: related
                     }, ScopeValidatorDiagnosticTag.DuplicateFunctionDeclaration);
                 }
@@ -1615,10 +1622,10 @@ export class ScopeValidator {
     /**
      * Find various function collisions
      */
-    private diagnosticDetectFunctionCollisions(file: BrsFile) {
-        const fileUri = util.pathToUri(file.srcPath);
+    private diagnosticDetectFunctionCollisions(code: BrsCode) {
+        const fileUri = util.pathToUri(code.srcPath);
         this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, tag: ScopeValidatorDiagnosticTag.FunctionCollisions });
-        for (let func of file.callables) {
+        for (let func of code.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
             if (lowerFuncName) {
@@ -1635,7 +1642,7 @@ export class ScopeValidator {
         }
     }
 
-    public detectShadowedLocalVar(file: BrsFile, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
+    public detectShadowedLocalVar(code: BrsCode, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
@@ -1654,7 +1661,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange)
+                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange)
                 });
             }
         } else if (callableContainerMap.has(lowerVarName) && !localVarIsInNamespace) {
@@ -1663,11 +1670,11 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromFileRange(
-                            callable[0].callable.file,
+                            callable[0].callable.code,
                             callable[0].callable.nameRange
                         )
                     }]
@@ -1675,11 +1682,11 @@ export class ScopeValidator {
             } else {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromRange(
-                            util.pathToUri(callable[0].callable.file.srcPath),
+                            util.pathToUri(callable[0].callable.code.srcPath),
                             callable[0].callable.nameRange
                         )
                     }]
@@ -1692,11 +1699,11 @@ export class ScopeValidator {
             if (classStmtLink && classStmtLink.item.isActive !== false) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(file, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Class declared here',
                         location: util.createLocationFromRange(
-                            util.pathToUri(classStmtLink.file.srcPath),
+                            util.pathToUri(classStmtLink.code.srcPath),
                             classStmtLink?.item.tokens.name.location?.range
                         )
                     }]
@@ -1705,9 +1712,9 @@ export class ScopeValidator {
         }
     }
 
-    private validateForStatement(file: BrsFile, forStmt: ForStatement) {
+    private validateForStatement(code: BrsCode, forStmt: ForStatement) {
         const assignStmt = forStmt.counterDeclaration;
-        const assignValueType = this.getNodeTypeWrapper(file, assignStmt.value, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+        const assignValueType = this.getNodeTypeWrapper(code, assignStmt.value, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
         if (!IntegerType.instance.isTypeCompatible(assignValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(assignValueType.toString(), 'integer'),
@@ -1715,7 +1722,7 @@ export class ScopeValidator {
             });
         }
         if (forStmt.increment) {
-            const incrementValueType = this.getNodeTypeWrapper(file, forStmt.increment, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+            const incrementValueType = this.getNodeTypeWrapper(code, forStmt.increment, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
             if (!IntegerType.instance.isTypeCompatible(incrementValueType)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.assignmentTypeMismatch(incrementValueType.toString(), 'integer'),
@@ -1723,7 +1730,7 @@ export class ScopeValidator {
                 });
             }
         }
-        const finalValueType = this.getNodeTypeWrapper(file, forStmt.finalValue, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+        const finalValueType = this.getNodeTypeWrapper(code, forStmt.finalValue, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
         if (!IntegerType.instance.isTypeCompatible(finalValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(finalValueType.toString(), 'integer'),
@@ -1732,8 +1739,8 @@ export class ScopeValidator {
         }
     }
 
-    private validateForEachStatement(file: BrsFile, forEachStmt: ForEachStatement) {
-        const targetType = this.getNodeTypeWrapper(file, forEachStmt.target, { flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex });
+    private validateForEachStatement(code: BrsCode, forEachStmt: ForEachStatement) {
+        const targetType = this.getNodeTypeWrapper(code, forEachStmt.target, { flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex });
         if (isDynamicType(targetType) || isObjectType(targetType)) {
             // unable to determine type, skip further validation
             return;
@@ -1774,20 +1781,20 @@ export class ScopeValidator {
      * Check that a `select case` handles every value it can receive. When the subject is an enum, covering every
      * member is enough. Otherwise, there must be a `case else`
      */
-    private validateSelectCaseStatement(file: BrsFile, selectCaseStmt: SelectCaseStatement) {
+    private validateSelectCaseStatement(code: BrsCode, selectCaseStmt: SelectCaseStatement) {
         //an empty `select case` is flagged separately by the BrsFileValidator
         if (selectCaseStmt.cases.length === 0) {
             return;
         }
         const typeOptions = { flags: SymbolTypeFlag.runtime, statementIndex: selectCaseStmt.statementIndex };
-        const subjectType = selectCaseStmt.subject ? this.getNodeTypeWrapper(file, selectCaseStmt.subject, typeOptions) : undefined;
+        const subjectType = selectCaseStmt.subject ? this.getNodeTypeWrapper(code, selectCaseStmt.subject, typeOptions) : undefined;
         const { enumType, members: enumMembers } = this.getPossibleEnumMembers(subjectType) ?? {};
 
         //values from a different enum than the subject are almost always a mistake
         if (enumMembers) {
             for (const caseStatement of selectCaseStmt.cases) {
                 for (const value of caseStatement.values) {
-                    const valueType = this.getNodeTypeWrapper(file, value, typeOptions);
+                    const valueType = this.getNodeTypeWrapper(code, value, typeOptions);
                     if (isEnumMemberType(valueType) && valueType.enumName?.toLowerCase() !== enumType.name.toLowerCase()) {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.caseValueEnumMismatch(valueType.enumName, enumType.name),
@@ -1812,7 +1819,7 @@ export class ScopeValidator {
 
         const missingMembers = enumMembers.filter(member => {
             return !selectCaseStmt.cases.some(caseStatement => caseStatement.values.some(value => {
-                return this.isCaseValueForEnumMember(file, value, member, enumType.name, typeOptions);
+                return this.isCaseValueForEnumMember(code, value, member, enumType.name, typeOptions);
             }));
         });
         if (missingMembers.length > 0) {
@@ -1861,8 +1868,8 @@ export class ScopeValidator {
     /**
      * Does this case value match the given enum member, either as a reference to it (`Direction.up`) or as its literal value (`"up"`)
      */
-    private isCaseValueForEnumMember(file: BrsFile, value: Expression, member: EnumMemberStatement, enumName: string, typeOptions: GetTypeOptions) {
-        const valueType = this.getNodeTypeWrapper(file, value, typeOptions);
+    private isCaseValueForEnumMember(code: BrsCode, value: Expression, member: EnumMemberStatement, enumName: string, typeOptions: GetTypeOptions) {
+        const valueType = this.getNodeTypeWrapper(code, value, typeOptions);
         if (isEnumMemberType(valueType)) {
             return valueType.enumName?.toLowerCase() === enumName.toLowerCase() &&
                 valueType.memberName?.toLowerCase() === member.name.toLowerCase();
@@ -1904,12 +1911,12 @@ export class ScopeValidator {
             return functionNames;
         };
 
-        for (const file of scope.getOwnFiles()) {
-            if (!isBrsFile(file)) {
+        for (const code of scope.getOwnFiles().flatMap(file => file.codes ?? [])) {
+            if (!isBrsCode(code)) {
                 continue;
             }
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            for (const expression of file['_cachedLookups'].expressions) {
+            for (const expression of code['_cachedLookups'].expressions) {
                 if (!isCallExpression(expression) || !this.isObserverCallWithStringCallback(expression)) {
                     continue;
                 }
@@ -1923,7 +1930,7 @@ export class ScopeValidator {
                 const isBrighterScriptName = [...getFunctionNames().values()].includes(lowerCallbackName);
                 const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
+                    ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.code.componentName?.text, suggestedName),
                     location: callbackArg.location
                 }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
             }
@@ -1952,12 +1959,12 @@ export class ScopeValidator {
     }
 
     private validateXmlInterface(scope: XmlScope) {
-        if (!scope.xmlFile.parser.ast?.componentElement?.interfaceElement) {
+        if (!scope.xmlFile.code.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
         this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(scope.xmlFile?.srcPath), tag: ScopeValidatorDiagnosticTag.XMLInterface });
 
-        const iface = scope.xmlFile.parser.ast.componentElement.interfaceElement;
+        const iface = scope.xmlFile.code.parser.ast.componentElement.interfaceElement;
         const callableContainerMap = scope.getCallableContainerMap();
         //validate functions
         for (const func of iface.functions) {
@@ -2041,11 +2048,11 @@ export class ScopeValidator {
             }
 
             //add warning for every script tag that this file shares with an ancestor
-            for (let scriptImport of scope.xmlFile.scriptTagImports) {
+            for (let scriptImport of scope.xmlFile.code.scriptTagImports) {
                 let ancestorScriptImport = lookup[scriptImport.destPath];
                 if (ancestorScriptImport) {
                     let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
-                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.destPath;
+                    let ancestorComponentName = ancestorComponent.code.componentName?.text ?? ancestorComponent.destPath;
                     this.addDiagnostic({
                         location: util.createLocationFromFileRange(scope.xmlFile, scriptImport.filePathRange),
                         ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
@@ -2064,17 +2071,17 @@ export class ScopeValidator {
      *
      * In most cases, this returns the result of node.getType()
      *
-     * @param file the current file being processed
+     * @param code the current code being processed
      * @param node the node to get the type of
      * @param getTypeOpts any options to pass to node.getType()
      * @returns the processed result type
      */
-    private getNodeTypeWrapper(file: BrsFile, node: AstNode, getTypeOpts: GetTypeOptions) {
-        const isBrightScriptMode = file.parseMode === ParseMode.BrightScript;
+    private getNodeTypeWrapper(code: BrsCode, node: AstNode, getTypeOpts: GetTypeOptions) {
+        const isBrightScriptMode = code.parseMode === ParseMode.BrightScript;
 
         const type = node?.getType({ ...getTypeOpts, changeUnknownNodeMemberToDynamic: isBrightScriptMode || !this.event.program.options.strictNodeMembers });
 
-        if (file.parseMode === ParseMode.BrightScript) {
+        if (code.parseMode === ParseMode.BrightScript) {
             // this is a brightscript file
             const typeChain = getTypeOpts.typeChain;
             if (typeChain) {

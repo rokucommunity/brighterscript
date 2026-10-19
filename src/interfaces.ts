@@ -1,7 +1,5 @@
 import type { Range, CodeAction, Position, CompletionItem, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
-import type { BrsFile } from './files/BrsFile';
-import type { XmlFile } from './files/XmlFile';
 import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
@@ -16,6 +14,8 @@ import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-language
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
+import type { BscCode } from './files/BscCode';
+import type { BrsCode } from './files/BrsCode';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
@@ -93,7 +93,10 @@ export interface DiagnosticContextPair {
 }
 
 export interface Callable {
-    file: BscFile;
+    /**
+     * The code this callable is in. Use `code.document` for the file it lives in
+     */
+    code: BrsCode;
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -169,7 +172,7 @@ export interface FileReference {
     /**
      * The file that is doing the import. Note this is NOT the file the destPath points to.
      */
-    sourceFile: XmlFile | BrsFile;
+    sourceFile: BscFile;
     /**
      * The full range of this file reference.
      * Keep in mind that file references can come from xml script tags
@@ -523,6 +526,20 @@ export interface Plugin {
      */
     afterValidateFile?(event: AfterValidateFileEvent): any;
 
+    /**
+     * Called before each piece of code is validated. A file can provide several pieces of code
+     * (i.e. an xml file provides its component, plus any BrightScript in its `<script>` blocks).
+     */
+    beforeValidateCode?(event: BeforeValidateCodeEvent): any;
+    /**
+     * Called during the code validation process. If your plugin contributes code validations, this is a good place to contribute them.
+     */
+    validateCode?(event: ValidateCodeEvent): any;
+    /**
+     * Called after each piece of code is validated
+     */
+    afterValidateCode?(event: AfterValidateCodeEvent): any;
+
 
     /**
      * Called right before the program builds (i.e. generates the code and puts it in the outDir
@@ -550,6 +567,20 @@ export interface Plugin {
      * After preparing the file for building
      */
     afterPrepareFile?(event: AfterPrepareFileEvent): any;
+
+    /**
+     * Before preparing a piece of code for building. A file can provide several pieces of code
+     * (i.e. an xml file provides its component, plus any BrightScript in its `<script>` blocks).
+     */
+    beforePrepareCode?(event: BeforePrepareCodeEvent): any;
+    /**
+     * Prepare a piece of code for building
+     */
+    prepareCode?(event: PrepareCodeEvent): any;
+    /**
+     * After preparing a piece of code for building
+     */
+    afterPrepareCode?(event: AfterPrepareCodeEvent): any;
 
 
     /**
@@ -608,25 +639,36 @@ export interface Plugin {
      */
     afterWriteFile?(event: AfterWriteFileEvent): any;
 }
-export interface BeforeProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface BeforeProvideCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
-    file: TFile;
+    /**
+     * The code this request applies to. Use `code.document` for the file it lives in.
+     */
+    code: TCode;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
-export interface ProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface ProvideCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
-    file: TFile;
+    /**
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
+     */
+    code: TCode;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
-export interface AfterProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface AfterProvideCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
-    file: TFile;
+    /**
+     * The code this request applies to. Use `code.document` for the file it lives in.
+     */
+    code: TCode;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
@@ -657,9 +699,14 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
     wasCancelled: boolean;
 }
 
-export interface ProvideSourceFixAllCodeActionsEvent {
+export interface ProvideSourceFixAllCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
-    file: BscFile;
+    /**
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
+     */
+    code: TCode;
     /** All diagnostics for this file (not range-filtered) */
     diagnostics: BsDiagnostic[];
     scopes: Scope[];
@@ -677,9 +724,14 @@ export type AfterProvideSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeAc
 export type OnGetSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
 
 
-export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
+export interface ProvideCompletionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
-    file: TFile;
+    /**
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
+     */
+    code: TCode;
     /**
      * The scopes this file is a member of. If the file is a member of no scopes, this will be an empty array.
      * Plugins can use `event.program.globalScope` if the file is not a member of any scopes
@@ -688,8 +740,8 @@ export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
     position: Position;
     completions: CompletionItem[];
 }
-export type BeforeProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
-export type AfterProvideCompletionsEvent<TFile extends BscFile = BscFile> = ProvideCompletionsEvent<TFile>;
+export type BeforeProvideCompletionsEvent<TCode extends BscCode = BscCode> = ProvideCompletionsEvent<TCode>;
+export type AfterProvideCompletionsEvent<TCode extends BscCode = BscCode> = ProvideCompletionsEvent<TCode>;
 
 export interface BeforeBuildProgramEvent {
     program: Program;
@@ -699,9 +751,14 @@ export interface BeforeBuildProgramEvent {
 export type BuildProgramEvent = BeforeBuildProgramEvent;
 export type AfterBuildProgramEvent = BeforeBuildProgramEvent;
 
-export interface ProvideHoverEvent {
+export interface ProvideHoverEvent<TCode extends BscCode = BscCode> {
     program: Program;
-    file: BscFile;
+    /**
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
+     */
+    code: TCode;
     position: Position;
     scopes: Scope[];
     hovers: Hover[];
@@ -767,12 +824,14 @@ export interface AfterFileParseEvent {
     program: Program;
     file: BscFile;
 }
-export interface ProvideDefinitionEvent<TFile = BscFile> {
+export interface ProvideDefinitionEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
-     * The file that the getDefinition request was invoked in
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
      */
-    file: TFile;
+    code: TCode;
     /**
      * The position in the text document where the getDefinition request was invoked
      */
@@ -785,15 +844,17 @@ export interface ProvideDefinitionEvent<TFile = BscFile> {
      */
     definitions: Array<Location | LocationLink>;
 }
-export type BeforeProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
-export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
+export type BeforeProvideDefinitionEvent<TCode extends BscCode = BscCode> = ProvideDefinitionEvent<TCode>;
+export type AfterProvideDefinitionEvent<TCode extends BscCode = BscCode> = ProvideDefinitionEvent<TCode>;
 
-export interface ProvideReferencesEvent<TFile = BscFile> {
+export interface ProvideReferencesEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
-     * The file that the getDefinition request was invoked in
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
      */
-    file: TFile;
+    code: TCode;
     /**
      * The position in the text document where the getDefinition request was invoked
      */
@@ -803,23 +864,25 @@ export interface ProvideReferencesEvent<TFile = BscFile> {
      */
     references: Location[];
 }
-export type BeforeProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
-export type AfterProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
+export type BeforeProvideReferencesEvent<TCode extends BscCode = BscCode> = ProvideReferencesEvent<TCode>;
+export type AfterProvideReferencesEvent<TCode extends BscCode = BscCode> = ProvideReferencesEvent<TCode>;
 
 
-export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
+export interface ProvideDocumentSymbolsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
-     * The file that the `documentSymbol` request was invoked in
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
      */
-    file: TFile;
+    code: TCode;
     /**
      * The result list of symbols
      */
     documentSymbols: DocumentSymbol[];
 }
-export type BeforeProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
-export type AfterProvideDocumentSymbolsEvent<TFile = BscFile> = ProvideDocumentSymbolsEvent<TFile>;
+export type BeforeProvideDocumentSymbolsEvent<TCode extends BscCode = BscCode> = ProvideDocumentSymbolsEvent<TCode>;
+export type AfterProvideDocumentSymbolsEvent<TCode extends BscCode = BscCode> = ProvideDocumentSymbolsEvent<TCode>;
 
 
 export interface ProvideWorkspaceSymbolsEvent {
@@ -833,15 +896,15 @@ export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
-export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface BeforeProvideSemanticTokensEvent<TCode extends BscCode = BscCode> {
     /**
      * The program this file is from
      */
     program: Program;
     /**
-     * The file to get semantic tokens for
+     * The code this request applies to. Use `code.document` for the file it lives in.
      */
-    file: T;
+    code: TCode;
     /**
      * The list of scopes that this file is a member of
      */
@@ -851,15 +914,17 @@ export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
      */
     semanticTokens: SemanticToken[];
 }
-export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface ProvideSemanticTokensEvent<TCode extends BscCode = BscCode> {
     /**
      * The program this file is from
      */
     program: Program;
     /**
-     * The file to get semantic tokens for
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
      */
-    file: T;
+    code: TCode;
     /**
      * The list of scopes that this file is a member of
      */
@@ -869,15 +934,15 @@ export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
      */
     semanticTokens: SemanticToken[];
 }
-export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface AfterProvideSemanticTokensEvent<TCode extends BscCode = BscCode> {
     /**
      * The program this file is from
      */
     program: Program;
     /**
-     * The file to get semantic tokens for
+     * The code this request applies to. Use `code.document` for the file it lives in.
      */
-    file: T;
+    code: TCode;
     /**
      * The list of scopes that this file is a member of
      */
@@ -888,12 +953,14 @@ export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 
-export interface ProvideSelectionRangesEvent<TFile = BscFile> {
+export interface ProvideSelectionRangesEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
-     * The file that the `selectionRange` request was invoked in
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
      */
-    file: TFile;
+    code: TCode;
     /**
      * The list of positions for which selection ranges are requested
      */
@@ -904,15 +971,17 @@ export interface ProvideSelectionRangesEvent<TFile = BscFile> {
      */
     selectionRanges: SelectionRange[];
 }
-export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
-export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
+export type BeforeProvideSelectionRangesEvent<TCode extends BscCode = BscCode> = ProvideSelectionRangesEvent<TCode>;
+export type AfterProvideSelectionRangesEvent<TCode extends BscCode = BscCode> = ProvideSelectionRangesEvent<TCode>;
 
-export interface ProvideInlayHintsEvent<TFile = BscFile> {
+export interface ProvideInlayHintsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
-     * The file that the `inlayHint` request was invoked in
+     * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
+     * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
+     * Use `code.document` for the file it lives in.
      */
-    file: TFile;
+    code: TCode;
     /**
      * The range of the document for which inlay hints should be computed
      */
@@ -926,8 +995,8 @@ export interface ProvideInlayHintsEvent<TFile = BscFile> {
      */
     inlayHints: InlayHint[];
 }
-export type BeforeProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
-export type AfterProvideInlayHintsEvent<TFile = BscFile> = ProvideInlayHintsEvent<TFile>;
+export type BeforeProvideInlayHintsEvent<TCode extends BscCode = BscCode> = ProvideInlayHintsEvent<TCode>;
+export type AfterProvideInlayHintsEvent<TCode extends BscCode = BscCode> = ProvideInlayHintsEvent<TCode>;
 
 
 export type BeforeValidateFileEvent = ValidateFileEvent;
@@ -941,6 +1010,17 @@ export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
+
+export type BeforeValidateCodeEvent<T extends BscCode = BscCode> = ValidateCodeEvent<T>;
+export interface ValidateCodeEvent<T extends BscCode = BscCode> {
+    program: Program;
+    /**
+     * The code being validated
+     */
+    code: T;
+}
+export type AfterValidateCodeEvent<T extends BscCode = BscCode> = ValidateCodeEvent<T>;
+
 export interface TranspileEntry {
     file: BscFile;
     outputPath: string;
@@ -1063,6 +1143,27 @@ export interface PrepareFileEvent<TFile extends BscFile = BscFile> {
 }
 export type OnPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
 export type AfterPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
+
+export type BeforePrepareCodeEvent<TCode extends BscCode = BscCode> = PrepareCodeEvent<TCode>;
+/**
+ * Prepare a piece of code for building
+ */
+export interface PrepareCodeEvent<TCode extends BscCode = BscCode> {
+    program: Program;
+    /**
+     * The code being prepared
+     */
+    code: TCode;
+    /**
+     * The editor for the file this code lives in. Use it for all changes, so they can be undone after the build.
+     */
+    editor: Editor;
+    /**
+     * The scope that was linked for this event. Code may be included in multiple scopes, but we choose the most relevant scope.
+     */
+    scope: Scope;
+}
+export type AfterPrepareCodeEvent<TCode extends BscCode = BscCode> = PrepareCodeEvent<TCode>;
 
 
 /**
@@ -1195,7 +1296,10 @@ export type DiagnosticCode = number | string;
 
 export interface FileLink<T> {
     item: T;
-    file: BrsFile;
+    /**
+     * The code this item is in. Use `code.document` for the file it lives in
+     */
+    code: BrsCode;
 }
 
 export interface ExtraSymbolData {

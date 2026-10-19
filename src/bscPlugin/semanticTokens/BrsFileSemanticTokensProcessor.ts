@@ -1,7 +1,7 @@
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isPrimitiveType, isVariableExpression } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCode } from '../../files/BrsCode';
 import type { ExtraSymbolData, ProvideSemanticTokensEvent, SemanticToken, TypeChainEntry } from '../../interfaces';
 import type { Locatable, Token } from '../../lexer/Token';
 import util from '../../util';
@@ -12,7 +12,7 @@ import type { AstNode } from '../../parser/AstNode';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(
-        public event: ProvideSemanticTokensEvent<BrsFile>
+        public event: ProvideSemanticTokensEvent<BrsCode>
     ) {
 
     }
@@ -24,7 +24,7 @@ export class BrsFileSemanticTokensProcessor {
             scope.linkSymbolTable();
         }
 
-        this.event.file.ast.walk(createVisitor({
+        this.event.code.ast.walk(createVisitor({
             VariableExpression: (node) => {
                 this.tryAddToken(node, node.tokens.name);
             },

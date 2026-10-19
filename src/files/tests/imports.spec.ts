@@ -256,8 +256,8 @@ describe('import statements', () => {
             import "pkg:"
             import "pkg:/"
         `);
-        expect(brsFile.ownScriptImports.length).to.equal(5);
-        expect(brsFile.ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
+        expect(brsFile.code.ownScriptImports.length).to.equal(5);
+        expect(brsFile.code.ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
     });
 
     it('keeps the original import path when transpiled', async () => {

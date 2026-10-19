@@ -11,11 +11,17 @@ import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
-import { isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
 import { SGNode } from '../parser/SGTypes';
 import { TranspileState } from '../parser/TranspileState';
+import { ParseMode } from '../parser/Parser';
+import { SourceMapConsumer } from 'source-map';
+import { isBrsCode, isPrintStatement, isXmlFile } from '../astUtils/reflection';
+import type { PrintStatement } from '../parser/Statement';
+import type { LiteralExpression } from '../parser/Expression';
+
+const fence = (code: string) => util.mdFence(code, 'brightscript');
 
 describe('XmlFile', () => {
 
@@ -59,8 +65,8 @@ describe('XmlFile', () => {
                 name: 'allows modifying the parsed XML model',
                 afterProvideFile: (event) => {
                     const file = event.files[0] as XmlFile;
-                    if (isXmlFile(file) && file.parser.ast.rootElement?.attributes?.[0]?.value) {
-                        file.parser.ast.rootElement.attributes[0].value = expected;
+                    if (isXmlFile(file) && file.code.parser.ast.rootElement?.attributes?.[0]?.value) {
+                        file.code.parser.ast.rootElement.attributes[0].value = expected;
                     }
                 }
             });
@@ -69,7 +75,7 @@ describe('XmlFile', () => {
                 <component name="ChildScene" extends="Scene">
                 </component>
             `);
-            expect(file.componentName.text).to.equal(expected);
+            expect(file.code.componentName.text).to.equal(expected);
         });
 
         it('only removes specified attribute when calling setAttribute', () => {
@@ -77,7 +83,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterProvideFile: () => {
-                    let child = file.parser.ast.componentElement!.childrenElement.elements[0];
+                    let child = file.code.parser.ast.componentElement!.childrenElement.elements[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttributeValue('text', undefined as any);
                     expect(child.getAttribute('id')!.value).to.equal('one');
@@ -109,7 +115,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.bs" />
                 </component>
             `);
-            expect(file.scriptTagImports.map(x => x.destPath)[0]).to.equal(
+            expect(file.code.scriptTagImports.map(x => x.destPath)[0]).to.equal(
                 s`components/ChildScene.bs`
             );
         });
@@ -124,7 +130,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(
-                file.scriptTagImports?.[0]?.destPath
+                file.code.scriptTagImports?.[0]?.destPath
             ).to.eql(
                 s`components/ChildScene.brs`
             );
@@ -138,16 +144,16 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
                 </component>
             `);
-            expect(file.scriptTagImports).to.be.lengthOf(3);
-            expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
+            expect(file.code.scriptTagImports).to.be.lengthOf(3);
+            expect(file.code.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'ChildScene1.brs',
                 filePathRange: Range.create(2, 42, 2, 57)
             });
-            expect(file.scriptTagImports[1]).to.deep.include(<FileReference>{
+            expect(file.code.scriptTagImports[1]).to.deep.include(<FileReference>{
                 text: 'ChildScene2.brs',
                 filePathRange: Range.create(2, 100, 2, 115)
             });
-            expect(file.scriptTagImports[2]).to.deep.include(<FileReference>{
+            expect(file.code.scriptTagImports[2]).to.deep.include(<FileReference>{
                 text: 'ChildScene3.brs',
                 filePathRange: Range.create(2, 158, 2, 173)
             });
@@ -161,8 +167,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
-            expect(file.parentComponentName.text).to.equal('ParentScene');
-            expect(file.componentName.text).to.equal('ChildScene');
+            expect(file.code.parentComponentName.text).to.equal('ParentScene');
+            expect(file.code.componentName.text).to.equal('ChildScene');
         });
 
         it('Adds error when whitespace appears before the prolog', () => {
@@ -252,8 +258,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="pkg:/components/cmp1.brs" />
                 </component>
             `);
-            expect(file.scriptTagImports.length).to.equal(1);
-            expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
+            expect(file.code.scriptTagImports.length).to.equal(1);
+            expect(file.code.scriptTagImports[0]).to.deep.include(<FileReference>{
                 sourceFile: file,
                 text: 'pkg:/components/cmp1.brs',
                 destPath: `components${path.sep}cmp1.brs`,
@@ -279,8 +285,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="cmp1.brs" />
                 </component>
             `);
-            expect(file.scriptTagImports.length).to.equal(1);
-            expect(file.scriptTagImports[0]).to.deep.include(<FileReference>{
+            expect(file.code.scriptTagImports.length).to.equal(1);
+            expect(file.code.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'cmp1.brs',
                 destPath: `components${path.sep}cmp1.brs`
             });
@@ -293,8 +299,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="" />
                 </component>
             `);
-            expect(file.scriptTagImports.length).to.equal(1);
-            expect(file.scriptTagImports[0]?.filePathRange).to.eql(
+            expect(file.code.scriptTagImports.length).to.equal(1);
+            expect(file.code.scriptTagImports[0]?.filePathRange).to.eql(
                 Range.create(2, 42, 2, 42)
             );
         });
@@ -372,7 +378,7 @@ describe('XmlFile', () => {
     describe('getCompletions', () => {
         it('returns empty set when out of range', () => {
             program.setFile('components/component1.brs', ``);
-            expect(file.getCompletions(Position.create(99, 99))).to.be.empty;
+            expect(file.code.getCompletions(Position.create(99, 99))).to.be.empty;
         });
 
         it('does not throw when a token is missing its tokenType', () => {
@@ -385,10 +391,10 @@ describe('XmlFile', () => {
                 </component>
             `);
             //`IToken.tokenType` is optional, so a token lacking it must not blow up a completion request
-            for (const token of xmlFile.parser.tokens as any[]) {
+            for (const token of xmlFile.code.parser.tokens as any[]) {
                 delete token.tokenType;
             }
-            expect(() => xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<Label '))).to.not.throw();
+            expect(() => xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<Label '))).to.not.throw();
         });
 
         //TODO - refine this test once cdata scripts are supported
@@ -431,7 +437,7 @@ describe('XmlFile', () => {
             //position the caret right after the lone `<` inside <children>
             const lines = xmlFile.fileContents.split('\n');
             const lineIndex = lines.findIndex(line => line.trim() === '<');
-            const completions = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
+            const completions = xmlFile.code.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
             const labels = completions.map(x => x.label);
             //built-in node
             expect(labels).to.include('Label');
@@ -452,7 +458,7 @@ describe('XmlFile', () => {
             `);
             const lines = xmlFile.fileContents.split('\n');
             const lineIndex = lines.findIndex(line => line.trim() === '<');
-            const labels = xmlFile.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1)).map(x => x.label);
+            const labels = xmlFile.code.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1)).map(x => x.label);
             expect(labels).to.include.members(['field', 'function']);
             //nodes/components are only valid inside <children>, not inside <interface>
             expect(labels).not.to.include('Label');
@@ -466,7 +472,7 @@ describe('XmlFile', () => {
                     </interface>
                 </component>
             `);
-            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<field id="thing" ')).map(x => x.label);
+            const labels = xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<field id="thing" ')).map(x => x.label);
             expect(labels).to.include.members(['type', 'value', 'onChange', 'alias']);
             //`id` is already present, so it should not be suggested again
             expect(labels).not.to.include('id');
@@ -480,7 +486,7 @@ describe('XmlFile', () => {
                     </interface>
                 </component>
             `);
-            const labels = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<function ')).map(x => x.label);
+            const labels = xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<function ')).map(x => x.label);
             expect(labels).to.eql(['name']);
         });
 
@@ -492,7 +498,7 @@ describe('XmlFile', () => {
                     </children>
                 </component>
             `);
-            const completions = xmlFile.getCompletions(positionAfter(xmlFile.fileContents, '<Label text="hi" '));
+            const completions = xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<Label text="hi" '));
             const labels = completions.map(x => x.label);
             //Label has a `color` field
             expect(labels).to.include('color');
@@ -506,7 +512,7 @@ describe('XmlFile', () => {
                 <component name="Main" extends="Group">
                 </component>
             `);
-            const token = xmlFile.getTokenAt(positionAfter(xmlFile.fileContents, '<compon'));
+            const token = xmlFile.code.getTokenAt(positionAfter(xmlFile.fileContents, '<compon'));
             expect(token?.image).to.equal('component');
         });
     });
@@ -614,7 +620,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.parentComponentName.location?.range).to.eql(Range.create(1, 38, 1, 47));
+            expect(file.code.parentComponentName.location?.range).to.eql(Range.create(1, 38, 1, 47));
         });
 
         it('works for multi-line', () => {
@@ -630,7 +636,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.parentComponentName.location?.range).to.eql(Range.create(2, 13, 2, 22));
+            expect(file.code.parentComponentName.location?.range).to.eql(Range.create(2, 13, 2, 22));
         });
 
         it('does not throw when unable to find extends', () => {
@@ -645,7 +651,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.parentComponentName).to.not.exist;
+            expect(file.code.parentComponentName).to.not.exist;
         });
 
         it('adds warning when no "extends" attribute is found', () => {
@@ -1749,7 +1755,7 @@ end sub`);
                 <script uri='SingleQuotedFile.brs' />
             </component>
         `);
-        expect(file.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
+        expect(file.code.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
     });
 
     describe('commentFlags', () => {
@@ -1911,6 +1917,554 @@ end sub`);
             `);
             //...the 2nd file should still be main
             expect(program.getComponent('comp1')!.file.destPath).to.equal(comp2.destPath);
+        });
+    });
+
+    describe('inline CDATA scripts', () => {
+        //the `<![CDATA[` in this component starts at line 2, character 37, so its code starts at character 46
+        const widgetXml = trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Widget" extends="Group">
+                <script type="text/brightscript"><![CDATA[
+                    sub helper()
+                        doesNotExist()
+                    end sub
+                ]]></script>
+            </component>
+        `;
+
+        it('provides a piece of BrightScript code for each CDATA block', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub first()
+                        end sub
+                    ]]></script>
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brighterscript"><![CDATA[
+                        sub second()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.codes).to.eql([xmlFile.code, ...xmlFile.scriptCodes]);
+            expect(xmlFile.scriptCodes.map(x => x.key)).to.eql([
+                `components${path.sep}Widget.xml#script-0`,
+                `components${path.sep}Widget.xml#script-1`
+            ]);
+            expect(xmlFile.scriptCodes.map(x => x.isEmbedded)).to.eql([true, true]);
+            expect(xmlFile.scriptCodes.map(x => x.parseMode)).to.eql([ParseMode.BrightScript, ParseMode.BrighterScript]);
+            expect(xmlFile.scriptCodes.map(x => x.callables.map(c => c.name))).to.eql([['first'], ['second']]);
+            expect(xmlFile.getCodeForScript(xmlFile.code.ast.componentElement.scriptElements[2])).to.equal(xmlFile.scriptCodes[1]);
+            expect(xmlFile.getCodeForScript(xmlFile.code.ast.componentElement.scriptElements[1])).to.be.undefined;
+        });
+
+        it('treats `text/bs` as brighterscript', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/bs"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.scriptCodes[0].parseMode).to.equal(ParseMode.BrighterScript);
+        });
+
+        it('locates the code in the xml file', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', widgetXml);
+            const code = xmlFile.scriptCodes[0];
+            expect(code.range).to.eql(util.createRange(2, 46, 6, 4));
+            expect(code.srcPath).to.equal(xmlFile.srcPath);
+            const subToken = code.parser.tokens.find(x => x.text === 'sub');
+            expect(subToken.location).to.eql(util.createLocation(3, 8, 3, 11, util.pathToUri(xmlFile.srcPath)));
+            expect(code.getText(subToken.location.range)).to.equal('sub');
+            expect(program.getCodeAt(xmlFile, util.createPosition(3, 9))).to.equal(code);
+            expect(program.getCodeAt(xmlFile, util.createPosition(1, 5))).to.equal(xmlFile.code);
+        });
+
+        it('reports diagnostics at their location in the xml file', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', widgetXml);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindFunction('doesNotExist'),
+                location: util.createLocation(4, 12, 4, 24, util.pathToUri(xmlFile.srcPath))
+            }]);
+        });
+
+        it('shares a scope with the component\'s other scripts', () => {
+            program.setFile('components/Widget.brs', `
+                sub init()
+                    helper()
+                end sub
+                sub other()
+                end sub
+            `);
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub helper()
+                            other()
+                            print m.top
+                        end sub
+                    ]]></script>
+                    <script type="text/brightscript"><![CDATA[
+                        sub fromSecondBlock()
+                            helper()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags duplicate functions between a CDATA block and another script', () => {
+            program.setFile('components/Widget.brs', `
+                sub helper()
+                end sub
+            `);
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub helper()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('helper'),
+                DiagnosticMessages.duplicateFunctionImplementation('helper')
+            ]);
+        });
+
+        it('is visible to child components', () => {
+            program.setFile('components/Parent.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Parent" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub fromParent()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.setFile('components/Child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Child" extends="Parent">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                            fromParent()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('uses the typedefs of other files in the scope', () => {
+            //the brs file can't be parsed, so the only way `libFunc` is found is through its typedef
+            program.setFile('source/lib.brs', `
+                sub libFunc(
+            `);
+            program.setFile('source/lib.d.bs', `
+                sub libFunc(name as string)
+                end sub
+            `);
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                            libFunc("hello")
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program.getDiagnostics().filter(x => x.location.uri.endsWith('Widget.xml')));
+        });
+
+        it('only allows brighterscript syntax in brighterscript blocks', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brighterscript"><![CDATA[
+                        namespace alpha
+                            sub beta()
+                            end sub
+                        end namespace
+                        sub init()
+                            alpha.beta()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        namespace alpha
+                        end namespace
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('namespace')
+            ]);
+        });
+
+        it('revalidates other files when a CDATA block changes', () => {
+            program.setFile('components/Widget.brs', `
+                sub init()
+                    helper()
+                end sub
+            `);
+            const withFunction = (name: string) => trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub ${name}()
+                        end sub
+                    ]]></script>
+                </component>
+            `;
+            program.setFile('components/Widget.xml', withFunction('helper'));
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('components/Widget.xml', withFunction('renamed'));
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('helper')
+            ]);
+
+            program.setFile('components/Widget.xml', withFunction('helper'));
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        describe('comment flags', () => {
+            it('honors bs:disable-next-line inside a CDATA block', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub helper()
+                                ' bs:disable-next-line
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('keeps a CDATA block\'s bs:disable within that block', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            ' bs:disable
+                            sub helper()
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                        <script type="text/brightscript" uri="pkg:/components/missing.brs" />
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.referencedFileDoesNotExist()
+                ]);
+            });
+
+            it('applies an xml bs:disable to the CDATA blocks after it', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!-- bs:disable -->
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub helper()
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('transpile', () => {
+            it('keeps brightscript blocks as they were written', async () => {
+                await testTranspile(trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                print "spacing"   ' and comments stay
+                            end sub
+                        ]]></script>
+                    </component>
+                `, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                print "spacing"   ' and comments stay
+                            end sub
+                        ]]></script>
+                        <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    </component>
+                `, 'none', 'components/Widget.xml');
+            });
+
+            it('transpiles brighterscript blocks', async () => {
+                await testTranspile(trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            namespace alpha
+                                const greeting = "hello"
+                                sub greet()
+                                    print greeting
+                                end sub
+                            end namespace
+                            sub init()
+                                x = true ? alpha.greeting : "no"
+                                alpha.greet()
+                            end sub
+                        ]]></script>
+                    </component>
+                `, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+
+
+                    sub alpha_greet()
+                        print "hello"
+                    end sub
+
+                    sub init()
+                        if true then
+                            x = "hello"
+                        else
+                            x = "no"
+                        end if
+                        alpha_greet()
+                    end sub
+                    ]]></script>
+                        <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    </component>
+                `, 'none', 'components/Widget.xml');
+            });
+
+            it('transpiles a brightscript block that a plugin changed', async () => {
+                program.plugins.add({
+                    name: 'test',
+                    prepareCode: (event) => {
+                        if (isBrsCode(event.code) && event.code.isEmbedded) {
+                            const print = event.code.ast.findChild<PrintStatement>(isPrintStatement);
+                            event.editor.setProperty((print.expressions[0] as LiteralExpression).tokens.value, 'text', '"changed"');
+                        }
+                    }
+                });
+                await testTranspile(trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                print "original"
+                            end sub
+                        ]]></script>
+                    </component>
+                `, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                    sub init()
+                        print "changed"
+                    end sub
+                    ]]></script>
+                        <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    </component>
+                `, 'none', 'components/Widget.xml');
+                //the change is undone after the build
+                const code = (program.getFile<XmlFile>('components/Widget.xml')).scriptCodes[0];
+                expect((code.ast.findChild<PrintStatement>(isPrintStatement).expressions[0] as LiteralExpression).tokens.value.text).to.equal('"original"');
+            });
+
+            it('maps transpiled code back to its place in the xml file', async () => {
+                program.options.sourceMap = true;
+                const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/Widget.xml`, dest: 'components/Widget.xml' }, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            sub init()
+                                print true ? "yes" : "no"
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const result = await program.getTranspiledFileContents(xmlFile.srcPath);
+                const generatedLines = result.code.split(/\r?\n/);
+                const generatedLine = generatedLines.findIndex(x => x.trim() === 'sub init()');
+                await SourceMapConsumer.with(JSON.parse(result.map), null, (consumer) => {
+                    const original = consumer.originalPositionFor({ line: generatedLine + 1, column: generatedLines[generatedLine].indexOf('sub') });
+                    expect(original.source).to.equal(xmlFile.srcPath);
+                    //`sub init()` is on line 4 (1-based), column 8, of the original xml
+                    expect([original.line, original.column]).to.eql([4, 8]);
+                });
+            });
+        });
+
+        describe('imports', () => {
+            it('adds the files a CDATA block imports to the component', async () => {
+                program.setFile('source/lib.bs', `
+                    sub libFunc()
+                    end sub
+                `);
+                const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            import "pkg:/source/lib.bs"
+                            sub init()
+                                libFunc()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(xmlFile.dependencies).to.include(s`source/lib.bs`);
+
+                const result = await program.getTranspiledFileContents(xmlFile.srcPath);
+                expect(result.code).to.include('<script type="text/brightscript" uri="pkg:/source/lib.brs" />');
+            });
+
+            it('uses the typedef of a .brs file that a CDATA block imports', () => {
+                //the brs file can't be parsed, so the only way `libFunc` is found is through its typedef
+                program.setFile('source/lib.brs', `
+                    sub libFunc(
+                `);
+                program.setFile('source/lib.d.bs', `
+                    sub libFunc(name as string)
+                    end sub
+                `);
+                const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            import "pkg:/source/lib.brs"
+                            sub init()
+                                libFunc("hello")
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expect(xmlFile.dependencies).to.include(s`source/lib.d.bs`);
+                expectZeroDiagnostics(program.getDiagnostics().filter(x => x.location.uri.endsWith('Widget.xml')));
+            });
+        });
+
+        describe('editor features', () => {
+            beforeEach(() => {
+                program.setFile('components/Widget.brs', `
+                    sub init()
+                        helper(1)
+                    end sub
+                `);
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript" uri="Widget.brs" />
+                        <script type="text/brightscript"><![CDATA[
+                            sub helper(value as integer)
+                                print value
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+            });
+
+            it('provides hovers', () => {
+                const hovers = program.getHover(s`${rootDir}/components/Widget.xml`, util.createPosition(4, 14));
+                expect(hovers[0]?.contents).to.eql([fence('sub helper(value as integer) as void')]);
+            });
+
+            it('goes to definitions in a CDATA block from other files', () => {
+                const definitions = program.getDefinition(s`${rootDir}/components/Widget.brs`, util.createPosition(2, 26));
+                expect(definitions).to.eql([
+                    util.createLocation(4, 8, 6, 15, util.pathToUri(s`${rootDir}/components/Widget.xml`))
+                ]);
+            });
+
+            it('provides completions', () => {
+                const labels = program.getCompletions(s`${rootDir}/components/Widget.xml`, util.createPosition(5, 12)).map(x => x.label);
+                expect(labels).to.include.members(['helper', 'init', 'value']);
+            });
+
+            it('provides document symbols', () => {
+                expect(program.getDocumentSymbols(s`${rootDir}/components/Widget.xml`).map(x => x.name)).to.eql(['helper']);
+            });
+
+            it('provides semantic tokens', () => {
+                const tokens = program.getSemanticTokens(s`${rootDir}/components/Widget.xml`);
+                expect(tokens.map(x => x.range)).to.deep.include(util.createRange(4, 12, 4, 18));
+            });
+
+            it('offers quick fixes that use brightscript comments', () => {
+                program.setFile('components/Other.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Other" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const actions = program.getCodeActions(s`${rootDir}/components/Other.xml`, util.createRange(4, 14, 4, 14));
+                const changes = (title: string) => {
+                    const action = actions.find(x => x.title.startsWith(title));
+                    return Object.values(action.edit.changes)[0].map(x => ({ position: x.range.start, newText: x.newText }));
+                };
+                expect(changes('Disable cannot-find-function for this line')).to.eql([{
+                    position: util.createPosition(4, 0),
+                    newText: `            ' bs:disable-next-line: cannot-find-function\n`
+                }]);
+                //the block's own `bs:disable` goes at the top of the block, not the top of the xml file
+                expect(changes('Disable cannot-find-function for this script block')).to.eql([{
+                    position: util.createPosition(2, 46),
+                    newText: `' bs:disable: cannot-find-function\n`
+                }]);
+            });
+
+            it('provides signature help for a function in a CDATA block', () => {
+                const help = program.getSignatureHelp(s`${rootDir}/components/Widget.brs`, util.createPosition(2, 31));
+                expect(help.map(x => x.signature.label)).to.eql(['sub helper(value as integer)']);
+            });
         });
     });
 });

@@ -1,9 +1,9 @@
-import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair } from './interfaces';
+import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair, CommentFlag } from './interfaces';
 import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isBlock, isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
+import { isBlock, isBrsCode, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
 import type { DiagnosticRelatedInformation, Location, Range } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
@@ -12,7 +12,6 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
-import type { BrsFile } from './files/BrsFile';
 import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import * as path from 'path';
 
@@ -198,10 +197,10 @@ export class DiagnosticManager {
             for (const scope of affectedScopes) {
                 if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
                     relatedInformation.push({
-                        message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
+                        message: `In component scope '${scope?.xmlFile?.code.componentName?.text}'`,
                         location: util.createLocationFromRange(
                             util.pathToUri(scope.xmlFile?.srcPath),
-                            scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
+                            scope?.xmlFile?.code.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
                         )
                     });
                 } else {
@@ -245,9 +244,13 @@ export class DiagnosticManager {
             if (!inactiveRanges) {
                 const file = this.program?.getFile(uri);
                 inactiveRanges = [];
-                if (isBrsFile(file)) {
+                //every piece of BrightScript in the file (a file can provide several, i.e. the `<script>` blocks of an xml file)
+                for (const code of file?.codes ?? []) {
+                    if (!isBrsCode(code)) {
+                        continue;
+                    }
                     // eslint-disable-next-line @typescript-eslint/dot-notation
-                    for (const statement of file['_cachedLookups'].conditionalCompileStatements) {
+                    for (const statement of code['_cachedLookups'].conditionalCompileStatements) {
                         for (const branch of [statement.thenBranch, statement.elseBranch]) {
                             if (isBlock(branch) && branch.isActive === false && branch.location) {
                                 inactiveRanges.push(branch.location.range);
@@ -268,13 +271,11 @@ export class DiagnosticManager {
     public isDiagnosticSuppressed(diagnostic: BsDiagnostic) {
         const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code?.toString() ?? undefined;
         const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
-        const file = this.program?.getFile(diagnostic.location?.uri);
-
         if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
             return false;
         }
 
-        for (let flag of file?.commentFlags ?? []) {
+        for (let flag of this.getCommentFlagsForLocation(diagnostic.location)) {
 
             if (!diagnostic.location?.range || !util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
                 continue;
@@ -292,6 +293,26 @@ export class DiagnosticManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Get the comment flags that apply at a location. When a file provides several pieces of code (i.e. the `<script>` blocks
+     * of an xml file), that is the flags of the code at the location plus the flags of the code covering the whole file.
+     * A block's own flags (like `' bs:disable`) stay within that block.
+     */
+    private getCommentFlagsForLocation(location: Location) {
+        const file = this.program?.getFile(location?.uri);
+        if (!file?.codes || file.codes.length <= 1) {
+            return file?.codes?.[0]?.commentFlags ?? [];
+        }
+        const codeAtLocation = this.program.getCodeAt(file, location.range?.start);
+        const flags = [] as CommentFlag[];
+        for (const code of file.codes) {
+            if (code === codeAtLocation || !code.range) {
+                flags.push(...code.commentFlags);
+            }
+        }
+        return flags;
     }
 
     private doesCodeListIncludeCode(codes: (string | number)[] | null, code: string | number | undefined, legacyCode: string | number | undefined) {
@@ -565,7 +586,7 @@ export class DiagnosticManager {
      * If so, we can skip any Scope-based validation on this file at all, which can save a lot of time for large files
      * with many diagnostics that are being ignored
      */
-    public canSkipScopeValidationForFile(file: BrsFile): boolean {
+    public canSkipScopeValidationForFile(file: { srcPath: string; destPath: string }): boolean {
         if (this.diagnosticFilterer.options !== this.options) {
             this.diagnosticFilterer.options = this.options;
         }

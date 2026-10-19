@@ -33,6 +33,7 @@ import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
+import type { BrsCode } from './files/BrsCode';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { AstNodeKind } from './parser/AstNode';
@@ -1975,7 +1976,7 @@ export class Util {
      * Gathers expressions, variables, and unique names from an expression.
      * This is mostly used for the ternary expression
      */
-    public getExpressionInfo(expression: Expression, file: BrsFile): ExpressionInfo {
+    public getExpressionInfo(expression: Expression, code: BrsCode): ExpressionInfo {
         const expressions = [expression];
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
@@ -1999,12 +2000,12 @@ export class Util {
         //handle the expression itself (for situations when expression is a VariableExpression)
         expressionWalker(expression);
 
-        const scope = file.program.getFirstScopeForFile(file);
+        const scope = code.program.getFirstScopeForCode(code);
         let filteredVarNames = [...uniqueVarNames];
         if (scope) {
             //a parameter or local variable can share a namespace's name, so only treat a name as a namespace when the enclosing function doesn't declare it
             const func = expression?.findAncestor<FunctionExpression>(isFunctionExpression);
-            const functionScope = func ? this.findFunctionScope(file.functionScopes, func) : undefined;
+            const functionScope = func ? this.findFunctionScope(code.functionScopes, func) : undefined;
             filteredVarNames = filteredVarNames.filter((varName: string) => {
                 const varNameLower = varName.toLowerCase();
                 const isNamespace = scope.namespaceLookup.has(varNameLower) && !functionScope?.getVariableByName(varNameLower);

@@ -1,6 +1,6 @@
 import type { Location } from 'vscode-languageserver';
 import { Editor } from '../astUtils/Editor';
-import type { BrsFile } from '../files/BrsFile';
+import type { BrsCode } from '../files/BrsCode';
 import type { FirmwareCapabilities } from '../RokuConstants';
 import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
@@ -8,11 +8,14 @@ import type { AstNode, Statement } from './AstNode';
 
 export class BrsTranspileState extends TranspileState {
     public constructor(
-        public file: BrsFile
+        /**
+         * The code being transpiled
+         */
+        public code: BrsCode
     ) {
-        super(file.srcPath, file.program.options);
-        this.bslibPrefix = this.file.program.bslibPrefix;
-        this.firmwareCapabilities = this.file.program.firmwareCapabilities;
+        super(code.srcPath, code.program.options);
+        this.bslibPrefix = this.code.program.bslibPrefix;
+        this.firmwareCapabilities = this.code.program.firmwareCapabilities;
     }
 
     /**

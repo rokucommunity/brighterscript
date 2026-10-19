@@ -477,7 +477,7 @@ describe('SpreadExpression', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const dAssignment = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
+            const dAssignment = file.code.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
             const dType = dAssignment.value.getType({ flags: SymbolTypeFlag.runtime });
             expect(dType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime).map(x => x.name).sort()).to.eql(['color', 'size']);
             expect(dType.getMemberType('color', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('string');
@@ -511,7 +511,7 @@ describe('SpreadExpression', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const assignments = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
+            const assignments = file.code.ast.findChildren<AssignmentStatement>(isAssignmentStatement);
             const dType = assignments.find(x => x.tokens.name.text === 'd').value.getType({ flags: SymbolTypeFlag.runtime });
             expect(dType.getMemberType('size', { flags: SymbolTypeFlag.runtime }).toString()).to.equal('string');
             const eType = assignments.find(x => x.tokens.name.text === 'e').value.getType({ flags: SymbolTypeFlag.runtime });
@@ -526,7 +526,7 @@ describe('SpreadExpression', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const dAssignment = file.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
+            const dAssignment = file.code.ast.findChildren<AssignmentStatement>(isAssignmentStatement).find(x => x.tokens.name.text === 'd');
             const dType = dAssignment.value.getType({ flags: SymbolTypeFlag.runtime });
             expect(dType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime).map(x => x.name)).to.eql(['size']);
         });

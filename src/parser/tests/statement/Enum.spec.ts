@@ -194,7 +194,7 @@ describe('EnumStatement', () => {
         program.validate();
 
         expectZeroDiagnostics(program);
-        expect(file.ast.findChildren<EnumStatement>(isEnumStatement).map(x => x.fullName)).to.eql([
+        expect(file.code.ast.findChildren<EnumStatement>(isEnumStatement).map(x => x.fullName)).to.eql([
             'entities.Person',
             'Direction'
         ]);
@@ -477,7 +477,7 @@ describe('EnumStatement', () => {
             const file = program.setFile<BrsFile>('source/lib.brs', code);
             const cancel = new CancellationTokenSource();
             let firstEnum: EnumStatement | undefined;
-            file.ast.walk(statement => {
+            file.code.ast.walk(statement => {
                 if (isEnumStatement(statement)) {
                     firstEnum = statement;
                     cancel.cancel();

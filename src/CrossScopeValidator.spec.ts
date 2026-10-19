@@ -158,8 +158,8 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });
@@ -194,9 +194,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.code.requiredSymbols.length).to.eq(1);
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
             const widgetScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget.xml`));
@@ -221,8 +221,8 @@ describe('CrossScopeValidator', () => {
 
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });
@@ -258,9 +258,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             //expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.code.requiredSymbols.length).to.eq(1);
             const incompatibleResolutions = program.crossScopeValidation.getIncompatibleSymbolResolutions();
             expect(incompatibleResolutions.length).to.eq(1);
             expect(incompatibleResolutions[0].incompatibleScopes.size).to.eq(2);
@@ -279,9 +279,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
-            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.code.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });
@@ -299,9 +299,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
-            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.code.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });
@@ -2056,9 +2056,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const index = new ProvidedSymbolIndex();
-            index.update(file);
-            expect(index.symbolEvents.get('alpha.beta.thing')?.map(x => x.file)).to.eql([file]);
-            expect(index.symbolEvents.get('helper')?.map(x => x.file)).to.eql([file]);
+            index.update(file.code);
+            expect(index.symbolEvents.get('alpha.beta.thing')?.map(x => x.code)).to.eql([file.code]);
+            expect(index.symbolEvents.get('helper')?.map(x => x.code)).to.eql([file.code]);
             expect(index.namespaceEvents.has('alpha')).to.be.true;
             expect(index.namespaceEvents.has('alpha.beta')).to.be.true;
             expect(index.namespaceEvents.has('helper')).to.be.false;
@@ -2071,9 +2071,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const index = new ProvidedSymbolIndex();
-            index.update(file);
+            index.update(file.code);
             const events = index.symbolEvents.get('first');
-            index.update(file);
+            index.update(file.code);
             expect(index.symbolEvents.get('first')).to.equal(events);
 
             file = program.setFile<BrsFile>('source/lib.bs', `
@@ -2083,9 +2083,9 @@ describe('CrossScopeValidator', () => {
             program.validate();
             //setFile makes a new file object, so the old one gets pruned (same order as addDiagnosticsForScopes)
             index.prune(program);
-            index.update(file);
+            index.update(file.code);
             expect(index.symbolEvents.has('first')).to.be.false;
-            expect(index.symbolEvents.get('second')?.map(x => x.file)).to.eql([file]);
+            expect(index.symbolEvents.get('second')?.map(x => x.code)).to.eql([file.code]);
         });
 
         it('prunes files that are no longer in the program', () => {
@@ -2097,7 +2097,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const index = new ProvidedSymbolIndex();
-            index.update(file);
+            index.update(file.code);
             program.removeFile(file.srcPath);
             index.prune(program);
             expect(index.symbolEvents.has('alpha.thing')).to.be.false;

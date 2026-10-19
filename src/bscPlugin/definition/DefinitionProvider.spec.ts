@@ -45,7 +45,7 @@ describe('DefinitionProvider', () => {
     it('handles unknown file type', () => {
         const result = new DefinitionProvider({
             program: program,
-            file: undefined,
+            code: undefined,
             position: util.createPosition(1, 2),
             definitions: []
         }).process();
@@ -443,7 +443,7 @@ describe('DefinitionProvider', () => {
             </component>
         `);
         // Corrupt the XML parser's AST to simulate a mangled parse result
-        const parserRef = (xmlFile as any).parser;
+        const parserRef = (xmlFile as any).code.parser;
         const originalAst = parserRef?.ast;
         if (parserRef) {
             parserRef.ast = null;

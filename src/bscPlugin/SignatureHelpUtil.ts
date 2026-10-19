@@ -14,40 +14,40 @@ import { util } from '../util';
 export class SignatureHelpUtil {
     getSignatureHelpItems(callExpressionInfo: CallExpressionInfo): SignatureInfoObj[] {
         let signatureHelpItems: SignatureInfoObj[] = [];
-        let file = callExpressionInfo.file;
+        let code = callExpressionInfo.code;
         let dotPart = callExpressionInfo.dotPart;
         let name = callExpressionInfo.name;
         let results = new Map<string, SignatureInfoObj>();
 
         switch (callExpressionInfo.type) {
             case CallExpressionType.namespaceCall:
-                signatureHelpItems = file.program.getStatementsByName(name, file, dotPart).map((fileLink) => this.getSignatureHelpForStatement(fileLink, dotPart));
+                signatureHelpItems = code.program.getStatementsByName(name, code, dotPart).map((fileLink) => this.getSignatureHelpForStatement(fileLink, dotPart));
                 break;
 
             case CallExpressionType.myClassCall:
-                let statement = file.getClassMethod(callExpressionInfo.myClass, name, true);
+                let statement = code.getClassMethod(callExpressionInfo.myClass, name, true);
                 if (statement) {
-                    signatureHelpItems = [this.getSignatureHelpForStatement({ item: statement, file: file })];
+                    signatureHelpItems = [this.getSignatureHelpForStatement({ item: statement, code: code })];
                 }
                 break;
 
             case CallExpressionType.otherClassCall:
-                signatureHelpItems = file.program.getStatementsByName(name, file).filter((fileLink) => isClassStatement(fileLink.item.parent)).map((fileLink) => this.getSignatureHelpForStatement(fileLink));
+                signatureHelpItems = code.program.getStatementsByName(name, code).filter((fileLink) => isClassStatement(fileLink.item.parent)).map((fileLink) => this.getSignatureHelpForStatement(fileLink));
                 break;
 
             case CallExpressionType.callFunc:
                 // must be from some call func interface method
                 signatureHelpItems = [];
-                for (const scope of file.program.getScopes().filter((s) => isXmlScope(s))) {
-                    signatureHelpItems.push(...file.program.getStatementsForXmlFile(scope as XmlScope, name).map((fileLink) => this.getSignatureHelpForStatement(fileLink)));
+                for (const scope of code.program.getScopes().filter((s) => isXmlScope(s))) {
+                    signatureHelpItems.push(...code.program.getStatementsForXmlFile(scope as XmlScope, name).map((fileLink) => this.getSignatureHelpForStatement(fileLink)));
                 }
                 break;
 
             case CallExpressionType.call:
-                signatureHelpItems = file.program.getStatementsByName(name, file).map((fileLink) => this.getSignatureHelpForStatement(fileLink));
+                signatureHelpItems = code.program.getStatementsByName(name, code).map((fileLink) => this.getSignatureHelpForStatement(fileLink));
                 break;
             case CallExpressionType.constructorCall:
-                let classItem = file.getClassFileLink(dotPart ? `${dotPart}.${name}` : name);
+                let classItem = code.getClassFileLink(dotPart ? `${dotPart}.${name}` : name);
                 let constructorSignatureHelp = this.getClassSignatureHelp(classItem);
                 if (constructorSignatureHelp) {
                     signatureHelpItems.push(constructorSignatureHelp);
@@ -69,7 +69,7 @@ export class SignatureHelpUtil {
 
     public getSignatureHelpForStatement(fileLink: FileLink<Statement>, namespaceName?: string): SignatureInfoObj {
         let statement = fileLink.item;
-        let file = fileLink.file;
+        let code = fileLink.code;
 
         if (!isFunctionStatement(statement) && !isMethodStatement(statement)) {
             return undefined;
@@ -113,7 +113,6 @@ export class SignatureHelpUtil {
 
         const documentation = functionComments.join('').trim();
 
-        const lines = util.splitIntoLines(file.fileContents);
         let key = statement.tokens.name.text + documentation;
         const params = [] as ParameterInformation[];
         for (const param of func.parameters) {
@@ -121,7 +120,8 @@ export class SignatureHelpUtil {
             key += param.tokens.name.text;
         }
 
-        let label = util.getTextForRange(lines, util.createRangeFromPositions(func.tokens.functionType?.location?.range.start, func.body.location?.range.start)).trim();
+        //read the label from the code (not the file), since the code may be embedded partway into its file
+        let label = code.getText(util.createRangeFromPositions(func.tokens.functionType?.location?.range.start, func.body.location?.range.start)).trim();
         if (namespaceName) {
             label = label.replace(/^(sub | function )/gim, `$1${namespaceName}.`);
         }
@@ -131,11 +131,11 @@ export class SignatureHelpUtil {
     }
 
     public getClassSignatureHelp(fileLink: FileLink<ClassStatement>): SignatureInfoObj | undefined {
-        let file = fileLink.file;
+        let code = fileLink.code;
         let classStatement = fileLink.item;
 
-        const classConstructor = file.getClassMethod(classStatement, 'new');
-        let sigHelp = classConstructor ? this.getSignatureHelpForStatement({ item: classConstructor, file: file }) : undefined;
+        const classConstructor = code.getClassMethod(classStatement, 'new');
+        let sigHelp = classConstructor ? this.getSignatureHelpForStatement({ item: classConstructor, code: code }) : undefined;
         let className = classStatement.getName(ParseMode.BrighterScript);
         if (sigHelp) {
             sigHelp.key = className;

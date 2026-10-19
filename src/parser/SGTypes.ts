@@ -4,6 +4,7 @@ import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGI
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
+import type { XmlTranspileState } from './XmlTranspileState';
 
 export interface SGToken {
     text: string;
@@ -379,7 +380,7 @@ export class SGScript extends SGElement {
         if (this.cdata) {
             return util.sourceNodeFromTranspileResult(null, null, null, [
                 '>',
-                state.transpileToken(this.cdata),
+                this.transpileCdata(state),
                 '</',
                 this.tokens.startTagName.text,
                 '>',
@@ -388,6 +389,23 @@ export class SGScript extends SGElement {
         } else {
             return super.transpileBody(state);
         }
+    }
+
+    /**
+     * Transpile the CDATA block. Its code is written as-is unless it needs to be transpiled (i.e. it is BrighterScript)
+     */
+    private transpileCdata(state: TranspileState) {
+        const code = (state as XmlTranspileState).file?.getCodeForScript?.(this);
+        if (!code?.needsTranspiled) {
+            return state.transpileToken(this.cdata);
+        }
+        return util.sourceNodeFromTranspileResult(null, null, state.srcPath, [
+            '<![CDATA[',
+            state.newline,
+            code.transpile(),
+            state.newline,
+            ']]>'
+        ]);
     }
 
     protected transpileAttributes(state: TranspileState, attributes: SGAttribute[]) {

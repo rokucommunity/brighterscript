@@ -1367,7 +1367,7 @@ describe('select case statement', () => {
         function getPrintTypes(text: string) {
             const file = program.setFile<BrsFile>('source/main.bs', text);
             program.validate();
-            return file.ast.findChildren<PrintStatement>(isPrintStatement, { walkMode: WalkMode.visitAllRecursive })
+            return file.code.ast.findChildren<PrintStatement>(isPrintStatement, { walkMode: WalkMode.visitAllRecursive })
                 .map(x => x.expressions[0])
                 .filter(x => !isLiteralExpression(x))
                 .map(x => getTypeName(x.getType({ flags: SymbolTypeFlag.runtime })));
@@ -3253,8 +3253,8 @@ describe('select case statement', () => {
                     end select
                 end sub
             `);
-            const caseStatement = file.ast.findChild<CaseStatement>(isCaseStatement);
-            const state = new BrsTranspileState(file);
+            const caseStatement = file.code.ast.findChild<CaseStatement>(isCaseStatement);
+            const state = new BrsTranspileState(file.code);
             const code = util.sourceNodeFromTranspileResult(null, null, null, caseStatement.transpile(state)).toString();
             expect(code.trim()).to.eql('print "one"');
             expect(new CaseStatement({ case: caseStatement.tokens.case }).transpile(state)).to.eql([]);

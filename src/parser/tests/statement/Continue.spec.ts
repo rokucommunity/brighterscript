@@ -32,7 +32,7 @@ describe('parser continue statements', () => {
             end sub
         `);
         expectZeroDiagnostics(program);
-        expect(file.ast.findChild(isContinueStatement)).to.exist;
+        expect(file.code.ast.findChild(isContinueStatement)).to.exist;
     });
 
     it('flags incorrect loop type', () => {
@@ -55,7 +55,7 @@ describe('parser continue statements', () => {
             DiagnosticMessages.expectedToken(TokenKind.For),
             DiagnosticMessages.expectedToken(TokenKind.While)
         ]);
-        expect(file.ast.findChild(isContinueStatement)).to.exist;
+        expect(file.code.ast.findChild(isContinueStatement)).to.exist;
     });
 
     it('flags missing `for` or `while` but still creates the node', () => {
@@ -69,7 +69,7 @@ describe('parser continue statements', () => {
         expectDiagnostics(program, [
             DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For)
         ]);
-        expect(file.ast.findChild(isContinueStatement)).to.exist;
+        expect(file.code.ast.findChild(isContinueStatement)).to.exist;
     });
 
     it('detects `continue` used outside of a loop', () => {
@@ -229,14 +229,14 @@ describe('parser continue statements', () => {
                 end for
             end sub
         `);
-        const state = new BrsTranspileState(file);
+        const state = new BrsTranspileState(file.code);
         //strip the newer api from this instance only (the host's state would never have had it)
         const legacyState = Object.create(state);
         for (let name of ['firmwareCapabilities', 'pushLoopLabel', 'popLoopLabel', 'peekLoopLabel', 'getLoopLabel']) {
             legacyState[name] = undefined;
         }
         expect(
-            new SourceNode(null, null, null, file.ast.transpile(legacyState) as any).toString()
+            new SourceNode(null, null, null, file.code.ast.transpile(legacyState) as any).toString()
         ).to.include('continue for');
     });
 

@@ -467,7 +467,7 @@ export class Project implements LspProject {
         for (const file of Object.values(this.builder.program.files)) {
             if (isBrsFile(file)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (const importStatement of file['_cachedLookups']?.importStatements ?? []) {
+                for (const importStatement of file.code['_cachedLookups']?.importStatements ?? []) {
                     if (!importStatement.tokens.path || !importStatement.filePath) {
                         continue;
                     }
@@ -486,7 +486,7 @@ export class Project implements LspProject {
                     });
                 }
             } else if (isXmlFile(file)) {
-                for (const scriptTag of file.parser?.references?.scriptTagImports ?? []) {
+                for (const scriptTag of file.code.parser?.references?.scriptTagImports ?? []) {
                     if (!scriptTag.filePathRange || !scriptTag.text) {
                         continue;
                     }

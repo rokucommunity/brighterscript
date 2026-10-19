@@ -99,10 +99,10 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.lineBegin = 0;
-        this.lineEnd = 0;
-        this.columnBegin = 0;
-        this.columnEnd = 0;
+        this.lineBegin = this.options.startLine;
+        this.lineEnd = this.options.startLine;
+        this.columnBegin = this.options.startCharacter;
+        this.columnEnd = this.options.startCharacter;
         this.tokens = [];
         this.diagnostics = [];
         this.previousEndPosition = undefined;
@@ -137,6 +137,8 @@ export class Lexer {
         options ??= {};
         options.includeWhitespace ??= false;
         options.trackLocations ??= true;
+        options.startLine ??= 0;
+        options.startCharacter ??= 0;
         return options;
     }
 
@@ -1270,4 +1272,17 @@ export interface ScanOptions {
      * Path to the file where this source code originated
      */
     srcPath?: string;
+    /**
+     * The zero-indexed line where this source code starts within its file.
+     * Used when scanning code embedded in a larger file (e.g. a CDATA block in an xml file),
+     * so that every token's location is in that file's coordinates.
+     * @default 0
+     */
+    startLine?: number;
+    /**
+     * The zero-indexed character where this source code starts on `startLine`.
+     * Only applies to the first line; every following line starts at character 0.
+     * @default 0
+     */
+    startCharacter?: number;
 }

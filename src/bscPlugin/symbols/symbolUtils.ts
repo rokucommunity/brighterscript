@@ -3,12 +3,12 @@ import { WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { DocumentSymbol, SymbolKind } from 'vscode-languageserver-protocol';
 import type { AstNode } from '../../parser/AstNode';
 import util from '../../util';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCode } from '../../files/BrsCode';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 
-export function getDocumentSymbolsFromBrsFile(file: BrsFile) {
+export function getDocumentSymbolsFromBrsCode(code: BrsCode) {
     let result: DocumentSymbol[] = [];
-    const symbols = getSymbolsFromAstNode(file.ast);
+    const symbols = getSymbolsFromAstNode(code.ast);
     for (let symbol of symbols) {
         result.push(
             createSymbol(symbol)
@@ -28,10 +28,11 @@ export function getDocumentSymbolsFromBrsFile(file: BrsFile) {
     }
 }
 
-export function getWorkspaceSymbolsFromBrsFile(file: BrsFile) {
+export function getWorkspaceSymbolsFromBrsCode(code: BrsCode) {
     const result: WorkspaceSymbol[] = [];
-    const uri = util.pathToUri(file.srcPath);
-    let symbolsToProcess = getSymbolsFromAstNode(file.ast);
+    //code uses its document's uri, so embedded code links to the file it lives in
+    const uri = util.pathToUri(code.srcPath);
+    let symbolsToProcess = getSymbolsFromAstNode(code.ast);
     while (symbolsToProcess.length > 0) {
         //get the symbol
         const symbolInfo = symbolsToProcess.shift();

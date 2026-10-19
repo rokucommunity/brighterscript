@@ -1,6 +1,6 @@
-import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
-import type { XmlFile } from '../../files/XmlFile';
+import { isAssignmentStatement, isBrsCode, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlCode } from '../../astUtils/reflection';
+import type { BrsCode } from '../../files/BrsCode';
+import type { XmlCode } from '../../files/XmlCode';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -26,10 +26,10 @@ export class HoverProcessor {
 
     public process() {
         let hover: Hover | undefined;
-        if (isBrsFile(this.event.file)) {
-            hover = this.getBrsFileHover(this.event.file);
-        } else if (isXmlFile(this.event.file)) {
-            hover = this.getXmlFileHover(this.event.file);
+        if (isBrsCode(this.event.code)) {
+            hover = this.getBrsCodeHover(this.event.code);
+        } else if (isXmlCode(this.event.code)) {
+            hover = this.getXmlCodeHover(this.event.code);
         }
 
         //if we got a result, "return" it
@@ -69,14 +69,14 @@ export class HoverProcessor {
         return (token && hoverTokenTypes.includes(token.kind));
     }
 
-    private getConstHover(token: Token, file: BrsFile, scope: Scope, expression: Expression) {
-        let containingNamespace = file.getNamespaceStatementForPosition(expression?.location?.range?.start)?.getName(ParseMode.BrighterScript);
+    private getConstHover(token: Token, code: BrsCode, scope: Scope, expression: Expression) {
+        let containingNamespace = code.getNamespaceStatementForPosition(expression?.location?.range?.start)?.getName(ParseMode.BrighterScript);
         const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
         //find a constant with this name
         const constant = scope?.getConstFileLink(fullName, containingNamespace);
         if (constant) {
-            const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
+            const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(code))).toString();
             const constantType = constant.item.getType({ flags: SymbolTypeFlag.runtime });
             return this.buildContentsWithDocsFromExpression(fence(`const ${constant.item.fullName} = ${constantValue} as ${constantType.toString()}`), constant.item);
         }
@@ -129,14 +129,14 @@ export class HoverProcessor {
         return result;
     }
 
-    private getBrsFileHover(file: BrsFile): Hover {
+    private getBrsCodeHover(code: BrsCode): Hover {
         //get the token at the position
-        let token = file.getTokenAt(this.event.position);
+        let token = code.getTokenAt(this.event.position);
 
         if (!this.isValidTokenForHover(token)) {
             return null;
         }
-        const expression = file.getClosestExpression(this.event.position);
+        const expression = code.getClosestExpression(this.event.position);
         if (!expression) {
             return null;
         }
@@ -144,13 +144,13 @@ export class HoverProcessor {
         for (let scope of this.event.scopes) {
             try {
                 scope.linkSymbolTable();
-                const constHover = this.getConstHover(token, file, scope, expression);
+                const constHover = this.getConstHover(token, code, scope, expression);
                 if (constHover) {
                     hoverContents.push(constHover);
                     continue;
                 }
                 //get the function scope for this position (if exists)
-                let functionScope = file.getFunctionScopeAtPosition(this.event.position);
+                let functionScope = code.getFunctionScopeAtPosition(this.event.position);
                 if (functionScope) {
                     const labelHover = this.getLabelHover(token, functionScope);
                     if (labelHover) {
@@ -248,9 +248,9 @@ export class HoverProcessor {
     }
 
     /**
-     * @param file the file
+     * @param code the code
      */
-    private getXmlFileHover(file: XmlFile) {
+    private getXmlCodeHover(code: XmlCode) {
         //TODO add xml hovers
         return undefined;
     }

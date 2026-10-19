@@ -2,6 +2,9 @@ import type { Body, AssignmentStatement, Block, EmptyStatement, ExpressionStatem
 import type { LiteralExpression, BinaryExpression, CallExpression, FunctionExpression, DottedGetExpression, XmlAttributeGetExpression, IndexedGetExpression, GroupingExpression, EscapedCharCodeLiteralExpression, ArrayLiteralExpression, AALiteralExpression, UnaryExpression, VariableExpression, SourceLiteralExpression, NewExpression, CallfuncExpression, TemplateStringQuasiExpression, TemplateStringExpression, TaggedTemplateStringExpression, AnnotationExpression, FunctionParameterExpression, AAMemberExpression, AAIndexedMemberExpression, TernaryExpression, NullCoalescingExpression, PrintSeparatorExpression, TypecastExpression, TypedArrayExpression, TypeExpression, InlineInterfaceMemberExpression, InlineInterfaceExpression, TypedFunctionTypeExpression, SpreadExpression } from '../parser/Expression';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
+import type { BscCode } from '../files/BscCode';
+import type { BrsCode } from '../files/BrsCode';
+import type { XmlCode } from '../files/XmlCode';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
@@ -52,6 +55,14 @@ export function isBrsFile(file: BscFile | undefined): file is BrsFile {
 
 export function isXmlFile(file: (BscFile | XmlFile | undefined)): file is XmlFile {
     return file?.constructor.name === 'XmlFile';
+}
+
+export function isBrsCode(code: BscCode | undefined): code is BrsCode {
+    return code?.constructor.name === 'BrsCode';
+}
+
+export function isXmlCode(code: BscCode | undefined): code is XmlCode {
+    return code?.constructor.name === 'XmlCode';
 }
 
 export function isAssetFile(file: (BscFile | AssetFile | undefined)): file is AssetFile {

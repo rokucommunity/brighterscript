@@ -25,9 +25,9 @@ describe('CachedLookups', () => {
         const loggerDebug = sinon.stub(program.logger, 'debug');
         program.validate();
         expectZeroDiagnostics(program);
-        const cache = new CachedLookups({ program: program, _parser: file.parser });
+        const cache = new CachedLookups({ program: program, _parser: file.code.parser });
 
-        expect(file.ast).to.exist;
+        expect(file.code.ast).to.exist;
         expect(cache.expressions.size).to.be.greaterThan(0);
         const loggerCalls = loggerDebug.getCalls();
         const unknownExpressionCall = loggerCalls.find((call) => {
