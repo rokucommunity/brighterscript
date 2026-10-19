@@ -1088,7 +1088,7 @@ for (let callable of globalCallables) {
     };
 
 }
-globalFile.staticCallables = globalCallables as Callable[];
+globalFile.code.staticCallables = globalCallables as Callable[];
 
 
 /**

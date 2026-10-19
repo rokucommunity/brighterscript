@@ -172,7 +172,7 @@ describe('Editor', () => {
             srcPath: '',
             destPath: '',
             program: new Program({})
-        }));
+        }).code);
         function transpileToString(transpilable: { transpile: (state: BrsTranspileState) => any }) {
             if (transpilable.transpile) {
                 const result = transpilable.transpile(state);

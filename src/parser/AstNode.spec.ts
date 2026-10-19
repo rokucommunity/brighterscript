@@ -62,7 +62,7 @@ describe('AstNode', () => {
             expectZeroDiagnostics(program);
             //NOTE: must match by name; a bare isVariableExpression matches the
             //namespace's own name expression, which has no class in its chain
-            const node = file.ast.findChild<VariableExpression>(
+            const node = file.code.ast.findChild<VariableExpression>(
                 (x) => isVariableExpression(x) && x.name.text.toLowerCase() === 'delta'
             );
             expect(node).to.exist;
@@ -211,10 +211,10 @@ describe('AstNode', () => {
                 `);
             program.validate();
             expectZeroDiagnostics(program);
-            const delta = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
+            const delta = file.code.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
             expect(delta.tokens.name.text).to.eql('delta');
 
-            const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
+            const foxtrot = file.code.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
             expect(foxtrot.tokens.name.text).to.eql('foxtrot');
         });
     });
@@ -228,7 +228,7 @@ describe('AstNode', () => {
                 end sub
             `);
             expect(
-                file.ast.findChild((node) => {
+                file.code.ast.findChild((node) => {
                     return isAssignmentStatement(node) && node.tokens.name.text === 'alpha';
                 })
             ).instanceof(AssignmentStatement);
@@ -242,7 +242,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            const instance = file.ast.findChild((node) => {
+            const instance = file.code.ast.findChild((node) => {
                 if (isAssignmentStatement(node)) {
                     count++;
                     if (count === 2) {
@@ -250,7 +250,7 @@ describe('AstNode', () => {
                     }
                 }
             });
-            const expected = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const expected = (file.code.ast.statements[0] as FunctionStatement).func.body.statements[1];
             expect(instance).to.equal(expected);
         });
 
@@ -262,7 +262,7 @@ describe('AstNode', () => {
                 end sub
             `);
             expect(
-                file.ast.findChild((node) => false)
+                file.code.ast.findChild((node) => false)
             ).not.to.exist;
         });
 
@@ -273,9 +273,9 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const secondStatement = (file.code.ast.statements[0] as FunctionStatement).func.body.statements[1];
             expect(
-                file.ast.findChild((node) => secondStatement)
+                file.code.ast.findChild((node) => secondStatement)
             ).to.equal(secondStatement);
         });
 
@@ -287,7 +287,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            file.ast.findChild((node, cancelToken) => {
+            file.code.ast.findChild((node, cancelToken) => {
                 count++;
                 cancelToken.cancel();
             });
@@ -303,8 +303,8 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
-            const foxtrot = file.ast.findChild((node) => {
+            const secondStatement = (file.code.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const foxtrot = file.code.ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -319,7 +319,7 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const foxtrot = file.ast.findChild((node) => {
+            const foxtrot = file.code.ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -334,8 +334,8 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
-            const foxtrot = file.ast.findChild((node) => {
+            const firstStatement = (file.code.ast.statements[0] as FunctionStatement).func.body.statements[0];
+            const foxtrot = file.code.ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -351,7 +351,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
+            const firstStatement = (file.code.ast.statements[0] as FunctionStatement).func.body.statements[0];
             firstStatement.findAncestor((node, cancel) => {
                 count++;
                 cancel.cancel();

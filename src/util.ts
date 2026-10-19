@@ -1976,8 +1976,7 @@ export class Util {
      * Gathers expressions, variables, and unique names from an expression.
      * This is mostly used for the ternary expression
      */
-    public getExpressionInfo(expression: Expression, fileOrCode: BrsFile | BrsCode): ExpressionInfo {
-        const code = isBrsFile(fileOrCode) ? fileOrCode.code : fileOrCode;
+    public getExpressionInfo(expression: Expression, code: BrsCode): ExpressionInfo {
         const expressions = [expression];
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();

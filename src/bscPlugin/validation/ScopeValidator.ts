@@ -1930,7 +1930,7 @@ export class ScopeValidator {
                 const isBrighterScriptName = [...getFunctionNames().values()].includes(lowerCallbackName);
                 const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
                 this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
+                    ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.code.componentName?.text, suggestedName),
                     location: callbackArg.location
                 }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
             }
@@ -1959,12 +1959,12 @@ export class ScopeValidator {
     }
 
     private validateXmlInterface(scope: XmlScope) {
-        if (!scope.xmlFile.parser.ast?.componentElement?.interfaceElement) {
+        if (!scope.xmlFile.code.parser.ast?.componentElement?.interfaceElement) {
             return;
         }
         this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(scope.xmlFile?.srcPath), tag: ScopeValidatorDiagnosticTag.XMLInterface });
 
-        const iface = scope.xmlFile.parser.ast.componentElement.interfaceElement;
+        const iface = scope.xmlFile.code.parser.ast.componentElement.interfaceElement;
         const callableContainerMap = scope.getCallableContainerMap();
         //validate functions
         for (const func of iface.functions) {
@@ -2048,11 +2048,11 @@ export class ScopeValidator {
             }
 
             //add warning for every script tag that this file shares with an ancestor
-            for (let scriptImport of scope.xmlFile.scriptTagImports) {
+            for (let scriptImport of scope.xmlFile.code.scriptTagImports) {
                 let ancestorScriptImport = lookup[scriptImport.destPath];
                 if (ancestorScriptImport) {
                     let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
-                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.destPath;
+                    let ancestorComponentName = ancestorComponent.code.componentName?.text ?? ancestorComponent.destPath;
                     this.addDiagnostic({
                         location: util.createLocationFromFileRange(scope.xmlFile, scriptImport.filePathRange),
                         ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)

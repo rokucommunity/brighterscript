@@ -106,10 +106,10 @@ describe('BrsFile', () => {
         });
 
         it('clears cached lookups', () => {
-            const file = program.setFile('source/main.bs', `sub main(): end sub`);
+            const file = program.setFile<BrsFile>('source/main.bs', `sub main(): end sub`);
             // prime lookup cache
-            void file['_cachedLookups'].functionStatements;
-            const cache = file['_cachedLookups']['cache'];
+            void file.code['_cachedLookups'].functionStatements;
+            const cache = file.code['_cachedLookups']['cache'];
             expect(cache.size).to.be.greaterThan(0);
 
             file.dispose();
@@ -550,7 +550,7 @@ describe('BrsFile', () => {
         // Check the result type too
         const sourceScope = program.getScopeByName('source');
         sourceScope.linkSymbolTable();
-        const timeElapsedFunc = file.ast.findChild<FunctionExpression>(isFunctionExpression);
+        const timeElapsedFunc = file.code.ast.findChild<FunctionExpression>(isFunctionExpression);
         const symbolTable = timeElapsedFunc.body.getSymbolTable();
         const offsetType = symbolTable.getSymbolType('offset', { flags: SymbolTypeFlag.runtime });
         expectTypeToBe(offsetType, IntegerType);
@@ -613,16 +613,16 @@ describe('BrsFile', () => {
 
     it('computes new import statements after clearing parser references', () => {
         const file = program.setFile<BrsFile>('source/main.bs', ``);
-        expect(file.ownScriptImports).to.be.empty;
-        file.parser.ast.statements.push(
+        expect(file.code.ownScriptImports).to.be.empty;
+        file.code.parser.ast.statements.push(
             new ImportStatement({
                 import: createToken(TokenKind.Import),
                 path: createToken(TokenKind.StringLiteral, 'pkg:/source/lib.brs')
             })
         );
-        expect(file.ownScriptImports).to.be.empty;
-        file['_cachedLookups'].invalidate();
-        expect(file.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
+        expect(file.code.ownScriptImports).to.be.empty;
+        file.code['_cachedLookups'].invalidate();
+        expect(file.code.ownScriptImports.map(x => x.text)).to.eql(['pkg:/source/lib.brs']);
     });
 
     describe('getPartialVariableName', () => {
@@ -633,12 +633,12 @@ describe('BrsFile', () => {
 
         it('creates proper tokens', () => {
             file = program.setFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
-            expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
-            expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
-            expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
-            expect(file['getPartialVariableName'](file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
-            expect(file['getPartialVariableName'](file.parser.tokens[3])).to.equal('ModuleA.');
-            expect(file['getPartialVariableName'](file.parser.tokens[2])).to.equal('ModuleA');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[4])).to.equal('ModuleA.ModuleB');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[3])).to.equal('ModuleA.');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[2])).to.equal('ModuleA');
         });
     });
 
@@ -751,8 +751,8 @@ describe('BrsFile', () => {
                         name = "bob
                     end sub
                 `);
-                expect(file.commentFlags[0]).to.exist;
-                expect(file.commentFlags[0]).to.deep.include({
+                expect(file.code.commentFlags[0]).to.exist;
+                expect(file.code.commentFlags[0]).to.deep.include({
                     codes: null,
                     range: Range.create(2, 24, 2, 45),
                     affectedRange: util.createRange(3, 0, 3, Number.MAX_SAFE_INTEGER)
@@ -769,8 +769,8 @@ describe('BrsFile', () => {
                         name = "bob
                     end sub
                 `);
-                expect(file.commentFlags[0]).to.exist;
-                expect(file.commentFlags[0]).to.deep.include({
+                expect(file.code.commentFlags[0]).to.exist;
+                expect(file.code.commentFlags[0]).to.deep.include({
                     codes: [1083, 1001],
                     range: Range.create(2, 24, 2, 57),
                     affectedRange: util.createRange(3, 0, 3, Number.MAX_SAFE_INTEGER)
@@ -786,7 +786,7 @@ describe('BrsFile', () => {
                         name = "bob
                     end sub
                 `);
-                expect(file.commentFlags[0]).to.exist;
+                expect(file.code.commentFlags[0]).to.exist;
                 expectHasDiagnostics(program);
             });
 
@@ -829,7 +829,7 @@ describe('BrsFile', () => {
                         name = unknown
                     end sub
                 `);
-                expect(file.commentFlags[0]).to.exist;
+                expect(file.code.commentFlags[0]).to.exist;
                 program.validate();
                 expectZeroDiagnostics(program);
             });
@@ -843,8 +843,8 @@ describe('BrsFile', () => {
                         z::;;%%%%%% 'bs:disable-line
                     end sub
                 `);
-                expect(file.commentFlags[0]).to.exist;
-                expect(file.commentFlags[0]).to.deep.include({
+                expect(file.code.commentFlags[0]).to.exist;
+                expect(file.code.commentFlags[0]).to.deep.include({
                     codes: null,
                     range: Range.create(2, 36, 2, 52),
                     affectedRange: Range.create(2, 0, 2, 36)
@@ -896,7 +896,7 @@ describe('BrsFile', () => {
                         name = "bob
                     end sub
                 `);
-                const blockFlag = file.commentFlags.find(flag => flag.codes === null && flag.affectedRange.end.line === Number.MAX_SAFE_INTEGER);
+                const blockFlag = file.code.commentFlags.find(flag => flag.codes === null && flag.affectedRange.end.line === Number.MAX_SAFE_INTEGER);
                 expect(blockFlag, 'a bs:disable flag should be emitted').to.exist;
                 program.validate();
                 expectZeroDiagnostics(program);
@@ -1073,7 +1073,7 @@ describe('BrsFile', () => {
         it('uses the proper parse mode based on file extension', () => {
             function testParseMode(destPath: string, expectedParseMode: ParseMode) {
                 const file = program.setFile<BrsFile>(destPath, '');
-                expect(file.parseMode).to.equal(expectedParseMode);
+                expect(file.code.parseMode).to.equal(expectedParseMode);
             }
 
             testParseMode('source/main.brs', ParseMode.BrightScript);
@@ -1460,7 +1460,7 @@ describe('BrsFile', () => {
                     print "hello world"
                 end sub
             `);
-            expect(file.functionScopes).to.be.lengthOf(2);
+            expect(file.code.functionScopes).to.be.lengthOf(2);
         });
 
         it('does not lose sub scope when mismatched end function', () => {
@@ -1473,7 +1473,7 @@ describe('BrsFile', () => {
                     print "hello world"
                 end sub
             `);
-            expect(file.functionScopes).to.be.lengthOf(2);
+            expect(file.code.functionScopes).to.be.lengthOf(2);
         });
 
         it('does not error with boolean in RHS of set statement', () => {
@@ -1771,7 +1771,7 @@ describe('BrsFile', () => {
                 end function
             `);
 
-            expect(file.callables[0]).to.deep.include({
+            expect(file.code.callables[0]).to.deep.include({
                 file: file,
                 nameRange: Range.create(1, 25, 1, 36)
             });
@@ -1800,11 +1800,11 @@ describe('BrsFile', () => {
                      print "B"
                  end function
             `);
-            expect(file.callables[0].name).to.equal('DoA');
-            expect(file.callables[0].nameRange).to.eql(Range.create(1, 25, 1, 28));
+            expect(file.code.callables[0].name).to.equal('DoA');
+            expect(file.code.callables[0].nameRange).to.eql(Range.create(1, 25, 1, 28));
 
-            expect(file.callables[1].name).to.equal('DoB');
-            expect(file.callables[1].nameRange).to.eql(Range.create(5, 26, 5, 29));
+            expect(file.code.callables[1].name).to.equal('DoB');
+            expect(file.code.callables[1].nameRange).to.eql(Range.create(5, 26, 5, 29));
         });
 
         it('throws an error if the file has already been parsed', () => {
@@ -1837,12 +1837,12 @@ describe('BrsFile', () => {
                      print "A"
                  end function
             `);
-            expect(file.callables.length).to.equal(2);
-            expect(file.callables[0].name).to.equal('DoA');
-            expect(file.callables[0].nameRange!.start.line).to.equal(1);
+            expect(file.code.callables.length).to.equal(2);
+            expect(file.code.callables[0].name).to.equal('DoA');
+            expect(file.code.callables[0].nameRange!.start.line).to.equal(1);
 
-            expect(file.callables[1].name).to.equal('DoA');
-            expect(file.callables[1].nameRange!.start.line).to.equal(5);
+            expect(file.code.callables[1].name).to.equal('DoA');
+            expect(file.code.callables[1].nameRange!.start.line).to.equal(5);
         });
 
         it('finds function calls that are unfinished', () => {
@@ -1859,7 +1859,7 @@ describe('BrsFile', () => {
                     DoC(
                 end function
             `);
-            expectDiagnostics(file.parser.diagnostics, [
+            expectDiagnostics(file.code.parser.diagnostics, [
                 DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
                 DiagnosticMessages.expectedNewlineOrColon(),
                 DiagnosticMessages.unexpectedToken('end function'),
@@ -1945,7 +1945,7 @@ describe('BrsFile', () => {
                     print "hello world"
                 end sub
             `);
-            let callable = file.callables[0];
+            let callable = file.code.callables[0];
             expect(callable.range).to.eql(Range.create(1, 16, 3, 23));
         });
 
@@ -1963,7 +1963,7 @@ describe('BrsFile', () => {
                     sayHi()
                 end sub
             `);
-            let callable = file.callables[0];
+            let callable = file.code.callables[0];
             expect(callable.range).to.eql(Range.create(1, 16, 6, 23));
         });
 
@@ -1978,7 +1978,7 @@ describe('BrsFile', () => {
 
                 end function
             `);
-            let callable = file.callables[0];
+            let callable = file.code.callables[0];
             expect(callable.params[0]).to.deep.include({
                 name: 'a',
                 isOptional: false,
@@ -2012,7 +2012,7 @@ describe('BrsFile', () => {
 
                 end function
             `);
-            let callable = file.callables[0];
+            let callable = file.code.callables[0];
             expect(callable.params[0]).to.deep.include({
                 name: 'a',
                 isOptional: true,
@@ -2032,7 +2032,7 @@ describe('BrsFile', () => {
 
                 end function
             `);
-            let callable = file.callables[0];
+            let callable = file.code.callables[0];
             expect(callable.params[0]).to.deep.include({
                 name: 'a',
                 isOptional: false,
@@ -2065,7 +2065,7 @@ describe('BrsFile', () => {
                 program: program
             });
             file.parse('name = "Bob"');
-            expect(file.callables.length).to.equal(0);
+            expect(file.code.callables.length).to.equal(0);
         });
 
         it('finds return type', () => {
@@ -2073,13 +2073,13 @@ describe('BrsFile', () => {
                 function DoSomething() as string
                 end function
             `);
-            expect(file.callables[0]).to.deep.include(<Partial<Callable>>{
+            expect(file.code.callables[0]).to.deep.include(<Partial<Callable>>{
                 file: file,
                 nameRange: Range.create(1, 25, 1, 36),
                 name: 'DoSomething',
                 params: []
             });
-            expect(file.callables[0].type.returnType).instanceof(StringType);
+            expect(file.code.callables[0].type.returnType).instanceof(StringType);
         });
     });
 
@@ -2090,7 +2090,7 @@ describe('BrsFile', () => {
                     name = 'bob"
                 end sub
             `);
-            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 3, 23));
+            expect(file.code.functionScopes[0].range).to.eql(Range.create(1, 16, 3, 23));
         });
 
         it('creates scopes for parent and child functions', () => {
@@ -2105,7 +2105,7 @@ describe('BrsFile', () => {
                     end sub)
                 end sub
             `);
-            expect(file.functionScopes).to.length(3);
+            expect(file.code.functionScopes).to.length(3);
         });
 
         it('outer function does not capture inner statements', () => {
@@ -2117,10 +2117,10 @@ describe('BrsFile', () => {
                     end sub
                 end sub
             `);
-            let outerScope = file.getFunctionScopeAtPosition(Position.create(2, 25));
+            let outerScope = file.code.getFunctionScopeAtPosition(Position.create(2, 25));
             expect(outerScope.variableDeclarations).to.be.lengthOf(2);
 
-            let innerScope = file.getFunctionScopeAtPosition(Position.create(4, 10));
+            let innerScope = file.code.getFunctionScopeAtPosition(Position.create(4, 10));
             expect(innerScope.variableDeclarations).to.be.lengthOf(1);
         });
 
@@ -2136,26 +2136,26 @@ describe('BrsFile', () => {
                     end sub)
                 end sub
             `);
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
+            expect(file.code.functionScopes[0].variableDeclarations).to.be.length(1);
+            expect(file.code.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 2,
                 name: 'sayHi'
             });
-            expect(file.functionScopes[0].variableDeclarations[0].getType()).instanceof(TypedFunctionType);
+            expect(file.code.functionScopes[0].variableDeclarations[0].getType()).instanceof(TypedFunctionType);
 
-            expect(file.functionScopes[1].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[1].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
+            expect(file.code.functionScopes[1].variableDeclarations).to.be.length(1);
+            expect(file.code.functionScopes[1].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 3,
                 name: 'age'
             });
-            expect(file.functionScopes[1].variableDeclarations[0].getType()).instanceof(IntegerType);
+            expect(file.code.functionScopes[1].variableDeclarations[0].getType()).instanceof(IntegerType);
 
-            expect(file.functionScopes[2].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[2].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
+            expect(file.code.functionScopes[2].variableDeclarations).to.be.length(1);
+            expect(file.code.functionScopes[2].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 7,
                 name: 'name'
             });
-            expect(file.functionScopes[2].variableDeclarations[0].getType()).instanceof(StringType);
+            expect(file.code.functionScopes[2].variableDeclarations[0].getType()).instanceof(StringType);
         });
 
         it('finds variable declarations inside of if statements', () => {
@@ -2166,7 +2166,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            let scope = file.getFunctionScopeAtPosition(Position.create(3, 0));
+            let scope = file.code.getFunctionScopeAtPosition(Position.create(3, 0));
             expect(scope.variableDeclarations[0]).to.exist;
             expect(scope.variableDeclarations[0].name).to.equal('theLength');
         });
@@ -2185,12 +2185,12 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
 
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(1);
-            expect(file.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
+            expect(file.code.functionScopes[0].variableDeclarations).to.be.length(1);
+            expect(file.code.functionScopes[0].variableDeclarations[0]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 2,
                 name: 'myName'
             });
-            expectTypeToBe(file.functionScopes[0].variableDeclarations[0].getType(), StringType);
+            expectTypeToBe(file.code.functionScopes[0].variableDeclarations[0].getType(), StringType);
         });
 
         it('finds variable type from other variable', () => {
@@ -2203,12 +2203,12 @@ describe('BrsFile', () => {
             // Types are only guaranteed after validation
             program.validate();
 
-            expect(file.functionScopes[0].variableDeclarations).to.be.length(2);
-            expect(file.functionScopes[0].variableDeclarations[1]).to.deep.include(<VariableDeclaration>{
+            expect(file.code.functionScopes[0].variableDeclarations).to.be.length(2);
+            expect(file.code.functionScopes[0].variableDeclarations[1]).to.deep.include(<VariableDeclaration>{
                 lineIndex: 3,
                 name: 'nameCopy'
             });
-            expectTypeToBe(file.functionScopes[0].variableDeclarations[1].getType(), StringType);
+            expectTypeToBe(file.code.functionScopes[0].variableDeclarations[1].getType(), StringType);
         });
 
         it('sets proper range for functions', () => {
@@ -2220,9 +2220,9 @@ describe('BrsFile', () => {
                 end sub
             `);
 
-            expect(file.functionScopes).to.be.length(2);
-            expect(file.functionScopes[0].range).to.eql(Range.create(1, 16, 5, 23));
-            expect(file.functionScopes[1].range).to.eql(Range.create(2, 30, 4, 32));
+            expect(file.code.functionScopes).to.be.length(2);
+            expect(file.code.functionScopes[0].range).to.eql(Range.create(1, 16, 5, 23));
+            expect(file.code.functionScopes[1].range).to.eql(Range.create(2, 30, 4, 32));
         });
     });
 
@@ -2273,7 +2273,7 @@ describe('BrsFile', () => {
                 end sub
             `);
             //delete the ending token `}`
-            const aa = file.ast.findChild<AALiteralExpression>(isAALiteralExpression);
+            const aa = file.code.ast.findChild<AALiteralExpression>(isAALiteralExpression);
             delete (aa.tokens as any).close;
 
             await testTranspile(file, `
@@ -2539,7 +2539,7 @@ describe('BrsFile', () => {
             function doTest(source: string, expected = source) {
                 const file = program.setFile<BrsFile>('source/main.bs', '');
                 //override the parser with our locationless parser
-                file['_parser'] = Parser.parse(source, { mode: ParseMode.BrighterScript, trackLocations: false, srcPath: s`${rootDir}/source/main.brs` });
+                file.code['_parser'] = Parser.parse(source, { mode: ParseMode.BrighterScript, trackLocations: false, srcPath: s`${rootDir}/source/main.brs` });
                 program.getScopesForFile(file).forEach(x => x['cache'].clear());
                 program.validate();
                 expectZeroDiagnostics(program);
@@ -2556,7 +2556,7 @@ describe('BrsFile', () => {
                     sub main()
                     end sub
                 `);
-                const body = file.ast.findChild<Block>(isBlock);
+                const body = file.code.ast.findChild<Block>(isBlock);
                 body.statements.push(new CallExpression({
                     callee: new LiteralExpression({ value: createIdentifier('lcase') }),
                     args: [createStringLiteral('HELLO')]
@@ -2574,7 +2574,7 @@ describe('BrsFile', () => {
                     sub main()
                     end sub
                 `);
-                const body = file.ast.findChild<Block>(isBlock);
+                const body = file.code.ast.findChild<Block>(isBlock);
                 body.statements.push(new PrintStatement({
                     expressions: [createStringLiteral('HELLO')]
                 }));
@@ -2590,7 +2590,7 @@ describe('BrsFile', () => {
             it('transpiles function expression when paren tokens are missing', async () => {
                 const file = program.setFile<BrsFile>('source/main.bs', `
                 `);
-                file.ast.statements.push(new FunctionStatement({
+                file.code.ast.statements.push(new FunctionStatement({
                     func: new FunctionExpression({
                         body: new Block({ statements: [] })
                     }),
@@ -3605,8 +3605,8 @@ describe('BrsFile', () => {
                 prepareFile: (event) => {
                     if (isBrsFile(event.file)) {
                         //delete trivia from the eof token
-                        event.file.parser.eofToken.leadingTrivia = [];
-                        event.file.ast.walk(createVisitor({
+                        event.file.code.parser.eofToken.leadingTrivia = [];
+                        event.file.code.ast.walk(createVisitor({
                             AstNode: (node) => {
                                 //delete all trivia from the node
                                 for (let i = 0; i < (node.leadingTrivia?.length ?? 0); i++) {
@@ -3984,12 +3984,12 @@ describe('BrsFile', () => {
                 let i = 0;
                 //remove newlines and EOF
                 //set each token to a different file
-                for (const token of file.parser.tokens) {
+                for (const token of file.code.parser.tokens) {
                     token.location.uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
                 }
 
                 const result = await program.getTranspiledFileContents(file.srcPath);
-                const tokens = file.parser.tokens.filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
+                const tokens = file.code.parser.tokens.filter(x => x.kind !== TokenKind.Eof && x.kind !== TokenKind.Newline);
 
                 //load the source map
                 await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
@@ -4033,7 +4033,7 @@ describe('BrsFile', () => {
                     end function
                 `);
                 //merge alpha into beta
-                beta.ast.statements.push(alpha.ast.statements[0]);
+                beta.code.ast.statements.push(alpha.code.ast.statements[0]);
 
                 const result = await program.getTranspiledFileContents(beta.srcPath);
                 expect(result.code).to.eql(undent`
@@ -4783,7 +4783,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                const funcStmt = mainFile.ast.statements[0] as FunctionStatement;
+                const funcStmt = mainFile.code.ast.statements[0] as FunctionStatement;
                 funcStmt.leadingTrivia.push(createToken(TokenKind.Comment, `'comment before function`), createToken(TokenKind.Newline));
                 funcStmt.func.body.statements[0].leadingTrivia.unshift(createToken(TokenKind.Comment, `'comment after func declaration`));
 
@@ -4797,7 +4797,7 @@ describe('BrsFile', () => {
                     createToken(TokenKind.Newline)
                 );
 
-                mainFile.parser.eofToken.leadingTrivia.push(createToken(TokenKind.Comment, `'comment at end of file`));
+                mainFile.code.parser.eofToken.leadingTrivia.push(createToken(TokenKind.Comment, `'comment at end of file`));
 
 
                 await testTranspile(mainFile, `
@@ -5640,17 +5640,17 @@ describe('BrsFile', () => {
                 sub main()
                 end sub
             `);
-            const parser = file['_parser'];
+            const parser = file.code['_parser'];
             //clear the private _parser instance
-            file['_parser'] = undefined as any;
+            file.code['_parser'] = undefined as any;
 
             //force the file to get a new instance of parser
-            const newParser = file.parser;
+            const newParser = file.code.parser;
 
             expect(newParser).to.exist.and.to.not.equal(parser);
 
             //reference shouldn't change in subsequent accesses
-            expect(file.parser).to.equal(newParser);
+            expect(file.code.parser).to.equal(newParser);
         });
 
         it('call parse when previously skipped', () => {
@@ -5663,12 +5663,12 @@ describe('BrsFile', () => {
                 end sub
             `);
             //no functions should be found since the parser was skipped
-            expect(file['_parser']).to.not.exist;
+            expect(file.code['_parser']).to.not.exist;
 
             const stub = sinon.stub(file, 'parse').callThrough();
 
             //`file.parser` is a getter, so that should force the parse to occur
-            expect(file.parser.ast).to.exist;
+            expect(file.code.parser.ast).to.exist;
             expect(stub.called).to.be.true;
             //parse should have been called
         });
@@ -5880,7 +5880,7 @@ describe('BrsFile', () => {
             };
             program.plugins.emit('validateCode', validateCodeEvent);
 
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.code.requiredSymbols.length).to.eq(0);
         });
 
         it('should be empty if the file needs no external symbols', () => {
@@ -5906,7 +5906,7 @@ describe('BrsFile', () => {
             };
             program.plugins.emit('validateCode', validateCodeEvent);
 
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.code.requiredSymbols.length).to.eq(0);
         });
 
         it('should not include global callables or types', () => {
@@ -5925,7 +5925,7 @@ describe('BrsFile', () => {
             };
             program.plugins.emit('validateCode', validateCodeEvent);
 
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.code.requiredSymbols.length).to.eq(0);
         });
 
         it('transpiles multi-dimension typed arrays to dynamic', async () => {
@@ -6188,7 +6188,7 @@ describe('BrsFile', () => {
             };
             program.plugins.emit('validateCode', validateCodeEvent);
 
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.code.requiredSymbols.length).to.eq(0);
         });
 
         it('should include unknown param and return types', () => {
@@ -6199,8 +6199,8 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(2);
-            expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
+            expect(mainFile.code.requiredSymbols.length).to.eq(2);
+            expect(mainFile.code.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
                 'TwoType', 'OneType']);
         });
 
@@ -6240,8 +6240,8 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(2);
-            expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
+            expect(mainFile.code.requiredSymbols.length).to.eq(2);
+            expect(mainFile.code.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
                 'TwoType', 'OneType']);
         });
 
@@ -6254,9 +6254,9 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(1);
+            expect(mainFile.code.requiredSymbols.length).to.eq(1);
             // x and arg are assigned.. they are not included in the required symbols
-            expect(mainFile.requiredSymbols[0].typeChain[0].name).to.equal('SomeOtherType');
+            expect(mainFile.code.requiredSymbols[0].typeChain[0].name).to.equal('SomeOtherType');
         });
 
         it('should include functions called that are not in the file', () => {
@@ -6275,8 +6275,8 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(4);
-            expect(mainFile.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
+            expect(mainFile.code.requiredSymbols.length).to.eq(4);
+            expect(mainFile.code.requiredSymbols.map(x => x.typeChain[0].name)).to.have.same.members([
                 'otherFileFunc1', 'otherFileFunc2', 'otherFileFunc3', 'otherFileFunc4'
             ]);
         });
@@ -6290,12 +6290,12 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(3);
-            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(mainFile.code.requiredSymbols.length).to.eq(3);
+            const requiredTypeChains = mainFile.code.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
             expect(requiredTypeChains).to.have.same.members([
                 'OtherKlass', 'NS1.Thing', 'AnotherClass'
             ]);
-            const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
+            const requiredSymbolsFlags = mainFile.code.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
                 SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.runtime
             ]);
@@ -6315,12 +6315,12 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(4);
-            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(mainFile.code.requiredSymbols.length).to.eq(4);
+            const requiredTypeChains = mainFile.code.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
             expect(requiredTypeChains).to.have.same.members([
                 'SomeEnum', 'SomeEnum.value1', 'SomeEnum.value2', 'SomeConstValue'
             ]);
-            const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
+            const requiredSymbolsFlags = mainFile.code.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
                 SymbolTypeFlag.typetime, SymbolTypeFlag.runtime, SymbolTypeFlag.runtime, SymbolTypeFlag.runtime
             ]);
@@ -6345,17 +6345,17 @@ describe('BrsFile', () => {
             // 'DataKind' is there twice:
             // - when used as a type
             // - when DataObject.kind is used
-            expect(mainFile.requiredSymbols.length).to.eq(6);
-            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(mainFile.code.requiredSymbols.length).to.eq(6);
+            const requiredTypeChains = mainFile.code.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
             expect(Array.from(requiredTypeChains)).to.have.same.members([
                 'DataKind', 'DataKind', 'SubData', 'BaseData', 'DataProcessor', 'ProcessedData'
             ]);
-            const requiredSymbolsFlags = mainFile.requiredSymbols.map(x => x.flags);
+            const requiredSymbolsFlags = mainFile.code.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolsFlags).to.have.same.members([
                 SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
             ]);
 
-            const requiredSymbolsEndFlags = mainFile.requiredSymbols.map(x => x.endChainFlags);
+            const requiredSymbolsEndFlags = mainFile.code.requiredSymbols.map(x => x.endChainFlags);
             expect(requiredSymbolsEndFlags).to.have.same.members([
                 SymbolTypeFlag.typetime, SymbolTypeFlag.runtime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime, SymbolTypeFlag.typetime
             ]);
@@ -6381,13 +6381,13 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            expect(mainFile.requiredSymbols.length).to.eq(2);
-            const requiredTypeChains = mainFile.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
+            expect(mainFile.code.requiredSymbols.length).to.eq(2);
+            const requiredTypeChains = mainFile.code.requiredSymbols.map(x => x.typeChain.map(tc => tc.name).join('.'));
             expect(requiredTypeChains).to.have.same.members([
                 'CONST_VALUE', 'OtherType'
             ]);
-            expect(mainFile.requiredSymbols[0].containingNamespaces).to.have.same.members(['Alpha', 'Beta']);
-            expect(mainFile.requiredSymbols[1].containingNamespaces).to.have.same.members(['Delta', 'Gamma', 'Eta']);
+            expect(mainFile.code.requiredSymbols[0].containingNamespaces).to.have.same.members(['Alpha', 'Beta']);
+            expect(mainFile.code.requiredSymbols[1].containingNamespaces).to.have.same.members(['Delta', 'Gamma', 'Eta']);
         });
         it('does not include namespaces that are defined in the file', () => {
             const mainFile: BrsFile = program.setFile('source/main.bs', `
@@ -6402,7 +6402,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(mainFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.code.requiredSymbols.length).to.eq(0);
         });
 
 
@@ -6413,8 +6413,8 @@ describe('BrsFile', () => {
                 end function
             `);
             validateFile(mainFile);
-            expect(mainFile.requiredSymbols.length).to.eq(1);
-            expect(mainFile.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(mainFile.code.requiredSymbols.length).to.eq(1);
+            expect(mainFile.code.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
         });
 
         it('should not include symbols in same namespace', () => {
@@ -6427,7 +6427,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(mainFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.code.requiredSymbols.length).to.eq(0);
         });
 
         it('should not include symbols in same namespace, but different statements', () => {
@@ -6443,7 +6443,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(mainFile);
-            expect(mainFile.requiredSymbols.length).to.eq(0);
+            expect(mainFile.code.requiredSymbols.length).to.eq(0);
         });
 
         it('should include symbols in imported file', () => {
@@ -6461,7 +6461,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile);
-            expect(mainFile.requiredSymbols.length).to.eq(1);
+            expect(mainFile.code.requiredSymbols.length).to.eq(1);
         });
 
         it('should  include symbols in imported file of imported file', () => {
@@ -6485,7 +6485,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile, deepFile);
-            expect(mainFile.requiredSymbols.length).to.eq(2);
+            expect(mainFile.code.requiredSymbols.length).to.eq(2);
         });
 
         it('should ignore imports even with circular references', () => {
@@ -6513,7 +6513,7 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(otherFile, mainFile, deepFile);
-            expect(mainFile.requiredSymbols.length).to.eq(2);
+            expect(mainFile.code.requiredSymbols.length).to.eq(2);
         });
     });
 
@@ -6530,7 +6530,7 @@ describe('BrsFile', () => {
                 end function
             `);
             validateFile(mainFile);
-            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            const runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(2);
             const someFuncType = runtimeSymbols.get('somefunc').symbol.type;
             expectTypeToBe(someFuncType, TypedFunctionType);
@@ -6546,13 +6546,13 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            const runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(1);
             const someFuncType = runtimeSymbols.get('somefunc').symbol.type;
             expectTypeToBe(someFuncType, TypedFunctionType);
-            const requiredSymbols = mainFile.requiredSymbols.map(x => x.typeChain[0].name);
+            const requiredSymbols = mainFile.code.requiredSymbols.map(x => x.typeChain[0].name);
             expect(requiredSymbols).to.have.same.members(['OtherFileType', 'OtherFileType']);
-            const requiredSymbolTypes = mainFile.requiredSymbols.map(x => x.flags);
+            const requiredSymbolTypes = mainFile.code.requiredSymbols.map(x => x.flags);
             expect(requiredSymbolTypes).to.have.same.members([SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]);
         });
 
@@ -6576,12 +6576,12 @@ describe('BrsFile', () => {
             `);
             validateFile(mainFile);
 
-            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            const runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(3);
             expectTypeToBe(runtimeSymbols.get('klass').symbol.type, ClassType);
             expectTypeToBe(runtimeSymbols.get('klass2').symbol.type, ClassType);
             expectTypeToBe(runtimeSymbols.get('klass3').symbol.type, ClassType);
-            const typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+            const typetimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
             expect(typetimeSymbols.size).to.eq(3);
             expectTypeToBe(runtimeSymbols.get('klass').symbol.type, ClassType);
             expectTypeToBe(runtimeSymbols.get('klass2').symbol.type, ClassType);
@@ -6604,11 +6604,11 @@ describe('BrsFile', () => {
                 end namespace
             `);
             validateFile(mainFile);
-            const runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+            const runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
             expect(runtimeSymbols.size).to.eq(2);
             expectTypeToBe(runtimeSymbols.get('myenum').symbol.type, EnumType);
             expectTypeToBe(runtimeSymbols.get('mynamespace.myconst').symbol.type, FloatType);
-            const typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+            const typetimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
             expect(typetimeSymbols.size).to.eq(2);
             expectTypeToBe(typetimeSymbols.get('myinterface').symbol.type, InterfaceType);
             expectTypeToBe(runtimeSymbols.get('myenum').symbol.type, EnumType);
@@ -6623,7 +6623,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6636,9 +6636,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(2);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('somefunc2')).to.be.true;
             });
@@ -6654,7 +6654,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(2);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6663,9 +6663,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('somefunc2')).to.be.true;
             });
@@ -6676,7 +6676,7 @@ describe('BrsFile', () => {
                     end namespace
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(0);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6685,9 +6685,9 @@ describe('BrsFile', () => {
                     end namespace
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('alpha.abc')).to.be.true;
             });
@@ -6704,7 +6704,7 @@ describe('BrsFile', () => {
                 `);
 
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(2);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6717,9 +6717,9 @@ describe('BrsFile', () => {
                     end namespace
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(2);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
             });
 
@@ -6730,7 +6730,7 @@ describe('BrsFile', () => {
                     end function
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6739,9 +6739,9 @@ describe('BrsFile', () => {
                     end function
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('somefunc'));
             });
@@ -6756,7 +6756,7 @@ describe('BrsFile', () => {
                     end class
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6768,12 +6768,12 @@ describe('BrsFile', () => {
                     end class
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('myklass'));
-                let typeTimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.typetime);
+                let typeTimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.typetime);
                 expect(typeTimeChanges.size).to.eq(1);
                 expect(typeTimeChanges.has('myklass'));
             });
@@ -6787,9 +6787,9 @@ describe('BrsFile', () => {
                     end interface
                 `);
                 validateFile(mainFile);
-                let typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+                let typetimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
                 expect(typetimeSymbols.size).to.eq(1);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(0);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6800,12 +6800,12 @@ describe('BrsFile', () => {
                     end interface
                 `);
                 validateFile(mainFile);
-                typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+                typetimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
                 expect(typetimeSymbols.size).to.eq(1);
-                let typeTimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.typetime);
+                let typeTimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.typetime);
                 expect(typeTimeChanges.size).to.eq(1);
                 expect(typeTimeChanges.has('iface1'));
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
             });
 
@@ -6819,7 +6819,7 @@ describe('BrsFile', () => {
                     end enum
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6831,14 +6831,14 @@ describe('BrsFile', () => {
                     end enum
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
 
-                let typetimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+                let typetimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
                 expect(typetimeSymbols.size).to.eq(1);
-                let typetimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.typetime);
+                let typetimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.typetime);
                 expect(typetimeChanges.size).to.eq(0);
             });
 
@@ -6864,7 +6864,7 @@ describe('BrsFile', () => {
                     end enum
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(3);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6888,9 +6888,9 @@ describe('BrsFile', () => {
                     end enum
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(3);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(2);
                 expect(runtimeChanges.has('weather'));
                 expect(runtimeChanges.has('colors'));
@@ -6907,7 +6907,7 @@ describe('BrsFile', () => {
                     end enum
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6919,9 +6919,9 @@ describe('BrsFile', () => {
                     end enum
                 `);
                 program.plugins.emit('validateCode', { program: program, code: mainFile.code });
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('direction'));
             });
@@ -6933,7 +6933,7 @@ describe('BrsFile', () => {
                     end namespace
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6942,9 +6942,9 @@ describe('BrsFile', () => {
                     end namespace
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(1);
                 expect(runtimeChanges.has('alpha.beta.pi'));
             });
@@ -6963,7 +6963,7 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 validateFile(mainFile);
-                let runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                let runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(2);
 
                 mainFile = program.setFile('source/main.bs', `
@@ -6979,9 +6979,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 validateFile(mainFile);
-                runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
+                runtimeSymbols = mainFile.code.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(2);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
             });
 
@@ -6999,7 +6999,7 @@ describe('BrsFile', () => {
                 // No changes!
                 mainFile = program.setFile<BrsFile>('source/class.bs', classFileContent);
                 validateFile(mainFile);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
             });
 
@@ -7028,7 +7028,7 @@ describe('BrsFile', () => {
                 // No changes!
                 mainFile = program.setFile<BrsFile>('source/class.bs', fileContent);
                 validateFile(mainFile);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
             });
 
@@ -7053,7 +7053,7 @@ describe('BrsFile', () => {
                 // No changes!
                 mainFile = program.setFile<BrsFile>('source/class.bs', fileContent);
                 validateFile(mainFile);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
             });
 
@@ -7073,7 +7073,7 @@ describe('BrsFile', () => {
                 // Just added a comment!
                 mainFile = program.setFile<BrsFile>('source/namespace.bs', fileContentWithComment);
                 validateFile(mainFile);
-                let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
+                let runtimeChanges = mainFile.code.providedSymbols.changes.get(SymbolTypeFlag.runtime);
                 expect(runtimeChanges.size).to.eq(0);
             });
         });
@@ -7114,7 +7114,7 @@ describe('BrsFile', () => {
                 'prop1', 'prop2', 'prop3', 'prop4', 'prop5', 'prop6', 'prop7', 'prop8', 'prop9'
             ];
 
-            const { propertyHints } = file['_cachedLookups'];
+            const { propertyHints } = file.code['_cachedLookups'];
             expect(Object.keys(propertyHints).sort()).to.deep.equal(expected, 'Initial hints');
         });
 
@@ -7137,7 +7137,7 @@ describe('BrsFile', () => {
                 'constructor', 'tostring', 'valueof'
             ];
 
-            const { propertyHints } = file['_cachedLookups'];
+            const { propertyHints } = file.code['_cachedLookups'];
             expect(Object.keys(propertyHints).sort()).to.deep.equal(expected, 'Initial hints');
         });
 
@@ -8308,7 +8308,7 @@ describe('BrsFile', () => {
                 ].join('\n'));
                 program.validate();
 
-                const sourceLiterals = file.ast.findChildren<SourceLiteralExpression>(isSourceLiteralExpression, { walkMode: WalkMode.visitAllRecursive });
+                const sourceLiterals = file.code.ast.findChildren<SourceLiteralExpression>(isSourceLiteralExpression, { walkMode: WalkMode.visitAllRecursive });
                 expect(sourceLiterals).to.have.lengthOf(sourceLiteralLines.length * 6);
                 //make sure every source literal kind is covered, so a new one can't silently skip this check
                 expect(
@@ -8319,7 +8319,7 @@ describe('BrsFile', () => {
 
                 const validator = new BrsFileValidator({ program: program, code: file.code });
                 for (const sourceLiteral of sourceLiterals) {
-                    const transpiled = sourceLiteral.transpile(new BrsTranspileState(file)).map(x => x.toString()).join('');
+                    const transpiled = sourceLiteral.transpile(new BrsTranspileState(file.code)).map(x => x.toString()).join('');
                     const parts = validator['getSourceLiteralReplacements'](sourceLiteral, file.code);
                     let expected = parts.length > 0
                         ? parts.map(part => (part.type === 'string' ? `"${part.value}"` : `${part.value}`)).join(' + ')
@@ -8671,7 +8671,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            expect(file.getClosestExpression(undefined)).to.be.undefined;
+            expect(file.code.getClosestExpression(undefined)).to.be.undefined;
         });
 
         it('returns the closest expression at Position', () => {
@@ -8682,7 +8682,7 @@ describe('BrsFile', () => {
                     end if
                 end sub
             `);
-            expect(file.getClosestExpression({ line: 3, character: 34 })).to.be.instanceOf(LiteralExpression);
+            expect(file.code.getClosestExpression({ line: 3, character: 34 })).to.be.instanceOf(LiteralExpression);
         });
     });
 

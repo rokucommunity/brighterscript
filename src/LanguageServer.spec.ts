@@ -2327,7 +2327,7 @@ describe('LanguageServer', () => {
                         const { program, editor } = event;
                         const file = program.getFile('source/main.bs');
                         if (isBrsFile(file)) {
-                            file.ast.walk(createVisitor({
+                            file.code.ast.walk(createVisitor({
                                 LiteralExpression: (expression) => {
                                     if (isLiteralString(expression)) {
                                         editor.setProperty(expression.tokens.value, 'text', 'hello moon');

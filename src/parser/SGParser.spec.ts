@@ -71,7 +71,7 @@ describe('SGParser', () => {
             </component>
         `, undefined, 'components/file.xml');
 
-        const { ast } = file.parser;
+        const { ast } = file.code.parser;
         expect(ast.prologElement).to.exist;
         expect(ast.componentElement).to.exist;
         expect(ast.rootElement).to.equal(ast.componentElement);

@@ -633,7 +633,7 @@ export class Program {
      */
     private addDeferredComponentTypeSymbolCreation(xmlFile: XmlFile) {
         const componentKey = this.getComponentKey(xmlFile);
-        const componentName = xmlFile.componentName?.text;
+        const componentName = xmlFile.code.componentName?.text;
         if (this.componentSymbolsToUpdate.has(componentKey)) {
             return;
         }
@@ -641,7 +641,7 @@ export class Program {
     }
 
     private getComponentKey(xmlFile: XmlFile) {
-        return (xmlFile.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        return (xmlFile.code.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
     }
 
     /**
@@ -800,7 +800,7 @@ export class Program {
             namesByLowerName.set(node.name.toLowerCase(), node.name);
         }
         for (const componentName in this.components) {
-            const displayName = this.components[componentName][0]?.file.componentName?.text;
+            const displayName = this.components[componentName][0]?.file.code.componentName?.text;
             if (displayName) {
                 namesByLowerName.set(displayName.toLowerCase(), displayName);
             }
@@ -865,10 +865,10 @@ export class Program {
             //prefer a project component (a project component can shadow a built-in of the same name)
             const component = this.getComponent(currentNodeName);
             if (component) {
-                for (const field of component.file.ast.componentElement?.interfaceElement?.fields ?? []) {
+                for (const field of component.file.code.ast.componentElement?.interfaceElement?.fields ?? []) {
                     addField({ name: field.id, type: field.type, default: field.value, origin: origin });
                 }
-                const parentName = component.file.ast.componentElement?.extends;
+                const parentName = component.file.code.ast.componentElement?.extends;
                 if (parentName) {
                     walk(parentName, 'inherited');
                 }
@@ -1701,7 +1701,7 @@ export class Program {
     }
 
     private doesXmlFileRequireProvidedSymbols(file: XmlFile, providedSymbolsByFlag: Map<SymbolTypeFlag, Set<string>>) {
-        for (const required of file.requiredSymbols) {
+        for (const required of file.code.requiredSymbols) {
             const symbolNameLower = (required as UnresolvedXMLSymbol).name.toLowerCase();
             const requiredSymbolIsProvided = providedSymbolsByFlag.get(required.flags).has(symbolNameLower);
             if (requiredSymbolIsProvided) {
@@ -1718,8 +1718,8 @@ export class Program {
         const componentsByName = Object.keys(this.files).reduce<Record<string, XmlFile[]>>((map, filePath) => {
             const file = this.files[filePath];
             //if this is an XmlFile, and it has a valid `componentName` property
-            if (isXmlFile(file) && file.componentName?.text) {
-                let lowerName = file.componentName.text.toLowerCase();
+            if (isXmlFile(file) && file.code.componentName?.text) {
+                let lowerName = file.code.componentName.text.toLowerCase();
                 if (!map[lowerName]) {
                     map[lowerName] = [];
                 }
@@ -1733,13 +1733,13 @@ export class Program {
             //add diagnostics for every duplicate component with this name
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
-                    const { componentName } = xmlFile;
+                    const { componentName } = xmlFile.code;
                     this.diagnostics.register({
                         ...DiagnosticMessages.duplicateComponentName(componentName.text),
-                        location: xmlFile.componentName.location,
+                        location: xmlFile.code.componentName.location,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-                                location: x.componentName.location,
+                                location: x.code.componentName.location,
                                 message: 'Also defined here'
                             };
                         })
@@ -1944,7 +1944,7 @@ export class Program {
         }
     }
 
-    public getStatementsByName(name: string, origin: BrsFile | BrsCode, namespaceName?: string): FileLink<Statement>[] {
+    public getStatementsByName(name: string, origin: BrsCode, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
         const codesSearched = new Set<BrsCode>();
         let lowerNamespaceName = namespaceName?.toLowerCase();
@@ -1960,7 +1960,7 @@ export class Program {
         }
 
         //look through all files in scope for matches
-        for (const scope of isBrsFile(origin) ? this.getScopesForFile(origin) : this.getScopesForCode(origin)) {
+        for (const scope of this.getScopesForCode(origin)) {
             for (const code of scope.getAllCodes()) {
                 //skip non-brs code, or code we've already processed
                 if (!isBrsCode(code) || codesSearched.has(code)) {
@@ -1991,7 +1991,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.ast.componentElement.interfaceElement?.functions.map((f) => f.name) ?? []) {
+            for (let name of currentScope.xmlFile.code.ast.componentElement.interfaceElement?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -2691,7 +2691,7 @@ export class Program {
                 //TODO handle namespace-relative function calls
                 //if the file has a function with this name
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].functionStatementMap.get(lowerFunctionName)) {
+                if (file.code['_cachedLookups'].functionStatementMap.get(lowerFunctionName)) {
                     files.push(file);
                 }
             }
@@ -2712,7 +2712,7 @@ export class Program {
                 //if the file has a function with this name
 
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].classStatementMap.get(lowerClassName) !== undefined) {
+                if (file.code['_cachedLookups'].classStatementMap.get(lowerClassName) !== undefined) {
                     files.push(file);
                 }
             }
@@ -2728,7 +2728,7 @@ export class Program {
             if (isBrsFile(file)) {
 
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].namespaceStatements.find((x) => {
+                if (file.code['_cachedLookups'].namespaceStatements.find((x) => {
                     const namespaceName = x.name.toLowerCase();
                     return (
                         //the namespace name matches exactly
@@ -2752,7 +2752,7 @@ export class Program {
         for (const file of Object.values(this.files)) {
             if (isBrsFile(file)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].enumStatementMap.get(lowerName)) {
+                if (file.code['_cachedLookups'].enumStatementMap.get(lowerName)) {
                     files.push(file);
                 }
             }

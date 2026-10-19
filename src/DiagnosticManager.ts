@@ -197,10 +197,10 @@ export class DiagnosticManager {
             for (const scope of affectedScopes) {
                 if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
                     relatedInformation.push({
-                        message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
+                        message: `In component scope '${scope?.xmlFile?.code.componentName?.text}'`,
                         location: util.createLocationFromRange(
                             util.pathToUri(scope.xmlFile?.srcPath),
-                            scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
+                            scope?.xmlFile?.code.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
                         )
                     });
                 } else {
@@ -303,7 +303,7 @@ export class DiagnosticManager {
     private getCommentFlagsForLocation(location: Location) {
         const file = this.program?.getFile(location?.uri);
         if (!file?.codes || file.codes.length <= 1) {
-            return file?.commentFlags ?? [];
+            return file?.codes?.[0]?.commentFlags ?? [];
         }
         const codeAtLocation = this.program.getCodeAt(file, location.range?.start);
         const flags = [] as CommentFlag[];

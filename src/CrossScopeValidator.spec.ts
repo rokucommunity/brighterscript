@@ -158,8 +158,8 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });
@@ -194,9 +194,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.code.requiredSymbols.length).to.eq(1);
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
             const widgetScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName(`components${path.sep}Widget.xml`));
@@ -221,8 +221,8 @@ describe('CrossScopeValidator', () => {
 
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });
@@ -258,9 +258,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             //expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file2.requiredSymbols.length).to.eq(0);
-            expect(widgetBs.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file2.code.requiredSymbols.length).to.eq(0);
+            expect(widgetBs.code.requiredSymbols.length).to.eq(1);
             const incompatibleResolutions = program.crossScopeValidation.getIncompatibleSymbolResolutions();
             expect(incompatibleResolutions.length).to.eq(1);
             expect(incompatibleResolutions[0].incompatibleScopes.size).to.eq(2);
@@ -279,9 +279,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
-            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.code.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });
@@ -299,9 +299,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.requiredSymbols.length).to.eq(1);
-            expect(file1.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
-            expect(file1.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
+            expect(file1.code.requiredSymbols.length).to.eq(1);
+            expect(file1.code.requiredSymbols[0].flags).to.eq(SymbolTypeFlag.typetime);
+            expect(file1.code.requiredSymbols[0].typeChain[0].name).to.eq('MyInterface');
             const sourceScopeIssues = program.crossScopeValidation.getIssuesForScope(program.getScopeByName('source'));
             expect(sourceScopeIssues.missingSymbols.size).to.eq(0);
         });

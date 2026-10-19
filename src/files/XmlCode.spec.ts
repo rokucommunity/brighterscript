@@ -38,8 +38,8 @@ describe('XmlCode', () => {
         expect(file.code.componentName.text).to.equal('Widget');
         expect(file.code.parentComponentName.text).to.equal('Group');
         expect(file.code.scriptTagImports.map(x => x.text)).to.eql(['Widget.brs']);
-        expect(file.ast).to.equal(file.code.ast);
-        expect(file.componentName).to.equal(file.code.componentName);
+        expect(file.code.ast).to.equal(file.code.ast);
+        expect(file.code.componentName).to.equal(file.code.componentName);
     });
 
     it('updates its required symbols when its file is re-parsed', () => {
@@ -71,7 +71,7 @@ describe('XmlCode', () => {
             </component>
         `);
         expect(file.code.commentFlags).to.be.lengthOf(1);
-        expect(file.commentFlags).to.equal(file.code.commentFlags);
+        expect(file.code.commentFlags).to.equal(file.code.commentFlags);
     });
 
     describe('codes', () => {

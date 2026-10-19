@@ -23,7 +23,7 @@ describe('DiagnosticManager', () => {
                 location: { uri: util.pathToUri(file?.srcPath), range: undefined }
             };
 
-            file.commentFlags.push({
+            file.code.commentFlags.push({
                 affectedRange: util.createRange(1, 2, 3, 4),
                 codes: [1, 2, 3],
                 file: file,
@@ -44,7 +44,7 @@ describe('DiagnosticManager', () => {
                 location: { uri: undefined, range: util.createRange(1, 2, 3, 4) }
             };
 
-            file.commentFlags.push({
+            file.code.commentFlags.push({
                 affectedRange: util.createRange(1, 2, 3, 4),
                 codes: [1, 2, 3],
                 file: file,
@@ -71,7 +71,7 @@ describe('DiagnosticManager', () => {
         ].join('\n');
 
         function setFeature(file: BrsFile, isEnabled: boolean) {
-            file.ast.bsConsts = new Map([['feature', isEnabled]]);
+            file.code.ast.bsConsts = new Map([['feature', isEnabled]]);
             file.isValidated = false;
             program.validate();
         }

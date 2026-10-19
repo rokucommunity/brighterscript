@@ -107,7 +107,7 @@ export class XmlFileValidator {
         const file = this.event.code.document as XmlFile;
         if (file.program?.options?.autoImportComponentScript === true) {
             const codebehindPaths = file.possibleCodebehindDestPaths ?? [];
-            for (const scriptImport of file.parser.references.scriptTagImports) {
+            for (const scriptImport of file.code.parser.references.scriptTagImports) {
                 if (!scriptImport.destPath || !scriptImport.filePathRange) {
                     continue;
                 }

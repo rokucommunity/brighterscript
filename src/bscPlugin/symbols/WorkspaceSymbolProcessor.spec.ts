@@ -76,7 +76,7 @@ describe('WorkspaceSymbolProcessor', () => {
         program.plugins['suppressErrors'] = false;
         function testMissingToken(source: string, nameTokenPath: string[], expected?: ExpectedArray[]) {
             const file = program.setFile<BrsFile>('source/lib0.brs', source);
-            let node = file.ast.statements[0];
+            let node = file.code.ast.statements[0];
             //delete the token at the given path
             for (let i = 0; i < nameTokenPath.length - 1; i++) {
                 node = node[nameTokenPath[i]];

@@ -443,7 +443,7 @@ describe('DefinitionProvider', () => {
             </component>
         `);
         // Corrupt the XML parser's AST to simulate a mangled parse result
-        const parserRef = (xmlFile as any).parser;
+        const parserRef = (xmlFile as any).code.parser;
         const originalAst = parserRef?.ast;
         if (parserRef) {
             parserRef.ast = null;

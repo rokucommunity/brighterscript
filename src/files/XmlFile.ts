@@ -2,14 +2,13 @@ import * as path from 'path';
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { Location, Position, Range } from 'vscode-languageserver';
-import type { FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
+import type { FileReference, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import { standardizePath as s } from '../util';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
-import type { IToken, TokenType } from 'chevrotain';
 import { XmlTranspileState } from '../parser/XmlTranspileState';
 import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
@@ -18,7 +17,6 @@ import { BrsCode } from './BrsCode';
 import { ParseMode } from '../parser/Parser';
 import type { SGScript } from '../parser/SGTypes';
 import type { BscCode } from './BscCode';
-import type { FunctionScope } from '../FunctionScope';
 
 
 export type { UnresolvedXMLSymbol } from './XmlCode';
@@ -79,6 +77,11 @@ export class XmlFile implements BscFile {
     public code: XmlCode;
 
     /**
+     * Indicates whether this file has been validated. Set by the program during validation
+     */
+    public isValidated = false;
+
+    /**
      * The BrightScript embedded in this component's `<script>` blocks (`<![CDATA[ ... ]]>`), in the order they appear
      */
     public scriptCodes = [] as BrsCode[];
@@ -118,7 +121,7 @@ export class XmlFile implements BscFile {
 
         const cdataOpen = '<![CDATA[';
         const cdataClose = ']]>';
-        for (const script of this.ast.componentElement?.scriptElements ?? []) {
+        for (const script of this.code.ast.componentElement?.scriptElements ?? []) {
             const cdata = script.cdata;
             const range = cdata?.location?.range;
             if (!range) {
@@ -269,7 +272,7 @@ export class XmlFile implements BscFile {
             return this._needsTranspiled;
         }
         return !!(
-            this.editor?.hasChanges || this.ast.componentElement?.scriptElements?.some(
+            this.editor?.hasChanges || this.code.ast.componentElement?.scriptElements?.some(
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
             ) ||
             //embedded code that needs transpiling has to be written back into this file
@@ -329,7 +332,7 @@ export class XmlFile implements BscFile {
      */
     public get dependencies() {
         const dependencies = [
-            ...this.scriptTagImports.map(x => x.destPath.toLowerCase()),
+            ...this.code.scriptTagImports.map(x => x.destPath.toLowerCase()),
             //`import` statements in the code embedded in `<script>` blocks
             ...this.scriptCodes.flatMap(code => code.ownScriptImports).filter(x => !!x.destPath).map(x => x.destPath.toLowerCase())
         ];
@@ -352,7 +355,7 @@ export class XmlFile implements BscFile {
             }
         }
 
-        if (this.parentComponentName) {
+        if (this.code.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
         return dependencies;
@@ -374,8 +377,8 @@ export class XmlFile implements BscFile {
      */
     public get dependencyGraphKey() {
         let key: string;
-        if (this.componentName) {
-            key = `component:${this.componentName.text}`.toLowerCase();
+        if (this.code.componentName) {
+            key = `component:${this.code.componentName.text}`.toLowerCase();
         } else {
             key = this.destPath.toLowerCase();
         }
@@ -396,8 +399,8 @@ export class XmlFile implements BscFile {
      * If we have aparent, we will use that. If we don't, this will return undefined
      */
     public get parentComponentDependencyGraphKey() {
-        if (this.parentComponentName) {
-            return `component:${this.parentComponentName.text}`.toLowerCase();
+        if (this.code.parentComponentName) {
+            return `component:${this.code.parentComponentName.text}`.toLowerCase();
         } else {
             return undefined;
         }
@@ -434,7 +437,7 @@ export class XmlFile implements BscFile {
      */
     public get parentComponent() {
         const result = this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.parentComponentName?.text)?.file;
+            return this.program.getComponent(this.code.parentComponentName?.text)?.file;
         });
         return result;
     }
@@ -451,7 +454,7 @@ export class XmlFile implements BscFile {
         let result = [] as FileReference[];
         let parent = this.parentComponent;
         while (parent) {
-            result.push(...parent.scriptTagImports);
+            result.push(...parent.code.scriptTagImports);
             parent = parent.parentComponent;
         }
         return result;
@@ -484,7 +487,7 @@ export class XmlFile implements BscFile {
         }, {});
 
         //if the XML already has this import, skip this one
-        let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
+        let alreadyThereScriptImportMap = this.code.scriptTagImports.reduce((map, fileReference) => {
             map[fileReference.destPath.toLowerCase()] = true;
             return map;
         }, {});
@@ -521,7 +524,7 @@ export class XmlFile implements BscFile {
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.parser.ast.transpile(state));
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.code.parser.ast.transpile(state));
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);
@@ -552,70 +555,5 @@ export class XmlFile implements BscFile {
         for (const code of this.scriptCodes) {
             code.dispose();
         }
-    }
-
-    // Everything below forwards to `this.code`. These keep existing callers working while they move to `XmlCode`,
-    // and will be removed once they have.
-
-    public get isValidated() {
-        return this.code.isValidated;
-    }
-    public set isValidated(value: boolean) {
-        this.code.isValidated = value;
-    }
-
-    public get commentFlags() {
-        return this.code.commentFlags;
-    }
-    public set commentFlags(value: CommentFlag[]) {
-        this.code.commentFlags = value;
-    }
-
-    public get parser() {
-        return this.code.parser;
-    }
-
-    public get ast() {
-        return this.code.ast;
-    }
-
-    public get callables() {
-        return this.code.callables;
-    }
-
-    public get functionScopes() {
-        return this.code.functionScopes;
-    }
-
-    public get scriptTagImports() {
-        return this.code.scriptTagImports;
-    }
-
-    public get parentComponentName() {
-        return this.code.parentComponentName;
-    }
-
-    public get componentName() {
-        return this.code.componentName;
-    }
-
-    public get requiredSymbols() {
-        return this.code.requiredSymbols;
-    }
-
-    public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
-        return this.code.getCommentFlags(tokens);
-    }
-
-    public getCompletions(position: Position) {
-        return this.code.getCompletions(position);
-    }
-
-    public getTokenAt(position: Position) {
-        return this.code.getTokenAt(position);
-    }
-
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]) {
-        return this.code.getFunctionScopeAtPosition(position, functionScopes);
     }
 }

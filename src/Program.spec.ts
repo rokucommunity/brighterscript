@@ -212,7 +212,7 @@ describe('Program', () => {
                     'some comment
                 end sub
             `);
-            (file.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
+            (file.code.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
             await program.build({
                 files: [file],
                 outDir: tempDir
@@ -525,9 +525,9 @@ describe('Program', () => {
                 end sub
             `);
             //disable the plugins
-            expect(file['_cachedLookups'].expressions).to.be.lengthOf(1);
+            expect(file.code['_cachedLookups'].expressions).to.be.lengthOf(1);
             program.validate();
-            expect(file['_cachedLookups'].expressions).to.be.lengthOf(1);
+            expect(file.code['_cachedLookups'].expressions).to.be.lengthOf(1);
         });
         it('catches duplicate XML component names', () => {
             //add 2 components which both reference the same errored file
@@ -1200,8 +1200,8 @@ describe('Program', () => {
 
                 //the symbol table should have exactly one entry for MyClass per flag
                 const file = program.getFile<BrsFile>('source/types.bs');
-                const runtimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === 'MyClass');
-                const typetimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === 'MyClass');
+                const runtimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === 'MyClass');
+                const typetimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === 'MyClass');
                 expect(runtimeEntries).to.have.lengthOf(1);
                 expect(typetimeEntries).to.have.lengthOf(1);
 
@@ -1236,8 +1236,8 @@ describe('Program', () => {
 
                 for (let i = 0; i < fileCount; i++) {
                     const file = program.getFile<BrsFile>(`source/types${i}.bs`);
-                    const runtimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === `MyClass${i}`);
-                    const typetimeEntries = file.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === `MyClass${i}`);
+                    const runtimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === `MyClass${i}`);
+                    const typetimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === `MyClass${i}`);
                     expect(runtimeEntries, `runtime entries for MyClass${i}`).to.have.lengthOf(1);
                     expect(typetimeEntries, `typetime entries for MyClass${i}`).to.have.lengthOf(1);
                 }
@@ -2554,7 +2554,7 @@ describe('Program', () => {
                     if (event.file !== file) {
                         return;
                     }
-                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    const stmt = ((event.file as BrsFile).code.ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 },
                 afterPrepareFile: sinon.spy()
@@ -2717,7 +2717,7 @@ describe('Program', () => {
                     if (event.file !== file) {
                         return;
                     }
-                    const stmt = ((event.file as BrsFile).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    const stmt = ((event.file as BrsFile).code.ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 }
             });
@@ -2746,7 +2746,7 @@ describe('Program', () => {
                 name: 'TestPlugin',
                 beforePrepareFile: (event) => {
                     if (event.file === file && isBrsFile(event.file)) {
-                        event.file.ast.walk(createVisitor({
+                        event.file.code.ast.walk(createVisitor({
                             LiteralExpression: (literal) => {
                                 literalExpression = literal;
                                 event.editor.setProperty(literal.tokens.value, 'text', '"goodbye world"');
@@ -2785,7 +2785,7 @@ describe('Program', () => {
             program.plugins.add({
                 name: 'TestPlugin',
                 beforePrepareProgram: (event) => {
-                    file.ast.walk(createVisitor({
+                    file.code.ast.walk(createVisitor({
                         LiteralExpression: (literal) => {
                             literalExpression = literal;
                             event.editor.setProperty(literal.tokens.value, 'text', '"goodbye world"');
@@ -4193,7 +4193,7 @@ describe('Program', () => {
                 beforeSerializeFile: (event) => {
                     if (event.file === lateFile) {
                         //edit the file's AST so we can verify the edit gets undone after the build
-                        const func = (event.file as BrsFile).ast.statements[0] as FunctionStatement;
+                        const func = (event.file as BrsFile).code.ast.statements[0] as FunctionStatement;
                         event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
                     }
                 }
@@ -4206,7 +4206,7 @@ describe('Program', () => {
 
             //the edit made to the late-added file should have been undone
             expect(
-                (lateFile.ast.statements[0] as FunctionStatement).tokens.name.text
+                (lateFile.code.ast.statements[0] as FunctionStatement).tokens.name.text
             ).to.eql('late');
         });
 
@@ -4231,7 +4231,7 @@ describe('Program', () => {
                 },
                 beforeSerializeFile: (event) => {
                     if (event.file === lateFile) {
-                        const func = (event.file as BrsFile).ast.statements[0] as FunctionStatement;
+                        const func = (event.file as BrsFile).code.ast.statements[0] as FunctionStatement;
                         event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
                     }
                 }
@@ -4240,7 +4240,7 @@ describe('Program', () => {
 
             //the edit made to the late-added file should have been undone
             expect(
-                (lateFile.ast.statements[0] as FunctionStatement).tokens.name.text
+                (lateFile.code.ast.statements[0] as FunctionStatement).tokens.name.text
             ).to.eql('late');
         });
     });

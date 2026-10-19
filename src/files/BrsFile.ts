@@ -2,20 +2,13 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { Position, Location, LocationLink } from 'vscode-languageserver';
 import * as path from 'path';
-import type { SymbolTable } from '../SymbolTable';
-import type { FunctionScope } from '../FunctionScope';
-import type { Callable, CommentFlag, SerializedCodeFile } from '../interfaces';
-import type { Token } from '../lexer/Token';
-import type { TokenKind } from '../lexer/TokenKind';
-import type { Parser } from '../parser/Parser';
+import type { SerializedCodeFile } from '../interfaces';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
-import type { AstNode, Expression } from '../parser/AstNode';
 import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
 import { DocumentSymbolProcessor } from '../bscPlugin/symbols/DocumentSymbolProcessor';
 import { WorkspaceSymbolProcessor } from '../bscPlugin/symbols/WorkspaceSymbolProcessor';
@@ -83,7 +76,7 @@ export class BrsFile implements BscFile {
 
             //all BrighterScript files need to be transpiled
             if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {
-                this.parseMode = ParseMode.BrighterScript;
+                this.code.parseMode = ParseMode.BrighterScript;
             }
             this.isTypedef = this.extension === '.d.bs';
             if (!this.isTypedef) {
@@ -111,6 +104,11 @@ export class BrsFile implements BscFile {
     public code: BrsCode;
 
     /**
+     * Indicates whether this file has been validated. Set by the program during validation
+     */
+    public isValidated = false;
+
+    /**
      * All of the code this file provides
      */
     public get codes(): BscCode[] {
@@ -127,7 +125,7 @@ export class BrsFile implements BscFile {
      */
     public get canBePruned() {
         let canPrune = true;
-        this.ast.walk(createVisitor({
+        this.code.ast.walk(createVisitor({
             FunctionStatement: () => {
                 canPrune = false;
             },
@@ -229,7 +227,7 @@ export class BrsFile implements BscFile {
      * The list of files that this file depends on
      */
     public get dependencies() {
-        const result = this.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
+        const result = this.code.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
 
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
@@ -251,6 +249,7 @@ export class BrsFile implements BscFile {
         if (this.hasTypedef) {
             //skip validation since the typedef is shadowing this file
             this.isValidated = true;
+            this.code.isValidated = true;
             return;
         }
         this.code.parse(fileContents);
@@ -336,20 +335,20 @@ export class BrsFile implements BscFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new BrsTranspileState(this);
+        const state = new BrsTranspileState(this.code);
         state.editor = this.editor ?? new Editor();
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            const astTranspile = this.ast.transpile(state);
+            const astTranspile = this.code.ast.transpile(state);
             const trailingComments = [];
-            if (util.hasLeadingComments(this.parser.eofToken)) {
-                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1]?.location, this.parser.eofToken)) {
+            if (util.hasLeadingComments(this.code.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(this.code.ast.statements[this.code.ast.statements.length - 1]?.location, this.code.parser.eofToken)) {
                     trailingComments.push(' ');
                 } else {
                     trailingComments.push('\n');
                 }
-                trailingComments.push(...state.transpileLeadingComments(this.parser.eofToken));
+                trailingComments.push(...state.transpileLeadingComments(this.code.parser.eofToken));
             }
 
             transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, [...astTranspile, ...trailingComments]);
@@ -385,8 +384,8 @@ export class BrsFile implements BscFile {
 
 
     public getTypedef() {
-        const state = new BrsTranspileState(this);
-        const typedef = this.ast.getTypedef(state);
+        const state = new BrsTranspileState(this.code);
+        const typedef = this.code.ast.getTypedef(state);
         const programNode = util.sourceNodeFromTranspileResult(null, null, this.srcPath, typedef);
         return programNode.toString();
     }
@@ -396,203 +395,5 @@ export class BrsFile implements BscFile {
 
         //deleting these properties result in lower memory usage (garbage collection is magic!)
         delete this.fileContents;
-    }
-
-    // Everything below forwards to `this.code`. These keep existing callers working while they move to `BrsCode`,
-    // and will be removed once they have.
-
-    public get parseMode() {
-        return this.code.parseMode;
-    }
-    public set parseMode(value: ParseMode) {
-        this.code.parseMode = value;
-    }
-
-    public get isValidated() {
-        return this.code.isValidated;
-    }
-    public set isValidated(value: boolean) {
-        this.code.isValidated = value;
-    }
-
-    public get commentFlags() {
-        return this.code.commentFlags;
-    }
-    public set commentFlags(value: CommentFlag[]) {
-        this.code.commentFlags = value;
-    }
-
-    public get parser() {
-        return this.code.parser;
-    }
-
-    protected get _parser() {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        return this.code['_parser'];
-    }
-    protected set _parser(value: Parser) {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        this.code['_parser'] = value;
-    }
-
-    protected get _cachedLookups() {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        return this.code['_cachedLookups'];
-    }
-
-    protected getNamespaceContributions() {
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        return this.code['getNamespaceContributions']();
-    }
-
-    public get ast() {
-        return this.code.ast;
-    }
-
-    public get functionScopes() {
-        return this.code.functionScopes;
-    }
-
-    public get scopesByFunc() {
-        return this.code.scopesByFunc;
-    }
-
-    public get staticCallables() {
-        return this.code.staticCallables;
-    }
-    public set staticCallables(value: Callable[]) {
-        this.code.staticCallables = value;
-    }
-
-    public get callables() {
-        return this.code.callables;
-    }
-
-    public get ownScriptImports() {
-        return this.code.ownScriptImports;
-    }
-
-    public get propertyNameCompletions() {
-        return this.code.propertyNameCompletions;
-    }
-
-    public get validationSegmenter() {
-        return this.code.validationSegmenter;
-    }
-
-    public get requiredSymbols() {
-        return this.code.requiredSymbols;
-    }
-
-    public get providedSymbols() {
-        return this.code.providedSymbols;
-    }
-
-    public get assignedSymbols() {
-        return this.code.assignedSymbols;
-    }
-
-    public getTokenAt(position: Position) {
-        return this.code.getTokenAt(position);
-    }
-
-    public getCurrentOrNextTokenAt(position: Position) {
-        return this.code.getCurrentOrNextTokenAt(position);
-    }
-
-    public getClosestExpression(position: Position) {
-        return this.code.getClosestExpression(position);
-    }
-
-    public getClassFileLink(className: string, containingNamespace?: string) {
-        return this.code.getClassFileLink(className, containingNamespace);
-    }
-
-    public findPropertyNameCompletions() {
-        return this.code.findPropertyNameCompletions();
-    }
-
-    public getCommentFlags(tokens: Token[]) {
-        return this.code.getCommentFlags(tokens);
-    }
-
-    public getFunctionScopeAtPosition(position: Position) {
-        return this.code.getFunctionScopeAtPosition(position);
-    }
-
-    public _getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]) {
-        return this.code._getFunctionScopeAtPosition(position, functionScopes);
-    }
-
-    public getNamespaceStatementForPosition(position: Position) {
-        return this.code.getNamespaceStatementForPosition(position);
-    }
-
-    public getPartialVariableName(currentToken: Token, excludeTokens: TokenKind[] = null) {
-        return this.code.getPartialVariableName(currentToken, excludeTokens);
-    }
-
-    public isPositionNextToTokenKind(position: Position, tokenKind: TokenKind) {
-        return this.code.isPositionNextToTokenKind(position, tokenKind);
-    }
-
-    public isTokenNextToTokenKind(closestToken: Token, tokenKind: TokenKind) {
-        return this.code.isTokenNextToTokenKind(closestToken, tokenKind);
-    }
-
-    public getTokenBefore(currentToken: Token, tokenKind?: TokenKind) {
-        return this.code.getTokenBefore(currentToken, tokenKind);
-    }
-
-    public tokenFollows(currentToken: Token, tokenKind: TokenKind) {
-        return this.code.tokenFollows(currentToken, tokenKind);
-    }
-
-    public getTokensUntil(currentToken: Token, tokenKind: TokenKind, direction: -1 | 1 = 1) {
-        return this.code.getTokensUntil(currentToken, tokenKind, direction);
-    }
-
-    public getNextTokenByPredicate(currentToken: Token, test: (Token) => boolean, direction: -1 | 1 = 1) {
-        return this.code.getNextTokenByPredicate(currentToken, test, direction);
-    }
-
-    public getPreviousToken(token: Token) {
-        return this.code.getPreviousToken(token);
-    }
-
-    public calleeStartsWithNamespace(callee: Expression) {
-        return this.code.calleeStartsWithNamespace(callee);
-    }
-
-    public getClosestToken(position: Position) {
-        return this.code.getClosestToken(position);
-    }
-
-    public getClassMethod(classStatement: ClassStatement, name: string, walkParents = true) {
-        return this.code.getClassMethod(classStatement, name, walkParents);
-    }
-
-    public getNamespaceSymbolTable(allowCache = true) {
-        return this.code.getNamespaceSymbolTable(allowCache);
-    }
-
-    public processSymbolInformation() {
-        return this.code.processSymbolInformation();
-    }
-
-    public unlinkNamespaceSymbolTables() {
-        return this.code.unlinkNamespaceSymbolTables();
-    }
-
-    public populateNameSpaceSymbolTable(namespaceSymbolTable: SymbolTable) {
-        return this.code.populateNameSpaceSymbolTable(namespaceSymbolTable);
-    }
-
-    public markSegmentAsValidated(node: AstNode) {
-        return this.code.markSegmentAsValidated(node);
-    }
-
-    public getNamespaceLookupObject() {
-        return this.code.getNamespaceLookupObject();
     }
 }

@@ -1,6 +1,5 @@
 import type { SourceMapGenerator } from 'source-map';
 import type { Editor } from '../astUtils/Editor';
-import type { CommentFlag } from '../interfaces';
 import type { DependencyChangedEvent } from '../DependencyGraph';
 import type { BscCode } from './BscCode';
 
@@ -70,10 +69,6 @@ export interface BscFile {
      * Called when the file needs to be validated
      */
     validate?: () => void;
-    /**
-     * An array of comment-based flags that can be used to suppress diagnostics
-     */
-    commentFlags?: CommentFlag[];
     /**
      * An array of functions that will be called when this file gets destroyed (i.e. event handler disconnection functions)
      */

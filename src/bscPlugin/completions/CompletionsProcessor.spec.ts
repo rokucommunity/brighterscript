@@ -729,7 +729,7 @@ describe('CompletionsProcessor', () => {
                         message = alpha
                     end sub
                 `);
-                const assignment = file.ast.findChild<AssignmentStatement>(isAssignmentStatement);
+                const assignment = file.code.ast.findChild<AssignmentStatement>(isAssignmentStatement);
                 // destroy the `range` for this value
                 delete (assignment as any).value.range;
 
@@ -746,7 +746,7 @@ describe('CompletionsProcessor', () => {
                         message = alpha
                     end sub
                 `);
-                const func = file.ast.findChild<FunctionExpression>(isFunctionExpression);
+                const func = file.code.ast.findChild<FunctionExpression>(isFunctionExpression);
                 // destroy the `body` for this value
                 delete (func as any).body;
 
@@ -1235,7 +1235,7 @@ describe('CompletionsProcessor', () => {
                 destPath: s`components/component1/component1.xml`,
                 program: program
             });
-            xmlFile.parser.references.scriptTagImports.push({
+            xmlFile.code.parser.references.scriptTagImports.push({
                 destPath: s`components/component1/component1.brs`,
                 text: 'component1.brs',
                 filePathRange: Range.create(1, 1, 1, 1)
@@ -1296,12 +1296,12 @@ describe('CompletionsProcessor', () => {
 
         it('creates proper tokens', () => {
             const file = program.setFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
-            expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
-            expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
-            expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
-            expect(file['getPartialVariableName'](file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
-            expect(file['getPartialVariableName'](file.parser.tokens[3])).to.equal('ModuleA.');
-            expect(file['getPartialVariableName'](file.parser.tokens[2])).to.equal('ModuleA');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[4])).to.equal('ModuleA.ModuleB');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[3])).to.equal('ModuleA.');
+            expect(file.code['getPartialVariableName'](file.code.parser.tokens[2])).to.equal('ModuleA');
         });
     });
 

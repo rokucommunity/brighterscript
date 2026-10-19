@@ -35,10 +35,10 @@ describe('BrsCode', () => {
             end sub
         `);
         expect(file.code.ast.statements).to.be.lengthOf(1);
-        expect(file.ast).to.equal(file.code.ast);
-        expect(file.parser).to.equal(file.code.parser);
-        expect(file.callables.map(x => x.name)).to.eql(['main']);
-        expect(file.code.callables).to.equal(file.callables);
+        expect(file.code.ast).to.equal(file.code.ast);
+        expect(file.code.parser).to.equal(file.code.parser);
+        expect(file.code.callables.map(x => x.name)).to.eql(['main']);
+        expect(file.code.callables).to.equal(file.code.callables);
     });
 
     it('uses brighterscript mode for .bs files', () => {

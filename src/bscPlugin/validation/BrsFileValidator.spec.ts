@@ -43,7 +43,7 @@ describe('BrsFileValidator', () => {
             end sub
         `);
         program.validate();
-        const func = (file.parser.ast.statements[0] as FunctionStatement);
+        const func = (file.code.parser.ast.statements[0] as FunctionStatement);
         const print = func.func.body.statements[0] as PrintStatement;
         expect(print.parent).to.equal(func.func.body);
 
@@ -58,7 +58,7 @@ describe('BrsFileValidator', () => {
     });
 
     it('links namespace name dotted get parents', () => {
-        const { ast } = program.setFile<BrsFile>('source/main.bs', `
+        const { code: { ast } } = program.setFile<BrsFile>('source/main.bs', `
             namespace alpha.bravo
                 class Delta extends alpha.bravo.Charlie
                 end class
@@ -466,7 +466,7 @@ describe('BrsFileValidator', () => {
 
             program.validate();
             expectZeroDiagnostics(program);
-            const forStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+            const forStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
             const insideFor = forStmt.body.statements[0];
             const screensDataType = insideFor.getSymbolTable().getSymbolType('screensData', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(screensDataType, ArrayType);
@@ -497,7 +497,7 @@ describe('BrsFileValidator', () => {
 
             program.validate();
             expectZeroDiagnostics(program);
-            const forStmt = mainFile.ast.findChild<ForEachStatement>(isForEachStatement);
+            const forStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
             const insideFor = forStmt.body.statements[0];
             const actionsType = insideFor.getSymbolTable().getSymbolType('actions', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(actionsType, ArrayType);
@@ -667,7 +667,7 @@ describe('BrsFileValidator', () => {
             const assigns = [] as Array<AssignmentStatement>;
 
             // find places in AST where "x" is assigned
-            file.ast.walk(createVisitor({
+            file.code.ast.walk(createVisitor({
                 AssignmentStatement: (stmt) => {
                     if (stmt.tokens.name.text.toLowerCase() === 'x') {
                         assigns.push(stmt);
@@ -721,7 +721,7 @@ describe('BrsFileValidator', () => {
             const assigns = [] as Array<AssignmentStatement>;
 
             // find places in AST where "x" is assigned
-            file.ast.walk(createVisitor({
+            file.code.ast.walk(createVisitor({
                 AssignmentStatement: (stmt) => {
                     if (stmt.tokens.name.text.toLowerCase() === 'x') {
                         assigns.push(stmt);
@@ -779,7 +779,7 @@ describe('BrsFileValidator', () => {
             expectZeroDiagnostics(program);
             // find places in AST where "x" is assigned
             const assigns = [] as Array<AssignmentStatement>;
-            file.ast.walk(createVisitor({
+            file.code.ast.walk(createVisitor({
                 AssignmentStatement: (stmt) => {
                     if (stmt.tokens.name.text.toLowerCase() === 'x') {
                         assigns.push(stmt);
@@ -815,7 +815,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const assigns = file.ast.findChildren(isAssignmentStatement);
+            const assigns = file.code.ast.findChildren(isAssignmentStatement);
             // inside IF
             const insideType = assigns[0].getSymbolTable().getSymbolType('inside', { flags: SymbolTypeFlag.runtime });
             const inputType = assigns[0].getSymbolTable().getSymbolType('input', { flags: SymbolTypeFlag.runtime });
@@ -935,7 +935,7 @@ describe('BrsFileValidator', () => {
             let func: FunctionExpression;
 
             // find places in AST where "x" is assigned
-            file.ast.walk(createVisitor({
+            file.code.ast.walk(createVisitor({
                 FunctionStatement: (stmt) => {
                     if (stmt.getName(ParseMode.BrighterScript) === 'ns1.ns2.func1') {
                         func = stmt.func;
@@ -1038,7 +1038,7 @@ describe('BrsFileValidator', () => {
             let func: FunctionExpression;
 
             // find places in AST where "x" is assigned
-            file.ast.walk(createVisitor({
+            file.code.ast.walk(createVisitor({
                 FunctionStatement: (stmt) => {
                     if (stmt.getName(ParseMode.BrighterScript) === 'ns1.ns2.getDirection') {
                         func = stmt.func;
@@ -1167,7 +1167,7 @@ describe('BrsFileValidator', () => {
 
             function collectPrintedText(file: BrsFile) {
                 const printed: string[] = [];
-                file.ast.walk(createVisitor({
+                file.code.ast.walk(createVisitor({
                     PrintStatement: (statement) => {
                         printed.push(statement.expressions.map(expression => (expression as any).tokens?.value?.text).join(''));
                     }
@@ -1444,7 +1444,7 @@ describe('BrsFileValidator', () => {
 
                 it('reports the diagnostics of the branch that a plugin activates by changing the constants', () => {
                     const diagnostics = validateAfterEdit((file) => {
-                        file.ast.bsConsts = new Map([['debug', true]]);
+                        file.code.ast.bsConsts = new Map([['debug', true]]);
                     });
                     expectDiagnostics(diagnostics, [
                         { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },
@@ -1454,7 +1454,7 @@ describe('BrsFileValidator', () => {
 
                 it('reports the diagnostics of the branch that a plugin activates by editing the condition', () => {
                     const diagnostics = validateAfterEdit((file) => {
-                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        const statement = file.code.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
                         (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition.location);
                     });
                     expectDiagnostics(diagnostics, [
@@ -1465,8 +1465,8 @@ describe('BrsFileValidator', () => {
 
                 it('reports the diagnostics of the else branch when a plugin negates the condition', () => {
                     const diagnostics = validateAfterEdit((file) => {
-                        file.ast.bsConsts = new Map([['debug', true]]);
-                        const statement = file.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                        file.code.ast.bsConsts = new Map([['debug', true]]);
+                        const statement = file.code.ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
                         (statement.tokens as any).not = createToken(TokenKind.Not, 'not');
                     });
                     expectDiagnostics(diagnostics, [
@@ -1481,7 +1481,7 @@ describe('BrsFileValidator', () => {
                     evaluationProgram.plugins.add({
                         name: 'edit-after-parse',
                         beforeValidateFile: (event) => {
-                            (event.file as BrsFile).ast.bsConsts = new Map([['debug', false]]);
+                            (event.file as BrsFile).code.ast.bsConsts = new Map([['debug', false]]);
                         }
                     });
                     evaluationProgram.setFile('source/main.brs', `
@@ -1509,20 +1509,20 @@ describe('BrsFileValidator', () => {
                         end sub
                     `);
                     const inactiveBranch = { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } };
-                    file.ast.statements.unshift(createHashConst('DEBUG', false));
+                    file.code.ast.statements.unshift(createHashConst('DEBUG', false));
                     evaluationProgram.validate();
                     expectDiagnostics(evaluationProgram, [inactiveBranch]);
 
-                    file.ast.statements[0] = createHashConst('DEBUG', true);
-                    file.ast.link();
+                    file.code.ast.statements[0] = createHashConst('DEBUG', true);
+                    file.code.ast.link();
                     //the parse error follows the walk right away. The fading hint comes from validation, so it stays until the file validates again
                     expectDiagnostics(evaluationProgram, [
                         { code: 'unexpected-token', location: { range: util.createRange(3, 32, 3, 33) } },
                         inactiveBranch
                     ]);
 
-                    file.ast.statements[0] = createHashConst('DEBUG', false);
-                    file.ast.link();
+                    file.code.ast.statements[0] = createHashConst('DEBUG', false);
+                    file.code.ast.link();
                     expectDiagnostics(evaluationProgram, [inactiveBranch]);
                 });
 
@@ -1545,12 +1545,12 @@ describe('BrsFileValidator', () => {
                     evaluationProgram.validate();
                     const scope = evaluationProgram.getScopeByName('source');
                     expect(scope.getClass('Foo').memberMap['releasemethod']).to.exist;
-                    file.ast.statements.unshift(createHashConst('DEBUG', true));
+                    file.code.ast.statements.unshift(createHashConst('DEBUG', true));
                     file.isValidated = false;
                     scope.invalidate();
                     evaluationProgram.validate();
                     expect(scope.getClass('Foo').memberMap['debugmethod']).to.exist;
-                    expect(file['_cachedLookups'].classStatementMap.get('foo').memberMap['debugmethod']).to.exist;
+                    expect(file.code['_cachedLookups'].classStatementMap.get('foo').memberMap['debugmethod']).to.exist;
                 });
             });
 
@@ -4169,7 +4169,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
+            const func = file.code.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
             const table = func.body.getSymbolTable();
             const data = {} as ExtraSymbolData;
             const channelType = table.getSymbolType('channel', { flags: SymbolTypeFlag.runtime, data: data });
@@ -4193,7 +4193,7 @@ describe('BrsFileValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
+            const func = file.code.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
             const table = func.body.getSymbolTable();
             const data = {} as ExtraSymbolData;
             const channelType = table.getSymbolType('channel', { flags: SymbolTypeFlag.runtime, data: data });
@@ -4213,7 +4213,7 @@ describe('BrsFileValidator', () => {
         `);
             program.validate();
             expectZeroDiagnostics(program);
-            const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
+            const func = file.code.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
             const table = func.body.getSymbolTable();
             const data = {} as ExtraSymbolData;
             const xType = table.getSymbolType('x', { flags: SymbolTypeFlag.runtime, data: data });
@@ -4233,7 +4233,7 @@ describe('BrsFileValidator', () => {
         `);
             program.validate();
             expectZeroDiagnostics(program);
-            const func = file.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
+            const func = file.code.ast.statements[0].findChild<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive });
             const table = func.getSymbolTable();
             const data = {} as ExtraSymbolData;
             const xType = table.getSymbolType('x', { flags: SymbolTypeFlag.runtime, data: data });
@@ -4267,7 +4267,7 @@ describe('BrsFileValidator', () => {
         `);
             program.validate();
             expectZeroDiagnostics(program);
-            const klass = file.ast.statements[1] as ClassStatement;
+            const klass = file.code.ast.statements[1] as ClassStatement;
             const newTable = klass.methods[0].func.body.getSymbolTable();
             let data = {} as ExtraSymbolData;
             const newSuperType = newTable.getSymbolType('super', { flags: SymbolTypeFlag.runtime, data: data });
@@ -4296,13 +4296,13 @@ describe('BrsFileValidator', () => {
                 expectZeroDiagnostics(program);
                 let data = {} as ExtraSymbolData;
                 expectTypeToBe(
-                    file.ast.findChild(isFunctionParameterExpression).getType({
+                    file.code.ast.findChild(isFunctionParameterExpression).getType({
                         flags: SymbolTypeFlag.runtime, data: data
                     }),
                     StringType
                 );
                 data = {};
-                const printSymbolTable = file.ast.findChild(isPrintStatement).getSymbolTable();
+                const printSymbolTable = file.code.ast.findChild(isPrintStatement).getSymbolTable();
                 expectTypeToBe(
                     printSymbolTable.getSymbolType('name', {
                         flags: SymbolTypeFlag.runtime, data: data
@@ -4323,13 +4323,13 @@ describe('BrsFileValidator', () => {
                 expectZeroDiagnostics(program);
                 let data = {} as ExtraSymbolData;
                 expectTypeToBe(
-                    file.ast.findChild(isFunctionParameterExpression).getType({
+                    file.code.ast.findChild(isFunctionParameterExpression).getType({
                         flags: SymbolTypeFlag.runtime, data: data
                     }),
                     DynamicType
                 );
                 data = {};
-                const printSymbolTable = file.ast.findChild(isPrintStatement).getSymbolTable();
+                const printSymbolTable = file.code.ast.findChild(isPrintStatement).getSymbolTable();
                 expectTypeToBe(
                     printSymbolTable.getSymbolType('name', {
                         flags: SymbolTypeFlag.runtime, data: data
@@ -4353,14 +4353,14 @@ describe('BrsFileValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
-                const funcParamExpr = file.ast.findChild(isFunctionParameterExpression);
+                const funcParamExpr = file.code.ast.findChild(isFunctionParameterExpression);
                 expectTypeToBe(
                     funcParamExpr.getType({
                         flags: SymbolTypeFlag.typetime, data: data
                     }),
                     ClassType
                 );
-                const myClassType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('myClass', {
+                const myClassType = file.code.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('myClass', {
                     flags: SymbolTypeFlag.runtime, data: data
                 });
                 expectTypeToBe(myClassType, ClassType);
@@ -4379,12 +4379,12 @@ describe('BrsFileValidator', () => {
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
                 expectTypeToBe(
-                    file.ast.findChild(isFunctionParameterExpression).getType({
+                    file.code.ast.findChild(isFunctionParameterExpression).getType({
                         flags: SymbolTypeFlag.typetime, data: data
                     }),
                     InterfaceType
                 );
-                const infoType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
+                const infoType = file.code.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
                     flags: SymbolTypeFlag.runtime, data: data
                 });
                 expectTypeToBe(infoType, InterfaceType);
@@ -4405,12 +4405,12 @@ describe('BrsFileValidator', () => {
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
                 expectTypeToBe(
-                    file.ast.findChild(isFunctionParameterExpression).getType({
+                    file.code.ast.findChild(isFunctionParameterExpression).getType({
                         flags: SymbolTypeFlag.runtime, data: data
                     }),
                     StringType
                 );
-                const infoType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
+                const infoType = file.code.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
                     flags: SymbolTypeFlag.runtime, data: data
                 });
                 expectTypeToBe(infoType, StringType);
@@ -4430,12 +4430,12 @@ describe('BrsFileValidator', () => {
                 ]);
                 const data = {} as ExtraSymbolData;
                 expectTypeToBe(
-                    file.ast.findChild(isFunctionParameterExpression).getType({
+                    file.code.ast.findChild(isFunctionParameterExpression).getType({
                         flags: SymbolTypeFlag.runtime, data: data
                     }),
                     DynamicType
                 );
-                const infoType = file.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
+                const infoType = file.code.ast.findChild(isPrintStatement).getSymbolTable().getSymbolType('info', {
                     flags: SymbolTypeFlag.runtime, data: data
                 });
                 expectTypeToBe(infoType, DynamicType);
@@ -4453,13 +4453,13 @@ describe('BrsFileValidator', () => {
                 expectZeroDiagnostics(program);
                 let data = {} as ExtraSymbolData;
                 expectTypeToBe(
-                    file.ast.findChild(isFunctionParameterExpression).getType({
+                    file.code.ast.findChild(isFunctionParameterExpression).getType({
                         flags: SymbolTypeFlag.runtime, data: data
                     }),
                     InterfaceType
                 );
                 data = {};
-                const printSymbolTable = file.ast.findChild(isPrintStatement).getSymbolTable();
+                const printSymbolTable = file.code.ast.findChild(isPrintStatement).getSymbolTable();
                 const thingType = printSymbolTable.getSymbolType('thing', {
                     flags: SymbolTypeFlag.runtime, data: data
                 });
@@ -4480,7 +4480,7 @@ describe('BrsFileValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
-                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcStmt = file.code.ast.findChild(isFunctionStatement);
                 const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(funcType, TypedFunctionType);
                 const returnType = (funcType as TypedFunctionType).returnType;
@@ -4499,7 +4499,7 @@ describe('BrsFileValidator', () => {
                     DiagnosticMessages.cannotFindName('TypeNotThere').message
                 ]);
                 const data = {} as ExtraSymbolData;
-                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcStmt = file.code.ast.findChild(isFunctionStatement);
                 const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(funcType, TypedFunctionType);
                 const returnType = (funcType as TypedFunctionType).returnType;
@@ -4518,7 +4518,7 @@ describe('BrsFileValidator', () => {
                     DiagnosticMessages.returnTypeMismatch('string', 'integer').message
                 ]);
                 const data = {} as ExtraSymbolData;
-                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcStmt = file.code.ast.findChild(isFunctionStatement);
                 const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(funcType, TypedFunctionType);
                 const returnType = (funcType as TypedFunctionType).returnType;
@@ -4542,7 +4542,7 @@ describe('BrsFileValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
-                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcStmt = file.code.ast.findChild(isFunctionStatement);
                 const funcType = funcStmt.getType({ flags: SymbolTypeFlag.typetime, data: data });
                 expectTypeToBe(funcType, TypedFunctionType);
                 const returnType = (funcType as TypedFunctionType).returnType;
@@ -4586,7 +4586,7 @@ describe('BrsFileValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
-                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcStmt = file.code.ast.findChild(isFunctionStatement);
                 const returnStmt = funcStmt.findChild(isReturnStatement);
                 const varType = returnStmt.getSymbolTable().getSymbolType('pieType', { flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(varType, StringType);
@@ -4606,7 +4606,7 @@ describe('BrsFileValidator', () => {
                     DiagnosticMessages.cannotFindName('unknown').message
                 ]);
                 const data = {} as ExtraSymbolData;
-                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcStmt = file.code.ast.findChild(isFunctionStatement);
                 const funcType = funcStmt.getType({ flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(funcType, TypedFunctionType);
                 const returnType = (funcType as TypedFunctionType).returnType;
@@ -4628,7 +4628,7 @@ describe('BrsFileValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
-                const assignStmt = file.ast.findChild(isAssignmentStatement);
+                const assignStmt = file.code.ast.findChild(isAssignmentStatement);
                 const infoType = assignStmt.getSymbolTable().getSymbolType('info', { flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(infoType, InterfaceType);
                 expect(infoType.toString()).to.eq('roDeviceInfo');
@@ -4663,7 +4663,7 @@ describe('BrsFileValidator', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 const data = {} as ExtraSymbolData;
-                const funcStmt = file.ast.findChild(isFunctionStatement);
+                const funcStmt = file.code.ast.findChild(isFunctionStatement);
                 const returnStmt = funcStmt.findChild(isReturnStatement);
                 const varType = returnStmt.getSymbolTable().getSymbolType('someDate', { flags: SymbolTypeFlag.runtime, data: data });
                 expectTypeToBe(varType, StringType);
