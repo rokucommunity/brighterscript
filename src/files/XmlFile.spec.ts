@@ -1950,8 +1950,8 @@ end sub`);
             `);
             expect(xmlFile.codes).to.eql([xmlFile.code, ...xmlFile.scriptCodes]);
             expect(xmlFile.scriptCodes.map(x => x.key)).to.eql([
-                'components/Widget.xml#script-0',
-                'components/Widget.xml#script-1'
+                `components${path.sep}Widget.xml#script-0`,
+                `components${path.sep}Widget.xml#script-1`
             ]);
             expect(xmlFile.scriptCodes.map(x => x.isEmbedded)).to.eql([true, true]);
             expect(xmlFile.scriptCodes.map(x => x.parseMode)).to.eql([ParseMode.BrightScript, ParseMode.BrighterScript]);
@@ -2354,7 +2354,7 @@ end sub`);
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                expect(xmlFile.dependencies).to.include('source/lib.bs');
+                expect(xmlFile.dependencies).to.include(s`source/lib.bs`);
 
                 const result = await program.getTranspiledFileContents(xmlFile.srcPath);
                 expect(result.code).to.include('<script type="text/brightscript" uri="pkg:/source/lib.brs" />');
@@ -2381,7 +2381,7 @@ end sub`);
                     </component>
                 `);
                 program.validate();
-                expect(xmlFile.dependencies).to.include('source/lib.d.bs');
+                expect(xmlFile.dependencies).to.include(s`source/lib.d.bs`);
                 expectZeroDiagnostics(program.getDiagnostics().filter(x => x.location.uri.endsWith('Widget.xml')));
             });
         });
