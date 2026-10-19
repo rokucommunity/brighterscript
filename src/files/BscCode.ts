@@ -1,3 +1,4 @@
+import type { Range } from 'vscode-languageserver';
 import type { CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
 import type { BscFile } from './BscFile';
@@ -17,6 +18,10 @@ export interface BscCode {
      */
     document: BscFile;
     program: Program;
+    /**
+     * The region of the document this code covers. Undefined means this code covers the whole document.
+     */
+    range?: Range;
     /**
      * Comment-based flags found in this code, used to suppress diagnostics
      */

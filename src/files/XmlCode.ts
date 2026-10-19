@@ -69,6 +69,11 @@ export class XmlCode implements BscCode {
     public program: Program;
 
     /**
+     * The region of the document this code covers. Undefined means this code covers the whole document.
+     */
+    public range?: Range;
+
+    /**
      * The document as an `XmlFile`. Many things outside of this class still identify code by its file
      * (script imports, required symbols, etc.), so this is what gets handed to them until they move to `XmlCode`.
      */

@@ -1864,6 +1864,42 @@ export class Program {
      * Get the first found scope for a file.
      */
     /**
+     * Get the code in a file at the given position. When pieces of code are nested (i.e. a `<script>` block inside an xml component),
+     * the innermost one is returned.
+     * @returns the code at that position, or undefined if the file provides no code
+     */
+    public getCodeAt(file: BscFile, position: Position): BscCode | undefined {
+        let result: BscCode;
+        for (const code of file?.codes ?? []) {
+            if (!code.range) {
+                //code that covers the whole document is the fallback when no more specific code contains the position
+                result ??= code;
+            } else if (util.rangeContains(code.range, position)) {
+                if (!result?.range || util.isRangeInRange(code.range, result.range)) {
+                    result = code;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get the code a file-wide request should be emitted for: each piece of code the file provides,
+     * or a single `undefined` for files that provide no code (so the request still reaches plugins)
+     */
+    private getCodesForRequest(file: BscFile): Array<BscCode | undefined> {
+        return file.codes?.length > 0 ? file.codes : [undefined];
+    }
+
+    /**
+     * Does the location belong to the given code (i.e. is `code` the innermost code at that location)?
+     * When `code` is undefined, every location in the file counts.
+     */
+    private isLocationInCode(file: BscFile, location: Location, code: BscCode | undefined) {
+        return !code || this.getCodeAt(file, location?.range?.start) === code;
+    }
+
+    /**
      * Get the scopes that contain the given code. Code belongs to the same scopes as the file it lives in.
      */
     public getScopesForCode(code: BscCode) {
@@ -1980,6 +2016,7 @@ export class Program {
         const event: ProvideCompletionsEvent = {
             program: this,
             file: file,
+            code: this.getCodeAt(file, position),
             scopes: this.getScopesForFile(file),
             position: position,
             completions: []
@@ -2021,6 +2058,7 @@ export class Program {
         const event: ProvideDefinitionEvent = {
             program: this,
             file: file,
+            code: this.getCodeAt(file, position),
             position: position,
             definitions: []
         };
@@ -2039,6 +2077,7 @@ export class Program {
             const event = {
                 program: this,
                 file: file,
+                code: this.getCodeAt(file, position),
                 position: position,
                 scopes: this.getScopesForFile(file),
                 hovers: []
@@ -2059,15 +2098,20 @@ export class Program {
     public getDocumentSymbols(srcPath: string): DocumentSymbol[] | undefined {
         let file = this.getFile(srcPath);
         if (file) {
-            const event: ProvideDocumentSymbolsEvent = {
-                program: this,
-                file: file,
-                documentSymbols: []
-            };
-            this.plugins.emit('beforeProvideDocumentSymbols', event);
-            this.plugins.emit('provideDocumentSymbols', event);
-            this.plugins.emit('afterProvideDocumentSymbols', event);
-            return event.documentSymbols;
+            const documentSymbols = [] as DocumentSymbol[];
+            //emit once for each piece of code in the file, collecting all of their symbols
+            for (const code of this.getCodesForRequest(file)) {
+                const event: ProvideDocumentSymbolsEvent = {
+                    program: this,
+                    file: file,
+                    code: code,
+                    documentSymbols: documentSymbols
+                };
+                this.plugins.emit('beforeProvideDocumentSymbols', event);
+                this.plugins.emit('provideDocumentSymbols', event);
+                this.plugins.emit('afterProvideDocumentSymbols', event);
+            }
+            return documentSymbols;
         } else {
             return undefined;
         }
@@ -2081,16 +2125,40 @@ export class Program {
     public getSelectionRanges(srcPath: string, positions: Position[]): SelectionRange[] {
         const file = this.getFile(srcPath);
         if (file) {
-            const event: ProvideSelectionRangesEvent = {
-                program: this,
-                file: file,
-                positions: positions,
-                selectionRanges: []
-            };
-            this.plugins.emit('beforeProvideSelectionRanges', event);
-            this.plugins.emit('provideSelectionRanges', event);
-            this.plugins.emit('afterProvideSelectionRanges', event);
-            return event.selectionRanges;
+            //the result has one entry per position, in order. Group the positions by the code they fall in,
+            //emit once per piece of code, then put each result back in its position's place
+            const indexesByCode = new Map<BscCode | undefined, number[]>();
+            for (let i = 0; i < positions.length; i++) {
+                const code = this.getCodeAt(file, positions[i]);
+                if (!indexesByCode.has(code)) {
+                    indexesByCode.set(code, []);
+                }
+                indexesByCode.get(code).push(i);
+            }
+            const selectionRanges = [] as SelectionRange[];
+            //plugins may contribute more ranges than there are positions. Those go after the per-position results
+            const extraSelectionRanges = [] as SelectionRange[];
+            for (const [code, indexes] of indexesByCode) {
+                const event: ProvideSelectionRangesEvent = {
+                    program: this,
+                    file: file,
+                    code: code,
+                    positions: indexes.map(i => positions[i]),
+                    selectionRanges: []
+                };
+                this.plugins.emit('beforeProvideSelectionRanges', event);
+                this.plugins.emit('provideSelectionRanges', event);
+                this.plugins.emit('afterProvideSelectionRanges', event);
+                //when every position is in the same code, the event's results are already in order
+                if (indexesByCode.size === 1) {
+                    return event.selectionRanges;
+                }
+                for (let j = 0; j < indexes.length; j++) {
+                    selectionRanges[indexes[j]] = event.selectionRanges[j];
+                }
+                extraSelectionRanges.push(...event.selectionRanges.slice(indexes.length));
+            }
+            return [...selectionRanges, ...extraSelectionRanges];
         }
         return [];
     }
@@ -2101,17 +2169,23 @@ export class Program {
     public getInlayHints(srcPath: string, range: Range): InlayHint[] {
         const file = this.getFile(srcPath);
         if (file) {
-            const event: ProvideInlayHintsEvent = {
-                program: this,
-                file: file,
-                range: range,
-                scopes: this.getScopesForFile(file),
-                inlayHints: []
-            };
-            this.plugins.emit('beforeProvideInlayHints', event);
-            this.plugins.emit('provideInlayHints', event);
-            this.plugins.emit('afterProvideInlayHints', event);
-            return event.inlayHints;
+            const inlayHints = [] as InlayHint[];
+            const scopes = this.getScopesForFile(file);
+            //emit once for each piece of code in the file, collecting all of their hints
+            for (const code of this.getCodesForRequest(file)) {
+                const event: ProvideInlayHintsEvent = {
+                    program: this,
+                    file: file,
+                    code: code,
+                    range: range,
+                    scopes: scopes,
+                    inlayHints: inlayHints
+                };
+                this.plugins.emit('beforeProvideInlayHints', event);
+                this.plugins.emit('provideInlayHints', event);
+                this.plugins.emit('afterProvideInlayHints', event);
+            }
+            return inlayHints;
         }
         return [];
     }
@@ -2133,10 +2207,12 @@ export class Program {
                 .filter(x => util.rangesIntersectOrTouch(x.location.range, range));
 
             const scopes = this.getScopesForFile(file);
+            const code = this.getCodeAt(file, range.start);
 
             this.plugins.emit('beforeProvideCodeActions', {
                 program: this,
                 file: file,
+                code: code,
                 range: range,
                 diagnostics: diagnostics,
                 scopes: scopes,
@@ -2146,6 +2222,7 @@ export class Program {
             this.plugins.emit('provideCodeActions', {
                 program: this,
                 file: file,
+                code: code,
                 range: range,
                 diagnostics: diagnostics,
                 scopes: scopes,
@@ -2155,6 +2232,7 @@ export class Program {
             this.plugins.emit('afterProvideCodeActions', {
                 program: this,
                 file: file,
+                code: code,
                 range: range,
                 diagnostics: diagnostics,
                 scopes: scopes,
@@ -2179,16 +2257,20 @@ export class Program {
                 .getDiagnostics()
                 .filter(x => x.location?.uri === fileUri);
             const scopes = this.getScopesForFile(file);
-            const event: ProvideSourceFixAllCodeActionsEvent = {
-                program: this,
-                file: file,
-                diagnostics: diagnostics,
-                scopes: scopes,
-                actions: actions
-            };
-            this.plugins.emit('beforeProvideSourceFixAllCodeActions', event);
-            this.plugins.emit('provideSourceFixAllCodeActions', event);
-            this.plugins.emit('afterProvideSourceFixAllCodeActions', event);
+            //emit once for each piece of code in the file, each with only the diagnostics that belong to it
+            for (const code of this.getCodesForRequest(file)) {
+                const event: ProvideSourceFixAllCodeActionsEvent = {
+                    program: this,
+                    file: file,
+                    code: code,
+                    diagnostics: diagnostics.filter(x => this.isLocationInCode(file, x.location, code)),
+                    scopes: scopes,
+                    actions: actions
+                };
+                this.plugins.emit('beforeProvideSourceFixAllCodeActions', event);
+                this.plugins.emit('provideSourceFixAllCodeActions', event);
+                this.plugins.emit('afterProvideSourceFixAllCodeActions', event);
+            }
         }
         return actions.map(action => codeActionUtil.createCodeAction({
             ...action,
@@ -2202,25 +2284,32 @@ export class Program {
     public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
         if (file) {
-            this.plugins.emit('beforeProvideSemanticTokens', {
-                program: this,
-                file: file,
-                scopes: this.getScopesForFile(file),
-                semanticTokens: undefined
-            });
             const result = [] as SemanticToken[];
-            this.plugins.emit('provideSemanticTokens', {
-                program: this,
-                file: file,
-                scopes: this.getScopesForFile(file),
-                semanticTokens: result
-            });
-            this.plugins.emit('afterProvideSemanticTokens', {
-                program: this,
-                file: file,
-                scopes: this.getScopesForFile(file),
-                semanticTokens: result
-            });
+            const scopes = this.getScopesForFile(file);
+            //emit once for each piece of code in the file, collecting all of their tokens
+            for (const code of this.getCodesForRequest(file)) {
+                this.plugins.emit('beforeProvideSemanticTokens', {
+                    program: this,
+                    file: file,
+                    code: code,
+                    scopes: scopes,
+                    semanticTokens: undefined
+                });
+                this.plugins.emit('provideSemanticTokens', {
+                    program: this,
+                    file: file,
+                    code: code,
+                    scopes: scopes,
+                    semanticTokens: result
+                });
+                this.plugins.emit('afterProvideSemanticTokens', {
+                    program: this,
+                    file: file,
+                    code: code,
+                    scopes: scopes,
+                    semanticTokens: result
+                });
+            }
             return result;
         }
     }
@@ -2242,6 +2331,7 @@ export class Program {
         const event: ProvideReferencesEvent = {
             program: this,
             file: file,
+            code: this.getCodeAt(file, position),
             position: position,
             references: []
         };

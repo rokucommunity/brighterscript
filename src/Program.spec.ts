@@ -1,13 +1,14 @@
 import { assert, expect } from './chai-config.spec';
 import * as path from 'path';
 import * as pick from 'object.pick';
-import { CancellationTokenSource, Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource, Position, Range, SemanticTokenTypes } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 import type { BrsFile } from './files/BrsFile';
 import type { BscFile } from './files/BscFile';
-import type { BrsCode } from './files/BrsCode';
+import { BrsCode } from './files/BrsCode';
+import type { BscCode } from './files/BscCode';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
@@ -1612,6 +1613,118 @@ describe('Program', () => {
             `);
 
             expect(program.getScopeByName(xmlFile.destPath).getFile('components/component1.brs')).to.exist;
+        });
+    });
+
+    describe('routing requests to code', () => {
+        let xmlFile: XmlFile;
+        let scriptCode: BrsCode;
+
+        /**
+         * Give the xml file a second piece of code covering lines 3-5, the way an embedded `<script>` block would
+         */
+        beforeEach(() => {
+            xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript">
+                        sub init()
+                        end sub
+                    </script>
+                </component>
+            `);
+            scriptCode = new BrsCode({ document: xmlFile, program: program });
+            scriptCode.range = util.createRange(3, 0, 5, 0);
+            Object.defineProperty(xmlFile, 'codes', { value: [xmlFile.code, scriptCode] });
+        });
+
+        it('finds the innermost code at a position', () => {
+            expect(program.getCodeAt(xmlFile, util.createPosition(1, 5))).to.equal(xmlFile.code);
+            expect(program.getCodeAt(xmlFile, util.createPosition(4, 5))).to.equal(scriptCode);
+            expect(program.getCodeAt(xmlFile, util.createPosition(6, 5))).to.equal(xmlFile.code);
+        });
+
+        it('finds the code of a single-code file anywhere in it', () => {
+            const brsFile = program.setFile<BrsFile>('source/main.brs', `sub main()\nend sub`);
+            expect(program.getCodeAt(brsFile, util.createPosition(0, 0))).to.equal(brsFile.code);
+            expect(program.getCodeAt(brsFile, util.createPosition(99, 0))).to.equal(brsFile.code);
+        });
+
+        it('returns undefined for files that provide no code', () => {
+            const assetFile = program.setFile('images/logo.png', '');
+            expect(program.getCodeAt(assetFile, util.createPosition(0, 0))).to.be.undefined;
+        });
+
+        it('sends position requests to the code at that position', () => {
+            const hoveredCode = [] as BscCode[];
+            program.plugins.add({
+                name: 'test',
+                provideHover: (event) => {
+                    hoveredCode.push(event.code);
+                }
+            });
+            program.getHover(xmlFile.srcPath, util.createPosition(1, 5));
+            program.getHover(xmlFile.srcPath, util.createPosition(4, 5));
+            expect(hoveredCode).to.eql([xmlFile.code, scriptCode]);
+        });
+
+        it('emits file-wide requests once per code and collects every result', () => {
+            program.plugins.add({
+                name: 'test',
+                provideSemanticTokens: (event) => {
+                    event.semanticTokens.push({
+                        range: event.code === scriptCode ? util.createRange(4, 0, 4, 3) : util.createRange(1, 0, 1, 3),
+                        tokenType: SemanticTokenTypes.function
+                    });
+                }
+            });
+            expect(program.getSemanticTokens(xmlFile.srcPath).map(x => x.range.start.line)).to.eql([1, 4]);
+        });
+
+        it('keeps selection ranges in the order the positions were requested', () => {
+            program.plugins.add({
+                name: 'test',
+                provideSelectionRanges: (event) => {
+                    for (const position of event.positions) {
+                        //tag each result with the code it came from
+                        event.selectionRanges.push({
+                            range: util.createRange(position.line, event.code === scriptCode ? 1 : 0, position.line, 9)
+                        });
+                    }
+                }
+            });
+            const result = program.getSelectionRanges(xmlFile.srcPath, [
+                util.createPosition(4, 5),
+                util.createPosition(1, 5),
+                util.createPosition(3, 5),
+                util.createPosition(6, 5)
+            ]);
+            expect(result.map(x => [x.range.start.line, x.range.start.character])).to.eql([
+                [4, 1],
+                [1, 0],
+                [3, 1],
+                [6, 0]
+            ]);
+        });
+
+        it('gives source fix-all only the diagnostics that belong to each code', () => {
+            program.diagnostics.register([{
+                ...DiagnosticMessages.genericParserMessage('in the component'),
+                location: util.createLocation(1, 0, 1, 5, util.pathToUri(xmlFile.srcPath))
+            }, {
+                ...DiagnosticMessages.genericParserMessage('in the script'),
+                location: util.createLocation(4, 0, 4, 5, util.pathToUri(xmlFile.srcPath))
+            }]);
+            const messagesByCode = new Map<BscCode, string[]>();
+            program.plugins.add({
+                name: 'test',
+                provideSourceFixAllCodeActions: (event) => {
+                    messagesByCode.set(event.code, event.diagnostics.map(x => x.message));
+                }
+            });
+            program.getSourceFixAllCodeActions(xmlFile.srcPath);
+            expect(messagesByCode.get(xmlFile.code)).to.include('in the component').and.not.include('in the script');
+            expect(messagesByCode.get(scriptCode)).to.eql(['in the script']);
         });
     });
 

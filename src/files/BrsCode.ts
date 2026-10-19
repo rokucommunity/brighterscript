@@ -72,6 +72,11 @@ export class BrsCode implements BscCode {
     public program: Program;
 
     /**
+     * The region of the document this code covers. Undefined means this code covers the whole document.
+     */
+    public range?: Range;
+
+    /**
      * The parseMode used for the parser for this code
      */
     public parseMode: ParseMode;
