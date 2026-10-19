@@ -2056,9 +2056,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const index = new ProvidedSymbolIndex();
-            index.update(file);
-            expect(index.symbolEvents.get('alpha.beta.thing')?.map(x => x.file)).to.eql([file]);
-            expect(index.symbolEvents.get('helper')?.map(x => x.file)).to.eql([file]);
+            index.update(file.code);
+            expect(index.symbolEvents.get('alpha.beta.thing')?.map(x => x.code)).to.eql([file.code]);
+            expect(index.symbolEvents.get('helper')?.map(x => x.code)).to.eql([file.code]);
             expect(index.namespaceEvents.has('alpha')).to.be.true;
             expect(index.namespaceEvents.has('alpha.beta')).to.be.true;
             expect(index.namespaceEvents.has('helper')).to.be.false;
@@ -2071,9 +2071,9 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const index = new ProvidedSymbolIndex();
-            index.update(file);
+            index.update(file.code);
             const events = index.symbolEvents.get('first');
-            index.update(file);
+            index.update(file.code);
             expect(index.symbolEvents.get('first')).to.equal(events);
 
             file = program.setFile<BrsFile>('source/lib.bs', `
@@ -2083,9 +2083,9 @@ describe('CrossScopeValidator', () => {
             program.validate();
             //setFile makes a new file object, so the old one gets pruned (same order as addDiagnosticsForScopes)
             index.prune(program);
-            index.update(file);
+            index.update(file.code);
             expect(index.symbolEvents.has('first')).to.be.false;
-            expect(index.symbolEvents.get('second')?.map(x => x.file)).to.eql([file]);
+            expect(index.symbolEvents.get('second')?.map(x => x.code)).to.eql([file.code]);
         });
 
         it('prunes files that are no longer in the program', () => {
@@ -2097,7 +2097,7 @@ describe('CrossScopeValidator', () => {
             `);
             program.validate();
             const index = new ProvidedSymbolIndex();
-            index.update(file);
+            index.update(file.code);
             program.removeFile(file.srcPath);
             index.prune(program);
             expect(index.symbolEvents.has('alpha.thing')).to.be.false;

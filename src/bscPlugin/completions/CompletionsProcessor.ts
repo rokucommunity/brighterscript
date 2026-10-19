@@ -1,6 +1,6 @@
-import { isAliasStatement, isBrsCode, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlCode, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isBrsCode, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlCode, isXmlScope } from '../../astUtils/reflection';
 import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
-import type { BscFile } from '../../files/BscFile';
+import type { BscCode } from '../../files/BscCode';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
@@ -568,8 +568,8 @@ export class CompletionsProcessor {
      */
     public getPropertyNameCompletions(scope: Scope) {
         let results = [] as CompletionItem[];
-        scope.enumerateBrsFiles((file) => {
-            results.push(...file.propertyNameCompletions);
+        scope.enumerateBrsCode((code) => {
+            results.push(...code.propertyNameCompletions);
         });
         return results;
     }
@@ -579,11 +579,11 @@ export class CompletionsProcessor {
      */
     public getAllClassMemberCompletions(scope: Scope) {
         let results = new Map<string, CompletionItem>();
-        let filesSearched = new Set<BscFile>();
-        for (const file of scope.getAllFiles()) {
-            if (isBrsFile(file) && !filesSearched.has(file)) {
+        let codesSearched = new Set<BscCode>();
+        for (const code of scope.getAllCodes()) {
+            if (isBrsCode(code) && !codesSearched.has(code)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (let cs of file['_cachedLookups'].classStatements) {
+                for (let cs of code['_cachedLookups'].classStatements) {
                     for (let s of cs.members) {
                         if (s.isActive !== false && !results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
                             results.set(s.tokens.name.text, {
@@ -594,7 +594,7 @@ export class CompletionsProcessor {
                     }
                 }
             }
-            filesSearched.add(file);
+            codesSearched.add(code);
         }
         return results;
     }

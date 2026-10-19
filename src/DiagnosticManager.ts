@@ -12,7 +12,6 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
-import type { BrsFile } from './files/BrsFile';
 import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import * as path from 'path';
 
@@ -565,7 +564,7 @@ export class DiagnosticManager {
      * If so, we can skip any Scope-based validation on this file at all, which can save a lot of time for large files
      * with many diagnostics that are being ignored
      */
-    public canSkipScopeValidationForFile(file: BrsFile): boolean {
+    public canSkipScopeValidationForFile(file: { srcPath: string; destPath: string }): boolean {
         if (this.diagnosticFilterer.options !== this.options) {
             this.diagnosticFilterer.options = this.options;
         }

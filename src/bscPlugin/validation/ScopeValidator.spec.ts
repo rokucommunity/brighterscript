@@ -57,7 +57,7 @@ describe('ScopeValidator', () => {
         delete returnStatement.parent;
         const validator = new ScopeValidator();
         //should not crash
-        validator['validateReturnStatement'](file, returnStatement);
+        validator['validateReturnStatement'](file.code, returnStatement);
     });
 
     describe('mismatchArgumentCount', () => {

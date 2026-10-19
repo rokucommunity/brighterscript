@@ -388,39 +388,39 @@ export class Program {
     private fileClusters = new Map<string, BscFile[]>();
 
     /**
-     * Map from a lower-cased namespace name part to the set of `BrsFile`s that contribute
+     * Map from a lower-cased namespace name part to the set of `BrsCode`s that contribute
      * to it. Built lazily, invalidated whenever any file is added, removed, or re-parsed
      * (`setFile` and `removeFile` both clear it).
      *
      * Used by `ScopeNamespaceLookup` to resolve a namespace name to its contributing
-     * files in O(1), then intersect against the scope's file set.
+     * code in O(1), then intersect against the scope's code set.
      */
-    private namespaceContributors: Map<string, Set<BrsFile>> | undefined;
+    private namespaceContributors: Map<string, Set<BrsCode>> | undefined;
 
     /**
-     * Look up the set of `BrsFile`s that declare any part of the given namespace name
-     * (lowercased). Returns `undefined` when no file contributes.
+     * Look up the set of `BrsCode`s that declare any part of the given namespace name
+     * (lowercased). Returns `undefined` when no code contributes.
      * @internal
      */
-    protected getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
+    protected getNamespaceContributors(namespaceNameLower: string): Set<BrsCode> | undefined {
         if (!this.namespaceContributors) {
             this.namespaceContributors = this.buildNamespaceContributors();
         }
         return this.namespaceContributors.get(namespaceNameLower);
     }
 
-    private buildNamespaceContributors(): Map<string, Set<BrsFile>> {
-        const contributors = new Map<string, Set<BrsFile>>();
-        for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
+    private buildNamespaceContributors(): Map<string, Set<BrsCode>> {
+        const contributors = new Map<string, Set<BrsCode>>();
+        for (const code of Object.values(this.files).flatMap(file => file.codes ?? [])) {
+            if (isBrsCode(code)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (const nameLower of file['getNamespaceContributions']().keys()) {
+                for (const nameLower of code['getNamespaceContributions']().keys()) {
                     let set = contributors.get(nameLower);
                     if (!set) {
-                        set = new Set<BrsFile>();
+                        set = new Set<BrsCode>();
                         contributors.set(nameLower, set);
                     }
-                    set.add(file);
+                    set.add(code);
                 }
             }
         }
@@ -428,7 +428,7 @@ export class Program {
     }
 
     /**
-     * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-pkgPaths)`.
+     * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-code-keys)`.
      * Two scopes with the same in-scope file set for a multi-contributor namespace share
      * the same aggregate object (and therefore the same merged statement collections and
      * symbolTable instance). Built lazily, invalidated alongside `namespaceContributors`.
@@ -451,9 +451,9 @@ export class Program {
         if (!this.aggregateNamespaceContainerCache) {
             this.aggregateNamespaceContainerCache = new Map<string, NamespaceContainer>();
         }
-        //sorted pkgPaths ensure two scopes with the same contributor set hit the same key
+        //sorted code keys ensure two scopes with the same contributor set hit the same key
         const key = nameLower + '|' + contributions
-            .map(c => c.file.pkgPath.toLowerCase())
+            .map(c => c.code.key.toLowerCase())
             .sort()
             .join('|');
         let aggregate = this.aggregateNamespaceContainerCache.get(key);
@@ -1226,8 +1226,8 @@ export class Program {
                     }
                 }
             }
-            if (isBrsFile(file)) {
-                this.crossScopeValidation.clearResolutionsForFile(file);
+            for (const code of file.codes ?? []) {
+                this.crossScopeValidation.clearResolutionsForCode(code);
             }
 
             this.diagnostics.clearForFile(file.srcPath);
@@ -1586,11 +1586,12 @@ export class Program {
                 this.validationDetails.changedComponentTypes = [];
             })
             .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
-                if (isBrsFile(file)) {
-                    file.validationSegmenter.unValidateAllSegments();
-                    if (!this.isFirstValidation) {
-                        scopesToInvalidate.push(...this.getScopesForFile(file));
-                    }
+                const brsCodes = (file.codes ?? []).filter(code => isBrsCode(code)) as BrsCode[];
+                for (const code of brsCodes) {
+                    code.validationSegmenter.unValidateAllSegments();
+                }
+                if (brsCodes.length > 0 && !this.isFirstValidation) {
+                    scopesToInvalidate.push(...this.getScopesForFile(file));
                 }
             })
             .once('invalidate affected scopes', () => {
