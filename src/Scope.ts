@@ -199,10 +199,10 @@ export class Scope {
             const stmt: T = code['_cachedLookups'][cachedMapName].get(nameLower);
             if (stmt) {
                 if (stmt.isActive !== false) {
-                    activeLink = { item: stmt, file: code.document, code: code };
+                    activeLink = { item: stmt, code: code };
                     return true;
                 }
-                inactiveLink ??= { item: stmt, file: code.document, code: code };
+                inactiveLink ??= { item: stmt, code: code };
             }
             return false;
         });
@@ -309,7 +309,7 @@ export class Scope {
         enumeration = this.preferActiveGlobalLink(enumeration, () => enumMap.get(lowerName));
         if (enumeration) {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
-            return member ? { item: member, file: enumeration.file, code: enumeration.code } : undefined;
+            return member ? { item: member, code: enumeration.code } : undefined;
         }
     }
 
@@ -351,7 +351,7 @@ export class Scope {
         if (includeNamespaces) {
             const nameSpaceContainer = this.getFirstNamespaceWithRoot(name, containingNamespace);
             if (nameSpaceContainer) {
-                links.push({ item: nameSpaceContainer.namespaceStatements?.[0], file: nameSpaceContainer?.file, code: nameSpaceContainer?.code as BrsCode });
+                links.push({ item: nameSpaceContainer.namespaceStatements?.[0], code: nameSpaceContainer?.code as BrsCode });
             }
         }
         const fullNameLower = (containingNamespace ? `${containingNamespace}.${name}` : name).toLowerCase();
@@ -359,7 +359,7 @@ export class Scope {
         if (callable) {
             if ((!callable.hasNamespace && includeNameShadowsOutsideNamespace) || callable.getName(ParseMode.BrighterScript).toLowerCase() === fullNameLower) {
                 // this callable has no namespace, or has same namespace
-                links.push({ item: callable.functionStatement, file: callable.file, code: callable.code });
+                links.push({ item: callable.functionStatement, code: callable.code });
             }
         }
         // remove empty links
@@ -448,7 +448,7 @@ export class Scope {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
-                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: code.document, code: code }, cls.isActive !== false);
+                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, code: code }, cls.isActive !== false);
                         }
                     }
                 }
@@ -471,7 +471,7 @@ export class Scope {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
-                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: code.document, code: code }, iface.isActive !== false);
+                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, code: code }, iface.isActive !== false);
                         }
                     }
                 }
@@ -492,7 +492,7 @@ export class Scope {
                 for (let enumStmt of code['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: code.document, code: code }, enumStmt.isActive !== false);
+                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, code: code }, enumStmt.isActive !== false);
                     }
                 }
             });
@@ -512,7 +512,7 @@ export class Scope {
                 for (let stmt of code['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: code.document, code: code }, stmt.isActive !== false);
+                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, code: code }, stmt.isActive !== false);
                     }
                 }
             });
@@ -534,7 +534,7 @@ export class Scope {
                         const typeName = node.tokens.name?.text;
                         if (typeName) {
                             const fullName = (namespaceName ? `${namespaceName}.${typeName}` : typeName).toLowerCase();
-                            map.set(fullName, { item: node, file: code.document, code: code });
+                            map.set(fullName, { item: node, code: code });
                         }
                     }
                 }, { walkMode: WalkMode.visitAllRecursive });
@@ -1159,9 +1159,8 @@ export class Scope {
  * does not walk into a sibling's parent, so the parent-provider plumbing was dead code.
  */
 export interface NamespaceFileContribution {
-    file: BscFile;
     /**
-     * The code this contribution is in. `file` is the file that code lives in
+     * The code this contribution is in. Use `code.document` for the file it lives in
      */
     code: BrsCode;
     fullName: string;
@@ -1187,9 +1186,8 @@ export interface NamespaceFileContribution {
  * Consumers must handle these fields being undefined.
  */
 export interface NamespaceContainer {
-    file: BscFile;
     /**
-     * The code this namespace is in. `file` is the file that code lives in
+     * The code this namespace is in. Use `code.document` for the file it lives in
      */
     code: BscCode;
     fullName: string;

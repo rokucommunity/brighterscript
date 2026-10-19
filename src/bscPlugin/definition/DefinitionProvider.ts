@@ -3,7 +3,6 @@ import * as fsExtra from 'fs-extra';
 import { rokuDeploy } from 'roku-deploy';
 import type { StandardizedFileEntry, FileEntry } from 'roku-deploy';
 import { isBrsCode, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isVariableExpression, isXmlCode, isXmlFile, isXmlScope } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
 import type { BrsCode } from '../../files/BrsCode';
 import type { XmlCode } from '../../files/XmlCode';
 import type { ProvideDefinitionEvent } from '../../interfaces';
@@ -284,7 +283,7 @@ export class DefinitionProvider {
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                         if (callable) {
                             this.event.definitions.push(
-                                util.createLocationFromRange(util.pathToUri((callable.callable.file as BrsFile).srcPath), callable.callable.functionStatement.tokens.name.location?.range)
+                                util.createLocationFromRange(util.pathToUri(callable.callable.code.srcPath), callable.callable.functionStatement.tokens.name.location?.range)
                             );
                         }
                     }
@@ -301,7 +300,7 @@ export class DefinitionProvider {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = code.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.file.srcPath), extendedClass.item.location?.range));
+                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.code.srcPath), extendedClass.item.location?.range));
                 }
             }
             return;

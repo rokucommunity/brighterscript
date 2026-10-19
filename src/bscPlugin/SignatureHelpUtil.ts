@@ -27,7 +27,7 @@ export class SignatureHelpUtil {
             case CallExpressionType.myClassCall:
                 let statement = code.getClassMethod(callExpressionInfo.myClass, name, true);
                 if (statement) {
-                    signatureHelpItems = [this.getSignatureHelpForStatement({ item: statement, file: code.document, code: code })];
+                    signatureHelpItems = [this.getSignatureHelpForStatement({ item: statement, code: code })];
                 }
                 break;
 
@@ -135,7 +135,7 @@ export class SignatureHelpUtil {
         let classStatement = fileLink.item;
 
         const classConstructor = code.getClassMethod(classStatement, 'new');
-        let sigHelp = classConstructor ? this.getSignatureHelpForStatement({ item: classConstructor, file: fileLink.file, code: code }) : undefined;
+        let sigHelp = classConstructor ? this.getSignatureHelpForStatement({ item: classConstructor, code: code }) : undefined;
         let className = classStatement.getName(ParseMode.BrighterScript);
         if (sigHelp) {
             sigHelp.key = className;

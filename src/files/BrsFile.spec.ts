@@ -1772,7 +1772,7 @@ describe('BrsFile', () => {
             `);
 
             expect(file.code.callables[0]).to.deep.include({
-                file: file,
+                code: file.code,
                 nameRange: Range.create(1, 25, 1, 36)
             });
         });
@@ -2074,7 +2074,7 @@ describe('BrsFile', () => {
                 end function
             `);
             expect(file.code.callables[0]).to.deep.include(<Partial<Callable>>{
-                file: file,
+                code: file.code,
                 nameRange: Range.create(1, 25, 1, 36),
                 name: 'DoSomething',
                 params: []

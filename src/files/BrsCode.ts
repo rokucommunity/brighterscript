@@ -35,7 +35,7 @@ import type { BscType } from '../types';
 import { NamespaceType } from '../types';
 import type { BscFile } from './BscFile';
 import type { BscCode } from './BscCode';
-import type { BrsFile, ProvidedSymbol } from './BrsFile';
+import type { ProvidedSymbol } from './BrsFile';
 
 /**
  * A piece of BrightScript or BrighterScript code. This holds everything about the code itself (tokens, AST, symbols, callables, etc.),
@@ -85,14 +85,6 @@ export class BrsCode implements BscCode {
     public parseMode: ParseMode;
 
     private onParserRequested: () => void;
-
-    /**
-     * The document as a `BrsFile`. Many things outside of this class still identify code by its file
-     * (callables, file links, symbol info, etc.), so this is what gets handed to them until they move to `BrsCode`.
-     */
-    private get file() {
-        return this.document as BrsFile;
-    }
 
     public get srcPath() {
         return this.document.srcPath;
@@ -301,7 +293,6 @@ export class BrsCode implements BscCode {
                             //class. Subsequent `??=` assignments mutate values without
                             //changing the object shape, which keeps property access fast.
                             contributions.set(lowerLoopName, {
-                                file: this.file,
                                 code: this,
                                 fullName: loopName,
                                 lastPartName: part,
@@ -359,7 +350,7 @@ export class BrsCode implements BscCode {
                     result.push({
                         filePathRange: statement.tokens.path.location?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
-                        sourceFile: this.file,
+                        sourceFile: this.document,
                         text: statement.tokens.path.text
                     });
                 }
@@ -436,7 +427,7 @@ export class BrsCode implements BscCode {
         const lowerClassName = className.toLowerCase();
         const lowerContainingNamespace = containingNamespace?.toLowerCase();
 
-        const scopes = this.program.getScopesForFile(this.file);
+        const scopes = this.program.getScopesForCode(this);
         //find the first class in the first scope that has it
         for (let scope of scopes) {
             const cls = scope.getClassFileLink(lowerClassName, lowerContainingNamespace);
@@ -473,7 +464,7 @@ export class BrsCode implements BscCode {
      * @param tokens - an array of tokens of which to find `TokenKind.Comment` from
      */
     public getCommentFlags(tokens: Token[]) {
-        const processor = new CommentFlagProcessor(this.file, ['rem', `'`], diagnosticCodes);
+        const processor = new CommentFlagProcessor(this.document, ['rem', `'`], diagnosticCodes);
 
         this.commentFlags = [];
         for (let lexerToken of tokens) {
@@ -614,7 +605,6 @@ export class BrsCode implements BscCode {
                     isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
                     name: statement.tokens.name?.text,
                     nameRange: statement.tokens.name?.location?.range,
-                    file: this.file,
                     code: this,
                     params: params,
                     range: statement.func.location?.range,
@@ -1164,7 +1154,6 @@ export class BrsCode implements BscCode {
                 if (!namespaceLookup.has(lowerLoopName)) {
                     namespaceLookup.set(lowerLoopName, {
                         isTopLevel: i === 0,
-                        file: this.file,
                         code: this,
                         fullName: loopName,
                         fullNameLower: lowerLoopName,

@@ -1,7 +1,5 @@
 import type { Range, CodeAction, Position, CompletionItem, Location, LocationLink, DocumentSymbol, WorkspaceSymbol, Disposable, FileChangeType, CodeDescription, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, SelectionRange, InlayHint } from 'vscode-languageserver-protocol';
 import type { Scope } from './Scope';
-import type { BrsFile } from './files/BrsFile';
-import type { XmlFile } from './files/XmlFile';
 import type { TypedFunctionType } from './types/TypedFunctionType';
 import type { ParseMode } from './parser/Parser';
 import type { Program } from './Program';
@@ -95,9 +93,8 @@ export interface DiagnosticContextPair {
 }
 
 export interface Callable {
-    file: BscFile;
     /**
-     * The code this callable is in. `file` is the file that code lives in
+     * The code this callable is in. Use `code.document` for the file it lives in
      */
     code: BrsCode;
     name: string;
@@ -175,7 +172,7 @@ export interface FileReference {
     /**
      * The file that is doing the import. Note this is NOT the file the destPath points to.
      */
-    sourceFile: XmlFile | BrsFile;
+    sourceFile: BscFile;
     /**
      * The full range of this file reference.
      * Keep in mind that file references can come from xml script tags
@@ -1299,9 +1296,8 @@ export type DiagnosticCode = number | string;
 
 export interface FileLink<T> {
     item: T;
-    file: BscFile;
     /**
-     * The code this item is in. `file` is the file that code lives in
+     * The code this item is in. Use `code.document` for the file it lives in
      */
     code: BrsCode;
 }

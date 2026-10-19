@@ -469,7 +469,6 @@ export class Program {
         //field order matches the NamespaceContainer interface declaration so aggregates
         //share a single V8 hidden class with the per-scope wrapper containers
         const aggregate: NamespaceContainer = {
-            file: first.file,
             code: first.code,
             fullName: first.fullName,
             nameRange: first.nameRange,
@@ -1954,7 +1953,7 @@ export class Program {
             let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(origin.parseMode)?.toLowerCase();
             if (statement.tokens.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                 if (!results.has(statement)) {
-                    results.set(statement, { item: statement, file: code.document, code: code });
+                    results.set(statement, { item: statement, code: code });
                 }
             }
         }
@@ -2011,7 +2010,7 @@ export class Program {
                 FunctionStatement: (statement: FunctionStatement) => {
                     if (funcNames.has(statement.tokens.name.text)) {
                         if (!results.has(statement)) {
-                            results.set(statement, { item: statement, file: code.document, code: code });
+                            results.set(statement, { item: statement, code: code });
                         }
                     }
                 }

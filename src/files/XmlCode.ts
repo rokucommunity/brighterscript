@@ -13,7 +13,6 @@ import type { FunctionScope } from '../FunctionScope';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFile } from './BscFile';
 import type { BscCode } from './BscCode';
-import type { XmlFile } from './XmlFile';
 
 /**
  * Names of the `@xml-tools` lexer token types we inspect for completions and hover
@@ -40,9 +39,8 @@ const interfaceElementAttributes: Record<string, string[]> = {
 export interface UnresolvedXMLSymbol {
     flags: SymbolTypeFlag;
     name: string;
-    file: XmlFile;
     /**
-     * The code this symbol is in. `file` is the file that code lives in
+     * The code this symbol is in. Use `code.document` for the file it lives in
      */
     code: XmlCode;
 }
@@ -76,14 +74,6 @@ export class XmlCode implements BscCode {
      * The region of the document this code covers. Undefined means this code covers the whole document.
      */
     public range?: Range;
-
-    /**
-     * The document as an `XmlFile`. Many things outside of this class still identify code by its file
-     * (script imports, required symbols, etc.), so this is what gets handed to them until they move to `XmlCode`.
-     */
-    private get file() {
-        return this.document as XmlFile;
-    }
 
     public get srcPath() {
         return this.document.srcPath;
@@ -179,7 +169,7 @@ export class XmlCode implements BscCode {
         return this.parser.references.scriptTagImports
             .map(tag => ({
                 ...tag,
-                sourceFile: this.file
+                sourceFile: this.document
             }));
     }
 
@@ -212,7 +202,6 @@ export class XmlCode implements BscCode {
                 if (node.name) {
                     requiredSymbols.push({
                         flags: SymbolTypeFlag.runtime,
-                        file: this.file,
                         code: this,
                         name: node.name.toLowerCase()
                     });
@@ -225,7 +214,6 @@ export class XmlCode implements BscCode {
                 if (node.onChange) {
                     requiredSymbols.push({
                         flags: SymbolTypeFlag.runtime,
-                        file: this.file,
                         code: this,
                         name: node.onChange.toLowerCase()
                     });
@@ -234,7 +222,7 @@ export class XmlCode implements BscCode {
                 //if (node.type && isCustomXmlType(node.type)) {
                 //    requiredSymbols.push({
                 //        flags: SymbolTypeFlag.typetime,
-                //        file: this.file,
+                //        code: this,
                 //        name: node.type.toLowerCase()
                 //    });
                 //}

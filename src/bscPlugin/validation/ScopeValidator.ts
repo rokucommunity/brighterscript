@@ -1348,7 +1348,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Enum declared here',
                         location: util.createLocationFromRange(
-                            util.pathToUri(enumFileLink?.file.srcPath),
+                            util.pathToUri(enumFileLink?.code.srcPath),
                             enumFileLink?.item?.tokens.name.location?.range
                         )
                     }]
@@ -1510,7 +1510,7 @@ export class ScopeValidator {
                     //skip the init function (because every component will have one of those){
                     if (lowerName !== 'init') {
                         let shadowedCallable = ancestorNonGlobalCallables[ancestorNonGlobalCallables.length - 1];
-                        if (!!shadowedCallable && shadowedCallable.callable.file === container.callable.file) {
+                        if (!!shadowedCallable && shadowedCallable.callable.code === container.callable.code) {
                             //same file: skip redundant imports
                             continue;
                         }
@@ -1518,11 +1518,11 @@ export class ScopeValidator {
                             ...DiagnosticMessages.overridesAncestorFunction(
                                 container.callable.name,
                                 container.scope.name,
-                                shadowedCallable.callable.file.destPath,
+                                shadowedCallable.callable.code.destPath,
                                 //grab the last item in the list, which should be the closest ancestor's version
                                 shadowedCallable.scope.name
                             ),
-                            location: util.createLocationFromFileRange(container.callable.file, container.callable.nameRange)
+                            location: util.createLocationFromFileRange(container.callable.code, container.callable.nameRange)
                         }, ScopeValidatorDiagnosticTag.DuplicateFunctionDeclaration);
                     }
                 }
@@ -1541,7 +1541,7 @@ export class ScopeValidator {
                             related.push({
                                 message: `Function declared here`,
                                 location: util.createLocationFromRange(
-                                    util.pathToUri(ownCallable.callable.file?.srcPath),
+                                    util.pathToUri(ownCallable.callable.code?.srcPath),
                                     thatNameRange
                                 )
                             });
@@ -1550,7 +1550,7 @@ export class ScopeValidator {
 
                     this.addMultiScopeDiagnostic({
                         ...DiagnosticMessages.duplicateFunctionImplementation(callable.name),
-                        location: util.createLocationFromFileRange(callable.file, callable.nameRange),
+                        location: util.createLocationFromFileRange(callable.code, callable.nameRange),
                         relatedInformation: related
                     }, ScopeValidatorDiagnosticTag.DuplicateFunctionDeclaration);
                 }
@@ -1674,7 +1674,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromFileRange(
-                            callable[0].callable.file,
+                            callable[0].callable.code,
                             callable[0].callable.nameRange
                         )
                     }]
@@ -1686,7 +1686,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromRange(
-                            util.pathToUri(callable[0].callable.file.srcPath),
+                            util.pathToUri(callable[0].callable.code.srcPath),
                             callable[0].callable.nameRange
                         )
                     }]
@@ -1703,7 +1703,7 @@ export class ScopeValidator {
                     relatedInformation: [{
                         message: 'Class declared here',
                         location: util.createLocationFromRange(
-                            util.pathToUri(classStmtLink.file.srcPath),
+                            util.pathToUri(classStmtLink.code.srcPath),
                             classStmtLink?.item.tokens.name.location?.range
                         )
                     }]

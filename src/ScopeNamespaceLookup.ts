@@ -199,7 +199,6 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         //field order matches the NamespaceContainer interface declaration so the
         //fast-path and slow-path containers share a single V8 hidden class.
         return {
-            file: contribution.file,
             code: contribution.code,
             fullName: contribution.fullName,
             nameRange: contribution.nameRange,
@@ -231,7 +230,6 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         //field order matches the NamespaceContainer interface declaration so fast-path
         //and slow-path containers share a single V8 hidden class
         return {
-            file: aggregate.file,
             code: aggregate.code,
             fullName: aggregate.fullName,
             nameRange: aggregate.nameRange,
