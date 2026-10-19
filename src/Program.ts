@@ -1517,17 +1517,34 @@ export class Program {
                 }
                 const didComponentChange = changedComponentTypes.length > 0;
                 const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.typetime).size > 0;
-                const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange, filesToBeValidatedInScopeContext);
+                const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
+                const filesToRevalidate = this.isFirstValidation ? new Set<BscFile>() : this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
 
                 this.crossScopeValidation.buildComponentsMap();
                 this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
-                    this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
-                });
-                if (!this.isFirstValidation) {
-                    const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
-                    for (const file of filesToRevalidate) {
-                        filesToBeValidatedInScopeContext.add(file);
+                    if (this.isFirstValidation || didComponentChange) {
+                        if (scopesToCheck.length > 0) {
+                            this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                        }
+                        return;
                     }
+                    //only the changed files, and the files that use a changed symbol, can have different cross-scope results.
+                    //Changing a file clears all of its diagnostics (including cross-scope ones), so it's rechecked in every scope it's in
+                    const filesToCheck = new Set([...filesToBeValidatedInScopeContext, ...filesToRevalidate]);
+                    const scopes = new Set(scopesToCheck);
+                    for (const file of filesToBeValidatedInScopeContext) {
+                        for (const scope of this.getScopesForFile(file)) {
+                            if (scope !== this.globalScope) {
+                                scopes.add(scope);
+                            }
+                        }
+                    }
+                    if (scopes.size > 0) {
+                        this.crossScopeValidation.addDiagnosticsForScopes([...scopes], filesToCheck, didProvidedSymbolChange);
+                    }
+                });
+                for (const file of filesToRevalidate) {
+                    filesToBeValidatedInScopeContext.add(file);
                 }
 
                 this.currentScopeValidationOptions = {
@@ -1639,14 +1656,7 @@ export class Program {
         }
     }
 
-    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean, changedFiles: Set<BscFile>) {
-        //changing a file clears all of its diagnostics (including cross-scope ones), so every scope containing a changed file must be rechecked
-        const scopesWithChangedFiles = new Set<Scope>();
-        for (const file of changedFiles) {
-            for (const scope of this.getScopesForFile(file)) {
-                scopesWithChangedFiles.add(scope);
-            }
-        }
+    private getScopesForCrossScopeValidation(someComponentTypeChanged: boolean, didProvidedSymbolChange: boolean) {
         const scopesForCrossScopeValidation: Scope[] = [];
         for (let scope of this.getAllUserScopes()) {
             if (this.globalScope === scope) {
@@ -1654,8 +1664,7 @@ export class Program {
             }
             if (
                 someComponentTypeChanged ||
-                (didProvidedSymbolChange && !scope.isValidated) ||
-                scopesWithChangedFiles.has(scope)
+                (didProvidedSymbolChange && !scope.isValidated)
             ) {
                 scopesForCrossScopeValidation.push(scope);
             }

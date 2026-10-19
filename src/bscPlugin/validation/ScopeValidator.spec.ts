@@ -5980,6 +5980,335 @@ describe('ScopeValidator', () => {
             program.validate();
             expectDiagnostics(program, expected);
         });
+
+        describe('files shared by multiple scopes', () => {
+            function setComponent(name: string, scripts: string[]) {
+                program.setFile(`components/${name}.xml`, [
+                    '<?xml version="1.0" encoding="utf-8" ?>',
+                    `<component name="${name}" extends="Group">`,
+                    ...scripts.map(x => `    <script uri="${x}" />`),
+                    '</component>'
+                ].join('\n'));
+            }
+
+            function setupMissingInB(sharedContents: string) {
+                program.setFile('components/shared.brs', sharedContents);
+                program.setFile('components/a.brs', `
+                    sub onlyInA()
+                    end sub
+                `);
+                program.setFile('components/b.brs', `
+                    sub onlyInB()
+                    end sub
+                `);
+                setComponent('A', ['shared.brs', 'a.brs']);
+                setComponent('B', ['shared.brs', 'b.brs']);
+                program.validate();
+            }
+
+            it('moves a cross-scope diagnostic when lines are added above it', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.cannotFindFunction('onlyInA'),
+                    location: { range: util.createRange(2, 24, 2, 31) }
+                }]);
+
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        print "one"
+                        print "two"
+                        onlyInA()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.cannotFindFunction('onlyInA'),
+                    location: { range: util.createRange(4, 24, 4, 31) }
+                }]);
+            });
+
+            it('removes a cross-scope diagnostic when the usage is removed', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        print "no more call"
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('adds a cross-scope diagnostic for a new usage in an existing file', () => {
+                setupMissingInB(`
+                    sub shared()
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            it('removes and restores a cross-scope diagnostic when another file in the scope provides the symbol', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+
+                program.setFile('components/b.brs', `
+                    sub onlyInB()
+                    end sub
+                    sub onlyInA()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                program.setFile('components/b.brs', `
+                    sub onlyInB()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            it('rechecks a scope when its script tags change but no symbols do', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+
+                //B now gets `onlyInA` from a.brs, which was already in the program
+                setComponent('B', ['shared.brs', 'b.brs', 'a.brs']);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                setComponent('B', ['shared.brs', 'b.brs']);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            it('does not duplicate cross-scope diagnostics when a file is revalidated without changing', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                program.getFile('components/shared.brs').isValidated = false;
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            function setupDoThing(aParamType: string, bParamType: string) {
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        doThing("hello")
+                    end sub
+                `);
+                program.setFile('components/a.brs', `
+                    sub doThing(x as ${aParamType})
+                    end sub
+                `);
+                program.setFile('components/b.brs', `
+                    sub doThing(x as ${bParamType})
+                    end sub
+                `);
+                setComponent('A', ['shared.brs', 'a.brs']);
+                setComponent('B', ['shared.brs', 'b.brs']);
+                program.validate();
+            }
+
+            const incompatibleDoThing = DiagnosticMessages.incompatibleSymbolDefinition('doThing', { scopes: [`components${path.sep}A.xml`, `components${path.sep}B.xml`] });
+
+            it('removes an incompatible definition diagnostic when the other definition is fixed', () => {
+                setupDoThing('string', 'integer');
+                expectDiagnostics(program, [incompatibleDoThing]);
+
+                program.setFile('components/b.brs', `
+                    sub doThing(x as string)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('adds an incompatible definition diagnostic when one definition changes', () => {
+                setupDoThing('string', 'string');
+                expectZeroDiagnostics(program);
+
+                program.setFile('components/b.brs', `
+                    sub doThing(x as integer)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [incompatibleDoThing]);
+            });
+
+            it('keeps an incompatible definition diagnostic when a file defining the symbol has a body edit', () => {
+                setupDoThing('string', 'integer');
+                expectDiagnostics(program, [incompatibleDoThing]);
+
+                program.setFile('components/b.brs', `
+                    sub doThing(x as integer)
+                        print "changed"
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [incompatibleDoThing]);
+            });
+
+            function setupNameCollision(utilsContents: string) {
+                program.options.autoImportComponentScript = true;
+                program.setFile('source/utils.bs', utilsContents);
+                program.setFile('components/Button1.bs', `
+                    import "pkg:/source/utils.bs"
+                    const Test = "test"
+                `);
+                program.setFile('components/Button1.xml', `
+                    <component name="Button1" extends="Group">
+                    </component>
+                `);
+                program.setFile('components/Button2.bs', `
+                    import "pkg:/source/utils.bs"
+                    const Other = "other"
+                `);
+                program.setFile('components/Button2.xml', `
+                    <component name="Button2" extends="Group">
+                    </component>
+                `);
+                program.validate();
+            }
+
+            it('keeps and moves name collision diagnostics located in a file that has a body edit', () => {
+                setupNameCollision(`
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    {
+                        ...DiagnosticMessages.nameCollision('Interface', 'Const', 'Test'),
+                        location: { range: util.createRange(1, 30, 1, 34) }
+                    }
+                ]);
+
+                program.setFile('source/utils.bs', `
+                    'a comment that moves everything down a line
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    {
+                        ...DiagnosticMessages.nameCollision('Interface', 'Const', 'Test'),
+                        location: { range: util.createRange(2, 30, 2, 34) }
+                    }
+                ]);
+            });
+
+            it('updates the related information of name collision diagnostics in other files when a file has a body edit', () => {
+                setupNameCollision(`
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                const getRelatedLineInUtils = () => {
+                    const diagnostic = program.getDiagnostics().find(x => x.location.uri.endsWith('Button1.bs'));
+                    return diagnostic.relatedInformation.find(x => x.location.uri.endsWith('utils.bs')).location.range.start.line;
+                };
+                expect(getRelatedLineInUtils()).to.eql(1);
+
+                program.setFile('source/utils.bs', `
+                    'a comment that moves everything down a line
+                    'and another one
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    DiagnosticMessages.nameCollision('Interface', 'Const', 'Test')
+                ]);
+                expect(getRelatedLineInUtils()).to.eql(3);
+            });
+
+            it('removes name collision diagnostics in other files when the colliding symbol is removed', () => {
+                setupNameCollision(`
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    DiagnosticMessages.nameCollision('Interface', 'Const', 'Test')
+                ]);
+
+                program.setFile('source/utils.bs', `
+                    interface Renamed
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('adds name collision diagnostics in other files when a colliding symbol is added', () => {
+                setupNameCollision(`
+                    interface Renamed
+                        name as string
+                    end interface
+                `);
+                expectZeroDiagnostics(program);
+
+                program.setFile('source/utils.bs', `
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    DiagnosticMessages.nameCollision('Interface', 'Const', 'Test')
+                ]);
+            });
+        });
     });
 
 
