@@ -10,7 +10,7 @@ import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
 import type { IToken, TokenType } from 'chevrotain';
-import { TranspileState } from '../parser/TranspileState';
+import { XmlTranspileState } from '../parser/XmlTranspileState';
 import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
 import { XmlCode } from './XmlCode';
@@ -329,7 +329,9 @@ export class XmlFile implements BscFile {
      */
     public get dependencies() {
         const dependencies = [
-            ...this.scriptTagImports.map(x => x.destPath.toLowerCase())
+            ...this.scriptTagImports.map(x => x.destPath.toLowerCase()),
+            //`import` statements in the code embedded in `<script>` blocks
+            ...this.scriptCodes.flatMap(code => code.ownScriptImports).filter(x => !!x.destPath).map(x => x.destPath.toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program?.options?.autoImportComponentScript) {
@@ -514,7 +516,7 @@ export class XmlFile implements BscFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this.srcPath, this.program.options);
+        const state = new XmlTranspileState(this);
 
         let transpileResult: SourceNode | undefined;
 

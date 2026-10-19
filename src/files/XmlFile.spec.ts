@@ -11,12 +11,15 @@ import util, { standardizePath as s } from '../util';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
-import { isXmlFile } from '../astUtils/reflection';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
 import { SGNode } from '../parser/SGTypes';
 import { TranspileState } from '../parser/TranspileState';
 import { ParseMode } from '../parser/Parser';
+import { SourceMapConsumer } from 'source-map';
+import { isBrsCode, isPrintStatement, isXmlFile } from '../astUtils/reflection';
+import type { PrintStatement } from '../parser/Statement';
+import type { LiteralExpression } from '../parser/Expression';
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
@@ -2204,6 +2207,182 @@ end sub`);
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('transpile', () => {
+            it('keeps brightscript blocks as they were written', async () => {
+                await testTranspile(trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                print "spacing"   ' and comments stay
+                            end sub
+                        ]]></script>
+                    </component>
+                `, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                print "spacing"   ' and comments stay
+                            end sub
+                        ]]></script>
+                        <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    </component>
+                `, 'none', 'components/Widget.xml');
+            });
+
+            it('transpiles brighterscript blocks', async () => {
+                await testTranspile(trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            namespace alpha
+                                const greeting = "hello"
+                                sub greet()
+                                    print greeting
+                                end sub
+                            end namespace
+                            sub init()
+                                x = true ? alpha.greeting : "no"
+                                alpha.greet()
+                            end sub
+                        ]]></script>
+                    </component>
+                `, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+
+
+                    sub alpha_greet()
+                        print "hello"
+                    end sub
+
+                    sub init()
+                        if true then
+                            x = "hello"
+                        else
+                            x = "no"
+                        end if
+                        alpha_greet()
+                    end sub
+                    ]]></script>
+                        <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    </component>
+                `, 'none', 'components/Widget.xml');
+            });
+
+            it('transpiles a brightscript block that a plugin changed', async () => {
+                program.plugins.add({
+                    name: 'test',
+                    prepareCode: (event) => {
+                        if (isBrsCode(event.code) && event.code.isEmbedded) {
+                            const print = event.code.ast.findChild<PrintStatement>(isPrintStatement);
+                            event.editor.setProperty((print.expressions[0] as LiteralExpression).tokens.value, 'text', '"changed"');
+                        }
+                    }
+                });
+                await testTranspile(trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                print "original"
+                            end sub
+                        ]]></script>
+                    </component>
+                `, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                    sub init()
+                        print "changed"
+                    end sub
+                    ]]></script>
+                        <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    </component>
+                `, 'none', 'components/Widget.xml');
+                //the change is undone after the build
+                const code = (program.getFile<XmlFile>('components/Widget.xml')).scriptCodes[0];
+                expect((code.ast.findChild<PrintStatement>(isPrintStatement).expressions[0] as LiteralExpression).tokens.value.text).to.equal('"original"');
+            });
+
+            it('maps transpiled code back to its place in the xml file', async () => {
+                program.options.sourceMap = true;
+                const xmlFile = program.setFile<XmlFile>({ src: s`${rootDir}/components/Widget.xml`, dest: 'components/Widget.xml' }, trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            sub init()
+                                print true ? "yes" : "no"
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const result = await program.getTranspiledFileContents(xmlFile.srcPath);
+                const generatedLines = result.code.split(/\r?\n/);
+                const generatedLine = generatedLines.findIndex(x => x.trim() === 'sub init()');
+                await SourceMapConsumer.with(JSON.parse(result.map), null, (consumer) => {
+                    const original = consumer.originalPositionFor({ line: generatedLine + 1, column: generatedLines[generatedLine].indexOf('sub') });
+                    expect(original.source).to.equal(xmlFile.srcPath);
+                    //`sub init()` is on line 4 (1-based), column 8, of the original xml
+                    expect([original.line, original.column]).to.eql([4, 8]);
+                });
+            });
+        });
+
+        describe('imports', () => {
+            it('adds the files a CDATA block imports to the component', async () => {
+                program.setFile('source/lib.bs', `
+                    sub libFunc()
+                    end sub
+                `);
+                const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            import "pkg:/source/lib.bs"
+                            sub init()
+                                libFunc()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                expect(xmlFile.dependencies).to.include('source/lib.bs');
+
+                const result = await program.getTranspiledFileContents(xmlFile.srcPath);
+                expect(result.code).to.include('<script type="text/brightscript" uri="pkg:/source/lib.brs" />');
+            });
+
+            it('uses the typedef of a .brs file that a CDATA block imports', () => {
+                //the brs file can't be parsed, so the only way `libFunc` is found is through its typedef
+                program.setFile('source/lib.brs', `
+                    sub libFunc(
+                `);
+                program.setFile('source/lib.d.bs', `
+                    sub libFunc(name as string)
+                    end sub
+                `);
+                const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brighterscript"><![CDATA[
+                            import "pkg:/source/lib.brs"
+                            sub init()
+                                libFunc("hello")
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expect(xmlFile.dependencies).to.include('source/lib.d.bs');
+                expectZeroDiagnostics(program.getDiagnostics().filter(x => x.location.uri.endsWith('Widget.xml')));
             });
         });
 

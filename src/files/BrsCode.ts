@@ -27,6 +27,8 @@ import type { BscSymbol } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFileLike } from '../astUtils/CachedLookups';
 import { CachedLookups } from '../astUtils/CachedLookups';
+import type { SourceNode } from 'source-map';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Editor } from '../astUtils/Editor';
 import { getBsConst } from '../preprocessor/Manifest';
 import type { BscType } from '../types';
@@ -1185,6 +1187,31 @@ export class BrsCode implements BscCode {
         }
         return namespaceLookup;
     }
+    /**
+     * Transpile this code into BrightScript. The result maps back to this code's location in its document, so code embedded in a
+     * larger file maps to its place in that file.
+     */
+    public transpile(): SourceNode {
+        const state = new BrsTranspileState(this);
+        state.editor = this.editor ?? new Editor();
+        const astTranspile = this.ast.transpile(state);
+        const trailingComments = [];
+        if (util.hasLeadingComments(this.parser.eofToken)) {
+            if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1]?.location, this.parser.eofToken)) {
+                trailingComments.push(' ');
+            } else {
+                trailingComments.push('\n');
+            }
+            trailingComments.push(...state.transpileLeadingComments(this.parser.eofToken));
+        }
+        const result = util.sourceNodeFromTranspileResult(null, null, state.srcPath, [...astTranspile, ...trailingComments]);
+        //if we created an editor for this transpile, undo the edits now
+        if (!this.editor) {
+            state.editor.undoAll();
+        }
+        return result;
+    }
+
     /**
      * Find the locations of every class method and field named `textToSearchFor` in this code
      * @param textToSearchFor the lower-case member name
