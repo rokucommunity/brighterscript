@@ -470,6 +470,7 @@ export class Program {
         //share a single V8 hidden class with the per-scope wrapper containers
         const aggregate: NamespaceContainer = {
             file: first.file,
+            code: first.code,
             fullName: first.fullName,
             nameRange: first.nameRange,
             lastPartName: first.lastPartName,
@@ -1947,34 +1948,34 @@ export class Program {
 
     public getStatementsByName(name: string, origin: BrsFile | BrsCode, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
-        const filesSearched = new Set<BrsFile>();
+        const codesSearched = new Set<BrsCode>();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
 
-        function addToResults(statement: FunctionStatement | MethodStatement, file: BrsFile) {
+        function addToResults(statement: FunctionStatement | MethodStatement, code: BrsCode) {
             let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(origin.parseMode)?.toLowerCase();
             if (statement.tokens.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                 if (!results.has(statement)) {
-                    results.set(statement, { item: statement, file: file as BrsFile });
+                    results.set(statement, { item: statement, file: code.document, code: code });
                 }
             }
         }
 
         //look through all files in scope for matches
         for (const scope of isBrsFile(origin) ? this.getScopesForFile(origin) : this.getScopesForCode(origin)) {
-            for (const file of scope.getAllFiles()) {
-                //skip non-brs files, or files we've already processed
-                if (!isBrsFile(file) || filesSearched.has(file)) {
+            for (const code of scope.getAllCodes()) {
+                //skip non-brs code, or code we've already processed
+                if (!isBrsCode(code) || codesSearched.has(code)) {
                     continue;
                 }
-                filesSearched.add(file);
+                codesSearched.add(code);
 
-                file.ast.walk(createVisitor({
+                code.ast.walk(createVisitor({
                     FunctionStatement: (statement: FunctionStatement) => {
-                        addToResults(statement, file);
+                        addToResults(statement, code);
                     },
                     MethodStatement: (statement: MethodStatement) => {
-                        addToResults(statement, file);
+                        addToResults(statement, code);
                     }
                 }), {
                     walkMode: WalkMode.visitStatements
@@ -1986,7 +1987,7 @@ export class Program {
 
     public getStatementsForXmlFile(scope: XmlScope, filterName?: string): FileLink<FunctionStatement>[] {
         let results = new Map<Statement, FileLink<FunctionStatement>>();
-        const filesSearched = new Set<BrsFile>();
+        const codesSearched = new Set<BrsCode>();
 
         //get all function names for the xml file and parents
         let funcNames = new Set<string>();
@@ -2001,18 +2002,18 @@ export class Program {
         }
 
         //look through all files in scope for matches
-        for (const file of scope.getOwnFiles()) {
-            //skip non-brs files, or files we've already processed
-            if (!isBrsFile(file) || filesSearched.has(file)) {
+        for (const code of scope.getOwnFiles().flatMap(file => file.codes ?? [])) {
+            //skip non-brs code, or code we've already processed
+            if (!isBrsCode(code) || codesSearched.has(code)) {
                 continue;
             }
-            filesSearched.add(file);
+            codesSearched.add(code);
 
-            file.ast.walk(createVisitor({
+            code.ast.walk(createVisitor({
                 FunctionStatement: (statement: FunctionStatement) => {
                     if (funcNames.has(statement.tokens.name.text)) {
                         if (!results.has(statement)) {
-                            results.set(statement, { item: statement, file: file });
+                            results.set(statement, { item: statement, file: code.document, code: code });
                         }
                     }
                 }

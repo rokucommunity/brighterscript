@@ -59,7 +59,7 @@ export class BrsCode implements BscCode {
         this.parseMode = options.parseMode ?? ParseMode.BrightScript;
         this.onParserRequested = options.onParserRequested;
         this._cachedLookups = new CachedLookups(this as unknown as BscFileLike);
-        this.validationSegmenter = new AstValidationSegmenter(this.file);
+        this.validationSegmenter = new AstValidationSegmenter(this);
     }
 
     public type = 'BrsCode';
@@ -280,6 +280,7 @@ export class BrsCode implements BscCode {
                             //changing the object shape, which keeps property access fast.
                             contributions.set(lowerLoopName, {
                                 file: this.file,
+                                code: this,
                                 fullName: loopName,
                                 lastPartName: part,
                                 nameRange: namespaceStatement.nameExpression.location?.range,
@@ -592,6 +593,7 @@ export class BrsCode implements BscCode {
                     name: statement.tokens.name?.text,
                     nameRange: statement.tokens.name?.location?.range,
                     file: this.file,
+                    code: this,
                     params: params,
                     range: statement.func.location?.range,
                     type: funcType,
@@ -1141,6 +1143,7 @@ export class BrsCode implements BscCode {
                     namespaceLookup.set(lowerLoopName, {
                         isTopLevel: i === 0,
                         file: this.file,
+                        code: this,
                         fullName: loopName,
                         fullNameLower: lowerLoopName,
                         parentNameLower: parentNameLower,

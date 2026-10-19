@@ -4,6 +4,7 @@ import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isAr
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCode } from '../../files/BrsCode';
 import type { BsDiagnostic, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
@@ -541,7 +542,7 @@ export class ScopeValidator {
                 processedNames.push(part.tokens.name?.text?.toLowerCase());
                 const link = scope.getConstFileLink(processedNames.join('.'), namespace);
                 if (link) {
-                    walkConst(link.item, link.file, chain);
+                    walkConst(link.item, link.code, chain);
                     return;
                 }
             }
@@ -549,7 +550,7 @@ export class ScopeValidator {
 
         const walkConst = (
             constStatement: ConstStatement,
-            file: BrsFile,
+            code: BrsCode,
             chain: ConstStatement[]
         ) => {
             const cycleStart = chain.indexOf(constStatement);
@@ -590,7 +591,7 @@ export class ScopeValidator {
         for (const [, link] of scope.getConstMap()) {
             //an inactive const is not compiled, so it can not take part in a cycle
             if (link.item.isActive !== false) {
-                walkConst(link.item, link.file, []);
+                walkConst(link.item, link.code, []);
             }
         }
     }

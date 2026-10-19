@@ -12,12 +12,13 @@ import { Cache } from './Cache';
 import type { BrsFile } from './files/BrsFile';
 import type { Identifier } from './lexer/Token';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
+import { isBrsCode, isBrsFile, isXmlCode, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
 import type { BscCode } from './files/BscCode';
+import type { BrsCode } from './files/BrsCode';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
@@ -67,14 +68,10 @@ export class Scope {
      */
     public get namespaceLookup() {
         let allFilesValidated = true;
-        for (const file of this.getSymbolFiles()) {
-            if (isBrsFile(file)) {
-                allFilesValidated = allFilesValidated && file.isValidated;
-                if (!allFilesValidated) {
-                    break;
-                }
-            }
-        }
+        this.enumerateBrsCodeWithBreak((code) => {
+            allFilesValidated = allFilesValidated && code.isValidated;
+            return !allFilesValidated;
+        });
         if (!allFilesValidated) {
             // This is not fit to cache
             // Since the files have not been validated, all namespace info might not have been available
@@ -92,8 +89,8 @@ export class Scope {
         return this.cache.getOrAdd('namespaceNameSet', () => {
             const lowerNamespaceNames = new Set<string>();
 
-            this.enumerateBrsFiles((file) => {
-                const fileNamespaceLookup = file.getNamespaceLookupObject();
+            this.enumerateBrsCode((code) => {
+                const fileNamespaceLookup = code.getNamespaceLookupObject();
                 for (const [lowerNamespaceName, _] of fileNamespaceLookup) {
                     lowerNamespaceNames.add(lowerNamespaceName);
                 }
@@ -198,14 +195,14 @@ export class Scope {
     private findTopCandidateFileLink<T extends Statement>(cachedMapName: string, nameLower: string): FileLink<T> {
         let activeLink: FileLink<T>;
         let inactiveLink: FileLink<T>;
-        this.enumerateBrsFilesWithBreak((file) => {
-            const stmt: T = file['_cachedLookups'][cachedMapName].get(nameLower);
+        this.enumerateBrsCodeWithBreak((code) => {
+            const stmt: T = code['_cachedLookups'][cachedMapName].get(nameLower);
             if (stmt) {
                 if (stmt.isActive !== false) {
-                    activeLink = { item: stmt, file: file };
+                    activeLink = { item: stmt, file: code.document, code: code };
                     return true;
                 }
-                inactiveLink ??= { item: stmt, file: file };
+                inactiveLink ??= { item: stmt, file: code.document, code: code };
             }
             return false;
         });
@@ -312,7 +309,7 @@ export class Scope {
         enumeration = this.preferActiveGlobalLink(enumeration, () => enumMap.get(lowerName));
         if (enumeration) {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
-            return member ? { item: member, file: enumeration.file } : undefined;
+            return member ? { item: member, file: enumeration.file, code: enumeration.code } : undefined;
         }
     }
 
@@ -354,7 +351,7 @@ export class Scope {
         if (includeNamespaces) {
             const nameSpaceContainer = this.getFirstNamespaceWithRoot(name, containingNamespace);
             if (nameSpaceContainer) {
-                links.push({ item: nameSpaceContainer.namespaceStatements?.[0], file: nameSpaceContainer?.file as BrsFile });
+                links.push({ item: nameSpaceContainer.namespaceStatements?.[0], file: nameSpaceContainer?.file, code: nameSpaceContainer?.code as BrsCode });
             }
         }
         const fullNameLower = (containingNamespace ? `${containingNamespace}.${name}` : name).toLowerCase();
@@ -362,7 +359,7 @@ export class Scope {
         if (callable) {
             if ((!callable.hasNamespace && includeNameShadowsOutsideNamespace) || callable.getName(ParseMode.BrighterScript).toLowerCase() === fullNameLower) {
                 // this callable has no namespace, or has same namespace
-                links.push({ item: callable.functionStatement, file: callable.file as BrsFile });
+                links.push({ item: callable.functionStatement, file: callable.file, code: callable.code });
             }
         }
         // remove empty links
@@ -445,13 +442,13 @@ export class Scope {
         return this.cache.getOrAdd('classMap', () => {
             const map = new Map<string, FileLink<ClassStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsFiles((file) => {
-                if (isBrsFile(file)) {
-                    for (let cls of file['_cachedLookups'].classStatements) {
+            this.enumerateBrsCode((code) => {
+                if (isBrsCode(code)) {
+                    for (let cls of code['_cachedLookups'].classStatements) {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
-                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: file }, cls.isActive !== false);
+                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: code.document, code: code }, cls.isActive !== false);
                         }
                     }
                 }
@@ -468,13 +465,13 @@ export class Scope {
         return this.cache.getOrAdd('interfaceMap', () => {
             const map = new Map<string, FileLink<InterfaceStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsFiles((file) => {
-                if (isBrsFile(file)) {
-                    for (let iface of file['_cachedLookups'].interfaceStatements) {
+            this.enumerateBrsCode((code) => {
+                if (isBrsCode(code)) {
+                    for (let iface of code['_cachedLookups'].interfaceStatements) {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
-                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: file }, iface.isActive !== false);
+                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: code.document, code: code }, iface.isActive !== false);
                         }
                     }
                 }
@@ -491,11 +488,11 @@ export class Scope {
         return this.cache.getOrAdd('enumMap', () => {
             const map = new Map<string, FileLink<EnumStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsFiles((file) => {
-                for (let enumStmt of file['_cachedLookups'].enumStatements) {
+            this.enumerateBrsCode((code) => {
+                for (let enumStmt of code['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file }, enumStmt.isActive !== false);
+                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: code.document, code: code }, enumStmt.isActive !== false);
                     }
                 }
             });
@@ -511,11 +508,11 @@ export class Scope {
         return this.cache.getOrAdd('constMap', () => {
             const map = new Map<string, FileLink<ConstStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsFiles((file) => {
-                for (let stmt of file['_cachedLookups'].constStatements) {
+            this.enumerateBrsCode((code) => {
+                for (let stmt of code['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: file }, stmt.isActive !== false);
+                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: code.document, code: code }, stmt.isActive !== false);
                     }
                 }
             });
@@ -530,14 +527,14 @@ export class Scope {
     public getTypeStatementMap(): Map<string, FileLink<TypeStatement>> {
         return this.cache.getOrAdd('typeStatementMap', () => {
             const map = new Map<string, FileLink<TypeStatement>>();
-            this.enumerateBrsFiles((file) => {
-                file.ast.walk((node) => {
+            this.enumerateBrsCode((code) => {
+                code.ast.walk((node) => {
                     if (isTypeStatement(node)) {
                         const namespaceName = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                         const typeName = node.tokens.name?.text;
                         if (typeName) {
                             const fullName = (namespaceName ? `${namespaceName}.${typeName}` : typeName).toLowerCase();
-                            map.set(fullName, { item: node, file: file });
+                            map.set(fullName, { item: node, file: code.document, code: code });
                         }
                     }
                 }, { walkMode: WalkMode.visitAllRecursive });
@@ -566,8 +563,8 @@ export class Scope {
      */
     public isKnownNamespace(namespaceName: string) {
         let namespaceNameLower = namespaceName.toLowerCase();
-        this.enumerateBrsFiles((file) => {
-            for (let namespace of file['_cachedLookups'].namespaceStatements) {
+        this.enumerateBrsCode((code) => {
+            for (let namespace of code['_cachedLookups'].namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -779,7 +776,48 @@ export class Scope {
     }
 
     /**
+     * Iterate over the BrightScript code in this scope (including ancestor scopes), skipping code shadowed by typedefs
+     */
+    public enumerateBrsCode(callback: (code: BrsCode) => void) {
+        for (const file of this.getSymbolFiles()) {
+            for (const code of file.codes ?? []) {
+                if (isBrsCode(code)) {
+                    callback(code);
+                }
+            }
+        }
+    }
+
+    /**
+     * Iterate over the BrightScript code in this scope (including ancestor scopes), skipping code shadowed by typedefs.
+     * Stops as soon as the callback returns true.
+     */
+    public enumerateBrsCodeWithBreak(callback: (code: BrsCode) => boolean) {
+        for (const file of this.getSymbolFiles()) {
+            for (const code of file.codes ?? []) {
+                if (isBrsCode(code) && callback(code)) {
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Iterate over the code directly in this scope (excluding code found only in parent scopes), skipping code shadowed by typedefs
+     */
+    public enumerateOwnCode(callback: (code: BscCode) => void) {
+        for (const file of this.getOwnSymbolFiles()) {
+            for (const code of file.codes ?? []) {
+                if (isXmlCode(code) || isBrsCode(code)) {
+                    callback(code);
+                }
+            }
+        }
+    }
+
+    /**
      * Iterate over Brs files not shadowed by typedefs
+     * @deprecated use `enumerateBrsCode` instead
      */
     public enumerateBrsFiles(callback: (file: BrsFile) => void) {
         const files = this.getSymbolFiles();
@@ -792,6 +830,7 @@ export class Scope {
 
     /**
      * Iterate over Brs files not shadowed by typedefs
+     * @deprecated use `enumerateBrsCodeWithBreak` instead
      */
     public enumerateBrsFilesWithBreak(callback: (file: BrsFile) => boolean) {
         const files = this.getSymbolFiles();
@@ -806,6 +845,7 @@ export class Scope {
 
     /**
      * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
+     * @deprecated use `enumerateOwnCode` instead
      */
     public enumerateOwnFiles(callback: (file: BscFile) => void) {
         const files = this.getOwnSymbolFiles();
@@ -822,10 +862,10 @@ export class Scope {
      */
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
-        //get callables from own files
-        this.enumerateOwnFiles((file) => {
-            if (isBrsFile(file)) {
-                for (let callable of file?.callables ?? []) {
+        //get callables from own code
+        this.enumerateOwnCode((code) => {
+            if (isBrsCode(code)) {
+                for (let callable of code?.callables ?? []) {
                     result.push({
                         callable: callable,
                         scope: this
@@ -856,8 +896,8 @@ export class Scope {
 
     public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
-        this.enumerateBrsFiles((file) => {
-            result.push(...file['_cachedLookups'].namespaceStatements);
+        this.enumerateBrsCode((code) => {
+            result.push(...code['_cachedLookups'].namespaceStatements);
         });
         return result;
     }
@@ -1022,8 +1062,8 @@ export class Scope {
                 }
             }
         }
-        this.enumerateBrsFiles((file) => {
-            const namespaceTypes = file.getNamespaceSymbolTable();
+        this.enumerateBrsCode((code) => {
+            const namespaceTypes = code.getNamespaceSymbolTable();
 
             this.linkSymbolTableDisposables.push(
                 ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
@@ -1052,11 +1092,11 @@ export class Scope {
      */
     public getOwnScriptImports() {
         let result = [] as FileReference[];
-        this.enumerateOwnFiles((file) => {
-            if (isBrsFile(file)) {
-                result.push(...file.ownScriptImports);
-            } else if (isXmlFile(file)) {
-                result.push(...file.scriptTagImports);
+        this.enumerateOwnCode((code) => {
+            if (isBrsCode(code)) {
+                result.push(...code.ownScriptImports);
+            } else if (isXmlCode(code)) {
+                result.push(...code.scriptTagImports);
             }
         });
         return result;
@@ -1117,7 +1157,11 @@ export class Scope {
  * does not walk into a sibling's parent, so the parent-provider plumbing was dead code.
  */
 export interface NamespaceFileContribution {
-    file: BrsFile;
+    file: BscFile;
+    /**
+     * The code this contribution is in. `file` is the file that code lives in
+     */
+    code: BrsCode;
     fullName: string;
     lastPartName: string;
     nameRange: Range;
@@ -1142,6 +1186,10 @@ export interface NamespaceFileContribution {
  */
 export interface NamespaceContainer {
     file: BscFile;
+    /**
+     * The code this namespace is in. `file` is the file that code lives in
+     */
+    code: BscCode;
     fullName: string;
     nameRange: Range;
     lastPartName: string;

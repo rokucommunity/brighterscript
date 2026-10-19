@@ -17,6 +17,7 @@ import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
 import type { BscCode } from './files/BscCode';
+import type { BrsCode } from './files/BrsCode';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
@@ -95,6 +96,10 @@ export interface DiagnosticContextPair {
 
 export interface Callable {
     file: BscFile;
+    /**
+     * The code this callable is in. `file` is the file that code lives in
+     */
+    code: BrsCode;
     name: string;
     /**
      * Is the callable declared as "sub". If falsey, assumed declared as "function"
@@ -1332,7 +1337,11 @@ export type DiagnosticCode = number | string;
 
 export interface FileLink<T> {
     item: T;
-    file: BrsFile;
+    file: BscFile;
+    /**
+     * The code this item is in. `file` is the file that code lives in
+     */
+    code: BrsCode;
 }
 
 export interface ExtraSymbolData {

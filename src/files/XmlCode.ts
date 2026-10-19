@@ -41,6 +41,10 @@ export interface UnresolvedXMLSymbol {
     flags: SymbolTypeFlag;
     name: string;
     file: XmlFile;
+    /**
+     * The code this symbol is in. `file` is the file that code lives in
+     */
+    code: XmlCode;
 }
 
 /**
@@ -209,6 +213,7 @@ export class XmlCode implements BscCode {
                     requiredSymbols.push({
                         flags: SymbolTypeFlag.runtime,
                         file: this.file,
+                        code: this,
                         name: node.name.toLowerCase()
                     });
                 }
@@ -221,6 +226,7 @@ export class XmlCode implements BscCode {
                     requiredSymbols.push({
                         flags: SymbolTypeFlag.runtime,
                         file: this.file,
+                        code: this,
                         name: node.onChange.toLowerCase()
                     });
                 }
