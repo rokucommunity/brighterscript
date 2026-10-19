@@ -9,10 +9,9 @@ import { ParseMode } from './parser/Parser';
 import { util } from './util';
 import { CachedLookups } from './astUtils/CachedLookups';
 import { Cache } from './Cache';
-import type { BrsFile } from './files/BrsFile';
 import type { Identifier } from './lexer/Token';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsCode, isBrsFile, isXmlCode, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
+import { isBrsCode, isXmlCode, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -811,47 +810,6 @@ export class Scope {
                 if (isXmlCode(code) || isBrsCode(code)) {
                     callback(code);
                 }
-            }
-        }
-    }
-
-    /**
-     * Iterate over Brs files not shadowed by typedefs
-     * @deprecated use `enumerateBrsCode` instead
-     */
-    public enumerateBrsFiles(callback: (file: BrsFile) => void) {
-        const files = this.getSymbolFiles();
-        for (const file of files) {
-            if (isBrsFile(file)) {
-                callback(file);
-            }
-        }
-    }
-
-    /**
-     * Iterate over Brs files not shadowed by typedefs
-     * @deprecated use `enumerateBrsCodeWithBreak` instead
-     */
-    public enumerateBrsFilesWithBreak(callback: (file: BrsFile) => boolean) {
-        const files = this.getSymbolFiles();
-        for (const file of files) {
-            if (isBrsFile(file)) {
-                if (callback(file)) {
-                    break;
-                }
-            }
-        }
-    }
-
-    /**
-     * Call a function for each file directly included in this scope (excluding files found only in parent scopes).
-     * @deprecated use `enumerateOwnCode` instead
-     */
-    public enumerateOwnFiles(callback: (file: BscFile) => void) {
-        const files = this.getOwnSymbolFiles();
-        for (const file of files) {
-            if (isXmlFile(file) || isBrsFile(file)) {
-                callback(file);
             }
         }
     }

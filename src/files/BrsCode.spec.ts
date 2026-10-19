@@ -95,8 +95,6 @@ describe('BrsCode', () => {
         const file = program.setFile<BrsFile>('source/main.brs', `sub main()\nend sub`);
         program.validate();
         expect(program.getCodeSymbolInfo(file.code).provides.symbolMap.get(SymbolTypeFlag.runtime).has('main')).to.be.true;
-        //the deprecated file-based lookup finds the same info
-        expect(program.getFileSymbolInfo(file)).to.equal(program.getCodeSymbolInfo(file.code));
     });
 
     it('knows where it starts in its document', () => {

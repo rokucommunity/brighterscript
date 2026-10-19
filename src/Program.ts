@@ -332,20 +332,6 @@ export class Program {
     }
 
     /**
-     * @deprecated use `addCodeSymbolInfo` instead
-     */
-    public addFileSymbolInfo(file: BrsFile) {
-        this.addCodeSymbolInfo(file.code);
-    }
-
-    /**
-     * @deprecated use `getCodeSymbolInfo` instead
-     */
-    public getFileSymbolInfo(file: BrsFile) {
-        return this.getCodeSymbolInfo(file.code);
-    }
-
-    /**
      * The path to bslib.brs (the BrightScript runtime for certain BrighterScript features)
      */
     public get bslibPkgPath() {

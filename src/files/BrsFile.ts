@@ -1,6 +1,5 @@
 import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
-import type { Position, Location, LocationLink } from 'vscode-languageserver';
 import * as path from 'path';
 import type { SerializedCodeFile } from '../interfaces';
 import { ParseMode } from '../parser/Parser';
@@ -9,14 +8,11 @@ import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
-import { ReferencesProvider } from '../bscPlugin/references/ReferencesProvider';
-import { DocumentSymbolProcessor } from '../bscPlugin/symbols/DocumentSymbolProcessor';
 import { WorkspaceSymbolProcessor } from '../bscPlugin/symbols/WorkspaceSymbolProcessor';
 import type { BscSymbol } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { Editor } from '../astUtils/Editor';
 import type { BscFile } from './BscFile';
-import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 import { BrsCode } from './BrsCode';
 import type { BscCode } from './BscCode';
 
@@ -257,18 +253,6 @@ export class BrsFile implements BscFile {
 
 
     /**
-     * Builds a list of document symbols for this file. Used by LanguageServer's onDocumentSymbol functionality
-     * @deprecated use `DocumentSymbolProvider.process()` instead
-     */
-    public getDocumentSymbols() {
-        return new DocumentSymbolProcessor({
-            documentSymbols: [],
-            code: this.code,
-            program: this.program
-        }).process();
-    }
-
-    /**
      * Builds a list of workspace symbols for this file. Used by LanguageServer's onWorkspaceSymbol functionality
      */
     public getWorkspaceSymbols() {
@@ -278,38 +262,6 @@ export class BrsFile implements BscFile {
         }).process();
     }
 
-    /**
-     * Given a position in a file, if the position is sitting on some type of identifier,
-     * go to the definition of that identifier (where this thing was first defined)
-     * @deprecated use `DefinitionProvider.process()` instead
-     */
-    public getDefinition(position: Position): Array<Location | LocationLink> {
-        return new DefinitionProvider({
-            program: this.program,
-            code: this.code,
-            position: position,
-            definitions: []
-        }).process();
-    }
-
-    public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
-        return file.code.getClassMemberDefinitions(textToSearchFor);
-    }
-
-
-    /**
-     * Given a position in a file, if the position is sitting on some type of identifier,
-     * look up all references of that identifier (every place that identifier is used across the whole app)
-     * @deprecated use `ReferencesProvider.process()` instead
-     */
-    public getReferences(position: Position): Location[] {
-        return new ReferencesProvider({
-            program: this.program,
-            code: this.code,
-            position: position,
-            references: []
-        }).process();
-    }
 
     /**
      * Generate the code, map, and typedef for this file
