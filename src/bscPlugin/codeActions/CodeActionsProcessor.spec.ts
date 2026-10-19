@@ -287,7 +287,6 @@ describe('CodeActionsProcessor', () => {
             const fileUri = util.pathToUri(file.srcPath);
             const event: ProvideCodeActionsEvent = {
                 program: program,
-                file: file,
                 code: program.getCodeAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),
@@ -1282,7 +1281,6 @@ describe('CodeActionsProcessor', () => {
             const range = util.createRange(1, 16, 1, 16);
             const event: ProvideCodeActionsEvent = {
                 program: program,
-                file: file as BscFile,
                 code: program.getCodeAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),
@@ -1365,7 +1363,6 @@ describe('CodeActionsProcessor', () => {
             const range = util.createRange(3, 22, 3, 22);
             const event: ProvideCodeActionsEvent = {
                 program: program,
-                file: file as BscFile,
                 code: program.getCodeAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),
@@ -1393,7 +1390,6 @@ describe('CodeActionsProcessor', () => {
             const range = util.createRange(3, 22, 3, 22);
             const event: ProvideCodeActionsEvent = {
                 program: program,
-                file: file as BscFile,
                 code: program.getCodeAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),

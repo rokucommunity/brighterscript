@@ -1,14 +1,15 @@
-import { isBrsFile } from '../../astUtils/reflection';
+import { isBrsCode } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
-import type { BeforePrepareFileEvent, Plugin } from '../../interfaces';
+import type { BeforePrepareCodeEvent, Plugin } from '../../interfaces';
 
 export default function plugin() {
     return {
         name: 'removePrint',
-        beforePrepareFile: (event: BeforePrepareFileEvent) => {
-            if (isBrsFile(event.file)) {
+        //runs for all BrightScript code, wherever it lives (`.brs`/`.bs` files and `<script>` blocks in xml files)
+        beforePrepareCode: (event: BeforePrepareCodeEvent) => {
+            if (isBrsCode(event.code)) {
                 // visit functions bodies and replace `PrintStatement` nodes with `EmptyStatement`
-                event.file.ast.walk(createVisitor({
+                event.code.ast.walk(createVisitor({
                     PrintStatement: (statement) => {
                         event.editor.overrideTranspileResult(statement, '');
                     }

@@ -1413,36 +1413,27 @@ export class Program {
             //it's untouched. Plugins that need an all-files-done signal should use
             //`afterValidateProgram` instead of `afterValidateFile`.
             .forEach('validateFile', () => filesToProcess, (file) => {
-                //each phase runs for the file's code before the file itself, so code validation
-                //(where the built-in validators run) is complete before plugins see the file in that phase
+                //the file's events wrap the events for each piece of code it provides. Code is validated in the code
+                //events; the file events are only for checks about the file itself
                 const codes = file.codes ?? [];
-                for (const code of codes) {
-                    this.plugins.emit('beforeValidateCode', {
-                        program: this,
-                        code: code
-                    });
-                }
                 this.plugins.emit('beforeValidateFile', {
                     program: this,
                     file: file
                 });
                 for (const code of codes) {
-                    this.plugins.emit('validateCode', {
+                    const codeEvent = {
                         program: this,
                         code: code
-                    });
+                    };
+                    this.plugins.emit('beforeValidateCode', codeEvent);
+                    this.plugins.emit('validateCode', codeEvent);
+                    this.plugins.emit('afterValidateCode', codeEvent);
+                    code.isValidated = true;
                 }
                 this.plugins.emit('validateFile', {
                     program: this,
                     file: file
                 });
-                for (const code of codes) {
-                    this.plugins.emit('afterValidateCode', {
-                        program: this,
-                        code: code
-                    });
-                    code.isValidated = true;
-                }
                 this.plugins.emit('afterValidateFile', {
                     program: this,
                     file: file
@@ -1915,19 +1906,17 @@ export class Program {
     }
 
     /**
-     * Get the code a file-wide request should be emitted for: each piece of code the file provides,
-     * or a single `undefined` for files that provide no code (so the request still reaches plugins)
+     * Get the code a file-wide request should be emitted for: each piece of code the file provides
      */
-    private getCodesForRequest(file: BscFile): Array<BscCode | undefined> {
-        return file.codes?.length > 0 ? file.codes : [undefined];
+    private getCodesForRequest(file: BscFile): BscCode[] {
+        return file.codes ?? [];
     }
 
     /**
      * Does the location belong to the given code (i.e. is `code` the innermost code at that location)?
-     * When `code` is undefined, every location in the file counts.
      */
-    private isLocationInCode(file: BscFile, location: Location, code: BscCode | undefined) {
-        return !code || this.getCodeAt(file, location?.range?.start) === code;
+    private isLocationInCode(file: BscFile, location: Location, code: BscCode) {
+        return this.getCodeAt(file, location?.range?.start) === code;
     }
 
     /**
@@ -2046,7 +2035,6 @@ export class Program {
 
         const event: ProvideCompletionsEvent = {
             program: this,
-            file: file,
             code: this.getCodeAt(file, position),
             scopes: this.getScopesForFile(file),
             position: position,
@@ -2088,7 +2076,6 @@ export class Program {
 
         const event: ProvideDefinitionEvent = {
             program: this,
-            file: file,
             code: this.getCodeAt(file, position),
             position: position,
             definitions: []
@@ -2107,7 +2094,6 @@ export class Program {
         if (file) {
             const event = {
                 program: this,
-                file: file,
                 code: this.getCodeAt(file, position),
                 position: position,
                 scopes: this.getScopesForFile(file),
@@ -2134,7 +2120,6 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 const event: ProvideDocumentSymbolsEvent = {
                     program: this,
-                    file: file,
                     code: code,
                     documentSymbols: documentSymbols
                 };
@@ -2172,7 +2157,6 @@ export class Program {
             for (const [code, indexes] of indexesByCode) {
                 const event: ProvideSelectionRangesEvent = {
                     program: this,
-                    file: file,
                     code: code,
                     positions: indexes.map(i => positions[i]),
                     selectionRanges: []
@@ -2206,7 +2190,6 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 const event: ProvideInlayHintsEvent = {
                     program: this,
-                    file: file,
                     code: code,
                     range: range,
                     scopes: scopes,
@@ -2242,7 +2225,6 @@ export class Program {
 
             this.plugins.emit('beforeProvideCodeActions', {
                 program: this,
-                file: file,
                 code: code,
                 range: range,
                 diagnostics: diagnostics,
@@ -2252,7 +2234,6 @@ export class Program {
 
             this.plugins.emit('provideCodeActions', {
                 program: this,
-                file: file,
                 code: code,
                 range: range,
                 diagnostics: diagnostics,
@@ -2262,7 +2243,6 @@ export class Program {
 
             this.plugins.emit('afterProvideCodeActions', {
                 program: this,
-                file: file,
                 code: code,
                 range: range,
                 diagnostics: diagnostics,
@@ -2292,7 +2272,6 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 const event: ProvideSourceFixAllCodeActionsEvent = {
                     program: this,
-                    file: file,
                     code: code,
                     diagnostics: diagnostics.filter(x => this.isLocationInCode(file, x.location, code)),
                     scopes: scopes,
@@ -2321,21 +2300,18 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 this.plugins.emit('beforeProvideSemanticTokens', {
                     program: this,
-                    file: file,
                     code: code,
                     scopes: scopes,
                     semanticTokens: undefined
                 });
                 this.plugins.emit('provideSemanticTokens', {
                     program: this,
-                    file: file,
                     code: code,
                     scopes: scopes,
                     semanticTokens: result
                 });
                 this.plugins.emit('afterProvideSemanticTokens', {
                     program: this,
-                    file: file,
                     code: code,
                     scopes: scopes,
                     semanticTokens: result
@@ -2362,7 +2338,6 @@ export class Program {
 
         const event: ProvideReferencesEvent = {
             program: this,
-            file: file,
             code: this.getCodeAt(file, position),
             position: position,
             references: []
@@ -2509,26 +2484,21 @@ export class Program {
                     outputPath: this.getOutputPath(file, outDir)
                 } as PrepareFileEvent & { outputPath: string };
 
-                //each phase runs for the file's code before the file itself, so the built-in code preparation
-                //is finished before plugins see the file in that phase
-                const codeEvents = (file.codes ?? []).map(code => ({
-                    program: this,
-                    code: code,
-                    editor: code.editor ?? file.editor,
-                    scope: scope
-                } as PrepareCodeEvent));
-
-                for (const codeEvent of codeEvents) {
-                    await this.plugins.emitAsync('beforePrepareCode', codeEvent);
-                }
+                //the file's events wrap the events for each piece of code it provides. Code is prepared in the code
+                //events; the file events are only for changes to the file itself
                 await this.plugins.emitAsync('beforePrepareFile', event);
-                for (const codeEvent of codeEvents) {
+                for (const code of file.codes ?? []) {
+                    const codeEvent: PrepareCodeEvent = {
+                        program: this,
+                        code: code,
+                        editor: code.editor ?? file.editor,
+                        scope: scope
+                    };
+                    await this.plugins.emitAsync('beforePrepareCode', codeEvent);
                     await this.plugins.emitAsync('prepareCode', codeEvent);
-                }
-                await this.plugins.emitAsync('prepareFile', event);
-                for (const codeEvent of codeEvents) {
                     await this.plugins.emitAsync('afterPrepareCode', codeEvent);
                 }
+                await this.plugins.emitAsync('prepareFile', event);
                 await this.plugins.emitAsync('afterPrepareFile', event);
 
                 //unlink the symbolTable so the next loop iteration can link theirs

@@ -264,7 +264,6 @@ export class BrsFile implements BscFile {
     public getDocumentSymbols() {
         return new DocumentSymbolProcessor({
             documentSymbols: [],
-            file: this,
             code: this.code,
             program: this.program
         }).process();
@@ -288,7 +287,6 @@ export class BrsFile implements BscFile {
     public getDefinition(position: Position): Array<Location | LocationLink> {
         return new DefinitionProvider({
             program: this.program,
-            file: this,
             code: this.code,
             position: position,
             definitions: []
@@ -308,7 +306,6 @@ export class BrsFile implements BscFile {
     public getReferences(position: Position): Location[] {
         return new ReferencesProvider({
             program: this.program,
-            file: this,
             code: this.code,
             position: position,
             references: []

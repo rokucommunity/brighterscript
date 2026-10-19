@@ -382,7 +382,7 @@ describe('Program', () => {
                 expect(xmlFile.code.isValidated).to.be.true;
             });
 
-            it('runs each phase for the code before the file', () => {
+            it('wraps the code events in the file events', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                     end sub
@@ -399,11 +399,11 @@ describe('Program', () => {
                 });
                 program.validate();
                 expect(calls).to.eql([
-                    'beforeValidateCode',
                     'beforeValidateFile',
+                    'beforeValidateCode',
                     'validateCode',
-                    'validateFile',
                     'afterValidateCode',
+                    'validateFile',
                     'afterValidateFile'
                 ]);
             });
@@ -2622,11 +2622,11 @@ describe('Program', () => {
                 end sub`
             );
             expect(calls).to.eql([
-                'beforePrepareCode',
                 'beforePrepareFile',
+                'beforePrepareCode',
                 'prepareCode',
-                'prepareFile',
                 'afterPrepareCode',
+                'prepareFile',
                 'afterPrepareFile'
             ]);
         });
