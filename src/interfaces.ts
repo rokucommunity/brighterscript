@@ -566,6 +566,20 @@ export interface Plugin {
      */
     afterPrepareFile?(event: AfterPrepareFileEvent): any;
 
+    /**
+     * Before preparing a piece of code for building. A file can provide several pieces of code
+     * (i.e. an xml file provides its component, plus any BrightScript in its `<script>` blocks).
+     */
+    beforePrepareCode?(event: BeforePrepareCodeEvent): any;
+    /**
+     * Prepare a piece of code for building
+     */
+    prepareCode?(event: PrepareCodeEvent): any;
+    /**
+     * After preparing a piece of code for building
+     */
+    afterPrepareCode?(event: AfterPrepareCodeEvent): any;
+
 
     /**
      * Before the program turns all file objects into their final buffers
@@ -1089,6 +1103,27 @@ export interface PrepareFileEvent<TFile extends BscFile = BscFile> {
 }
 export type OnPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
 export type AfterPrepareFileEvent<TFile extends BscFile = BscFile> = PrepareFileEvent<TFile>;
+
+export type BeforePrepareCodeEvent<TCode extends BscCode = BscCode> = PrepareCodeEvent<TCode>;
+/**
+ * Prepare a piece of code for building
+ */
+export interface PrepareCodeEvent<TCode extends BscCode = BscCode> {
+    program: Program;
+    /**
+     * The code being prepared
+     */
+    code: TCode;
+    /**
+     * The editor for the file this code lives in. Use it for all changes, so they can be undone after the build.
+     */
+    editor: Editor;
+    /**
+     * The scope that was linked for this event. Code may be included in multiple scopes, but we choose the most relevant scope.
+     */
+    scope: Scope;
+}
+export type AfterPrepareCodeEvent<TCode extends BscCode = BscCode> = PrepareCodeEvent<TCode>;
 
 
 /**

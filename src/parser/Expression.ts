@@ -38,6 +38,7 @@ import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
 import type { BrsFile } from '../files/BrsFile';
+import type { BrsCode } from '../files/BrsCode';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -2628,10 +2629,10 @@ export class NullCoalescingExpression extends Expression {
      * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
      * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
      */
-    public hasMutatingExpression(file: BrsFile) {
+    public hasMutatingExpression(fileOrCode: BrsFile | BrsCode) {
         return [
-            ...util.getExpressionInfo(this.consequent, file).expressions,
-            ...util.getExpressionInfo(this.alternate, file).expressions
+            ...util.getExpressionInfo(this.consequent, fileOrCode).expressions,
+            ...util.getExpressionInfo(this.alternate, fileOrCode).expressions
         ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
     }
 

@@ -84,6 +84,10 @@ export class XmlCode implements BscCode {
         return this.document.destPath;
     }
 
+    public get pkgPath() {
+        return this.document.pkgPath;
+    }
+
     private cache = new Cache();
 
     /**

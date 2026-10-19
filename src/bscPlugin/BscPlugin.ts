@@ -1,5 +1,5 @@
 import { isBrsCode, isBrsFile, isXmlCode, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, ValidateCodeEvent, AfterValidateCodeEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent, ProvideSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
+import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, ValidateCodeEvent, AfterValidateCodeEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, PrepareCodeEvent, WriteFileEvent, ProvideSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -14,7 +14,6 @@ import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
 import type { BrsFile } from '../files/BrsFile';
-import type { XmlFile } from '../files/XmlFile';
 import type { BrsCode } from '../files/BrsCode';
 import type { XmlCode } from '../files/XmlCode';
 import util from '../util';
@@ -122,11 +121,11 @@ export class BscPlugin implements Plugin {
     /**
      * Do transpiling-related work after all plugins had a chance to operate on the files
      */
-    public prepareFile(event: OnPrepareFileEvent) {
-        if (isBrsFile(event.file)) {
-            return new BrsFilePreTranspileProcessor(event as OnPrepareFileEvent<BrsFile>).process();
-        } else if (isXmlFile(event.file)) {
-            return new XmlFilePreTranspileProcessor(event as OnPrepareFileEvent<XmlFile>).process();
+    public prepareCode(event: PrepareCodeEvent) {
+        if (isBrsCode(event.code)) {
+            return new BrsFilePreTranspileProcessor(event as PrepareCodeEvent<BrsCode>).process();
+        } else if (isXmlCode(event.code)) {
+            return new XmlFilePreTranspileProcessor(event as PrepareCodeEvent<XmlCode>).process();
         }
     }
 

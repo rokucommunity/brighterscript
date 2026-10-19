@@ -7,6 +7,7 @@ import { DiagnosticMessages } from './DiagnosticMessages';
 import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 import type { BrsFile } from './files/BrsFile';
 import type { BscFile } from './files/BscFile';
+import type { BrsCode } from './files/BrsCode';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
@@ -2454,6 +2455,67 @@ describe('Program', () => {
                 end sub`
             );
             expect(plugin.afterPrepareFile.callCount).to.be.greaterThan(0);
+        });
+
+        it('fires code preparation events with the file\'s editor and scope', async () => {
+            const file = program.setFile<BrsFile>('source/main.brs', trim`
+                sub main()
+                    print "hello world"
+                end sub
+            `);
+            const calls = [] as string[];
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforePrepareCode: (event) => {
+                    if (event.code === file.code) {
+                        calls.push('beforePrepareCode');
+                    }
+                },
+                beforePrepareFile: (event) => {
+                    if (event.file === file) {
+                        calls.push('beforePrepareFile');
+                    }
+                },
+                prepareCode: (event) => {
+                    if (event.code !== file.code) {
+                        return;
+                    }
+                    calls.push('prepareCode');
+                    expect(event.editor).to.equal(file.editor);
+                    expect(event.scope).to.equal(program.getFirstScopeForCode(file.code));
+                    const stmt = ((event.code as BrsCode).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello code"');
+                },
+                prepareFile: (event) => {
+                    if (event.file === file) {
+                        calls.push('prepareFile');
+                    }
+                },
+                afterPrepareCode: (event) => {
+                    if (event.code === file.code) {
+                        calls.push('afterPrepareCode');
+                    }
+                },
+                afterPrepareFile: (event) => {
+                    if (event.file === file) {
+                        calls.push('afterPrepareFile');
+                    }
+                }
+            });
+            const result = await program.getTranspiledFileContents(file.srcPath);
+            expect(result.code).to.eql(trim`
+                sub main()
+                    print "hello code"
+                end sub`
+            );
+            expect(calls).to.eql([
+                'beforePrepareCode',
+                'beforePrepareFile',
+                'prepareCode',
+                'prepareFile',
+                'afterPrepareCode',
+                'afterPrepareFile'
+            ]);
         });
 
         it('allows events to modify the file contents', async () => {

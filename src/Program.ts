@@ -9,7 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareCodeEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -53,6 +53,7 @@ import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
+import type { BscCode } from './files/BscCode';
 import { firstBy } from 'thenby';
 import { CrossScopeValidator } from './CrossScopeValidator';
 import { DiagnosticManager } from './DiagnosticManager';
@@ -1862,6 +1863,20 @@ export class Program {
     /**
      * Get the first found scope for a file.
      */
+    /**
+     * Get the scopes that contain the given code. Code belongs to the same scopes as the file it lives in.
+     */
+    public getScopesForCode(code: BscCode) {
+        return this.getScopesForFile(code.document);
+    }
+
+    /**
+     * Get the first scope that contains the given code. Code belongs to the same scopes as the file it lives in.
+     */
+    public getFirstScopeForCode(code: BscCode): Scope | undefined {
+        return this.getFirstScopeForFile(code.document);
+    }
+
     public getFirstScopeForFile(file: BscFile): Scope | undefined {
         const scopeKeys = this.getSortedScopeNames();
         for (let key of scopeKeys) {
@@ -2372,8 +2387,26 @@ export class Program {
                     outputPath: this.getOutputPath(file, outDir)
                 } as PrepareFileEvent & { outputPath: string };
 
+                //each phase runs for the file's code before the file itself, so the built-in code preparation
+                //is finished before plugins see the file in that phase
+                const codeEvents = (file.codes ?? []).map(code => ({
+                    program: this,
+                    code: code,
+                    editor: file.editor,
+                    scope: scope
+                } as PrepareCodeEvent));
+
+                for (const codeEvent of codeEvents) {
+                    await this.plugins.emitAsync('beforePrepareCode', codeEvent);
+                }
                 await this.plugins.emitAsync('beforePrepareFile', event);
+                for (const codeEvent of codeEvents) {
+                    await this.plugins.emitAsync('prepareCode', codeEvent);
+                }
                 await this.plugins.emitAsync('prepareFile', event);
+                for (const codeEvent of codeEvents) {
+                    await this.plugins.emitAsync('afterPrepareCode', codeEvent);
+                }
                 await this.plugins.emitAsync('afterPrepareFile', event);
 
                 //unlink the symbolTable so the next loop iteration can link theirs

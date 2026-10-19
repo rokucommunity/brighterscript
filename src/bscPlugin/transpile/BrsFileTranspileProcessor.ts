@@ -2,8 +2,8 @@ import { createAssignmentStatement, createBlock, createCall, createDottedSetStat
 import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
 import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
-import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
+import type { BrsCode } from '../../files/BrsCode';
+import type { ExtraSymbolData, PrepareCodeEvent } from '../../interfaces';
 import type { Identifier, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
@@ -29,20 +29,20 @@ const ARRAY_SPREAD_APPEND_THRESHOLD = 8;
 
 export class BrsFilePreTranspileProcessor {
     public constructor(
-        private event: OnPrepareFileEvent<BrsFile>
+        private event: PrepareCodeEvent<BrsCode>
     ) {
     }
 
     public process() {
         this.iterateExpressions();
         //apply prefixes to bslib
-        if (BslibManager.isBslibPkgPath(this.event.file.pkgPath)) {
-            this.applyBslibPrefixesIfMissing(this.event.file, this.event.editor);
+        if (BslibManager.isBslibPkgPath(this.event.code.pkgPath)) {
+            this.applyBslibPrefixesIfMissing(this.event.code, this.event.editor);
         }
     }
 
-    public applyBslibPrefixesIfMissing(file: BrsFile, editor: Editor) {
-        file.ast.walk(createVisitor({
+    public applyBslibPrefixesIfMissing(code: BrsCode, editor: Editor) {
+        code.ast.walk(createVisitor({
             FunctionStatement: (statement) => {
                 BslibManager.applyPrefixIfMissing(statement, editor, this.event.program.bslibPrefix);
             }
@@ -52,10 +52,10 @@ export class BrsFilePreTranspileProcessor {
     }
 
     private iterateExpressions() {
-        const scope = this.event.program.getFirstScopeForFile(this.event.file);
+        const scope = this.event.program.getFirstScopeForCode(this.event.code);
         //TODO move away from this loop and use a visitor instead
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let expression of this.event.file['_cachedLookups'].expressions) {
+        for (let expression of this.event.code['_cachedLookups'].expressions) {
             if (expression) {
                 if (isUnaryExpression(expression)) {
                     this.processExpression(expression.right, scope);
@@ -84,7 +84,7 @@ export class BrsFilePreTranspileProcessor {
                 this.processSpreadLiteral(literal, visitor, walkMode);
             }
         });
-        this.event.file.ast.walk(visitor, { walkMode: walkMode });
+        this.event.code.ast.walk(visitor, { walkMode: walkMode });
         //rewriting one can surface nested ones (re-collected by the visitor), so drain until there are none left
         while (nullCoalescingExpressions.length > 0) {
             this.processNullCoalescingExpression(nullCoalescingExpressions.shift(), visitor, walkMode);
@@ -102,7 +102,7 @@ export class BrsFilePreTranspileProcessor {
      */
     private processNullCoalescingExpression(expression: NullCoalescingExpression, visitor: ReturnType<typeof createVisitor>, walkMode: WalkMode) {
         //simple operands already transpile to a one-line `bslib_coalesce()` call, so leave those alone
-        if (!expression.hasMutatingExpression(this.event.file)) {
+        if (!expression.hasMutatingExpression(this.event.code)) {
             return;
         }
         //the `??` (ignoring wrapping parens) must be the entire value of an assignment
@@ -171,7 +171,7 @@ export class BrsFilePreTranspileProcessor {
      */
     private expressionReferencesLocal(name: string, expression: Expression) {
         const lowerName = name.toLowerCase();
-        return util.getExpressionInfo(expression, this.event.file).uniqueVarNames.some(varName => varName.toLowerCase() === lowerName);
+        return util.getExpressionInfo(expression, this.event.code).uniqueVarNames.some(varName => varName.toLowerCase() === lowerName);
     }
 
     /**
@@ -628,7 +628,7 @@ export class BrsFilePreTranspileProcessor {
             // skip any changes in an Alias Statement
             return;
         }
-        let containingNamespaceStmt = this.event.file.getNamespaceStatementForPosition(expression.location?.range.start);
+        let containingNamespaceStmt = this.event.code.getNamespaceStatementForPosition(expression.location?.range.start);
         let containingNamespace = containingNamespaceStmt?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);
@@ -792,7 +792,7 @@ export class BrsFilePreTranspileProcessor {
         let alias: AliasStatement;
         let potentiallyAliased = expression;
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        const fileAliasStatements = this.event.file['_cachedLookups'].aliasStatements;
+        const fileAliasStatements = this.event.code['_cachedLookups'].aliasStatements;
 
         if (fileAliasStatements.length === 0) {
             return expression;
