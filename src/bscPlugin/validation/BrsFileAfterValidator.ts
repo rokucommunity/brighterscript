@@ -1,21 +1,16 @@
-import { isBrsFile } from '../../astUtils/reflection';
-
-import type { BrsFile } from '../../files/BrsFile';
-import type { AfterValidateFileEvent } from '../../interfaces';
+import type { BrsCode } from '../../files/BrsCode';
+import type { AfterValidateCodeEvent } from '../../interfaces';
 
 
 export class BrsFileAfterValidator {
     constructor(
-        public event: AfterValidateFileEvent<BrsFile>
+        public event: AfterValidateCodeEvent<BrsCode>
     ) {
     }
 
     public process() {
-        if (isBrsFile(this.event.file)) {
-            const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
-            this.event.file.processSymbolInformation();
-            unlinkGlobalSymbolTable();
-        }
-
+        const unlinkGlobalSymbolTable = this.event.code.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
+        this.event.code.processSymbolInformation();
+        unlinkGlobalSymbolTable();
     }
 }

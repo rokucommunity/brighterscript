@@ -1,5 +1,5 @@
-import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent, ProvideSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
+import { isBrsCode, isBrsFile, isXmlCode, isXmlFile } from '../astUtils/reflection';
+import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, ValidateCodeEvent, AfterValidateCodeEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent, ProvideSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -15,6 +15,9 @@ import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
 import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
+import type { BrsCode } from '../files/BrsCode';
+import type { XmlCode } from '../files/XmlCode';
+import util from '../util';
 import { FileWriter } from './FileWriter';
 import { FileProvider } from './fileProviders/FileProvider';
 import { BslibManager } from './serialize/BslibManager';
@@ -79,16 +82,23 @@ export class BscPlugin implements Plugin {
     }
 
     public validateFile(event: ValidateFileEvent) {
-        if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as ValidateFileEvent<BrsFile>).process();
-        } else if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as ValidateFileEvent<XmlFile>).process();
+        //checks about the file itself. Checks about its code happen in `validateCode`
+        if (isBrsFile(event.file) || isXmlFile(event.file)) {
+            util.validateTooDeepFile(event.file);
         }
     }
 
-    public afterValidateFile(event: AfterValidateFileEvent) {
-        if (isBrsFile(event.file)) {
-            return new BrsFileAfterValidator(event as AfterValidateFileEvent<BrsFile>).process();
+    public validateCode(event: ValidateCodeEvent) {
+        if (isBrsCode(event.code)) {
+            return new BrsFileValidator(event as ValidateCodeEvent<BrsCode>).process();
+        } else if (isXmlCode(event.code)) {
+            return new XmlFileValidator(event as ValidateCodeEvent<XmlCode>).process();
+        }
+    }
+
+    public afterValidateCode(event: AfterValidateCodeEvent) {
+        if (isBrsCode(event.code)) {
+            return new BrsFileAfterValidator(event as AfterValidateCodeEvent<BrsCode>).process();
         }
     }
 

@@ -16,6 +16,7 @@ import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-language
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
 import type { BscFile } from './files/BscFile';
+import type { BscCode } from './files/BscCode';
 import type { FileFactory } from './files/Factory';
 import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
@@ -523,6 +524,20 @@ export interface Plugin {
      */
     afterValidateFile?(event: AfterValidateFileEvent): any;
 
+    /**
+     * Called before each piece of code is validated. A file can provide several pieces of code
+     * (i.e. an xml file provides its component, plus any BrightScript in its `<script>` blocks).
+     */
+    beforeValidateCode?(event: BeforeValidateCodeEvent): any;
+    /**
+     * Called during the code validation process. If your plugin contributes code validations, this is a good place to contribute them.
+     */
+    validateCode?(event: ValidateCodeEvent): any;
+    /**
+     * Called after each piece of code is validated
+     */
+    afterValidateCode?(event: AfterValidateCodeEvent): any;
+
 
     /**
      * Called right before the program builds (i.e. generates the code and puts it in the outDir
@@ -941,6 +956,17 @@ export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
+
+export type BeforeValidateCodeEvent<T extends BscCode = BscCode> = ValidateCodeEvent<T>;
+export interface ValidateCodeEvent<T extends BscCode = BscCode> {
+    program: Program;
+    /**
+     * The code being validated
+     */
+    code: T;
+}
+export type AfterValidateCodeEvent<T extends BscCode = BscCode> = ValidateCodeEvent<T>;
+
 export interface TranspileEntry {
     file: BscFile;
     outputPath: string;

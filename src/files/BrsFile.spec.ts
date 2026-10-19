@@ -44,10 +44,10 @@ describe('BrsFile', () => {
 
     function validateFile(...files: BrsFile[]) {
         for (const file of files) {
-            program.plugins.emit('validateFile', { program: program, file: file });
+            program.plugins.emit('validateCode', { program: program, code: file.code });
         }
         for (const file of files) {
-            program.plugins.emit('afterValidateFile', { program: program, file: file });
+            program.plugins.emit('afterValidateCode', { program: program, code: file.code });
         }
 
     }
@@ -5874,11 +5874,11 @@ describe('BrsFile', () => {
                     return 1
                 end function
             `);
-            const validateFileEvent = {
+            const validateCodeEvent = {
                 program: program,
-                file: mainFile
+                code: mainFile.code
             };
-            program.plugins.emit('validateFile', validateFileEvent);
+            program.plugins.emit('validateCode', validateCodeEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -5900,11 +5900,11 @@ describe('BrsFile', () => {
                     end sub
                 end class
             `);
-            const validateFileEvent = {
+            const validateCodeEvent = {
                 program: program,
-                file: mainFile
+                code: mainFile.code
             };
-            program.plugins.emit('validateFile', validateFileEvent);
+            program.plugins.emit('validateCode', validateCodeEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -5919,11 +5919,11 @@ describe('BrsFile', () => {
                 label.text = text
                 end sub
             `);
-            const validateFileEvent = {
+            const validateCodeEvent = {
                 program: program,
-                file: mainFile
+                code: mainFile.code
             };
-            program.plugins.emit('validateFile', validateFileEvent);
+            program.plugins.emit('validateCode', validateCodeEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -6182,11 +6182,11 @@ describe('BrsFile', () => {
                 end function
             `);
             const mainFile = program.getFile<BrsFile>('source/main.bs');
-            const validateFileEvent = {
+            const validateCodeEvent = {
                 program: program,
-                file: mainFile
+                code: mainFile.code
             };
-            program.plugins.emit('validateFile', validateFileEvent);
+            program.plugins.emit('validateCode', validateCodeEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -6918,7 +6918,7 @@ describe('BrsFile', () => {
                         west = "W"
                     end enum
                 `);
-                program.plugins.emit('validateFile', { program: program, file: mainFile });
+                program.plugins.emit('validateCode', { program: program, code: mainFile.code });
                 runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
                 let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
@@ -8317,10 +8317,10 @@ describe('BrsFile', () => {
                     [...BrighterScriptSourceLiterals, TokenKind.LineNumLiteral].sort()
                 );
 
-                const validator = new BrsFileValidator({ program: program, file: file });
+                const validator = new BrsFileValidator({ program: program, code: file.code });
                 for (const sourceLiteral of sourceLiterals) {
                     const transpiled = sourceLiteral.transpile(new BrsTranspileState(file)).map(x => x.toString()).join('');
-                    const parts = validator['getSourceLiteralReplacements'](sourceLiteral, file);
+                    const parts = validator['getSourceLiteralReplacements'](sourceLiteral, file.code);
                     let expected = parts.length > 0
                         ? parts.map(part => (part.type === 'string' ? `"${part.value}"` : `${part.value}`)).join(' + ')
                         : sourceLiteral.tokens.value.text;
@@ -8572,7 +8572,7 @@ describe('BrsFile', () => {
         it('counts the same literals in a .bs file as the device sees in its transpiled output', async () => {
             //the device compiles the transpiled .brs, so the .bs pools must match the pools of that output
             const getPools = (targetProgram: Program, file: BrsFile) => {
-                const validator = new BrsFileValidator({ program: targetProgram, file: file });
+                const validator = new BrsFileValidator({ program: targetProgram, code: file.code });
                 validator.process();
                 const pools = validator['literalPools'];
                 return Object.keys(pools).sort().map(poolName => {

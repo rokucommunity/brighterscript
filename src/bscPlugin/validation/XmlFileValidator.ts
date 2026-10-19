@@ -1,22 +1,22 @@
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
-import type { ValidateFileEvent } from '../../interfaces';
+import type { XmlCode } from '../../files/XmlCode';
+import type { ValidateCodeEvent } from '../../interfaces';
 import type { SGAst, SGElement } from '../../parser/SGTypes';
 import { isSGInterface } from '../../astUtils/xml';
 import util from '../../util';
 
 export class XmlFileValidator {
     constructor(
-        public event: ValidateFileEvent<XmlFile>
+        public event: ValidateCodeEvent<XmlCode>
     ) {
     }
 
     public process() {
-        util.validateTooDeepFile(this.event.file);
-        if (this.event.file.parser.ast.rootElement) {
-            this.validateComponent(this.event.file.parser.ast);
-            this.validateTagClosings(this.event.file.parser.ast.rootElement);
-            this.validateTagCasing(this.event.file.parser.ast.rootElement);
+        if (this.event.code.parser.ast.rootElement) {
+            this.validateComponent(this.event.code.parser.ast);
+            this.validateTagClosings(this.event.code.parser.ast.rootElement);
+            this.validateTagCasing(this.event.code.parser.ast.rootElement);
         } else {
             //skip empty XML
         }
@@ -104,7 +104,7 @@ export class XmlFileValidator {
         }
 
         //flag explicit script imports that match the auto-imported codebehind file
-        const file = this.event.file;
+        const file = this.event.code.document as XmlFile;
         if (file.program?.options?.autoImportComponentScript === true) {
             const codebehindPaths = file.possibleCodebehindDestPaths ?? [];
             for (const scriptImport of file.parser.references.scriptTagImports) {

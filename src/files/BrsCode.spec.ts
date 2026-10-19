@@ -3,6 +3,7 @@ import { Program } from '../Program';
 import { rootDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
 import { ParseMode } from '../parser/Parser';
+import { util } from '../util';
 
 describe('BrsCode', () => {
     let program: Program;
@@ -60,6 +61,26 @@ describe('BrsCode', () => {
         `);
         expect(file.code).to.equal(code);
         expect(code.callables.map(x => x.name)).to.eql(['a', 'b']);
+    });
+
+    describe('getText', () => {
+        it('returns all of the code, or the text in a range', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `sub main()\n    print "hello"\nend sub`);
+            expect(file.code.getText()).to.equal(`sub main()\n    print "hello"\nend sub`);
+            expect(file.code.getText(util.createRange(1, 4, 1, 9))).to.equal('print');
+        });
+
+        it('reads ranges in document coordinates for code that starts partway into its document', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', '');
+            //as if this code sat right after `<![CDATA[` at line 3, character 40 of an xml file
+            file.code.parse(`sub main()\n    print "hello"\nend sub`, { startLine: 3, startCharacter: 40 });
+
+            const subToken = file.code.parser.tokens[0];
+            expect(subToken.location.range).to.eql(util.createRange(3, 40, 3, 43));
+            expect(file.code.getText(subToken.location.range)).to.equal('sub');
+            expect(file.code.getText(util.createRange(4, 4, 4, 9))).to.equal('print');
+            expect(file.code.getText(util.createRange(3, 44, 4, 9))).to.equal('main()\n    print');
+        });
     });
 
     it('parses on demand when its file has a typedef', () => {

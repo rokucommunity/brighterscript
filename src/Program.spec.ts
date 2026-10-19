@@ -356,6 +356,74 @@ describe('Program', () => {
     });
 
     describe('validate', () => {
+        describe('code validation events', () => {
+            it('emits the code events for every piece of code a file provides', () => {
+                const brsFile = program.setFile<BrsFile>('source/main.brs', `
+                    sub main()
+                    end sub
+                `);
+                const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                    </component>
+                `);
+                const validatedCode = [];
+                program.plugins.add({
+                    name: 'test',
+                    validateCode: (event) => {
+                        validatedCode.push(event.code);
+                    }
+                });
+                program.validate();
+                expect(validatedCode).to.have.members([brsFile.code, xmlFile.code]);
+                expect(brsFile.code.isValidated).to.be.true;
+                expect(xmlFile.code.isValidated).to.be.true;
+            });
+
+            it('runs each phase for the code before the file', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                    end sub
+                `);
+                const calls = [] as string[];
+                program.plugins.add({
+                    name: 'test',
+                    beforeValidateCode: () => calls.push('beforeValidateCode'),
+                    beforeValidateFile: () => calls.push('beforeValidateFile'),
+                    validateCode: () => calls.push('validateCode'),
+                    validateFile: () => calls.push('validateFile'),
+                    afterValidateCode: () => calls.push('afterValidateCode'),
+                    afterValidateFile: () => calls.push('afterValidateFile')
+                });
+                program.validate();
+                expect(calls).to.eql([
+                    'beforeValidateCode',
+                    'beforeValidateFile',
+                    'validateCode',
+                    'validateFile',
+                    'afterValidateCode',
+                    'afterValidateFile'
+                ]);
+            });
+
+            it('has finished the built-in code validation by the time plugins see validateFile', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        print "hello"
+                    end sub
+                `);
+                let hadSymbolInfo: boolean;
+                program.plugins.add({
+                    name: 'test',
+                    afterValidateFile: (event) => {
+                        hadSymbolInfo = !!program.getFileSymbolInfo(event.file as BrsFile);
+                    }
+                });
+                program.validate();
+                expect(hadSymbolInfo).to.be.true;
+            });
+        });
+
         it('does not lose scope diagnostics in second validation after cancelling the previous validation', async () => {
             program.setFile('source/Direction.bs', `
                 enum Direction

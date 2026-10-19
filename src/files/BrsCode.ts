@@ -1,4 +1,4 @@
-import type { CompletionItem, Position } from 'vscode-languageserver';
+import type { CompletionItem, Position, Range } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -114,18 +114,67 @@ export class BrsCode implements BscCode {
     private _parser: Parser;
 
     /**
+     * The source code of this code (not the whole document, unless this code spans the whole document)
+     */
+    public text: string;
+
+    /**
+     * The zero-indexed line in the document where this code starts
+     */
+    public startLine = 0;
+
+    /**
+     * The zero-indexed character on `startLine` where this code starts
+     */
+    public startCharacter = 0;
+
+    /**
+     * Get the source code of this code, or of the given range within it
+     * @param range a range in document coordinates. If omitted, all of this code's text is returned
+     */
+    public getText(range?: Range) {
+        if (!range) {
+            return this.text;
+        }
+        //convert the range from document coordinates into coordinates within this code's text
+        const toCodePosition = (position: Position) => util.createPosition(
+            position.line - this.startLine,
+            position.line === this.startLine ? position.character - this.startCharacter : position.character
+        );
+        return util.getTextForRange(this.text, util.createRangeFromPositions(
+            toCodePosition(range.start),
+            toCodePosition(range.end)
+        ));
+    }
+
+    /**
+     * Does this code need to be transpiled? This is decided by the file it lives in.
+     */
+    public get needsTranspiled() {
+        return !!(this.document as { needsTranspiled?: boolean }).needsTranspiled;
+    }
+
+    /**
      * Tokenize and parse this code
      * @param text the source code to parse
+     * @param options options for parsing
+     * @param options.startLine the zero-indexed line in the document where this code starts (for code embedded in a larger file)
+     * @param options.startCharacter the zero-indexed character on `startLine` where this code starts
      */
-    public parse(text: string) {
+    public parse(text: string, options?: { startLine?: number; startCharacter?: number }) {
         const diagnostics = [] as Array<BsDiagnostic>;
+        this.text = text;
+        this.startLine = options?.startLine ?? 0;
+        this.startCharacter = options?.startCharacter ?? 0;
 
         try {
             //tokenize the input file
             let lexer = this.program.logger.time('debug', ['lexer.lex', chalk.green(this.srcPath)], () => {
                 return Lexer.scan(text, {
                     includeWhitespace: false,
-                    srcPath: this.srcPath
+                    srcPath: this.srcPath,
+                    startLine: this.startLine,
+                    startCharacter: this.startCharacter
                 });
             });
 
@@ -1095,6 +1144,7 @@ export class BrsCode implements BscCode {
         this._parser?.dispose();
 
         //deleting these properties result in lower memory usage (garbage collection is magic!)
+        delete this.text;
         delete this._parser;
         delete this._functionScopes;
         delete this.scopesByFunc;

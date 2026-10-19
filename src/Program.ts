@@ -1384,14 +1384,36 @@ export class Program {
             //it's untouched. Plugins that need an all-files-done signal should use
             //`afterValidateProgram` instead of `afterValidateFile`.
             .forEach('validateFile', () => filesToProcess, (file) => {
+                //each phase runs for the file's code before the file itself, so code validation
+                //(where the built-in validators run) is complete before plugins see the file in that phase
+                const codes = file.codes ?? [];
+                for (const code of codes) {
+                    this.plugins.emit('beforeValidateCode', {
+                        program: this,
+                        code: code
+                    });
+                }
                 this.plugins.emit('beforeValidateFile', {
                     program: this,
                     file: file
                 });
+                for (const code of codes) {
+                    this.plugins.emit('validateCode', {
+                        program: this,
+                        code: code
+                    });
+                }
                 this.plugins.emit('validateFile', {
                     program: this,
                     file: file
                 });
+                for (const code of codes) {
+                    this.plugins.emit('afterValidateCode', {
+                        program: this,
+                        code: code
+                    });
+                    code.isValidated = true;
+                }
                 this.plugins.emit('afterValidateFile', {
                     program: this,
                     file: file
