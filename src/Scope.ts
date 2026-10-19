@@ -17,6 +17,7 @@ import { WalkMode } from './astUtils/visitors';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
+import type { BscCode } from './files/BscCode';
 import { referenceTypeFactory } from './types/ReferenceType';
 import { unionTypeFactory } from './types/UnionType';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
@@ -644,6 +645,13 @@ export class Scope {
     public getOwnFiles() {
         //source scope only inherits files from global, so just return all files. This function mostly exists to assist XmlScope
         return this.getAllFiles();
+    }
+
+    /**
+     * Get the code provided by every file in this scope, including files from ancestor scopes
+     */
+    public getAllCodes(): BscCode[] {
+        return this.getAllFiles().flatMap(file => file.codes ?? []);
     }
 
     /**

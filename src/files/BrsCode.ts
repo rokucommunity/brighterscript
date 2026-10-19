@@ -1,4 +1,4 @@
-import type { CompletionItem, Position, Range } from 'vscode-languageserver';
+import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { CompletionItemKind } from 'vscode-languageserver';
 import chalk from 'chalk';
@@ -13,7 +13,7 @@ import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
 import type { FunctionExpression } from '../parser/Expression';
-import type { ClassStatement, NamespaceStatement, MethodStatement } from '../parser/Statement';
+import type { ClassStatement, NamespaceStatement, MethodStatement, FieldStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { util } from '../util';
 import { isClassStatement, isDottedGetExpression, isFunctionExpression, isNamespaceStatement, isVariableExpression, isImportStatement, isAnyReferenceType, isNamespaceType, isReferenceType, isCallableType, isFunctionStatement, isEnumStatement, isConstStatement } from '../astUtils/reflection';
@@ -132,6 +132,13 @@ export class BrsCode implements BscCode {
      * The zero-indexed character on `startLine` where this code starts
      */
     public startCharacter = 0;
+
+    /**
+     * The position in the document where this code starts. Use this instead of `0:0` when inserting at the top of the code.
+     */
+    public get startPosition(): Position {
+        return util.createPosition(this.startLine, this.startCharacter);
+    }
 
     /**
      * Get the source code of this code, or of the given range within it
@@ -1144,6 +1151,34 @@ export class BrsCode implements BscCode {
         }
         return namespaceLookup;
     }
+    /**
+     * Find the locations of every class method and field named `textToSearchFor` in this code
+     * @param textToSearchFor the lower-case member name
+     */
+    public getClassMemberDefinitions(textToSearchFor: string): Location[] {
+        let results: Location[] = [];
+        const uri = util.pathToUri(this.srcPath);
+        //get class fields and members
+        const statementHandler = (statement: MethodStatement) => {
+            if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
+                results.push(util.createLocationFromRange(uri, statement.location?.range));
+            }
+        };
+        const fieldStatementHandler = (statement: FieldStatement) => {
+            if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
+                results.push(util.createLocationFromRange(uri, statement.location?.range));
+            }
+        };
+        this.parser.ast.walk(createVisitor({
+            MethodStatement: statementHandler,
+            FieldStatement: fieldStatementHandler
+        }), {
+            walkMode: WalkMode.visitStatements
+        });
+
+        return results;
+    }
+
     public dispose() {
         this._cachedLookups?.invalidate();
         this._parser?.dispose();

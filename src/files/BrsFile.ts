@@ -9,7 +9,7 @@ import type { Token } from '../lexer/Token';
 import type { TokenKind } from '../lexer/TokenKind';
 import type { Parser } from '../parser/Parser';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement, MethodStatement, FieldStatement } from '../parser/Statement';
+import type { ClassStatement } from '../parser/Statement';
 import type { Program } from '../Program';
 import { standardizePath as s, util } from '../util';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
@@ -265,6 +265,7 @@ export class BrsFile implements BscFile {
         return new DocumentSymbolProcessor({
             documentSymbols: [],
             file: this,
+            code: this.code,
             program: this.program
         }).process();
     }
@@ -288,32 +289,14 @@ export class BrsFile implements BscFile {
         return new DefinitionProvider({
             program: this.program,
             file: this,
+            code: this.code,
             position: position,
             definitions: []
         }).process();
     }
 
     public getClassMemberDefinitions(textToSearchFor: string, file: BrsFile): Location[] {
-        let results: Location[] = [];
-        //get class fields and members
-        const statementHandler = (statement: MethodStatement) => {
-            if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
-            }
-        };
-        const fieldStatementHandler = (statement: FieldStatement) => {
-            if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
-            }
-        };
-        file.parser.ast.walk(createVisitor({
-            MethodStatement: statementHandler,
-            FieldStatement: fieldStatementHandler
-        }), {
-            walkMode: WalkMode.visitStatements
-        });
-
-        return results;
+        return file.code.getClassMemberDefinitions(textToSearchFor);
     }
 
 
@@ -326,6 +309,7 @@ export class BrsFile implements BscFile {
         return new ReferencesProvider({
             program: this.program,
             file: this,
+            code: this.code,
             position: position,
             references: []
         }).process();

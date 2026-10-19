@@ -1,10 +1,10 @@
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCode } from '../../files/BrsCode';
 import type { ProvideReferencesEvent } from '../../interfaces';
 import type { Location } from 'vscode-languageserver-protocol';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { XmlFile } from '../../files/XmlFile';
-import { isBrsFile, isXmlFile } from '../../astUtils/reflection';
+import type { XmlCode } from '../../files/XmlCode';
+import { isBrsCode, isXmlCode } from '../../astUtils/reflection';
 
 export class ReferencesProvider {
     constructor(
@@ -12,20 +12,20 @@ export class ReferencesProvider {
     ) { }
 
     public process(): Location[] {
-        if (isBrsFile(this.event.file)) {
-            this.brsFileGetReferences(this.event.file);
-        } else if (isXmlFile(this.event.file)) {
-            this.xmlFileGetReferences(this.event.file);
+        if (isBrsCode(this.event.code)) {
+            this.brsCodeGetReferences(this.event.code);
+        } else if (isXmlCode(this.event.code)) {
+            this.xmlCodeGetReferences(this.event.code);
         }
         return this.event.references;
     }
 
     /**
-     * For a position in a BrsFile, get the location where the token at that position was defined
+     * For a position in BrightScript code, get the location where the token at that position was defined
      */
-    private brsFileGetReferences(file: BrsFile): void {
+    private brsCodeGetReferences(code: BrsCode): void {
 
-        const callSiteToken = file.getTokenAt(this.event.position);
+        const callSiteToken = code.getTokenAt(this.event.position);
 
         //there's no token at this position (i.e. the cursor is past the end of a line), so there's nothing to search for
         if (!callSiteToken) {
@@ -34,27 +34,27 @@ export class ReferencesProvider {
 
         const searchFor = callSiteToken.text.toLowerCase();
 
-        const scopes = this.event.program.getScopesForFile(file);
+        const scopes = this.event.program.getScopesForCode(code);
 
-        //track processed files across all scopes. A file's references are the same no matter which
+        //track processed code across all scopes. Code's references are the same no matter which
         //scope it was reached through, so walking it once per scope would emit duplicate results
-        const processedFiles = new Set<BrsFile>();
+        const processedCodes = new Set<BrsCode>();
 
         for (const scope of scopes) {
-            for (const file of scope.getAllFiles()) {
-                if (!isBrsFile(file) || processedFiles.has(file)) {
+            for (const scopeCode of scope.getAllCodes()) {
+                if (!isBrsCode(scopeCode) || processedCodes.has(scopeCode)) {
                     continue;
                 }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
+                processedCodes.add(scopeCode);
+                scopeCode.ast.walk(createVisitor({
                     AssignmentStatement: (s) => {
                         if (s.tokens.name?.text?.toLowerCase() === searchFor) {
-                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), s.tokens.name.location?.range));
+                            this.event.references.push(util.createLocationFromRange(util.pathToUri(scopeCode.srcPath), s.tokens.name.location?.range));
                         }
                     },
                     VariableExpression: (e) => {
                         if (e.tokens.name.text.toLowerCase() === searchFor) {
-                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), e.location?.range));
+                            this.event.references.push(util.createLocationFromRange(util.pathToUri(scopeCode.srcPath), e.location?.range));
                         }
                     }
                 }), {
@@ -64,7 +64,7 @@ export class ReferencesProvider {
         }
     }
 
-    private xmlFileGetReferences(file: XmlFile) {
+    private xmlCodeGetReferences(code: XmlCode) {
 
     }
 }

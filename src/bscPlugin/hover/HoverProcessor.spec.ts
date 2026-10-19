@@ -47,7 +47,7 @@ describe('HoverProcessor', () => {
             const processor = new HoverProcessor({} as any);
             const expression = createIntegerLiteral('1');
             expect(
-                processor['getConstHover'](createIdentifier('hello'), file, program.getScopeByName('source'), expression)
+                processor['getConstHover'](createIdentifier('hello'), file.code, program.getScopeByName('source'), expression)
             ).to.eql(undefined);
         });
 

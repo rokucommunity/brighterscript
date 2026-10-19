@@ -54,6 +54,7 @@ import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import type { BscCode } from './files/BscCode';
+import type { BrsCode } from './files/BrsCode';
 import { firstBy } from 'thenby';
 import { CrossScopeValidator } from './CrossScopeValidator';
 import { DiagnosticManager } from './DiagnosticManager';
@@ -1924,14 +1925,14 @@ export class Program {
         }
     }
 
-    public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
+    public getStatementsByName(name: string, origin: BrsFile | BrsCode, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
         const filesSearched = new Set<BrsFile>();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
 
         function addToResults(statement: FunctionStatement | MethodStatement, file: BrsFile) {
-            let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
+            let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(origin.parseMode)?.toLowerCase();
             if (statement.tokens.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                 if (!results.has(statement)) {
                     results.set(statement, { item: statement, file: file as BrsFile });
@@ -1940,7 +1941,7 @@ export class Program {
         }
 
         //look through all files in scope for matches
-        for (const scope of this.getScopesForFile(originFile)) {
+        for (const scope of isBrsFile(origin) ? this.getScopesForFile(origin) : this.getScopesForCode(origin)) {
             for (const file of scope.getAllFiles()) {
                 //skip non-brs files, or files we've already processed
                 if (!isBrsFile(file) || filesSearched.has(file)) {

@@ -1,4 +1,4 @@
-import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isBrsCode, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlCode, isXmlScope } from '../../astUtils/reflection';
 import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -10,9 +10,9 @@ import type { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import type { BscSymbol } from '../../SymbolTable';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { XmlFile } from '../../files/XmlFile';
+import type { XmlCode } from '../../files/XmlCode';
 import type { Program } from '../../Program';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCode } from '../../files/BrsCode';
 import type { FunctionScope } from '../../FunctionScope';
 import { BooleanType } from '../../types/BooleanType';
 import { InvalidType } from '../../types/InvalidType';
@@ -34,7 +34,7 @@ export class CompletionsProcessor {
     }
 
     public process() {
-        let file = this.event.file;
+        let code = this.event.code;
         this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
 
             // Find the scopes for this file - Only process the first few scopes
@@ -44,17 +44,17 @@ export class CompletionsProcessor {
             let completionResults: CompletionItem[] = [];
             let globalResults: CompletionItem[] = [];
 
-            if (isXmlFile(file)) {
-                completionResults = this.getXmlFileCompletions(this.event.position, file);
-            } else if (isBrsFile(file)) {
+            if (isXmlCode(code)) {
+                completionResults = this.getXmlCodeCompletions(this.event.position, code);
+            } else if (isBrsCode(code)) {
                 //handle script import completions
-                let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, this.event.position);
+                let scriptImport = util.getScriptImportAtPosition(code.ownScriptImports, this.event.position);
                 if (scriptImport) {
-                    this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
+                    this.event.completions.push(...this.getScriptImportCompletions(code.program, code.pkgPath, scriptImport));
                     return;
                 }
 
-                const results = this.getBrsFileCompletions(this.event.position, file, scopesToProcess);
+                const results = this.getBrsCodeCompletions(this.event.position, code, scopesToProcess);
                 completionResults = results.scoped;
                 globalResults = results.global;
             }
@@ -102,13 +102,13 @@ export class CompletionsProcessor {
      * Get all available completions for the specified position
      * @param position the position to get completions
      */
-    public getXmlFileCompletions(position: Position, file: XmlFile): CompletionItem[] {
-        let scriptImport = util.getScriptImportAtPosition(file.scriptTagImports, position);
+    public getXmlCodeCompletions(position: Position, code: XmlCode): CompletionItem[] {
+        let scriptImport = util.getScriptImportAtPosition(code.scriptTagImports, position);
         if (scriptImport) {
-            return this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport);
+            return this.getScriptImportCompletions(code.program, code.pkgPath, scriptImport);
         }
         //xml element/attribute completions (scenegraph nodes, interface field/function, node fields)
-        return file.getCompletions(position);
+        return code.getCompletions(position);
     }
 
     /**
@@ -175,10 +175,10 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsFileCompletions(position: Position, file: BrsFile, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
+    public getBrsCodeCompletions(position: Position, code: BrsCode, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
-        const currentTokenByFilePosition = file.getTokenAt(position);
-        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(file.getClosestExpression(position)?.location?.range.start);
+        const currentTokenByFilePosition = code.getTokenAt(position);
+        const currentToken = currentTokenByFilePosition ?? code.getTokenAt(code.getClosestExpression(position)?.location?.range.start);
 
         const emptyResult = { global: [], scoped: [] };
 
@@ -188,7 +188,7 @@ export class CompletionsProcessor {
         const tokenKind = currentToken?.kind;
 
         //if cursor is after a comment, disable completions
-        if (this.isPositionInComment(file, position)) {
+        if (this.isPositionInComment(code, position)) {
             return emptyResult;
         }
 
@@ -198,36 +198,36 @@ export class CompletionsProcessor {
         let symbolTableLookupFlag = SymbolTypeFlag.runtime;
         let beforeDotToken: Token;
 
-        if (file.tokenFollows(currentToken, TokenKind.Goto)) {
-            let functionScope = file.getFunctionScopeAtPosition(position);
+        if (code.tokenFollows(currentToken, TokenKind.Goto)) {
+            let functionScope = code.getFunctionScopeAtPosition(position);
             return { global: [], scoped: this.getLabelCompletion(functionScope) };
         }
 
-        if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
-            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Dot);
-            beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+        if (this.isTokenAdjacentTo(code, currentToken, TokenKind.Dot)) {
+            const dotToken = this.getAdjacentToken(code, currentToken, TokenKind.Dot);
+            beforeDotToken = code.getTokenBefore(dotToken);
+            expression = code.getClosestExpression(beforeDotToken?.location?.range.end);
             shouldLookForMembers = true;
-        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc)) {
-            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Callfunc);
-            beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+        } else if (this.isTokenAdjacentTo(code, currentToken, TokenKind.Callfunc)) {
+            const dotToken = this.getAdjacentToken(code, currentToken, TokenKind.Callfunc);
+            beforeDotToken = code.getTokenBefore(dotToken);
+            expression = code.getClosestExpression(beforeDotToken?.location?.range.end);
             shouldLookForCallFuncMembers = true;
-        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.As)) {
-            if (file.parseMode === ParseMode.BrightScript) {
+        } else if (this.isTokenAdjacentTo(code, currentToken, TokenKind.As)) {
+            if (code.parseMode === ParseMode.BrightScript) {
                 return { global: NativeTypeCompletions, scoped: [] };
             }
-            expression = file.getClosestExpression(this.event.position);
+            expression = code.getClosestExpression(this.event.position);
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
-        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Equal)) {
-            expression = file.getClosestExpression(this.event.position);
+        } else if (this.isTokenAdjacentTo(code, currentToken, TokenKind.Equal)) {
+            expression = code.getClosestExpression(this.event.position);
             if (expression?.findAncestor<AliasStatement>(isAliasStatement)) {
                 // allow runtime and typetime lookups in alias statements
                 // eslint-disable-next-line no-bitwise
                 symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
             }
         } else {
-            expression = file.getClosestExpression(this.event.position);
+            expression = code.getClosestExpression(this.event.position);
         }
 
         if (isFunctionExpression(expression)) {
@@ -239,7 +239,7 @@ export class CompletionsProcessor {
             return emptyResult;
         }
 
-        const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.location?.range?.start));
+        const tokenBefore = code.getTokenBefore(code.getClosestToken(expression.location?.range?.start));
 
         // helper to check get correct symbol tables for look ups
         function getSymbolTableForLookups() {
@@ -336,7 +336,7 @@ export class CompletionsProcessor {
                         currentSymbols.push(...nameSpaceTypeSofar.getMemberTable().getAllSymbols(symbolTableLookupFlag));
                     }
                 }
-                currentSymbols.push(...this.getScopeSymbolCompletions(file, scope, symbolTableLookupFlag));
+                currentSymbols.push(...this.getScopeSymbolCompletions(code, scope, symbolTableLookupFlag));
             }
 
             let ignoreAllPropertyNames = false;
@@ -361,24 +361,24 @@ export class CompletionsProcessor {
         return { global: globalCompletions, scoped: result };
     }
 
-    private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
+    private getScopeSymbolCompletions(code: BrsCode, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
         // get all scope available symbols
 
-        const scopeSymbols = file.parseMode === ParseMode.BrighterScript
+        const scopeSymbols = code.parseMode === ParseMode.BrighterScript
             ? [...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag), ...scope.allNamespaceTypeTable.getOwnSymbols(symbolTableLookupFlag)]
             : scope.symbolTable.getOwnSymbols(symbolTableLookupFlag);
 
-        const fileSymbols = file.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
+        const fileSymbols = code.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
         scopeSymbols.push(...fileSymbols);
 
         const scopeAvailableSymbols = scopeSymbols.filter(sym => {
-            if (file.parseMode === ParseMode.BrighterScript) {
+            if (code.parseMode === ParseMode.BrighterScript) {
                 // eslint-disable-next-line no-bitwise
                 if (sym.flags & SymbolTypeFlag.postTranspile) {
                     // underscored symbols should not be available in Brighterscript files
                     return false;
                 }
-            } else if (file.parseMode === ParseMode.BrightScript) {
+            } else if (code.parseMode === ParseMode.BrightScript) {
                 if (isNamespaceType(sym.type)) {
                     return false;
                 }
@@ -646,8 +646,8 @@ export class CompletionsProcessor {
         ];
     }
 
-    private isPositionInComment(file: BrsFile, position: Position) {
-        const currentToken = file.getCurrentOrNextTokenAt(position);
+    private isPositionInComment(code: BrsCode, position: Position) {
+        const currentToken = code.getCurrentOrNextTokenAt(position);
         const tokenKind = currentToken?.kind;
         if (!currentToken) {
             return true;
@@ -656,7 +656,7 @@ export class CompletionsProcessor {
             return true;
         }
 
-        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
+        const nextNonComment = code.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
         const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
         if (firstComment && util.comparePosition(position, firstComment?.location?.range.start) >= 0) {
             return true;
@@ -664,12 +664,12 @@ export class CompletionsProcessor {
         return false;
     }
 
-    private isTokenAdjacentTo(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
-        return file.getPreviousToken(currentToken)?.kind === targetKind || file.isTokenNextToTokenKind(currentToken, targetKind);
+    private isTokenAdjacentTo(code: BrsCode, currentToken: Token, targetKind: TokenKind) {
+        return code.getPreviousToken(currentToken)?.kind === targetKind || code.isTokenNextToTokenKind(currentToken, targetKind);
     }
 
-    private getAdjacentToken(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
-        return currentToken.kind === targetKind ? currentToken : file.getTokenBefore(currentToken, targetKind);
+    private getAdjacentToken(code: BrsCode, currentToken: Token, targetKind: TokenKind) {
+        return currentToken.kind === targetKind ? currentToken : code.getTokenBefore(currentToken, targetKind);
     }
 }
 

@@ -83,6 +83,13 @@ describe('BrsCode', () => {
         });
     });
 
+    it('knows where it starts in its document', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `sub main()\nend sub`);
+        expect(file.code.startPosition).to.eql(util.createPosition(0, 0));
+        file.code.parse(`sub main()\nend sub`, { startLine: 3, startCharacter: 40 });
+        expect(file.code.startPosition).to.eql(util.createPosition(3, 40));
+    });
+
     it('parses on demand when its file has a typedef', () => {
         program.setFile('source/main.d.bs', `
             sub main()

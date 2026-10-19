@@ -637,19 +637,19 @@ export interface Plugin {
      */
     afterWriteFile?(event: AfterWriteFileEvent): any;
 }
-export interface BeforeProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface BeforeProvideCodeActionsEvent<TFile extends BscFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     file: TFile;
     /**
      * The code this request applies to. Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
-export interface ProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface ProvideCodeActionsEvent<TFile extends BscFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     file: TFile;
     /**
@@ -657,19 +657,19 @@ export interface ProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
-export interface AfterProvideCodeActionsEvent<TFile extends BscFile = BscFile> {
+export interface AfterProvideCodeActionsEvent<TFile extends BscFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     file: TFile;
     /**
      * The code this request applies to. Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     range: Range;
     scopes: Scope[];
     diagnostics: BsDiagnostic[];
@@ -700,7 +700,7 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
     wasCancelled: boolean;
 }
 
-export interface ProvideSourceFixAllCodeActionsEvent {
+export interface ProvideSourceFixAllCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     file: BscFile;
     /**
@@ -708,7 +708,7 @@ export interface ProvideSourceFixAllCodeActionsEvent {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /** All diagnostics for this file (not range-filtered) */
     diagnostics: BsDiagnostic[];
     scopes: Scope[];
@@ -726,7 +726,7 @@ export type AfterProvideSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeAc
 export type OnGetSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEvent;
 
 
-export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
+export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     file: TFile;
     /**
@@ -734,7 +734,7 @@ export interface ProvideCompletionsEvent<TFile extends BscFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The scopes this file is a member of. If the file is a member of no scopes, this will be an empty array.
      * Plugins can use `event.program.globalScope` if the file is not a member of any scopes
@@ -754,7 +754,7 @@ export interface BeforeBuildProgramEvent {
 export type BuildProgramEvent = BeforeBuildProgramEvent;
 export type AfterBuildProgramEvent = BeforeBuildProgramEvent;
 
-export interface ProvideHoverEvent {
+export interface ProvideHoverEvent<TCode extends BscCode = BscCode> {
     program: Program;
     file: BscFile;
     /**
@@ -762,7 +762,7 @@ export interface ProvideHoverEvent {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     position: Position;
     scopes: Scope[];
     hovers: Hover[];
@@ -828,7 +828,7 @@ export interface AfterFileParseEvent {
     program: Program;
     file: BscFile;
 }
-export interface ProvideDefinitionEvent<TFile = BscFile> {
+export interface ProvideDefinitionEvent<TFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     /**
      * The file that the getDefinition request was invoked in
@@ -839,7 +839,7 @@ export interface ProvideDefinitionEvent<TFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The position in the text document where the getDefinition request was invoked
      */
@@ -855,7 +855,7 @@ export interface ProvideDefinitionEvent<TFile = BscFile> {
 export type BeforeProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
 export type AfterProvideDefinitionEvent<TFile = BscFile> = ProvideDefinitionEvent<TFile>;
 
-export interface ProvideReferencesEvent<TFile = BscFile> {
+export interface ProvideReferencesEvent<TFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     /**
      * The file that the getDefinition request was invoked in
@@ -866,7 +866,7 @@ export interface ProvideReferencesEvent<TFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The position in the text document where the getDefinition request was invoked
      */
@@ -880,7 +880,7 @@ export type BeforeProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEve
 export type AfterProvideReferencesEvent<TFile = BscFile> = ProvideReferencesEvent<TFile>;
 
 
-export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
+export interface ProvideDocumentSymbolsEvent<TFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     /**
      * The file that the `documentSymbol` request was invoked in
@@ -891,7 +891,7 @@ export interface ProvideDocumentSymbolsEvent<TFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The result list of symbols
      */
@@ -912,7 +912,7 @@ export type BeforeProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 export type AfterProvideWorkspaceSymbolsEvent = ProvideWorkspaceSymbolsEvent;
 
 
-export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile, TCode extends BscCode = BscCode> {
     /**
      * The program this file is from
      */
@@ -924,7 +924,7 @@ export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The code this request applies to. Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The list of scopes that this file is a member of
      */
@@ -934,7 +934,7 @@ export interface BeforeProvideSemanticTokensEvent<T extends BscFile = BscFile> {
      */
     semanticTokens: SemanticToken[];
 }
-export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile, TCode extends BscCode = BscCode> {
     /**
      * The program this file is from
      */
@@ -948,7 +948,7 @@ export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The list of scopes that this file is a member of
      */
@@ -958,7 +958,7 @@ export interface ProvideSemanticTokensEvent<T extends BscFile = BscFile> {
      */
     semanticTokens: SemanticToken[];
 }
-export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
+export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile, TCode extends BscCode = BscCode> {
     /**
      * The program this file is from
      */
@@ -970,7 +970,7 @@ export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     /**
      * The code this request applies to. Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The list of scopes that this file is a member of
      */
@@ -981,7 +981,7 @@ export interface AfterProvideSemanticTokensEvent<T extends BscFile = BscFile> {
     semanticTokens: SemanticToken[];
 }
 
-export interface ProvideSelectionRangesEvent<TFile = BscFile> {
+export interface ProvideSelectionRangesEvent<TFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     /**
      * The file that the `selectionRange` request was invoked in
@@ -992,7 +992,7 @@ export interface ProvideSelectionRangesEvent<TFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The list of positions for which selection ranges are requested
      */
@@ -1006,7 +1006,7 @@ export interface ProvideSelectionRangesEvent<TFile = BscFile> {
 export type BeforeProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 export type AfterProvideSelectionRangesEvent<TFile = BscFile> = ProvideSelectionRangesEvent<TFile>;
 
-export interface ProvideInlayHintsEvent<TFile = BscFile> {
+export interface ProvideInlayHintsEvent<TFile = BscFile, TCode extends BscCode = BscCode> {
     program: Program;
     /**
      * The file that the `inlayHint` request was invoked in
@@ -1017,7 +1017,7 @@ export interface ProvideInlayHintsEvent<TFile = BscFile> {
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
      * Undefined for files that provide no code.
      */
-    code?: BscCode;
+    code?: TCode;
     /**
      * The range of the document for which inlay hints should be computed
      */

@@ -1,6 +1,6 @@
 import { SelectionRange } from 'vscode-languageserver-types';
 import type { Range, Position } from 'vscode-languageserver-protocol';
-import { isBrsFile } from '../../astUtils/reflection';
+import { isBrsCode } from '../../astUtils/reflection';
 import type { ProvideSelectionRangesEvent } from '../../interfaces';
 import type { AstNode } from '../../parser/AstNode';
 
@@ -10,7 +10,7 @@ export class SelectionRangesProcessor {
     ) { }
 
     public process() {
-        if (!isBrsFile(this.event.file)) {
+        if (!isBrsCode(this.event.code)) {
             return;
         }
 
@@ -23,13 +23,13 @@ export class SelectionRangesProcessor {
     }
 
     private buildSelectionRange(position: Position): SelectionRange | undefined {
-        const file = this.event.file;
-        if (!isBrsFile(file)) {
+        const code = this.event.code;
+        if (!isBrsCode(code)) {
             return undefined;
         }
 
         // Find the deepest AST node containing this position
-        const innerNode = file.ast.findChildAtPosition(position);
+        const innerNode = code.ast.findChildAtPosition(position);
         const innerNodeRange = innerNode?.location?.range;
         if (!innerNodeRange) {
             return undefined;
@@ -42,7 +42,7 @@ export class SelectionRangesProcessor {
         // To give the first expansion step a tight "identifier only" range — matching
         // the JS/TS smart-select behaviour — we look up the exact lexer token at the
         // cursor position and use its range as the initial step.
-        const token = file.getTokenAt(position);
+        const token = code.getTokenAt(position);
         const tokenRange = token?.location?.range;
         if (tokenRange && !rangesEqual(tokenRange, innerNodeRange)) {
             ranges.push(tokenRange);

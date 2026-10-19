@@ -19,6 +19,18 @@ export interface BscCode {
     document: BscFile;
     program: Program;
     /**
+     * The absolute path to the file this code lives in
+     */
+    readonly srcPath: string;
+    /**
+     * The path to the file this code lives in, relative to the root of the package (retaining its original file extension)
+     */
+    readonly destPath: string;
+    /**
+     * The final path in the package of the file this code lives in
+     */
+    readonly pkgPath: string;
+    /**
      * The region of the document this code covers. Undefined means this code covers the whole document.
      */
     range?: Range;

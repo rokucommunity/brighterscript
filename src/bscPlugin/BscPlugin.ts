@@ -13,7 +13,7 @@ import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
-import type { BrsFile } from '../files/BrsFile';
+import type { BscFile } from '../files/BscFile';
 import type { BrsCode } from '../files/BrsCode';
 import type { XmlCode } from '../files/XmlCode';
 import util from '../util';
@@ -75,8 +75,8 @@ export class BscPlugin implements Plugin {
     }
 
     public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
-        if (isBrsFile(event.file)) {
-            return new BrsFileSemanticTokensProcessor(event as ProvideSemanticTokensEvent<BrsFile>).process();
+        if (isBrsCode(event.code)) {
+            return new BrsFileSemanticTokensProcessor(event as ProvideSemanticTokensEvent<BscFile, BrsCode>).process();
         }
     }
 

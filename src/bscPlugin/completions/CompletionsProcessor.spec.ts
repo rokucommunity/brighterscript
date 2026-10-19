@@ -722,7 +722,7 @@ describe('CompletionsProcessor', () => {
             ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
         });
 
-        describe('getBrsFileCompletions', () => {
+        describe('getBrsCodeCompletions', () => {
             it('does not crash on expression with missing range', () => {
                 const file = program.setFile<BrsFile>('source/main.brs', `
                     sub main()
@@ -736,7 +736,7 @@ describe('CompletionsProcessor', () => {
                 const processor = new CompletionsProcessor({ scopes: [] } as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file, [])
+                    processor['getBrsCodeCompletions'](util.createPosition(2, 39), file.code, [])
                 ).to.eql({ global: [], scoped: [] });
             });
 
@@ -753,7 +753,7 @@ describe('CompletionsProcessor', () => {
                 const processor = new CompletionsProcessor({} as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file, program.getScopesForFile(file))
+                    processor['getBrsCodeCompletions'](util.createPosition(2, 39), file.code, program.getScopesForFile(file))
                 ).to.eql({ global: [], scoped: [] });
             });
         });
@@ -828,7 +828,7 @@ describe('CompletionsProcessor', () => {
                 program.validate();
                 //get the name of all global completions
                 const globalCompletions = program.globalScope.getAllFiles().flatMap((x) => {
-                    return completionProcessor.getBrsFileCompletions(position, x as BrsFile, program.getScopesForFile(x)).global;
+                    return completionProcessor.getBrsCodeCompletions(position, (x as BrsFile).code, program.getScopesForFile(x)).global;
                 }).map(x => x.label);
                 //filter out completions from global scope
                 completions = completions.filter(x => !globalCompletions.includes(x.label));
@@ -1241,7 +1241,7 @@ describe('CompletionsProcessor', () => {
                 filePathRange: Range.create(1, 1, 1, 1)
             });
             const processesor = new CompletionsProcessor(null);
-            const completions = processesor.getXmlFileCompletions(Position.create(1, 1), xmlFile);
+            const completions = processesor.getXmlCodeCompletions(Position.create(1, 1), xmlFile.code);
             expectCompletionsIncludes(completions, [{
                 label: 'component1.brs',
                 kind: CompletionItemKind.File
