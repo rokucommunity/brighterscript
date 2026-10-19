@@ -2433,6 +2433,34 @@ end sub`);
                 expect(tokens.map(x => x.range)).to.deep.include(util.createRange(4, 12, 4, 18));
             });
 
+            it('offers quick fixes that use brightscript comments', () => {
+                program.setFile('components/Other.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Other" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub init()
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                const actions = program.getCodeActions(s`${rootDir}/components/Other.xml`, util.createRange(4, 14, 4, 14));
+                const changes = (title: string) => {
+                    const action = actions.find(x => x.title.startsWith(title));
+                    return Object.values(action.edit.changes)[0].map(x => ({ position: x.range.start, newText: x.newText }));
+                };
+                expect(changes('Disable cannot-find-function for this line')).to.eql([{
+                    position: util.createPosition(4, 0),
+                    newText: `            ' bs:disable-next-line: cannot-find-function\n`
+                }]);
+                //the block's own `bs:disable` goes at the top of the block, not the top of the xml file
+                expect(changes('Disable cannot-find-function for this script block')).to.eql([{
+                    position: util.createPosition(2, 46),
+                    newText: `' bs:disable: cannot-find-function\n`
+                }]);
+            });
+
             it('provides signature help for a function in a CDATA block', () => {
                 const help = program.getSignatureHelp(s`${rootDir}/components/Widget.brs`, util.createPosition(2, 31));
                 expect(help.map(x => x.signature.label)).to.eql(['sub helper(value as integer)']);

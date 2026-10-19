@@ -186,7 +186,8 @@ export class CodeActionsProcessor {
         if (fileAction) {
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
-                    title: `Disable ${code} for this file: ${diagnostic.message}`,
+                    //a block's `bs:disable` only covers that block, so say so for code embedded in a file
+                    title: `Disable ${code} for this ${isBrsCode(file) && file.isEmbedded ? 'script block' : 'file'}: ${diagnostic.message}`,
                     diagnostics: [diagnostic],
                     kind: CodeActionKind.QuickFix,
                     changes: [fileAction]
