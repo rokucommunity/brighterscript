@@ -16,6 +16,9 @@ import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
 import { SGNode } from '../parser/SGTypes';
 import { TranspileState } from '../parser/TranspileState';
+import { ParseMode } from '../parser/Parser';
+
+const fence = (code: string) => util.mdFence(code, 'brightscript');
 
 describe('XmlFile', () => {
 
@@ -1911,6 +1914,350 @@ end sub`);
             `);
             //...the 2nd file should still be main
             expect(program.getComponent('comp1')!.file.destPath).to.equal(comp2.destPath);
+        });
+    });
+
+    describe('inline CDATA scripts', () => {
+        //the `<![CDATA[` in this component starts at line 2, character 37, so its code starts at character 46
+        const widgetXml = trim`
+            <?xml version="1.0" encoding="utf-8" ?>
+            <component name="Widget" extends="Group">
+                <script type="text/brightscript"><![CDATA[
+                    sub helper()
+                        doesNotExist()
+                    end sub
+                ]]></script>
+            </component>
+        `;
+
+        it('provides a piece of BrightScript code for each CDATA block', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub first()
+                        end sub
+                    ]]></script>
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brighterscript"><![CDATA[
+                        sub second()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.codes).to.eql([xmlFile.code, ...xmlFile.scriptCodes]);
+            expect(xmlFile.scriptCodes.map(x => x.key)).to.eql([
+                'components/Widget.xml#script-0',
+                'components/Widget.xml#script-1'
+            ]);
+            expect(xmlFile.scriptCodes.map(x => x.isEmbedded)).to.eql([true, true]);
+            expect(xmlFile.scriptCodes.map(x => x.parseMode)).to.eql([ParseMode.BrightScript, ParseMode.BrighterScript]);
+            expect(xmlFile.scriptCodes.map(x => x.callables.map(c => c.name))).to.eql([['first'], ['second']]);
+            expect(xmlFile.getCodeForScript(xmlFile.ast.componentElement.scriptElements[2])).to.equal(xmlFile.scriptCodes[1]);
+            expect(xmlFile.getCodeForScript(xmlFile.ast.componentElement.scriptElements[1])).to.be.undefined;
+        });
+
+        it('treats `text/bs` as brighterscript', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/bs"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            expect(xmlFile.scriptCodes[0].parseMode).to.equal(ParseMode.BrighterScript);
+        });
+
+        it('locates the code in the xml file', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', widgetXml);
+            const code = xmlFile.scriptCodes[0];
+            expect(code.range).to.eql(util.createRange(2, 46, 6, 4));
+            expect(code.srcPath).to.equal(xmlFile.srcPath);
+            const subToken = code.parser.tokens.find(x => x.text === 'sub');
+            expect(subToken.location).to.eql(util.createLocation(3, 8, 3, 11, util.pathToUri(xmlFile.srcPath)));
+            expect(code.getText(subToken.location.range)).to.equal('sub');
+            expect(program.getCodeAt(xmlFile, util.createPosition(3, 9))).to.equal(code);
+            expect(program.getCodeAt(xmlFile, util.createPosition(1, 5))).to.equal(xmlFile.code);
+        });
+
+        it('reports diagnostics at their location in the xml file', () => {
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', widgetXml);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindFunction('doesNotExist'),
+                location: util.createLocation(4, 12, 4, 24, util.pathToUri(xmlFile.srcPath))
+            }]);
+        });
+
+        it('shares a scope with the component\'s other scripts', () => {
+            program.setFile('components/Widget.brs', `
+                sub init()
+                    helper()
+                end sub
+                sub other()
+                end sub
+            `);
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub helper()
+                            other()
+                            print m.top
+                        end sub
+                    ]]></script>
+                    <script type="text/brightscript"><![CDATA[
+                        sub fromSecondBlock()
+                            helper()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags duplicate functions between a CDATA block and another script', () => {
+            program.setFile('components/Widget.brs', `
+                sub helper()
+                end sub
+            `);
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub helper()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.duplicateFunctionImplementation('helper'),
+                DiagnosticMessages.duplicateFunctionImplementation('helper')
+            ]);
+        });
+
+        it('is visible to child components', () => {
+            program.setFile('components/Parent.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Parent" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub fromParent()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.setFile('components/Child.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Child" extends="Parent">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                            fromParent()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('uses the typedefs of other files in the scope', () => {
+            //the brs file can't be parsed, so the only way `libFunc` is found is through its typedef
+            program.setFile('source/lib.brs', `
+                sub libFunc(
+            `);
+            program.setFile('source/lib.d.bs', `
+                sub libFunc(name as string)
+                end sub
+            `);
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                            libFunc("hello")
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program.getDiagnostics().filter(x => x.location.uri.endsWith('Widget.xml')));
+        });
+
+        it('only allows brighterscript syntax in brighterscript blocks', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brighterscript"><![CDATA[
+                        namespace alpha
+                            sub beta()
+                            end sub
+                        end namespace
+                        sub init()
+                            alpha.beta()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        namespace alpha
+                        end namespace
+                    ]]></script>
+                </component>
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('namespace')
+            ]);
+        });
+
+        it('revalidates other files when a CDATA block changes', () => {
+            program.setFile('components/Widget.brs', `
+                sub init()
+                    helper()
+                end sub
+            `);
+            const withFunction = (name: string) => trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript" uri="Widget.brs" />
+                    <script type="text/brightscript"><![CDATA[
+                        sub ${name}()
+                        end sub
+                    ]]></script>
+                </component>
+            `;
+            program.setFile('components/Widget.xml', withFunction('helper'));
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('components/Widget.xml', withFunction('renamed'));
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('helper')
+            ]);
+
+            program.setFile('components/Widget.xml', withFunction('helper'));
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        describe('comment flags', () => {
+            it('honors bs:disable-next-line inside a CDATA block', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub helper()
+                                ' bs:disable-next-line
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('keeps a CDATA block\'s bs:disable within that block', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            ' bs:disable
+                            sub helper()
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                        <script type="text/brightscript" uri="pkg:/components/missing.brs" />
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.referencedFileDoesNotExist()
+                ]);
+            });
+
+            it('applies an xml bs:disable to the CDATA blocks after it', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <!-- bs:disable -->
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub helper()
+                                doesNotExist()
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        describe('editor features', () => {
+            beforeEach(() => {
+                program.setFile('components/Widget.brs', `
+                    sub init()
+                        helper(1)
+                    end sub
+                `);
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script type="text/brightscript" uri="Widget.brs" />
+                        <script type="text/brightscript"><![CDATA[
+                            sub helper(value as integer)
+                                print value
+                            end sub
+                        ]]></script>
+                    </component>
+                `);
+                program.validate();
+            });
+
+            it('provides hovers', () => {
+                const hovers = program.getHover(s`${rootDir}/components/Widget.xml`, util.createPosition(4, 14));
+                expect(hovers[0]?.contents).to.eql([fence('sub helper(value as integer) as void')]);
+            });
+
+            it('goes to definitions in a CDATA block from other files', () => {
+                const definitions = program.getDefinition(s`${rootDir}/components/Widget.brs`, util.createPosition(2, 26));
+                expect(definitions).to.eql([
+                    util.createLocation(4, 8, 6, 15, util.pathToUri(s`${rootDir}/components/Widget.xml`))
+                ]);
+            });
+
+            it('provides completions', () => {
+                const labels = program.getCompletions(s`${rootDir}/components/Widget.xml`, util.createPosition(5, 12)).map(x => x.label);
+                expect(labels).to.include.members(['helper', 'init', 'value']);
+            });
+
+            it('provides document symbols', () => {
+                expect(program.getDocumentSymbols(s`${rootDir}/components/Widget.xml`).map(x => x.name)).to.eql(['helper']);
+            });
+
+            it('provides semantic tokens', () => {
+                const tokens = program.getSemanticTokens(s`${rootDir}/components/Widget.xml`);
+                expect(tokens.map(x => x.range)).to.deep.include(util.createRange(4, 12, 4, 18));
+            });
+
+            it('provides signature help for a function in a CDATA block', () => {
+                const help = program.getSignatureHelp(s`${rootDir}/components/Widget.brs`, util.createPosition(2, 31));
+                expect(help.map(x => x.signature.label)).to.eql(['sub helper(value as integer)']);
+            });
         });
     });
 });

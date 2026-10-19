@@ -995,8 +995,10 @@ export class Scope {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
             for (let file of this.getOwnFiles()) {
-                if (isBrsFile(file)) {
-                    result.mergeSymbolTable(file.parser?.symbolTable);
+                for (const code of file.codes ?? []) {
+                    if (isBrsCode(code)) {
+                        result.mergeSymbolTable(code.parser?.symbolTable);
+                    }
                 }
             }
             return result;
@@ -1042,16 +1044,16 @@ export class Scope {
         // (e.g. files added by plugins during build). Linking doesn't change files or namespaces,
         // so get it once per link instead of once per namespace statement.
         const namespaceLookup = this.namespaceLookup;
-        for (const file of this.getAllFiles()) {
-            if (isBrsFile(file)) {
+        for (const code of this.getAllCodes()) {
+            if (isBrsCode(code)) {
                 this.linkSymbolTableDisposables.push(
-                    file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
+                    code.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
 
                 //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable.
                 //Leaf containers always have symbolTable populated, so the lookup below is safe; the null
                 //guard tolerates edge cases like a namespace that failed to register.
-                for (const namespace of file['_cachedLookups'].namespaceStatements) {
+                for (const namespace of code['_cachedLookups'].namespaceStatements) {
                     const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
                     const aggregate = namespaceLookup.get(namespaceNameLower)?.symbolTable;
                     if (aggregate) {

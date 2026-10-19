@@ -1279,6 +1279,10 @@ export class Program {
     private validationDetails: {
         brsFilesValidated: BrsFile[];
         xmlFilesValidated: XmlFile[];
+        /**
+         * The BrightScript code in every validated file (including code embedded in xml files)
+         */
+        brsCodesValidated: BrsCode[];
         changedSymbols: Map<SymbolTypeFlag, Set<string>>;
         changedComponentTypes: string[];
         scopesToInvalidate: Scope[];
@@ -1288,6 +1292,7 @@ export class Program {
     } = {
             brsFilesValidated: [],
             xmlFilesValidated: [],
+            brsCodesValidated: [],
             changedSymbols: new Map<SymbolTypeFlag, Set<string>>(),
             changedComponentTypes: [],
             scopesToInvalidate: [],
@@ -1346,6 +1351,7 @@ export class Program {
 
         const brsFilesValidated: BrsFile[] = this.validationDetails.brsFilesValidated;
         const xmlFilesValidated: XmlFile[] = this.validationDetails.xmlFilesValidated;
+        const brsCodesValidated: BrsCode[] = this.validationDetails.brsCodesValidated;
         const changedSymbols = this.validationDetails.changedSymbols;
         const changedComponentTypes = this.validationDetails.changedComponentTypes;
         const scopesToInvalidate = this.validationDetails.scopesToInvalidate;
@@ -1447,15 +1453,21 @@ export class Program {
                 } else if (isXmlFile(file)) {
                     xmlFilesValidated.push(file);
                 }
+                for (const code of codes) {
+                    if (isBrsCode(code)) {
+                        brsCodesValidated.push(code);
+                    }
+                }
             })
-            .forEach('do deferred component creation', () => [...brsFilesValidated, ...xmlFilesValidated], (file) => {
-                if (isXmlFile(file)) {
-                    this.addDeferredComponentTypeSymbolCreation(file);
-                } else if (isBrsFile(file) && !this.isFirstValidation) {
-                    const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
-                    if (fileHasChanges) {
-                        for (const scope of this.getScopesForFile(file)) {
-                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, file.providedSymbols.changes)) {
+            .forEach('do deferred component creation', () => [...brsCodesValidated, ...xmlFilesValidated], (fileOrCode) => {
+                if (isXmlFile(fileOrCode)) {
+                    this.addDeferredComponentTypeSymbolCreation(fileOrCode);
+                } else if (isBrsCode(fileOrCode) && !this.isFirstValidation) {
+                    const code = fileOrCode;
+                    const codeHasChanges = code.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || code.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
+                    if (codeHasChanges) {
+                        for (const scope of this.getScopesForCode(code)) {
+                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, code.providedSymbols.changes)) {
                                 this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
                             }
                         }
@@ -1476,16 +1488,11 @@ export class Program {
                 });
             })
             .once('track and update type-time and runtime symbol dependencies and changes', () => {
-                const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
-                    if (isBrsFile(f)) {
-                        return f.providedSymbols.changes;
-                    }
-                    return null;
-                }).filter(x => x);
+                const changedSymbolsMapArr = brsCodesValidated.map(code => code.providedSymbols.changes);
 
                 // update the map of typetime dependencies
-                for (const file of brsFilesValidated) {
-                    for (const [symbolName, provided] of file.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
+                for (const code of brsCodesValidated) {
+                    for (const [symbolName, provided] of code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
                         // clear existing dependencies
                         for (const values of this.symbolDependencies.values()) {
                             values.delete(symbolName);
@@ -1552,6 +1559,7 @@ export class Program {
                 // can reset filesValidatedList, because they are no longer needed
                 this.validationDetails.brsFilesValidated = [];
                 this.validationDetails.xmlFilesValidated = [];
+                this.validationDetails.brsCodesValidated = [];
             })
             .once('tracks changed symbols and prepares files and scopes for validation', () => {
                 if (this.options.logLevel === LogLevel.debug) {
@@ -2338,11 +2346,12 @@ export class Program {
     }
 
     public getSignatureHelp(filePath: string, position: Position): SignatureInfoObj[] {
-        let file: BrsFile = this.getFile(filePath);
-        if (!file || !isBrsFile(file)) {
+        const file = this.getFile(filePath);
+        const code = file ? this.getCodeAt(file, position) : undefined;
+        if (!isBrsCode(code)) {
             return [];
         }
-        let callExpressionInfo = new CallExpressionInfo(file, position);
+        let callExpressionInfo = new CallExpressionInfo(code, position);
         let signatureHelpUtil = new SignatureHelpUtil();
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
@@ -2505,7 +2514,7 @@ export class Program {
                 const codeEvents = (file.codes ?? []).map(code => ({
                     program: this,
                     code: code,
-                    editor: file.editor,
+                    editor: code.editor ?? file.editor,
                     scope: scope
                 } as PrepareCodeEvent));
 
@@ -2679,6 +2688,12 @@ export class Program {
             for (const file of new Set([...event.files, ...serializedFilesByFile.keys()])) {
                 //a file added by a plugin very late in the flow might not have an editor at all
                 file.editor?.undoAll();
+                //code can have an editor of its own (i.e. code embedded in an xml file)
+                for (const code of file.codes ?? []) {
+                    if (code.editor && code.editor !== file.editor) {
+                        code.editor.undoAll();
+                    }
+                }
             }
         });
 

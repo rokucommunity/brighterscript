@@ -14,6 +14,9 @@ import { TranspileState } from '../parser/TranspileState';
 import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
 import { XmlCode } from './XmlCode';
+import { BrsCode } from './BrsCode';
+import { ParseMode } from '../parser/Parser';
+import type { SGScript } from '../parser/SGTypes';
 import type { BscCode } from './BscCode';
 import type { FunctionScope } from '../FunctionScope';
 
@@ -76,10 +79,75 @@ export class XmlFile implements BscFile {
     public code: XmlCode;
 
     /**
-     * All of the code this file provides
+     * The BrightScript embedded in this component's `<script>` blocks (`<![CDATA[ ... ]]>`), in the order they appear
+     */
+    public scriptCodes = [] as BrsCode[];
+
+    /**
+     * The `<script>` element each piece of embedded code came from
+     */
+    private scriptElementsByCode = new Map<BrsCode, SGScript>();
+
+    /**
+     * All of the code this file provides: the component itself, then the BrightScript in its `<script>` blocks
      */
     public get codes(): BscCode[] {
-        return [this.code];
+        return [this.code, ...this.scriptCodes];
+    }
+
+    /**
+     * Get the code embedded in a `<script>` element, if it has any
+     */
+    public getCodeForScript(script: SGScript): BrsCode | undefined {
+        for (const [code, scriptElement] of this.scriptElementsByCode) {
+            if (scriptElement === script) {
+                return code;
+            }
+        }
+    }
+
+    /**
+     * Create a piece of BrightScript code for every `<script>` element that has its code inline in a CDATA block
+     */
+    private createScriptCodes() {
+        for (const code of this.scriptCodes) {
+            code.dispose();
+        }
+        this.scriptCodes = [];
+        this.scriptElementsByCode.clear();
+
+        const cdataOpen = '<![CDATA[';
+        const cdataClose = ']]>';
+        for (const script of this.ast.componentElement?.scriptElements ?? []) {
+            const cdata = script.cdata;
+            const range = cdata?.location?.range;
+            if (!range) {
+                continue;
+            }
+            const isBrighterScript = /brighterscript|text\/bs\b/i.test(script.type ?? '') || this.program?.options?.allowBrighterScriptInBrightScript;
+            const code = new BrsCode({
+                document: this,
+                program: this.program,
+                parseMode: isBrighterScript ? ParseMode.BrighterScript : ParseMode.BrightScript
+            });
+            code.isEmbedded = true;
+            code.key = `${this.pkgPath}#script-${this.scriptCodes.length}`;
+            //the code is everything between `<![CDATA[` and `]]>`
+            const hasClose = cdata.text.endsWith(cdataClose);
+            const startCharacter = range.start.character + cdataOpen.length;
+            code.range = util.createRange(
+                range.start.line,
+                startCharacter,
+                range.end.line,
+                hasClose ? range.end.character - cdataClose.length : range.end.character
+            );
+            code.parse(
+                cdata.text.substring(cdataOpen.length, hasClose ? cdata.text.length - cdataClose.length : cdata.text.length),
+                { startLine: range.start.line, startCharacter: startCharacter }
+            );
+            this.scriptCodes.push(code);
+            this.scriptElementsByCode.set(code, script);
+        }
     }
 
     /**
@@ -203,7 +271,9 @@ export class XmlFile implements BscFile {
         return !!(
             this.editor?.hasChanges || this.ast.componentElement?.scriptElements?.some(
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
-            )
+            ) ||
+            //embedded code that needs transpiling has to be written back into this file
+            this.scriptCodes.some(code => code.needsTranspiled)
         );
     }
     public set needsTranspiled(value) {
@@ -223,6 +293,7 @@ export class XmlFile implements BscFile {
     public parse(fileContents: string) {
         this.fileContents = fileContents;
         this.code.parse(fileContents);
+        this.createScriptCodes();
     }
 
     /**
@@ -476,6 +547,9 @@ export class XmlFile implements BscFile {
     public dispose() {
         //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
+        for (const code of this.scriptCodes) {
+            code.dispose();
+        }
     }
 
     // Everything below forwards to `this.code`. These keep existing callers working while they move to `XmlCode`,

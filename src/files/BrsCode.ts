@@ -27,6 +27,7 @@ import type { BscSymbol } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import type { BscFileLike } from '../astUtils/CachedLookups';
 import { CachedLookups } from '../astUtils/CachedLookups';
+import { Editor } from '../astUtils/Editor';
 import { getBsConst } from '../preprocessor/Manifest';
 import type { BscType } from '../types';
 import { NamespaceType } from '../types';
@@ -171,9 +172,28 @@ export class BrsCode implements BscCode {
     }
 
     /**
-     * Does this code need to be transpiled? This is decided by the file it lives in.
+     * Is this code embedded in a file of another language (i.e. a `<script>` block in an xml file)?
+     * Code that is the whole of its `.brs`/`.bs` file is not embedded.
+     */
+    public isEmbedded = false;
+
+    /**
+     * The editor for changes to this code during the build. Embedded code has an editor of its own, so its file can tell whether
+     * this code was changed (and needs to be transpiled) apart from changes to the rest of the file. Other code uses its file's editor.
+     */
+    public get editor(): Editor {
+        return this.isEmbedded ? (this._editor ??= new Editor()) : (this.document as { editor?: Editor }).editor;
+    }
+    private _editor: Editor;
+
+    /**
+     * Does this code need to be transpiled? Embedded code needs it when it is BrighterScript or it was changed during the build;
+     * any other code follows the file it lives in.
      */
     public get needsTranspiled() {
+        if (this.isEmbedded) {
+            return this.parseMode === ParseMode.BrighterScript || !!this._editor?.hasChanges;
+        }
         return !!(this.document as { needsTranspiled?: boolean }).needsTranspiled;
     }
 

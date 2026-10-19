@@ -2,6 +2,7 @@ import type { Range } from 'vscode-languageserver';
 import type { CommentFlag } from '../interfaces';
 import type { Program } from '../Program';
 import type { BscFile } from './BscFile';
+import type { Editor } from '../astUtils/Editor';
 
 /**
  * A piece of code that a file provides (i.e. the BrightScript in a `.brs` file, or the SceneGraph component in a `.xml` file).
@@ -44,6 +45,10 @@ export interface BscCode {
      * Comment-based flags found in this code, used to suppress diagnostics
      */
     commentFlags: CommentFlag[];
+    /**
+     * The editor for changes to this code during the build. When omitted, the file's editor is used
+     */
+    readonly editor?: Editor;
     /**
      * Indicates whether this code has been validated
      */
