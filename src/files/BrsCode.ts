@@ -31,13 +31,14 @@ import { getBsConst } from '../preprocessor/Manifest';
 import type { BscType } from '../types';
 import { NamespaceType } from '../types';
 import type { BscFile } from './BscFile';
+import type { BscCode } from './BscCode';
 import type { BrsFile, ProvidedSymbol } from './BrsFile';
 
 /**
  * A piece of BrightScript or BrighterScript code. This holds everything about the code itself (tokens, AST, symbols, callables, etc.),
  * while the file it lives in (its `document`) holds the paths, contents, dependencies and output.
  */
-export class BrsCode {
+export class BrsCode implements BscCode {
     constructor(options: {
         /**
          * The file this code lives in

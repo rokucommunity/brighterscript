@@ -25,6 +25,7 @@ import { Editor } from '../astUtils/Editor';
 import type { BscFile } from './BscFile';
 import { DefinitionProvider } from '../bscPlugin/definition/DefinitionProvider';
 import { BrsCode } from './BrsCode';
+import type { BscCode } from './BscCode';
 
 export interface ProvidedSymbol {
     symbol: BscSymbol;
@@ -108,6 +109,13 @@ export class BrsFile implements BscFile {
      * The code in this file
      */
     public code: BrsCode;
+
+    /**
+     * All of the code this file provides
+     */
+    public get codes(): BscCode[] {
+        return [this.code];
+    }
 
     /**
      * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
