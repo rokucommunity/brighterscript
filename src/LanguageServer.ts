@@ -73,6 +73,10 @@ export class LanguageServer {
      * The default project discovery setting for the language server. Can be overridden by per-workspace settings
      */
     public static enableProjectDiscoveryDefault = true;
+    /**
+     * The default lazy project activation setting for the language server. Can be overridden by per-workspace settings
+     */
+    public static lazyProjectActivationDefault = false;
 
     /**
      * The default number of projects that are permitted to activate concurrently.
@@ -205,6 +209,9 @@ export class LanguageServer {
         // or when document is closed without saving (original contents are sent as a change)
         //
         this.documents.onDidChangeContent(this.onTextDocumentDidChangeContent.bind(this));
+
+        //whenever a document gets opened (fires before the first onDidChangeContent for that document)
+        this.documents.onDidOpen(this.onDocumentOpen.bind(this));
 
         //whenever a document gets closed
         this.documents.onDidClose(this.onDocumentClose.bind(this));
@@ -556,6 +563,15 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    private async onDocumentOpen(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
+        this.logger.debug('onDocumentOpen', event.document.uri);
+
+        await this.projectManager.handleFileOpen({
+            srcPath: util.uriToPath(event.document.uri)
+        });
+    }
+
+    @AddStackToErrorMessage
     private async onDocumentClose(event: TextDocumentChangeEvent<TextDocument>): Promise<void> {
         this.logger.debug('onDocumentClose', event.document.uri);
 
@@ -611,7 +627,8 @@ export class LanguageServer {
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
                         logLevel: brightscriptConfig?.languageServer?.logLevel,
                         projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit,
-                        maxWorkerThreads: brightscriptConfig?.languageServer?.maxWorkerThreads
+                        maxWorkerThreads: brightscriptConfig?.languageServer?.maxWorkerThreads,
+                        lazyProjectActivation: brightscriptConfig?.languageServer?.lazyProjectActivation ?? LanguageServer.lazyProjectActivationDefault
                     }
                 };
             })
@@ -1083,6 +1100,7 @@ export interface BrightScriptClientConfiguration {
         projectDiscoveryMaxDepth?: number;
         projectActivationConcurrencyLimit?: number;
         maxWorkerThreads?: number;
+        lazyProjectActivation?: boolean;
     };
 }
 
