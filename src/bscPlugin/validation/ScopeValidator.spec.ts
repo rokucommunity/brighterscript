@@ -6242,6 +6242,33 @@ describe('ScopeValidator', () => {
                 ]);
             });
 
+            it('keeps name collision diagnostics located on a namespace when its file has a body edit', () => {
+                program.setFile('source/utils.bs', `
+                    namespace Test
+                        function foo()
+                        end function
+                    end namespace
+                `);
+                program.setFile('source/main.bs', `
+                    enum Test
+                        a
+                    end enum
+                `);
+                program.validate();
+                const messagesBefore = program.getDiagnostics().map(x => x.message).sort();
+                expect(messagesBefore).to.include(DiagnosticMessages.nameCollision('Namespace', 'Enum', 'Test').message);
+
+                program.setFile('source/utils.bs', `
+                    namespace Test
+                        function foo()
+                            'a comment
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expect(program.getDiagnostics().map(x => x.message).sort()).to.eql(messagesBefore);
+            });
+
             it('updates the related information of name collision diagnostics in other files when a file has a body edit', () => {
                 setupNameCollision(`
                     interface Test

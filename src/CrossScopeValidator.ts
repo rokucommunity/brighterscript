@@ -178,6 +178,10 @@ export class ProvidedSymbolIndex {
     public getSymbolNames(file: BscFile) {
         return this.files.get(file)?.symbolNames ?? [];
     }
+
+    public getNamespaceNames(file: BscFile) {
+        return this.files.get(file)?.namespaceNames ?? [];
+    }
 }
 
 const positionsPerFile = 1e6;
@@ -503,7 +507,9 @@ export class CrossScopeValidator {
     private getPossibleDuplicateNames(file: BscFile) {
         let names = this.possibleDuplicateNamesCache?.get(file);
         if (!names) {
-            names = this.providedSymbolIndex.getSymbolNames(file).filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
+            //namespace names are included so a collision located on a namespace gets rechecked when only its file is
+            const allNames = [...this.providedSymbolIndex.getSymbolNames(file), ...this.providedSymbolIndex.getNamespaceNames(file)];
+            names = allNames.filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
             this.possibleDuplicateNamesCache?.set(file, names);
         }
         return names;
@@ -846,13 +852,22 @@ export class CrossScopeValidator {
         const scopeSet = new Set(scopes);
         for (const file of files) {
             const fileUri = util.pathToUri(file.srcPath);
-            for (const scope of this.program.getScopesForFile(file)) {
-                if (scopeSet.has(scope)) {
-                    this.program.diagnostics.clearByFilter({
-                        scope: scope,
-                        tag: CrossScopeValidatorDiagnosticTag,
-                        fileUri: fileUri
-                    });
+            const fileScopes = this.program.getScopesForFile(file);
+            if (fileScopes.every(scope => scopeSet.has(scope) || scope === this.program.globalScope)) {
+                //every scope this file is in gets rechecked, so clear them all at once
+                this.program.diagnostics.clearByFilter({
+                    tag: CrossScopeValidatorDiagnosticTag,
+                    fileUri: fileUri
+                });
+            } else {
+                for (const scope of fileScopes) {
+                    if (scopeSet.has(scope)) {
+                        this.program.diagnostics.clearByFilter({
+                            scope: scope,
+                            tag: CrossScopeValidatorDiagnosticTag,
+                            fileUri: fileUri
+                        });
+                    }
                 }
             }
             this.program.diagnostics.clearByFilter({
