@@ -93,7 +93,7 @@ export class Body extends Statement implements TypedefProvider {
                 result.push(state.newline);
             }
 
-            result.push(...statement.transpile(state));
+            util.pushAll(result, statement.transpile(state));
         }
         return result;
     }
@@ -220,9 +220,7 @@ export class Block extends Statement {
 
             //push block onto parent list
             state.lineage.unshift(this);
-            results.push(
-                ...statement.transpile(state)
-            );
+            util.pushAll(results, statement.transpile(state));
             state.lineage.shift();
         }
         //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
@@ -558,7 +556,7 @@ export class IfStatement extends Statement {
                 if (body.length > 0) {
                     //zero or more spaces between the `else` and the `if`
                     results.push(this.elseBranch.tokens.if.leadingWhitespace!);
-                    results.push(...body);
+                    util.pushAll(results, body);
 
                     // stop here because chained if will transpile the rest
                     return results;
@@ -573,7 +571,7 @@ export class IfStatement extends Statement {
                 state.lineage.shift();
 
                 if (body.length > 0) {
-                    results.push(...body);
+                    util.pushAll(results, body);
                 }
                 results.push('\n');
             }
@@ -1045,7 +1043,7 @@ export class ForStatement extends Statement {
         //loop body
         state.lineage.unshift(this);
         state.pushLoopLabel?.();
-        result.push(...this.body.transpile(state));
+        util.pushAll(result, this.body.transpile(state));
         state.popLoopLabel?.();
         state.lineage.shift();
 
@@ -1137,7 +1135,7 @@ export class ForEachStatement extends Statement {
         //body
         state.lineage.unshift(this);
         state.pushLoopLabel?.();
-        result.push(...this.body.transpile(state));
+        util.pushAll(result, this.body.transpile(state));
         state.popLoopLabel?.();
         state.lineage.shift();
 
@@ -1212,7 +1210,7 @@ export class WhileStatement extends Statement {
         state.lineage.unshift(this);
         //body
         state.pushLoopLabel?.();
-        result.push(...this.body.transpile(state));
+        util.pushAll(result, this.body.transpile(state));
         state.popLoopLabel?.();
         state.lineage.shift();
 
@@ -2069,12 +2067,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const body = this.getTranspiledClassBody(ancestors);
 
         //make the methods
-        result.push(...this.getTranspiledMethods(state, className, body));
+        util.pushAll(result, this.getTranspiledMethods(state, className, body));
         //make the builder
-        result.push(...this.getTranspiledBuilder(state, className, ancestors, body));
+        util.pushAll(result, this.getTranspiledBuilder(state, className, ancestors, body));
         result.push('\n', state.indent());
         //make the class assembler (i.e. the public-facing class creator method)
-        result.push(...this.getTranspiledClassFunction(state, className));
+        util.pushAll(result, this.getTranspiledClassFunction(state, className));
 
         return result;
     }
@@ -2366,8 +2364,8 @@ export class ClassStatement extends Statement implements TypedefProvider {
         for (let statement of body) {
             if (isMethodStatement(statement)) {
                 state.classStatement = this;
+                util.pushAll(result, statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)));
                 result.push(
-                    ...statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)),
                     state.newline,
                     state.indent()
                 );

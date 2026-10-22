@@ -1939,6 +1939,18 @@ export class Util {
     }
 
     /**
+     * Append every item to the end of `target`, and return `target`.
+     * Use this instead of `target.push(...items)` when `items` could be very large: spreading passes each item
+     * as its own function argument, which throws "Maximum call stack size exceeded" somewhere past ~100k items.
+     */
+    public pushAll<T>(target: T[], items: Iterable<T>): T[] {
+        for (const item of items) {
+            target.push(item);
+        }
+        return target;
+    }
+
+    /**
      * Wraps SourceNode's constructor to be compatible with the TranspileResult type
      */
     public sourceNodeFromTranspileResult(

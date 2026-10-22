@@ -286,7 +286,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             state.lineage.unshift(this);
             let body = this.body.transpile(state);
             state.lineage.shift();
-            results.push(...body);
+            util.pushAll(results, body);
         }
         results.push('\n');
         //'end sub'|'end function'
