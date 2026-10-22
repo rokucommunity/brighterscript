@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [0.73.8](https://github.com/rokucommunity/brighterscript/compare/0.73.7...v0.73.8) - 2026-10-22
+### Fixed
+ - Fix "Maximum call stack size exceeded" when transpiling very large classes and blocks ([#1937](https://github.com/rokucommunity/brighterscript/pull/1937))
+
+
+
 ## [0.73.7](https://github.com/rokucommunity/brighterscript/compare/0.73.6...v0.73.7) - 2026-10-13
 ### Added
  - Add component-scope coverage for recursive const resolution ([#1904](https://github.com/rokucommunity/brighterscript/pull/1904))
