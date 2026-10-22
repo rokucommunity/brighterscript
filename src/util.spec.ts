@@ -604,6 +604,20 @@ describe('util', () => {
         });
     });
 
+    describe('pushAll', () => {
+        it('appends items in order and returns the target', () => {
+            const target = [1, 2];
+            expect(util.pushAll(target, [3, 4])).to.equal(target);
+            expect(target).to.eql([1, 2, 3, 4]);
+        });
+
+        it('handles arrays too large to spread into push', () => {
+            const items = new Array<number>(500_000).fill(1);
+            expect(() => [].push(...items)).to.throw(RangeError);
+            expect(util.pushAll([0], items)).to.be.lengthOf(500_001);
+        });
+    });
+
     describe('padLeft', () => {
         it('stops at an upper limit to prevent terrible memory explosions', () => {
             expect(util.padLeft('', Number.MAX_VALUE, ' ')).to.be.lengthOf(1000);
