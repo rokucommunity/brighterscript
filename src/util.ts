@@ -27,7 +27,7 @@ import type { FunctionScope } from './FunctionScope';
 import { LogLevel, createLogger } from './logging';
 import { isToken, type Identifier, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isAssignmentStatement, isFunctionExpression, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
+import { isAnyReferenceType, isAssignmentStatement, isFunctionExpression, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isConstStatement, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SourceNode, SourceMapConsumer } from 'source-map';
 import type { RawSourceMap, SourceMapGenerator } from 'source-map';
@@ -48,12 +48,13 @@ import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromVa
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
-import type { AssignmentStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from './parser/Statement';
+import type { AssignmentStatement, ConstStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from './parser/Statement';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
 import { TypedFunctionType } from './types';
 import { IntersectionType } from './types/IntersectionType';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 
 export class Util {
     public clearConsole() {
@@ -155,6 +156,63 @@ export class Util {
                 configPath = path.join(parentDirPath, 'bsconfig.json');
             }
         }
+    }
+
+    /**
+     * Create a new `bsconfig.json` file in the given directory (this powers `bsc --init`).
+     * The file contains recommended defaults, followed by the rest of the supported options commented out.
+     * An existing `bsconfig.json` file is never overwritten.
+     * @param cwd the directory where the `bsconfig.json` file should be created
+     * @returns the path to the new file, or `undefined` if a `bsconfig.json` file already exists in that directory
+     */
+    public createConfigFile(cwd = process.cwd()): string | undefined {
+        const configPath = path.join(cwd, 'bsconfig.json');
+        if (fsExtra.pathExistsSync(configPath)) {
+            return undefined;
+        }
+        //each setting is followed by a short description, aligned like `tsc --init`
+        const option = (setting: string, description: string, indent = '    ') => `${indent}${setting.padEnd(50 - indent.length)} /* ${description} */`;
+        const compilerOption = (setting: string, description: string) => option(setting, description, '        ');
+        const contents = [
+            '{',
+            option('"outDir": "dist",', 'The directory where the transpiled files are placed.'),
+            option('"compilerOptions": {', 'Options that control how your code is validated and transpiled.'),
+            compilerOption(`"minFirmwareVersion": "${DEFAULT_MIN_FIRMWARE_VERSION}",`, 'The minimum Roku firmware version required to run this project.'),
+            compilerOption('"autoImportComponentScript": true,', 'For every xml component, automatically import a .bs or .brs file with the same name (if it exists).'),
+            compilerOption('"sourceMap": true,', 'Generate sourcemap files so debuggers can show the original source code.'),
+            compilerOption('"relativeSourceMaps": true,', 'Write sourcemap `sources` as relative paths instead of absolute paths.'),
+            '',
+            compilerOption('// "allowBrighterScriptInBrightScript": false,', 'Allow BrighterScript features (classes, interfaces, etc...) in BrightScript (`.brs`) files, and force those files to be transpiled.'),
+            compilerOption('// "bslibDestinationDir": "source",', 'Override the output directory location of the bslib.brs file. Using a location outside of `source` will break scripts that depend on it.'),
+            compilerOption('// "emitDefinitions": false,', 'Emit type definition files (`d.bs`) during transpile.'),
+            compilerOption('// "emitFullPaths": false,', 'Emit full paths to files when printing diagnostics to the console.'),
+            compilerOption('// "manifest": { "bs_const": {} },', 'Override values in the manifest file (currently only `bs_const` is supported).'),
+            compilerOption('// "pruneEmptyCodeFiles": false,', 'Remove files that are empty (or only contain comments) after transpilation.'),
+            compilerOption('// "removeParameterTypes": false,', 'Remove explicit parameter and return types (the `as type` syntax) from functions.'),
+            compilerOption('// "resolveSourceRoot": false,', 'Resolve `sourceRoot` to an absolute path (relative to this bsconfig.json file).'),
+            compilerOption('// "sourceRoot": ""', 'Override where source files appear to live in sourcemaps and source literals.'),
+            '    },',
+            '',
+            option('// "cwd": "./",', 'Override the current working directory.'),
+            option('// "diagnosticFilters": [],', 'A list of filters used to hide diagnostics.'),
+            option('// "diagnosticLevel": "warn",', 'Which diagnostic levels are printed to the console: "hint", "info", "warn", or "error".'),
+            option('// "diagnosticReporters": "detailed",', 'How diagnostics are reported to the console: "detailed", "github-actions", or a custom template string.'),
+            option('// "diagnosticSeverityOverrides": {},', 'A map of diagnostic codes to severity overrides ("hint", "info", "warn", or "error").'),
+            option('// "extends": "",', 'Path to another bsconfig.json file that this file should import and then override.'),
+            option(`// "files": ${JSON.stringify(DefaultFiles).replace(/,/g, ', ')},`, 'The list of files (or globs) to include in your project.'),
+            option('// "logLevel": "log",', 'The log level: "error", "warn", "log", "info", "debug", "trace", or "off".'),
+            option('// "plugins": [],', 'A list of node scripts or npm modules to load as compiler plugins.'),
+            option('// "require": [],', 'A list of node scripts or npm modules to `require()` on startup.'),
+            option('// "rootDir": "./",', 'The root directory of your Roku project (where the manifest lives).'),
+            option('// "showDiagnosticsInConsole": true,', 'Print diagnostics to the console.'),
+            option('// "validate": true,', 'Set to false to skip validation (diagnostics) entirely, which can speed up builds.'),
+            option('// "watch": false', 'Keep running, and recompile on every file change.'),
+            '}',
+            ''
+        ].join('\n');
+        //the `wx` flag guarantees we never overwrite an existing file
+        fsExtra.writeFileSync(configPath, contents, { flag: 'wx' });
+        return configPath;
     }
 
     public getRangeFromOffsetLength(text: string, offset: number, length: number) {
@@ -2047,10 +2105,13 @@ export class Util {
         let lines = src.split(/\r?\n/g);
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             let line = lines[lineIndex];
-            chunks.push(
-                lineIndex > 0 ? '\n' : '',
-                new SourceNode(lineIndex + 1, 0, source, line)
-            );
+            if (lineIndex > 0) {
+                chunks.push('\n');
+            }
+            //skip wrapping empty lines in a SourceNode, since they'd have empty children
+            if (line.length > 0) {
+                chunks.push(new SourceNode(lineIndex + 1, 0, source, line));
+            }
         }
         return new SourceNode(null, null, source, chunks);
     }
@@ -2493,6 +2554,18 @@ export class Util {
     }
 
     /**
+     * Append every item to the end of `target`, and return `target`.
+     * Use this instead of `target.push(...items)` when `items` could be very large: spreading passes each item
+     * as its own function argument, which throws "Maximum call stack size exceeded" somewhere past ~100k items.
+     */
+    public pushAll<T>(target: T[], items: Iterable<T>): T[] {
+        for (const item of items) {
+            target.push(item);
+        }
+        return target;
+    }
+
+    /**
      * Wraps SourceNode's constructor to be compatible with the TranspileResult type
      */
     public sourceNodeFromTranspileResult(
@@ -2520,12 +2593,10 @@ export class Util {
     public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
         //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
         const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
-        if (pattern.test(node.toString())) {
-            //`replaceRight` operates on the right-most leaf string, which is where a trailing comment
-            //lands in both the verbatim and AST-transpiled cases. The `source-map` typings declare the
-            //pattern as a string, but it is handed straight to `String.prototype.replace`, which
-            //accepts a RegExp
-            node.replaceRight(pattern as unknown as string, '');
+        const match = pattern.exec(node.toString());
+        if (match) {
+            //trim the exact matched length off the right edge, since the match may span multiple sibling leaves
+            this.trimSourceNodeRight(node, match[0].length);
         }
         return node;
     }
@@ -2654,6 +2725,58 @@ export class Util {
         return false;
     }
 
+    /**
+     * Trim `charCount` characters off the right edge of a SourceNode tree, walking children right to left.
+     * Collects the edits in a first pass and only applies them if the full `charCount` was accounted for,
+     * so a tree containing an unrecognized child (e.g. a SourceNode from a different installed copy of
+     * `source-map`) is left completely untouched instead of partially trimmed.
+     * Returns true if the full `charCount` was trimmed, false if the walk bailed out or ran out of content.
+     */
+    private trimSourceNodeRight(node: SourceNode, charCount: number): boolean {
+        const trimEdits: TrimEdit[] = [];
+        const trimState: TrimState = { remainingCharCount: charCount, bailedOut: false };
+        this.collectSourceNodeTrimEdits(node, trimState, trimEdits);
+        if (trimState.bailedOut || trimState.remainingCharCount > 0) {
+            return false;
+        }
+        for (const trimEdit of trimEdits) {
+            trimEdit.children[trimEdit.childIndex] = trimEdit.replacement;
+        }
+        return true;
+    }
+
+    /**
+     * Walk a SourceNode tree right to left, recording planned leaf edits into `trimEdits` without mutating
+     * anything, until `trimState.remainingCharCount` reaches zero or an unrecognized child is encountered
+     */
+    private collectSourceNodeTrimEdits(node: SourceNode, trimState: TrimState, trimEdits: TrimEdit[]): void {
+        const children = node.children as unknown as Array<SourceNode | string>;
+        for (let childIndex = children.length - 1; childIndex >= 0 && trimState.remainingCharCount > 0 && !trimState.bailedOut; childIndex--) {
+            const child = children[childIndex];
+            if (typeof child === 'string') {
+                if (child.length <= trimState.remainingCharCount) {
+                    trimState.remainingCharCount -= child.length;
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: '' });
+                } else {
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: child.slice(0, child.length - trimState.remainingCharCount) });
+                    trimState.remainingCharCount = 0;
+                }
+            } else if (this.isSourceNodeLike(child)) {
+                this.collectSourceNodeTrimEdits(child, trimState, trimEdits);
+            } else {
+                //unrecognized child shape (not a string, not a SourceNode from any installed copy of `source-map`); stop rather than skip past it
+                trimState.bailedOut = true;
+            }
+        }
+    }
+
+    /**
+     * Duck-check for a SourceNode, matching the same marker property `source-map` itself uses in `SourceNode.prototype.add()`,
+     * so this also recognizes SourceNodes produced by a different installed copy of the `source-map` package
+     */
+    private isSourceNodeLike(value: string | SourceNode): value is SourceNode {
+        return !!value && typeof value === 'object' && (value as any).$$$isSourceNode$$$ === true && Array.isArray((value as any).children);
+    }
 
     /**
      * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
@@ -3069,6 +3192,20 @@ export class Util {
         return false;
     }
 
+    /**
+     * If `expression` is used in the initializer of a namespaced const with the same name (i.e. `namespace promises: const chain = chain`),
+     * return that const. A const can't refer to itself by its namespace-relative name, so that name refers to the outer (global) symbol instead.
+     */
+    public getSelfNamedConstOfInitializer(expression: VariableExpression): ConstStatement | undefined {
+        const constStatement = expression?.findAncestor<ConstStatement>(isConstStatement);
+        if (
+            constStatement?.tokens.name?.text.toLowerCase() === expression.tokens.name?.text.toLowerCase() &&
+            constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)
+        ) {
+            return constStatement;
+        }
+    }
+
     public isCalleeMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
         namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
 
@@ -3116,9 +3253,10 @@ export class Util {
 
         if (isNamespaceStatement(namespace)) {
             let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
-            // check if the namespace has a symbol with the same name, but different definiton
-            if (namespaceHasSymbol && !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable())) {
-                return true;
+            // the variable is shadowing the namespace's symbol if it resolves to a different definition. If it resolves to the
+            // namespace's own symbol, then nothing is shadowing it, even if a different symbol with this name exists at the file level
+            if (namespaceHasSymbol) {
+                return !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable());
             }
         }
         const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();
@@ -3249,3 +3387,21 @@ export type RangeLike = { location?: Location } | Location | { range?: Range } |
 
 export let util = new Util();
 export default util;
+
+/**
+ * A single planned string replacement for one entry in a SourceNode's `children` array, produced by
+ * `collectSourceNodeTrimEdits` and only applied once the full trim amount has been accounted for
+ */
+interface TrimEdit {
+    children: Array<SourceNode | string>;
+    childIndex: number;
+    replacement: string;
+}
+
+/**
+ * Mutable state threaded through `collectSourceNodeTrimEdits` while walking a SourceNode tree right to left
+ */
+interface TrimState {
+    remainingCharCount: number;
+    bailedOut: boolean;
+}
