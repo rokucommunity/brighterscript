@@ -16,7 +16,7 @@ interface NormalizedFilter {
     src?: string;
     dest?: string;
     codes?: (number | string)[];
-    severities?: BsDiagnosticSeverity[];
+    minSeverity?: BsDiagnosticSeverity;
     isNegative: boolean;
 }
 
@@ -101,7 +101,7 @@ export class DiagnosticFilterer {
         let isMatch = false;
         //filter each matched file
         for (let filter of this.filters) {
-            if (filter.codes?.length > 0 || Array.isArray(filter.severities)) {
+            if (filter.codes?.length > 0 || filter.minSeverity !== undefined) {
                 continue;
             }
             let srcMatch = false;
@@ -245,19 +245,19 @@ export class DiagnosticFilterer {
         const isSuppressing = !filter.isNegative;
         const lowerFileUri = fileUri.toLowerCase();
         const hasCodes = Array.isArray(filter.codes);
-        const hasSeverities = Array.isArray(filter.severities);
-        //if there is no code or severity filter, set isSuppressed on every diagnostic in this file
-        if (!hasCodes && !hasSeverities) {
+        const hasMinSeverity = filter.minSeverity !== undefined;
+        //if there is no code or minSeverity filter, set isSuppressed on every diagnostic in this file
+        if (!hasCodes && !hasMinSeverity) {
             this.byFile[lowerFileUri].forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
-            //set isSuppressed for any diagnostics with matching codes and/or severities
+            //set isSuppressed for any diagnostics with matching codes and/or minSeverity
         } else {
             let fileDiagnostics = this.byFile[lowerFileUri];
             for (const diagnostic of fileDiagnostics) {
                 const codeMatches = hasCodes ? this.matchesCode(filter, diagnostic.diagnostic) : true;
-                const severityMatches = hasSeverities ? this.matchesSeverity(filter, diagnostic.diagnostic) : true;
+                const severityMatches = hasMinSeverity ? this.matchesSeverity(filter, diagnostic.diagnostic) : true;
                 if (codeMatches && severityMatches) {
                     diagnostic.isSuppressed = isSuppressing;
                 }
@@ -276,10 +276,14 @@ export class DiagnosticFilterer {
 
     private matchesSeverity(filter: NormalizedFilter, diagnostic: BsDiagnostic): boolean {
         const diagnosticSeverity = this.toDiagnosticSeverity(diagnostic.severity);
-        if (diagnosticSeverity === undefined) {
+        const minSeverity = this.toDiagnosticSeverity(filter.minSeverity);
+        if (diagnosticSeverity === undefined || minSeverity === undefined) {
             return false;
         }
-        return !!filter.severities?.some(s => this.toDiagnosticSeverity(s) === diagnosticSeverity);
+        if (filter.isNegative) {
+            return diagnosticSeverity <= minSeverity;
+        }
+        return diagnosticSeverity > minSeverity;
     }
 
     private toDiagnosticSeverity(value: unknown): DiagnosticSeverity | undefined {
@@ -309,25 +313,6 @@ export class DiagnosticFilterer {
             }
         }
         return undefined;
-    }
-
-    private extractSeverities(filter: { severities?: unknown; severity?: unknown }): BsDiagnosticSeverity[] | undefined {
-        let rawSeverities: unknown[] | undefined;
-        if (Array.isArray(filter.severities)) {
-            rawSeverities = filter.severities;
-        } else if (filter.severities !== undefined) {
-            rawSeverities = [filter.severities];
-        } else if (Array.isArray(filter.severity)) {
-            rawSeverities = filter.severity;
-        } else if (filter.severity !== undefined) {
-            rawSeverities = [filter.severity];
-        }
-        if (!rawSeverities) {
-            return undefined;
-        }
-        return rawSeverities.filter(
-            (s): s is BsDiagnosticSeverity => this.toDiagnosticSeverity(s) !== undefined
-        );
     }
 
     public getDiagnosticFilters(config: BsConfig) {
@@ -364,18 +349,18 @@ export class DiagnosticFilterer {
             }
 
             const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
-            const severities = this.extractSeverities(filter);
+            const hasMinSeverity = 'minSeverity' in filter && filter.minSeverity !== undefined;
 
-            //code/severity-only filter
-            if (!('files' in filter) && (hasCodes || severities !== undefined)) {
+            //code/minSeverity-only filter
+            if (!('files' in filter) && (hasCodes || hasMinSeverity)) {
                 const normalized: NormalizedFilter = {
                     isNegative: false
                 };
                 if (hasCodes) {
                     normalized.codes = filter.codes;
                 }
-                if (severities !== undefined) {
-                    normalized.severities = severities;
+                if (hasMinSeverity) {
+                    normalized.minSeverity = filter.minSeverity;
                 }
                 result.push(normalized);
                 continue;
@@ -451,18 +436,18 @@ export class DiagnosticFilterer {
             }
 
             const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
-            const severities = this.extractSeverities(filter as { severities?: unknown; severity?: unknown });
+            const hasMinSeverity = 'minSeverity' in filter && filter.minSeverity !== undefined;
 
-            //code/severity-only filter
-            if (!('src' in filter) && (hasCodes || severities !== undefined)) {
+            //code/minSeverity-only filter
+            if (!('src' in filter) && (hasCodes || hasMinSeverity)) {
                 const normalized: NormalizedFilter = {
                     isNegative: false
                 };
                 if (hasCodes) {
                     normalized.codes = filter.codes;
                 }
-                if (severities !== undefined) {
-                    normalized.severities = severities;
+                if (hasMinSeverity) {
+                    normalized.minSeverity = filter.minSeverity;
                 }
                 result.push(normalized);
                 continue;
@@ -479,8 +464,8 @@ export class DiagnosticFilterer {
                 if ('codes' in filter) {
                     normalized.codes = filter.codes;
                 }
-                if (severities !== undefined) {
-                    normalized.severities = severities;
+                if (hasMinSeverity) {
+                    normalized.minSeverity = filter.minSeverity;
                 }
                 result.push(normalized);
             }
@@ -491,7 +476,7 @@ export class DiagnosticFilterer {
 
     private getNormalizedFilter(
         fileGlob: string,
-        filter: { files?: any; codes?: (number | string)[]; severities?: BsDiagnosticSeverity[]; severity?: BsDiagnosticSeverity | BsDiagnosticSeverity[] },
+        filter: { files?: any; codes?: (number | string)[]; minSeverity?: BsDiagnosticSeverity },
         locationKey: 'src' | 'dest' = 'src'
     ): NormalizedFilter {
         const isNegative = fileGlob.startsWith('!');
@@ -503,9 +488,8 @@ export class DiagnosticFilterer {
         if ('codes' in filter && Array.isArray(filter.codes)) {
             normalized.codes = filter.codes;
         }
-        const severities = this.extractSeverities(filter);
-        if (severities !== undefined) {
-            normalized.severities = severities;
+        if ('minSeverity' in filter && filter.minSeverity !== undefined) {
+            normalized.minSeverity = filter.minSeverity;
         }
         return normalized;
     }

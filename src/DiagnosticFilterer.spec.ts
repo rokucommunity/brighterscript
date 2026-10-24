@@ -795,41 +795,39 @@ describe('DiagnosticFilterer', () => {
         });
     });
 
-    describe('filtering by severity', () => {
-        it('normalizes global and file-scoped severity filters', () => {
+    describe('filtering by minSeverity', () => {
+        it('normalizes global and file-scoped minSeverity filters', () => {
             expect(filterer.getDiagnosticFilters({
                 diagnosticFilters: [
-                    { severities: ['warn', 'info'] },
-                    { severity: 'hint' },
-                    { files: 'lib/**/*.brs', severities: ['warn', 'info', 'hint'] },
-                    { files: '!lib/critical/**/*.brs', severity: ['error', 'warn'] },
-                    { files: 'source/**/*.brs', codes: [1001], severities: ['warn'] }
+                    { minSeverity: 'warn' },
+                    { files: 'lib/**/*.brs', minSeverity: 'error' },
+                    { files: '!lib/critical/**/*.brs', minSeverity: 'warn' },
+                    { files: 'source/**/*.brs', codes: [1001], minSeverity: 'error' }
                 ]
             })).to.eql([
-                { severities: ['warn', 'info'], isNegative: false },
-                { severities: ['hint'], isNegative: false },
-                { src: 'lib/**/*.brs', severities: ['warn', 'info', 'hint'], isNegative: false },
-                { src: 'lib/critical/**/*.brs', severities: ['error', 'warn'], isNegative: true },
-                { src: 'source/**/*.brs', codes: [1001], severities: ['warn'], isNegative: false }
+                { minSeverity: 'warn', isNegative: false },
+                { src: 'lib/**/*.brs', minSeverity: 'error', isNegative: false },
+                { src: 'lib/critical/**/*.brs', minSeverity: 'warn', isNegative: true },
+                { src: 'source/**/*.brs', codes: [1001], minSeverity: 'error', isNegative: false }
             ]);
         });
 
-        it('normalizes severity filters in v0 compatibility mode', () => {
+        it('normalizes minSeverity filters in v0 compatibility mode', () => {
             expect(filterer.getDiagnosticFilters({
                 diagnosticFiltersV0Compatibility: true,
                 diagnosticFilters: [
-                    { severities: ['info', 'hint'] },
-                    { src: 'lib/**/*.brs', severities: ['warn'] },
-                    { src: '!lib/critical/**/*.brs', codes: [100], severities: ['error'] }
+                    { minSeverity: 'warn' },
+                    { src: 'lib/**/*.brs', minSeverity: 'error' },
+                    { src: '!lib/critical/**/*.brs', codes: [100], minSeverity: 'warn' }
                 ] as any
             })).to.eql([
-                { severities: ['info', 'hint'], isNegative: false },
-                { src: 'lib/**/*.brs', severities: ['warn'], isNegative: false },
-                { src: 'lib/critical/**/*.brs', codes: [100], severities: ['error'], isNegative: true }
+                { minSeverity: 'warn', isNegative: false },
+                { src: 'lib/**/*.brs', minSeverity: 'error', isNegative: false },
+                { src: 'lib/critical/**/*.brs', codes: [100], minSeverity: 'warn', isNegative: true }
             ]);
         });
 
-        it('filters diagnostics globally by severity string and DiagnosticSeverity enum', () => {
+        it('filters diagnostics globally by minSeverity string and DiagnosticSeverity enum', () => {
             const diagnostics = [
                 getDiagnostic(1, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Error),
                 getDiagnostic(2, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Warning),
@@ -841,31 +839,59 @@ describe('DiagnosticFilterer', () => {
                 filterer.filter({
                     rootDir: rootDir,
                     diagnosticFilters: [
-                        { severities: ['warn', 'info', DiagnosticSeverity.Hint] }
+                        { minSeverity: 'warn' }
+                    ]
+                }, diagnostics).map(x => x.code)
+            ).to.eql([1, 2]);
+
+            expect(
+                filterer.filter({
+                    rootDir: rootDir,
+                    diagnosticFilters: [
+                        { minSeverity: 'error' }
                     ]
                 }, diagnostics).map(x => x.code)
             ).to.eql([1]);
+
+            expect(
+                filterer.filter({
+                    rootDir: rootDir,
+                    diagnosticFilters: [
+                        { minSeverity: 'info' }
+                    ]
+                }, diagnostics).map(x => x.code)
+            ).to.eql([1, 2, 3]);
+
+            expect(
+                filterer.filter({
+                    rootDir: rootDir,
+                    diagnosticFilters: [
+                        { minSeverity: DiagnosticSeverity.Warning }
+                    ]
+                }, diagnostics).map(x => x.code)
+            ).to.eql([1, 2]);
         });
 
-        it('filters diagnostics by files glob and severities', () => {
+        it('filters diagnostics by files glob and minSeverity', () => {
             const diagnostics = [
-                getDiagnostic(1, `${rootDir}/lib/vendor.brs`, undefined, DiagnosticSeverity.Error),
-                getDiagnostic(2, `${rootDir}/lib/vendor.brs`, undefined, DiagnosticSeverity.Warning),
-                getDiagnostic(3, `${rootDir}/lib/vendor.brs`, undefined, DiagnosticSeverity.Information),
-                getDiagnostic(4, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Warning)
+                getDiagnostic(1, `${rootDir}/components/comp.brs`, undefined, DiagnosticSeverity.Error),
+                getDiagnostic(2, `${rootDir}/components/comp.brs`, undefined, DiagnosticSeverity.Warning),
+                getDiagnostic(3, `${rootDir}/components/comp.brs`, undefined, DiagnosticSeverity.Information),
+                getDiagnostic(4, `${rootDir}/components/comp.brs`, undefined, DiagnosticSeverity.Hint),
+                getDiagnostic(5, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Hint)
             ];
 
             expect(
                 filterer.filter({
                     rootDir: rootDir,
                     diagnosticFilters: [
-                        { files: 'lib/**/*.brs', severities: ['warn', 'info', 'hint'] }
+                        { files: 'components/**/*', minSeverity: 'warn' }
                     ]
                 }, diagnostics).map(x => x.code)
-            ).to.eql([1, 4]);
+            ).to.eql([1, 2, 5]);
         });
 
-        it('filters diagnostics by dest path and severities', () => {
+        it('filters diagnostics by dest path and minSeverity', () => {
             const program = new Program({ rootDir: rootDir });
             program.setFile('source/common.brs', '');
             program.setFile({ src: `${rootDir}/source/utils.brs`, dest: 'source/vendor/utils.brs' }, '');
@@ -873,6 +899,7 @@ describe('DiagnosticFilterer', () => {
             const diagnostics = [
                 getDiagnostic('err1', `${rootDir}/source/utils.brs`, `${rootDir}/source/vendor/utils.brs`, DiagnosticSeverity.Error),
                 getDiagnostic('warn1', `${rootDir}/source/utils.brs`, `${rootDir}/source/vendor/utils.brs`, DiagnosticSeverity.Warning),
+                getDiagnostic('info1', `${rootDir}/source/utils.brs`, `${rootDir}/source/vendor/utils.brs`, DiagnosticSeverity.Information),
                 getDiagnostic('warn2', `${rootDir}/source/common.brs`, undefined, DiagnosticSeverity.Warning)
             ];
 
@@ -881,7 +908,7 @@ describe('DiagnosticFilterer', () => {
                 diagnosticFilters: [
                     {
                         files: [{ dest: 'source/vendor/**/*.*' }],
-                        severities: ['warn']
+                        minSeverity: 'error'
                     }
                 ]
             }, diagnostics, program);
@@ -889,18 +916,18 @@ describe('DiagnosticFilterer', () => {
             expect(result.map(x => x.code)).to.eql(['err1', 'warn2']);
         });
 
-        it('combines codes and severities in the same filter object using logical AND', () => {
+        it('combines codes and minSeverity in the same filter object using logical AND', () => {
             const diagnostics = [
-                getDiagnostic(100, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Warning), // matches both -> suppress
-                getDiagnostic(100, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Error), // matches code only -> keep
-                getDiagnostic(200, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Warning) // matches severity only -> keep
+                getDiagnostic(100, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Warning), // matches code and is below error -> suppress
+                getDiagnostic(100, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Error), // matches code but meets minSeverity -> keep
+                getDiagnostic(200, `${rootDir}/source/main.brs`, undefined, DiagnosticSeverity.Warning) // below minSeverity but different code -> keep
             ];
 
             expect(
                 filterer.filter({
                     rootDir: rootDir,
                     diagnosticFilters: [
-                        { files: 'source/**/*.brs', codes: [100], severities: ['warn'] }
+                        { files: 'source/**/*.brs', codes: [100], minSeverity: 'error' }
                     ]
                 }, diagnostics).map(x => `${x.code}:${x.severity}`)
             ).to.eql([
@@ -909,7 +936,7 @@ describe('DiagnosticFilterer', () => {
             ]);
         });
 
-        it('supports negative globs with severities to un-ignore specific severities', () => {
+        it('supports negative globs with minSeverity to un-ignore diagnostics meeting the threshold', () => {
             const diagnostics = [
                 getDiagnostic(1, `${rootDir}/lib/vendor.brs`, undefined, DiagnosticSeverity.Error),
                 getDiagnostic(2, `${rootDir}/lib/vendor.brs`, undefined, DiagnosticSeverity.Warning),
@@ -921,17 +948,17 @@ describe('DiagnosticFilterer', () => {
                     rootDir: rootDir,
                     diagnosticFilters: [
                         { files: 'lib/**/*.brs' },
-                        { files: '!lib/**/*.brs', severities: ['error'] }
+                        { files: '!lib/**/*.brs', minSeverity: 'warn' }
                     ]
                 }, diagnostics).map(x => x.code)
-            ).to.eql([1]);
+            ).to.eql([1, 2]);
         });
 
-        it('does not mark a file as completely filtered when the filter specifies severities', () => {
+        it('does not mark a file as completely filtered when the filter specifies minSeverity', () => {
             filterer.options = {
                 rootDir: rootDir,
                 diagnosticFilters: [
-                    { files: 'lib/**/*.brs', severities: ['warn', 'info', 'hint'] }
+                    { files: 'lib/**/*.brs', minSeverity: 'error' }
                 ]
             };
             expect(
@@ -942,47 +969,19 @@ describe('DiagnosticFilterer', () => {
             ).to.be.false;
         });
 
-        it('does not suppress diagnostics or mark files as completely filtered when severities is an empty array', () => {
-            const diagnostics = [
-                getDiagnostic(1, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Error),
-                getDiagnostic(2, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Warning),
-                getDiagnostic(3, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Information),
-                getDiagnostic(4, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Hint)
-            ];
-
-            expect(
-                filterer.filter({
-                    rootDir: rootDir,
-                    diagnosticFilters: [
-                        { files: 'vendor/**/*', severities: [] },
-                        { files: 'vendor/**/*', severity: [] },
-                        { severities: [] }
-                    ]
-                }, diagnostics).map(x => x.code)
-            ).to.eql([1, 2, 3, 4]);
-
-            expect(
-                filterer.isFileCompletelyFiltered({
-                    srcPath: `${rootDir}/vendor/lib.brs`,
-                    destPath: 'vendor/lib.brs'
-                })
-            ).to.be.false;
-        });
-
-        it('does not suppress all diagnostics when severity names are invalid', () => {
+        it('does not suppress all diagnostics when minSeverity is invalid', () => {
             const diagnostics = [
                 getDiagnostic(1, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Error),
                 getDiagnostic(2, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Warning),
                 getDiagnostic(3, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Information)
             ];
 
-            // Only invalid severity names -> matches no severities, suppresses nothing
             expect(
                 filterer.filter({
                     rootDir: rootDir,
                     diagnosticFilters: [
-                        { files: 'vendor/**/*', severities: ['invalid' as any, 999 as any] },
-                        { files: 'vendor/**/*', severity: 'unknown' as any }
+                        { files: 'vendor/**/*', minSeverity: 'invalid' as any },
+                        { files: 'vendor/**/*', minSeverity: 999 as any }
                     ]
                 }, diagnostics).map(x => x.code)
             ).to.eql([1, 2, 3]);
@@ -993,62 +992,6 @@ describe('DiagnosticFilterer', () => {
                     destPath: 'vendor/lib.brs'
                 })
             ).to.be.false;
-
-            // Mixed valid and invalid severity names -> suppresses only valid matching severities
-            expect(
-                filterer.filter({
-                    rootDir: rootDir,
-                    diagnosticFilters: [
-                        { files: 'vendor/**/*', severities: ['warn', 'invalid' as any] }
-                    ]
-                }, diagnostics).map(x => x.code)
-            ).to.eql([1, 3]);
-        });
-
-        it('does not suppress matching codes when combined with an empty severities array', () => {
-            const diagnostics = [
-                getDiagnostic(1001, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Error),
-                getDiagnostic(1001, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Warning),
-                getDiagnostic(1002, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Warning)
-            ];
-
-            expect(
-                filterer.filter({
-                    rootDir: rootDir,
-                    diagnosticFilters: [
-                        { files: 'vendor/**/*', codes: [1001], severities: [] },
-                        { codes: [1001], severities: [] }
-                    ]
-                }, diagnostics).map(x => `${x.code}:${x.severity}`)
-            ).to.eql([
-                `1001:${DiagnosticSeverity.Error}`,
-                `1001:${DiagnosticSeverity.Warning}`,
-                `1002:${DiagnosticSeverity.Warning}`
-            ]);
-        });
-
-        it('does not un-suppress diagnostics when a negative filter has an empty severities array', () => {
-            const diagnostics = [
-                getDiagnostic(1, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Error),
-                getDiagnostic(2, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Warning)
-            ];
-
-            expect(
-                filterer.filter({
-                    rootDir: rootDir,
-                    diagnosticFilters: [
-                        { files: 'vendor/**/*' },
-                        { files: '!vendor/**/*', severities: [] }
-                    ]
-                }, diagnostics).map(x => x.code)
-            ).to.eql([]);
-
-            expect(
-                filterer.isFileCompletelyFiltered({
-                    srcPath: `${rootDir}/vendor/lib.brs`,
-                    destPath: 'vendor/lib.brs'
-                })
-            ).to.be.true;
         });
     });
 
