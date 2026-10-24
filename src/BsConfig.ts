@@ -127,8 +127,7 @@ export interface BsConfig {
     | {
         files?: string | Array<string | { src: string } | { dest: string }>;
         codes?: Array<number | string>;
-        severities?: BsDiagnosticSeverity[];
-        severity?: BsDiagnosticSeverity | BsDiagnosticSeverity[];
+        minSeverity?: BsDiagnosticSeverity;
     }
     >;
 

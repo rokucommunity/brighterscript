@@ -123,7 +123,7 @@ If present, overrides the current working directory when invoking `bsc`. Default
 
 ## `diagnosticFilters`
 
-Type: `Array<string | number | {files?: string | Array<string | {src: string} | {dest: string}>; codes?: Array<number | string>; severities?: Array<'error' | 'warn' | 'info' | 'hint'>; severity?: 'error' | 'warn' | 'info' | 'hint' | Array<'error' | 'warn' | 'info' | 'hint'>}>`
+Type: `Array<string | number | {files?: string | Array<string | {src: string} | {dest: string}>; codes?: Array<number | string>; minSeverity?: 'error' | 'warn' | 'info' | 'hint'}>`
 
 A list of filters used to hide diagnostics.
 
@@ -137,7 +137,7 @@ A list of filters used to hide diagnostics.
   ]
   ```
 
-- An object can also be provided to filter specific diagnostic codes and/or severities for a file pattern. If no `files` property is included, any diagnostic that matches the values in `codes` and/or `severities` will be suppressed globally. If a `string` is given for the `files` property, it is treated as a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well. For example,
+- An object can also be provided to filter specific diagnostic codes and/or set a minimum severity threshold (`minSeverity`) for a file pattern. If no `files` property is included, any diagnostic that matches the values in `codes` and/or has a severity lower than `minSeverity` will be suppressed globally. If a `string` is given for the `files` property, it is treated as a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well. For example,
 
   ```jsonc
   "diagnosticFilters": [{
@@ -159,31 +159,32 @@ A list of filters used to hide diagnostics.
   }]
   ```
 
-- An object with `severities` (or `severity`) can be used to suppress diagnostics matching specific severity levels (`"error"`, `"warn"`, `"info"`, `"hint"`), either globally (when `files` is omitted) or for specific `files` patterns:
+- An object with `minSeverity` can be used to filter out diagnostics below a minimum severity threshold (`"error"`, `"warn"`, `"info"`, `"hint"`), either globally (when `files` is omitted) or for specific `files` patterns:
 
   ```jsonc
   "diagnosticFilters": [
-      // ignore all info and hint diagnostics across the entire project
+      // filter out hint and info diagnostics in components (keep warn and error)
       {
-          "severities": ["info", "hint"]
+          "files": "components/**/*",
+          "minSeverity": "warn"
       },
-      // ignore warnings, info, and hint diagnostics in vendor files (keep errors)
+      // filter out warnings, info, and hint diagnostics in vendor files (keep only errors)
       {
           "files": "vendor/**/*",
-          "severities": ["warn", "info", "hint"]
+          "minSeverity": "error"
       }
   ]
   ```
 
-- When an object specifies both `codes` and `severities`, a diagnostic is suppressed only when it matches **both** a code in `codes` **and** a severity in `severities` (logical AND). To suppress diagnostics that match either condition (logical OR), use separate filter objects:
+- When an object specifies both `codes` and `minSeverity`, a diagnostic is suppressed only when it matches **both** a code in `codes` **and** has a severity lower than `minSeverity` (logical AND). To suppress diagnostics that match either condition (logical OR), use separate filter objects:
 
   ```jsonc
   "diagnosticFilters": [
-      // suppress cannot-find-name in vendor files only when its severity is warn
+      // suppress cannot-find-name in vendor files when its severity is below error
       {
           "files": "vendor/**/*",
           "codes": ["cannot-find-name"],
-          "severities": ["warn"]
+          "minSeverity": "error"
       }
   ]
   ```
@@ -209,13 +210,13 @@ A negative pattern can be used to un-ignore some files, codes, or severities whi
 ]
 ```
 
-A specific error code or severity can be unignored in multiple places by using a pattern which matches everything under `rootDir`. For example,
+A specific error code or severity threshold can be unignored in multiple places by using a pattern which matches everything under `rootDir`. For example,
 
 ```jsonc
 "diagnosticFilters": [
     { "files": "vendor/**/*" }, //ignore all diagnostics from vendor libraries
     { "files": "!*/**/*", "codes": ["name-collision"] }, //EXCEPT do show this particular code everywhere
-    { "files": "!vendor/**/*", "severities": ["error"] } //AND still show errors from vendor libraries
+    { "files": "!vendor/**/*", "minSeverity": "error" } //AND still show errors from vendor libraries
 ]
 ```
 

@@ -348,43 +348,14 @@
                                     ]
                                 }
                             },
-                            "severities": {
-                                "type": "array",
-                                "description": "A list of diagnostic severities that should be filtered out (error|warn|info|hint)",
-                                "items": {
-                                    "type": "string",
-                                    "enum": [
-                                        "error",
-                                        "warn",
-                                        "info",
-                                        "hint"
-                                    ]
-                                }
-                            },
-                            "severity": {
-                                "description": "A diagnostic severity or list of severities that should be filtered out (error|warn|info|hint)",
-                                "anyOf": [
-                                    {
-                                        "type": "string",
-                                        "enum": [
-                                            "error",
-                                            "warn",
-                                            "info",
-                                            "hint"
-                                        ]
-                                    },
-                                    {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "string",
-                                            "enum": [
-                                                "error",
-                                                "warn",
-                                                "info",
-                                                "hint"
-                                            ]
-                                        }
-                                    }
+                            "minSeverity": {
+                                "type": "string",
+                                "description": "The minimum diagnostic severity to keep (error|warn|info|hint). Diagnostics with a lower severity will be filtered out.",
+                                "enum": [
+                                    "error",
+                                    "warn",
+                                    "info",
+                                    "hint"
                                 ]
                             }
                         }
