@@ -186,11 +186,15 @@ export class Util {
             compilerOption('// "bslibDestinationDir": "source",', 'Override the output directory location of the bslib.brs file. Using a location outside of `source` will break scripts that depend on it.'),
             compilerOption('// "emitDefinitions": false,', 'Emit type definition files (`d.bs`) during transpile.'),
             compilerOption('// "emitFullPaths": false,', 'Emit full paths to files when printing diagnostics to the console.'),
+            compilerOption('// "legacyCallfuncHandling": false,', 'Insert `invalid` as an argument to `callfunc()` calls that have no arguments, for legacy Roku OS versions.'),
             compilerOption('// "manifest": { "bs_const": {} },', 'Override values in the manifest file (currently only `bs_const` is supported).'),
             compilerOption('// "pruneEmptyCodeFiles": false,', 'Remove files that are empty (or only contain comments) after transpilation.'),
             compilerOption('// "removeParameterTypes": false,', 'Remove explicit parameter and return types (the `as type` syntax) from functions.'),
             compilerOption('// "resolveSourceRoot": false,', 'Resolve `sourceRoot` to an absolute path (relative to this bsconfig.json file).'),
-            compilerOption('// "sourceRoot": ""', 'Override where source files appear to live in sourcemaps and source literals.'),
+            compilerOption('// "sourceRoot": "",', 'Override where source files appear to live in sourcemaps and source literals.'),
+            compilerOption('// "strict": false,', 'Enable all strict mode options (`strictCallFunc`, `strictNodeMembers`, and any added in the future).'),
+            compilerOption('// "strictCallFunc": false,', 'Disallow `callfunc()` invocations on generic Node types.'),
+            compilerOption('// "strictNodeMembers": false', 'Treat unknown members on Node types as errors instead of dynamic values.'),
             '    },',
             '',
             option('// "cwd": "./",', 'Override the current working directory.'),
@@ -201,6 +205,7 @@ export class Util {
             option('// "extends": "",', 'Path to another bsconfig.json file that this file should import and then override.'),
             option(`// "files": ${JSON.stringify(DefaultFiles).replace(/,/g, ', ')},`, 'The list of files (or globs) to include in your project.'),
             option('// "logLevel": "log",', 'The log level: "error", "warn", "log", "info", "debug", "trace", or "off".'),
+            option('// "noEmit": false,', 'Validate the project without writing any files to `outDir`.'),
             option('// "plugins": [],', 'A list of node scripts or npm modules to load as compiler plugins.'),
             option('// "require": [],', 'A list of node scripts or npm modules to `require()` on startup.'),
             option('// "rootDir": "./",', 'The root directory of your Roku project (where the manifest lives).'),
@@ -3197,9 +3202,18 @@ export class Util {
      * return that const. A const can't refer to itself by its namespace-relative name, so that name refers to the outer (global) symbol instead.
      */
     public getSelfNamedConstOfInitializer(expression: VariableExpression): ConstStatement | undefined {
-        const constStatement = expression?.findAncestor<ConstStatement>(isConstStatement);
+        //this runs for every variable expression, so only walk up to the nearest statement instead of all the way to the root.
+        //a const's initializer is an expression, so the nearest statement around it is the const itself
+        let node = expression?.parent;
+        while (node && !isStatement(node)) {
+            node = node.parent;
+        }
+        if (!isConstStatement(node)) {
+            return undefined;
+        }
+        const constStatement = node;
         if (
-            constStatement?.tokens.name?.text.toLowerCase() === expression.tokens.name?.text.toLowerCase() &&
+            constStatement.tokens.name?.text.toLowerCase() === expression.tokens.name?.text.toLowerCase() &&
             constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)
         ) {
             return constStatement;

@@ -276,8 +276,9 @@ describe('util', () => {
             for (const key of [
                 'allowBrighterScriptInBrightScript', 'bslibDestinationDir', 'cwd', 'diagnosticFilters', 'diagnosticLevel',
                 'diagnosticReporters', 'diagnosticSeverityOverrides', 'emitDefinitions', 'emitFullPaths', 'extends', 'files',
-                'logLevel', 'manifest', 'plugins', 'pruneEmptyCodeFiles', 'removeParameterTypes', 'require',
-                'resolveSourceRoot', 'rootDir', 'showDiagnosticsInConsole', 'sourceRoot', 'validate', 'watch'
+                'legacyCallfuncHandling', 'logLevel', 'manifest', 'noEmit', 'plugins', 'pruneEmptyCodeFiles', 'removeParameterTypes', 'require',
+                'resolveSourceRoot', 'rootDir', 'showDiagnosticsInConsole', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers',
+                'validate', 'watch'
             ]) {
                 expect(contents).to.include(`// "${key}":`);
             }
