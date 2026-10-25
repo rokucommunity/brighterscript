@@ -275,9 +275,9 @@ export class DiagnosticFilterer {
     }
 
     private matchesSeverity(filter: NormalizedFilter, diagnostic: BsDiagnostic): boolean {
-        const diagnosticSeverity = this.toDiagnosticSeverity(diagnostic.severity);
+        const diagnosticSeverity = this.toDiagnosticSeverity(diagnostic.severity) ?? DiagnosticSeverity.Error;
         const minSeverity = this.toDiagnosticSeverity(filter.minSeverity);
-        if (diagnosticSeverity === undefined || minSeverity === undefined) {
+        if (minSeverity === undefined) {
             return false;
         }
         if (filter.isNegative) {
@@ -349,7 +349,7 @@ export class DiagnosticFilterer {
             }
 
             const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
-            const hasMinSeverity = 'minSeverity' in filter && filter.minSeverity !== undefined;
+            const hasMinSeverity = 'minSeverity' in filter && this.toDiagnosticSeverity(filter.minSeverity) !== undefined;
 
             //code/minSeverity-only filter
             if (!('files' in filter) && (hasCodes || hasMinSeverity)) {
@@ -436,7 +436,7 @@ export class DiagnosticFilterer {
             }
 
             const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
-            const hasMinSeverity = 'minSeverity' in filter && filter.minSeverity !== undefined;
+            const hasMinSeverity = 'minSeverity' in filter && this.toDiagnosticSeverity(filter.minSeverity) !== undefined;
 
             //code/minSeverity-only filter
             if (!('src' in filter) && (hasCodes || hasMinSeverity)) {
@@ -488,7 +488,7 @@ export class DiagnosticFilterer {
         if ('codes' in filter && Array.isArray(filter.codes)) {
             normalized.codes = filter.codes;
         }
-        if ('minSeverity' in filter && filter.minSeverity !== undefined) {
+        if ('minSeverity' in filter && this.toDiagnosticSeverity(filter.minSeverity) !== undefined) {
             normalized.minSeverity = filter.minSeverity;
         }
         return normalized;

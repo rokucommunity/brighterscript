@@ -969,29 +969,47 @@ describe('DiagnosticFilterer', () => {
             ).to.be.false;
         });
 
-        it('does not suppress all diagnostics when minSeverity is invalid', () => {
+        it('treats diagnostics with no severity as Error by default', () => {
             const diagnostics = [
-                getDiagnostic(1, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Error),
-                getDiagnostic(2, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Warning),
-                getDiagnostic(3, `${rootDir}/vendor/lib.brs`, undefined, DiagnosticSeverity.Information)
+                getDiagnostic(1, `${rootDir}/lib/vendor.brs`), // no severity -> defaults to Error
+                getDiagnostic(2, `${rootDir}/lib/vendor.brs`, undefined, DiagnosticSeverity.Warning),
+                getDiagnostic(3, `${rootDir}/lib/vendor.brs`, undefined, DiagnosticSeverity.Information)
             ];
 
             expect(
                 filterer.filter({
                     rootDir: rootDir,
                     diagnosticFilters: [
-                        { files: 'vendor/**/*', minSeverity: 'invalid' as any },
-                        { files: 'vendor/**/*', minSeverity: 999 as any }
+                        { minSeverity: 'warn' }
                     ]
                 }, diagnostics).map(x => x.code)
-            ).to.eql([1, 2, 3]);
+            ).to.eql([1, 2]);
 
             expect(
-                filterer.isFileCompletelyFiltered({
-                    srcPath: `${rootDir}/vendor/lib.brs`,
-                    destPath: 'vendor/lib.brs'
+                filterer.filter({
+                    rootDir: rootDir,
+                    diagnosticFilters: [
+                        { files: 'lib/**/*.brs' },
+                        { files: '!lib/**/*.brs', minSeverity: 'error' }
+                    ]
+                }, diagnostics).map(x => x.code)
+            ).to.eql([1]);
+        });
+
+        it('ignores invalid minSeverity values during filter normalization', () => {
+            expect(
+                filterer.getDiagnosticFilters({
+                    diagnosticFilters: [
+                        { minSeverity: 'foo' as any },
+                        { minSeverity: 999 as any },
+                        { codes: [100], minSeverity: 'foo' as any },
+                        { files: 'vendor/**/*', minSeverity: 'foo' as any }
+                    ]
                 })
-            ).to.be.false;
+            ).to.eql([
+                { codes: [100], isNegative: false },
+                { src: 'vendor/**/*', isNegative: false }
+            ]);
         });
     });
 
