@@ -6,7 +6,7 @@ import { expect } from '../chai-config.spec';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { Range } from 'vscode-languageserver';
 import { ParseMode, Parser } from '../parser/Parser';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, getBrsCode } from '../testHelpers.spec';
 import { standardizePath as s, util } from '../util';
 import * as fsExtra from 'fs-extra';
 import { BrsTranspileState } from '../parser/BrsTranspileState';
@@ -47,7 +47,7 @@ describe('BrsFile BrighterScript classes', () => {
 
             end class
         `);
-        const classStatements = file.code.ast.findChildren<ClassStatement>(isClassStatement);
+        const classStatements = getBrsCode(file).ast.findChildren<ClassStatement>(isClassStatement);
         expect(classStatements.map(x => x.getName(ParseMode.BrighterScript)).sort()).to.eql(['Animal', 'Duck']);
     });
 
@@ -113,7 +113,7 @@ describe('BrsFile BrighterScript classes', () => {
         `);
         program.validate();
         expectZeroDiagnostics(program);
-        let duckClass = file.code.ast.findChildren<ClassStatement>(isClassStatement, { walkMode: WalkMode.visitStatements }).find(x => x.tokens.name.text.toLowerCase() === 'duck');
+        let duckClass = getBrsCode(file).ast.findChildren<ClassStatement>(isClassStatement, { walkMode: WalkMode.visitStatements }).find(x => x.tokens.name.text.toLowerCase() === 'duck');
         expect(duckClass).to.exist;
         expect(duckClass!.memberMap['move']).to.exist;
     });
@@ -232,11 +232,11 @@ describe('BrsFile BrighterScript classes', () => {
                 end class
             `);
             expect(
-                (file.code.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
+                (getBrsCode(file).ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
             await program.getTranspiledFileContents(file.srcPath);
             expect(
-                (file.code.ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
+                (getBrsCode(file).ast as any).statements[1].body[0].func.body.statements[0].expression.callee.tokens.name.text
             ).to.eql('super');
         });
 
@@ -669,7 +669,7 @@ describe('BrsFile BrighterScript classes', () => {
             program.plugins.add({
                 name: 'test-plugin',
                 beforeFileTranspile: (event) => {
-                    const classStatement = (event.file as BrsFile).code['_cachedLookups'].classStatements.find(x => x.tokens.name.text === 'Duck');
+                    const classStatement = getBrsCode(event.file)['_cachedLookups'].classStatements.find(x => x.tokens.name.text === 'Duck');
                     const ctor = classStatement?.memberMap['new'] as MethodStatement;
                     if (ctor) {
                         const tracker = Parser.parse(`track("line1")`).ast.statements[0];
@@ -1207,7 +1207,7 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `, undefined, undefined, false);
             //the AST should not be permanently modified
-            const constructor = (file as any).code.ast.statements[0].body[0] as MethodStatement;
+            const constructor = (getBrsCode(file).ast as any).statements[0].body[0] as MethodStatement;
             expect(constructor.func.body.statements).to.be.lengthOf(0);
         });
 
@@ -1234,7 +1234,7 @@ describe('BrsFile BrighterScript classes', () => {
                 end function
             `);
             //the AST should not be permanently modified
-            const constructor = (file as any).code.ast.statements[0].body[0] as MethodStatement;
+            const constructor = (getBrsCode(file).ast as any).statements[0].body[0] as MethodStatement;
             expect(constructor.func.body.statements).to.be.lengthOf(0);
         });
 
@@ -2432,8 +2432,8 @@ describe('BrsFile BrighterScript classes', () => {
             end class
         `);
         doesNotThrow(() => {
-            const classStatements = file.code.ast.findChildren<ClassStatement>(isClassStatement);
-            classStatements[0]['getParentClassIndex'](new BrsTranspileState(file.code));
+            const classStatements = getBrsCode(file).ast.findChildren<ClassStatement>(isClassStatement);
+            classStatements[0]['getParentClassIndex'](new BrsTranspileState(getBrsCode(file)));
         });
     });
 
@@ -2988,7 +2988,7 @@ describe('BrsFile BrighterScript classes', () => {
                     beforeValidateFile: (event) => {
                         if (isBrsFile(event.file)) {
                             const injected = Parser.parse(`#const DEBUG = ${debug}\n`).ast.statements[0];
-                            event.file.code.ast.statements.unshift(injected);
+                            getBrsCode(event.file).ast.statements.unshift(injected);
                         }
                     }
                 });

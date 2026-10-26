@@ -8,7 +8,7 @@ import type { BsDiagnostic, FileReference } from '../interfaces';
 import { Program } from '../Program';
 import { XmlFile } from './XmlFile';
 import util, { standardizePath as s } from '../util';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestTranspile, trim, trimMap, getBrsCodes } from '../testHelpers.spec';
 import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
@@ -65,8 +65,8 @@ describe('XmlFile', () => {
                 name: 'allows modifying the parsed XML model',
                 afterProvideFile: (event) => {
                     const file = event.files[0] as XmlFile;
-                    if (isXmlFile(file) && file.code.parser.ast.rootElement?.attributes?.[0]?.value) {
-                        file.code.parser.ast.rootElement.attributes[0].value = expected;
+                    if (isXmlFile(file) && file.componentCode.parser.ast.rootElement?.attributes?.[0]?.value) {
+                        file.componentCode.parser.ast.rootElement.attributes[0].value = expected;
                     }
                 }
             });
@@ -75,7 +75,7 @@ describe('XmlFile', () => {
                 <component name="ChildScene" extends="Scene">
                 </component>
             `);
-            expect(file.code.componentName.text).to.equal(expected);
+            expect(file.componentCode.componentName.text).to.equal(expected);
         });
 
         it('only removes specified attribute when calling setAttribute', () => {
@@ -83,7 +83,7 @@ describe('XmlFile', () => {
             program.plugins.add({
                 name: 'allows modifying the parsed XML model',
                 afterProvideFile: () => {
-                    let child = file.code.parser.ast.componentElement!.childrenElement.elements[0];
+                    let child = file.componentCode.parser.ast.componentElement!.childrenElement.elements[0];
                     expect(child.attributes).to.have.lengthOf(4);
                     child.setAttributeValue('text', undefined as any);
                     expect(child.getAttribute('id')!.value).to.equal('one');
@@ -115,7 +115,7 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.bs" />
                 </component>
             `);
-            expect(file.code.scriptTagImports.map(x => x.destPath)[0]).to.equal(
+            expect(file.componentCode.scriptTagImports.map(x => x.destPath)[0]).to.equal(
                 s`components/ChildScene.bs`
             );
         });
@@ -130,7 +130,7 @@ describe('XmlFile', () => {
                 </component>
             `);
             expect(
-                file.code.scriptTagImports?.[0]?.destPath
+                file.componentCode.scriptTagImports?.[0]?.destPath
             ).to.eql(
                 s`components/ChildScene.brs`
             );
@@ -144,16 +144,16 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene1.brs" /> <script type="text/brightscript" uri="ChildScene2.brs" /> <script type="text/brightscript" uri="ChildScene3.brs" />
                 </component>
             `);
-            expect(file.code.scriptTagImports).to.be.lengthOf(3);
-            expect(file.code.scriptTagImports[0]).to.deep.include(<FileReference>{
+            expect(file.componentCode.scriptTagImports).to.be.lengthOf(3);
+            expect(file.componentCode.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'ChildScene1.brs',
                 filePathRange: Range.create(2, 42, 2, 57)
             });
-            expect(file.code.scriptTagImports[1]).to.deep.include(<FileReference>{
+            expect(file.componentCode.scriptTagImports[1]).to.deep.include(<FileReference>{
                 text: 'ChildScene2.brs',
                 filePathRange: Range.create(2, 100, 2, 115)
             });
-            expect(file.code.scriptTagImports[2]).to.deep.include(<FileReference>{
+            expect(file.componentCode.scriptTagImports[2]).to.deep.include(<FileReference>{
                 text: 'ChildScene3.brs',
                 filePathRange: Range.create(2, 158, 2, 173)
             });
@@ -167,8 +167,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="ChildScene.brs" />
                 </component>
             `);
-            expect(file.code.parentComponentName.text).to.equal('ParentScene');
-            expect(file.code.componentName.text).to.equal('ChildScene');
+            expect(file.componentCode.parentComponentName.text).to.equal('ParentScene');
+            expect(file.componentCode.componentName.text).to.equal('ChildScene');
         });
 
         it('Adds error when whitespace appears before the prolog', () => {
@@ -258,8 +258,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="pkg:/components/cmp1.brs" />
                 </component>
             `);
-            expect(file.code.scriptTagImports.length).to.equal(1);
-            expect(file.code.scriptTagImports[0]).to.deep.include(<FileReference>{
+            expect(file.componentCode.scriptTagImports.length).to.equal(1);
+            expect(file.componentCode.scriptTagImports[0]).to.deep.include(<FileReference>{
                 sourceFile: file,
                 text: 'pkg:/components/cmp1.brs',
                 destPath: `components${path.sep}cmp1.brs`,
@@ -285,8 +285,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="cmp1.brs" />
                 </component>
             `);
-            expect(file.code.scriptTagImports.length).to.equal(1);
-            expect(file.code.scriptTagImports[0]).to.deep.include(<FileReference>{
+            expect(file.componentCode.scriptTagImports.length).to.equal(1);
+            expect(file.componentCode.scriptTagImports[0]).to.deep.include(<FileReference>{
                 text: 'cmp1.brs',
                 destPath: `components${path.sep}cmp1.brs`
             });
@@ -299,8 +299,8 @@ describe('XmlFile', () => {
                     <script type="text/brightscript" uri="" />
                 </component>
             `);
-            expect(file.code.scriptTagImports.length).to.equal(1);
-            expect(file.code.scriptTagImports[0]?.filePathRange).to.eql(
+            expect(file.componentCode.scriptTagImports.length).to.equal(1);
+            expect(file.componentCode.scriptTagImports[0]?.filePathRange).to.eql(
                 Range.create(2, 42, 2, 42)
             );
         });
@@ -378,7 +378,7 @@ describe('XmlFile', () => {
     describe('getCompletions', () => {
         it('returns empty set when out of range', () => {
             program.setFile('components/component1.brs', ``);
-            expect(file.code.getCompletions(Position.create(99, 99))).to.be.empty;
+            expect(file.componentCode.getCompletions(Position.create(99, 99))).to.be.empty;
         });
 
         it('does not throw when a token is missing its tokenType', () => {
@@ -391,10 +391,10 @@ describe('XmlFile', () => {
                 </component>
             `);
             //`IToken.tokenType` is optional, so a token lacking it must not blow up a completion request
-            for (const token of xmlFile.code.parser.tokens as any[]) {
+            for (const token of xmlFile.componentCode.parser.tokens as any[]) {
                 delete token.tokenType;
             }
-            expect(() => xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<Label '))).to.not.throw();
+            expect(() => xmlFile.componentCode.getCompletions(positionAfter(xmlFile.fileContents, '<Label '))).to.not.throw();
         });
 
         //TODO - refine this test once cdata scripts are supported
@@ -437,7 +437,7 @@ describe('XmlFile', () => {
             //position the caret right after the lone `<` inside <children>
             const lines = xmlFile.fileContents.split('\n');
             const lineIndex = lines.findIndex(line => line.trim() === '<');
-            const completions = xmlFile.code.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
+            const completions = xmlFile.componentCode.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1));
             const labels = completions.map(x => x.label);
             //built-in node
             expect(labels).to.include('Label');
@@ -458,7 +458,7 @@ describe('XmlFile', () => {
             `);
             const lines = xmlFile.fileContents.split('\n');
             const lineIndex = lines.findIndex(line => line.trim() === '<');
-            const labels = xmlFile.code.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1)).map(x => x.label);
+            const labels = xmlFile.componentCode.getCompletions(Position.create(lineIndex, lines[lineIndex].indexOf('<') + 1)).map(x => x.label);
             expect(labels).to.include.members(['field', 'function']);
             //nodes/components are only valid inside <children>, not inside <interface>
             expect(labels).not.to.include('Label');
@@ -472,7 +472,7 @@ describe('XmlFile', () => {
                     </interface>
                 </component>
             `);
-            const labels = xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<field id="thing" ')).map(x => x.label);
+            const labels = xmlFile.componentCode.getCompletions(positionAfter(xmlFile.fileContents, '<field id="thing" ')).map(x => x.label);
             expect(labels).to.include.members(['type', 'value', 'onChange', 'alias']);
             //`id` is already present, so it should not be suggested again
             expect(labels).not.to.include('id');
@@ -486,7 +486,7 @@ describe('XmlFile', () => {
                     </interface>
                 </component>
             `);
-            const labels = xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<function ')).map(x => x.label);
+            const labels = xmlFile.componentCode.getCompletions(positionAfter(xmlFile.fileContents, '<function ')).map(x => x.label);
             expect(labels).to.eql(['name']);
         });
 
@@ -498,7 +498,7 @@ describe('XmlFile', () => {
                     </children>
                 </component>
             `);
-            const completions = xmlFile.code.getCompletions(positionAfter(xmlFile.fileContents, '<Label text="hi" '));
+            const completions = xmlFile.componentCode.getCompletions(positionAfter(xmlFile.fileContents, '<Label text="hi" '));
             const labels = completions.map(x => x.label);
             //Label has a `color` field
             expect(labels).to.include('color');
@@ -512,7 +512,7 @@ describe('XmlFile', () => {
                 <component name="Main" extends="Group">
                 </component>
             `);
-            const token = xmlFile.code.getTokenAt(positionAfter(xmlFile.fileContents, '<compon'));
+            const token = xmlFile.componentCode.getTokenAt(positionAfter(xmlFile.fileContents, '<compon'));
             expect(token?.image).to.equal('component');
         });
     });
@@ -620,7 +620,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.code.parentComponentName.location?.range).to.eql(Range.create(1, 38, 1, 47));
+            expect(file.componentCode.parentComponentName.location?.range).to.eql(Range.create(1, 38, 1, 47));
         });
 
         it('works for multi-line', () => {
@@ -636,7 +636,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.code.parentComponentName.location?.range).to.eql(Range.create(2, 13, 2, 22));
+            expect(file.componentCode.parentComponentName.location?.range).to.eql(Range.create(2, 13, 2, 22));
         });
 
         it('does not throw when unable to find extends', () => {
@@ -651,7 +651,7 @@ describe('XmlFile', () => {
                     </component>
                 `
             );
-            expect(file.code.parentComponentName).to.not.exist;
+            expect(file.componentCode.parentComponentName).to.not.exist;
         });
 
         it('adds warning when no "extends" attribute is found', () => {
@@ -1755,7 +1755,7 @@ end sub`);
                 <script uri='SingleQuotedFile.brs' />
             </component>
         `);
-        expect(file.code.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
+        expect(file.componentCode.scriptTagImports[0]?.text).to.eql('SingleQuotedFile.brs');
     });
 
     describe('commentFlags', () => {
@@ -1948,16 +1948,16 @@ end sub`);
                     ]]></script>
                 </component>
             `);
-            expect(xmlFile.codes).to.eql([xmlFile.code, ...xmlFile.scriptCodes]);
-            expect(xmlFile.scriptCodes.map(x => x.key)).to.eql([
+            expect(xmlFile.codes).to.eql([xmlFile.componentCode, ...getBrsCodes(xmlFile)]);
+            expect(getBrsCodes(xmlFile).map(x => x.key)).to.eql([
                 `components${path.sep}Widget.xml#script-0`,
                 `components${path.sep}Widget.xml#script-1`
             ]);
-            expect(xmlFile.scriptCodes.map(x => x.isEmbedded)).to.eql([true, true]);
-            expect(xmlFile.scriptCodes.map(x => x.parseMode)).to.eql([ParseMode.BrightScript, ParseMode.BrighterScript]);
-            expect(xmlFile.scriptCodes.map(x => x.callables.map(c => c.name))).to.eql([['first'], ['second']]);
-            expect(xmlFile.getCodeForScript(xmlFile.code.ast.componentElement.scriptElements[2])).to.equal(xmlFile.scriptCodes[1]);
-            expect(xmlFile.getCodeForScript(xmlFile.code.ast.componentElement.scriptElements[1])).to.be.undefined;
+            expect(getBrsCodes(xmlFile).map(x => x.isEmbedded)).to.eql([true, true]);
+            expect(getBrsCodes(xmlFile).map(x => x.parseMode)).to.eql([ParseMode.BrightScript, ParseMode.BrighterScript]);
+            expect(getBrsCodes(xmlFile).map(x => x.callables.map(c => c.name))).to.eql([['first'], ['second']]);
+            expect(xmlFile.getCodeForScript(xmlFile.componentCode.ast.componentElement.scriptElements[2])).to.equal(getBrsCodes(xmlFile)[1]);
+            expect(xmlFile.getCodeForScript(xmlFile.componentCode.ast.componentElement.scriptElements[1])).to.be.undefined;
         });
 
         it('treats `text/bs` as brighterscript', () => {
@@ -1970,19 +1970,19 @@ end sub`);
                     ]]></script>
                 </component>
             `);
-            expect(xmlFile.scriptCodes[0].parseMode).to.equal(ParseMode.BrighterScript);
+            expect(getBrsCodes(xmlFile)[0].parseMode).to.equal(ParseMode.BrighterScript);
         });
 
         it('locates the code in the xml file', () => {
             const xmlFile = program.setFile<XmlFile>('components/Widget.xml', widgetXml);
-            const code = xmlFile.scriptCodes[0];
+            const code = getBrsCodes(xmlFile)[0];
             expect(code.range).to.eql(util.createRange(2, 46, 6, 4));
             expect(code.srcPath).to.equal(xmlFile.srcPath);
             const subToken = code.parser.tokens.find(x => x.text === 'sub');
             expect(subToken.location).to.eql(util.createLocation(3, 8, 3, 11, util.pathToUri(xmlFile.srcPath)));
             expect(code.getText(subToken.location.range)).to.equal('sub');
             expect(program.getCodeAt(xmlFile, util.createPosition(3, 9))).to.equal(code);
-            expect(program.getCodeAt(xmlFile, util.createPosition(1, 5))).to.equal(xmlFile.code);
+            expect(program.getCodeAt(xmlFile, util.createPosition(1, 5))).to.equal(xmlFile.componentCode);
         });
 
         it('reports diagnostics at their location in the xml file', () => {
@@ -2306,7 +2306,7 @@ end sub`);
                     </component>
                 `, 'none', 'components/Widget.xml');
                 //the change is undone after the build
-                const code = (program.getFile<XmlFile>('components/Widget.xml')).scriptCodes[0];
+                const code = getBrsCodes(program.getFile<XmlFile>('components/Widget.xml'))[0];
                 expect((code.ast.findChild<PrintStatement>(isPrintStatement).expressions[0] as LiteralExpression).tokens.value.text).to.equal('"original"');
             });
 

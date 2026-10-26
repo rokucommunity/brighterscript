@@ -5,7 +5,7 @@ import util, { standardizePath as s } from './util';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import PluginInterface from './PluginInterface';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim, getBrsCode } from './testHelpers.spec';
 import type { BrsFile } from './files/BrsFile';
 import type { AssignmentStatement, ForEachStatement, IfStatement, NamespaceStatement, PrintStatement, TypeStatement } from './parser/Statement';
 import type { CompilerPlugin, ValidateScopeEvent } from './interfaces';
@@ -90,7 +90,7 @@ describe('Scope', () => {
         program.validate();
         const scope = program.getScopesForFile('source/alpha.bs')[0];
         scope.linkSymbolTable();
-        const symbolTable = file.code.ast.findChildren<NamespaceStatement>(isNamespaceStatement)[1].body.getSymbolTable();
+        const symbolTable = getBrsCode(file).ast.findChildren<NamespaceStatement>(isNamespaceStatement)[1].body.getSymbolTable();
         //the symbol table should contain the relative names for all items in this namespace across the entire scope
         expect(
             // eslint-disable-next-line no-bitwise
@@ -816,7 +816,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainSymbolTable = file.code.ast.findChild(isBlock).getSymbolTable();
+                const mainSymbolTable = getBrsCode(file).ast.findChild(isBlock).getSymbolTable();
                 const sceneType = mainSymbolTable.getSymbolType('scene', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
                 expectTypeToBe(sceneType, InterfaceType);
                 expect(sceneType.name).to.eq('roSGScreen');
@@ -848,7 +848,7 @@ describe('Scope', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 program.getScopeByName('source').linkSymbolTable();
-                const mainSymbolTable = file.code.ast.findChild(isBlock).getSymbolTable();
+                const mainSymbolTable = getBrsCode(file).ast.findChild(isBlock).getSymbolTable();
                 const comp1Type = mainSymbolTable.getSymbolType('comp1', { flags: SymbolTypeFlag.runtime }) as InterfaceType;
                 expectTypeToBe(comp1Type, ComponentType);
                 expect(comp1Type.name).to.eq('Comp1');
@@ -866,7 +866,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainSymbolTable = file.code.ast.findChild(isBlock).getSymbolTable();
+                const mainSymbolTable = getBrsCode(file).ast.findChild(isBlock).getSymbolTable();
                 const resultType = mainSymbolTable.getSymbolType('result', { flags: SymbolTypeFlag.runtime });
                 expectTypeToBe(resultType, ObjectType);
             });
@@ -2740,7 +2740,7 @@ describe('Scope', () => {
                     end function
                 end namespace
             `);
-            delete ((file.code.ast.statements[0] as NamespaceStatement).body.statements[0] as any).name;
+            delete ((getBrsCode(file).ast.statements[0] as NamespaceStatement).body.statements[0] as any).name;
             program.validate();
             program['scopes']['source'].buildNamespaceLookup();
         });
@@ -3483,7 +3483,7 @@ describe('Scope', () => {
             try {
                 expect(buildSpy.callCount).to.eql(1);
                 //a namespace statement in one file can see symbols declared in the same namespace in other files
-                const alphaSymbolTable = (program.getFile<BrsFile>('source/a.bs').code.ast.statements[0] as NamespaceStatement).body.getSymbolTable();
+                const alphaSymbolTable = (getBrsCode(program.getFile<BrsFile>('source/a.bs')).ast.statements[0] as NamespaceStatement).body.getSymbolTable();
                 expect(alphaSymbolTable.hasSymbol('two', SymbolTypeFlag.runtime)).to.be.true;
             } finally {
                 scope.unlinkSymbolTable();
@@ -3609,7 +3609,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 10));
+            const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 10));
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
@@ -3636,7 +3636,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 25));
+            const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 25));
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
@@ -3663,7 +3663,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 25));
+            const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 25));
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             expect(mainFnScope).to.exist;
@@ -3679,7 +3679,7 @@ describe('Scope', () => {
             program.setFile('source/animals.bs', animalFileContents);
             program.validate();
             expectZeroDiagnostics(program);
-            const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(7, 23));
+            const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(7, 23));
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
@@ -3700,7 +3700,7 @@ describe('Scope', () => {
             program.setFile('source/animals.bs', animalFileContents);
             program.validate();
             expectZeroDiagnostics(program);
-            const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(7, 23));
+            const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(7, 23));
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
@@ -3733,7 +3733,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+            const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
@@ -3751,7 +3751,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+            const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
             const sourceScope = program.getScopeByName('source');
             expect(sourceScope).to.exist;
             sourceScope.linkSymbolTable();
@@ -3784,7 +3784,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -3813,7 +3813,7 @@ describe('Scope', () => {
                 expectDiagnostics(program, [
                     DiagnosticMessages.cannotFindName('legs', '(Person or Pet).legs', '(Person or Pet)').message
                 ]);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -3837,7 +3837,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -3866,7 +3866,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -3907,7 +3907,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -3945,7 +3945,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -3990,7 +3990,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -4029,7 +4029,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -4063,7 +4063,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -4093,7 +4093,7 @@ describe('Scope', () => {
                         end if
                     end sub
                 `);
-                const ast = mainFile.code.ast;
+                const ast = getBrsCode(mainFile).ast;
                 program.validate();
                 expectZeroDiagnostics(program);
                 expect(isTypeStatement(ast.statements[0])).to.be.true;
@@ -4113,7 +4113,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -4139,7 +4139,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -4165,7 +4165,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 expect(sourceScope).to.exist;
                 sourceScope.linkSymbolTable();
@@ -4190,7 +4190,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 sourceScope.linkSymbolTable();
                 let mainSymbolTable = mainFnScope.symbolTable;
@@ -4210,7 +4210,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const mainFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const mainFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const sourceScope = program.getScopeByName('source');
                 sourceScope.linkSymbolTable();
                 let mainSymbolTable = mainFnScope.symbolTable;
@@ -4239,7 +4239,7 @@ describe('Scope', () => {
                 program.validate();
                 expectZeroDiagnostics(program);
                 program.getScopeByName('source').linkSymbolTable();
-                const getDataFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const getDataFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = getDataFnScope.symbolTable;
                 const getTypeOptions = { flags: SymbolTypeFlag.runtime };
                 let alphaType = symbolTable.getSymbolType('alpha', getTypeOptions);
@@ -4481,7 +4481,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('s', opts), StringType);
@@ -4507,7 +4507,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('a', opts), BooleanType);
@@ -4533,7 +4533,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const func = mainFile.code.ast.findChild<FunctionExpression>(isFunctionExpression);
+                const func = getBrsCode(mainFile).ast.findChild<FunctionExpression>(isFunctionExpression);
                 const symbolTable = func.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('one', opts), IntegerType);
@@ -4555,7 +4555,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
@@ -4581,7 +4581,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const myAA = symbolTable.getSymbolType('myAA', opts);
@@ -4610,7 +4610,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('a', opts), IntegerType);
@@ -4635,7 +4635,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('test', opts), StringType);
@@ -4652,7 +4652,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('x', opts), IntegerType);
@@ -4678,7 +4678,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('myString', opts), StringType);
@@ -4695,7 +4695,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
@@ -4712,7 +4712,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('num', opts), IntegerType);
@@ -4735,7 +4735,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(mainFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex + 1 };
                 expectTypeToBe(symbolTable.getSymbolType('total', opts), IntegerType);
@@ -4765,7 +4765,7 @@ describe('Scope', () => {
                 expectZeroDiagnostics(program);
                 const sourceScope = program.getScopeByName('source');
                 sourceScope.linkSymbolTable();
-                const forEachStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(mainFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
@@ -4789,7 +4789,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmts = mainFile.code.ast.findChildren<ForEachStatement>(isForEachStatement);
+                const forEachStmts = getBrsCode(mainFile).ast.findChildren<ForEachStatement>(isForEachStatement);
                 const outerSymbolTable = forEachStmts[0].body.getSymbolTable();
                 const innerSymbolTable = forEachStmts[1].body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
@@ -4808,7 +4808,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(mainFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('str', opts), StringType);
@@ -4824,7 +4824,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(mainFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('byte', opts), IntegerType);
@@ -4841,7 +4841,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(mainFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('key', opts), StringType);
@@ -4857,7 +4857,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(mainFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const itemType = symbolTable.getSymbolType('item', opts) as UnionType;
@@ -4876,7 +4876,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmt = mainFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(mainFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('item', opts), DynamicType);
@@ -4893,7 +4893,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = mainFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(mainFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('intArr', opts), ArrayType);
@@ -4919,7 +4919,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const forEachStmt = utilFile.code.ast.findChild<ForEachStatement>(isForEachStatement);
+                const forEachStmt = getBrsCode(utilFile).ast.findChild<ForEachStatement>(isForEachStatement);
                 const symbolTable = forEachStmt.body.getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 expectTypeToBe(symbolTable.getSymbolType('data', opts), ArrayType);
@@ -4941,7 +4941,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const dataType = symbolTable.getSymbolType('data', opts);
@@ -4960,7 +4960,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(2, 24));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(2, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const dataType = symbolTable.getSymbolType('labels', opts);
@@ -4985,7 +4985,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(9, 24));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(9, 24));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
@@ -5014,7 +5014,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const symbolTable = utilFile.code.ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
+                const symbolTable = getBrsCode(utilFile).ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
                 expectTypeToBe(dataType, ArrayType);
@@ -5042,7 +5042,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const symbolTable = utilFile.code.ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
+                const symbolTable = getBrsCode(utilFile).ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
                 expectTypeToBe(dataType, ArrayType);
@@ -5068,7 +5068,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const symbolTable = utilFile.code.ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
+                const symbolTable = getBrsCode(utilFile).ast.findChild<CallExpression>(isCallExpression).getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const dataType = symbolTable.getSymbolType('arr', opts) as ArrayType;
                 expectTypeToBe(dataType, ArrayType);
@@ -5092,7 +5092,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                let symbolTable = utilFile.code.ast.findChild<CallExpression>(isFunctionExpression).getSymbolTable();
+                let symbolTable = getBrsCode(utilFile).ast.findChild<CallExpression>(isFunctionExpression).getSymbolTable();
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const pathType = symbolTable.getSymbolType('Path', opts) as ArrayType;
                 expectTypeToBe(pathType, ArrayType);
@@ -5128,7 +5128,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(3, 31));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const sourceScope = program.getScopeByName('source');
@@ -5162,7 +5162,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(3, 31));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const sourceScope = program.getScopeByName('source');
@@ -5180,7 +5180,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(3, 31));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const sourceScope = program.getScopeByName('source');
@@ -5220,7 +5220,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(3, 31));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(3, 31));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const sourceScope = program.getScopeByName('source');
@@ -5261,7 +5261,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const processFnScope = utilFile.code.getFunctionScopeAtPosition(util.createPosition(5, 31));
+                const processFnScope = getBrsCode(utilFile).getFunctionScopeAtPosition(util.createPosition(5, 31));
                 const symbolTable = processFnScope.symbolTable;
                 const opts = { flags: SymbolTypeFlag.runtime };
                 const sourceScope = program.getScopeByName('source');
@@ -5526,7 +5526,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const forEachStmt = file.code.parser.ast.findChildren(isForEachStatement, { walkMode: WalkMode.visitAllRecursive })[0] as ForEachStatement;
+            const forEachStmt = getBrsCode(file).parser.ast.findChildren(isForEachStatement, { walkMode: WalkMode.visitAllRecursive })[0] as ForEachStatement;
             const mType = forEachStmt.getSymbolTable().getSymbolType('m', { flags: SymbolTypeFlag.runtime });
             expectTypeToBe(mType, AssociativeArrayType);
         });
@@ -5565,8 +5565,8 @@ describe('Scope', () => {
                     }
                 }
             });
-            file1.code.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
-            file2.code.ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
+            getBrsCode(file1).ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
+            getBrsCode(file2).ast.walk(assignmentVisitor, { walkMode: WalkMode.visitAllRecursive });
             program.getScopeByName('source').linkSymbolTable();
 
             // method1 - uses Thing1 'm'
@@ -5590,7 +5590,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, StringType);
@@ -5612,7 +5612,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, StringType);
@@ -5635,7 +5635,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, StringType);
@@ -5649,7 +5649,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const inputSymbol = table.getSymbol('input', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(inputSymbol.type, InlineInterfaceType);
@@ -5668,7 +5668,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, IntegerType);
@@ -5683,7 +5683,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const callbackSymbol = table.getSymbol('callback', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(callbackSymbol.type, TypedFunctionType);
@@ -5706,7 +5706,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, IntegerType);
@@ -5724,7 +5724,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, UnionType);
@@ -5742,7 +5742,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, UnionType);
@@ -5760,7 +5760,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, UnionType);
@@ -5778,7 +5778,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const callbackSymbol = table.getSymbol('callback', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(callbackSymbol.type, TypedFunctionType);
@@ -5801,7 +5801,7 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                const funcExprBody = file.code.parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
+                const funcExprBody = getBrsCode(file).parser.ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitAllRecursive })[0].body;
                 const table = funcExprBody.getSymbolTable();
                 const valueSymbol = table.getSymbol('value', SymbolTypeFlag.runtime)[0];
                 expectTypeToBe(valueSymbol.type, UnionType);
@@ -5826,7 +5826,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let xVar = printStmts[0].expressions[0];
             expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             xVar = printStmts[1].expressions[0];
@@ -5851,7 +5851,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let xVar = printStmts[0].expressions[0];
             expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             xVar = printStmts[1].expressions[0];
@@ -5879,7 +5879,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let xVar = printStmts[0].expressions[0];
             expectTypeToBe(xVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             xVar = printStmts[1].expressions[0];
@@ -5910,7 +5910,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let dbgVar = printStmts[0].expressions[0];
             expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
             dbgVar = printStmts[1].expressions[0];
@@ -5940,7 +5940,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let dbgVar = printStmts[0].expressions[0];
             expectTypeToBe(dbgVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
             dbgVar = printStmts[1].expressions[0];
@@ -5969,7 +5969,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let dataVar = printStmts[0].expressions[0];
             expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             dataVar = printStmts[1].expressions[0];
@@ -6003,7 +6003,7 @@ describe('Scope', () => {
                 `);
             program.validate();
             expectZeroDiagnostics(program);
-            const ifStmts = file.code.ast.findChildren<IfStatement>(isIfStatement);
+            const ifStmts = getBrsCode(file).ast.findChildren<IfStatement>(isIfStatement);
             let lhs2 = (ifStmts[1].condition as BinaryExpression).left as DottedGetExpression;
             expectTypeToBe(lhs2.obj.getType({ flags: SymbolTypeFlag.runtime }), ObjectType);
         });
@@ -6024,7 +6024,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let dataVar = printStmts[0].expressions[0];
             expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             dataVar = printStmts[1].expressions[0];
@@ -6054,7 +6054,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let dataVar = printStmts[0].expressions[0];
             expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             dataVar = printStmts[1].expressions[0];
@@ -6082,7 +6082,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let dataVar = printStmts[0].expressions[0];
             expectTypeToBe(dataVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             dataVar = printStmts[1].expressions[0];
@@ -6113,7 +6113,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let msgVar = printStmts[0].expressions[0];
             let msgVarType = msgVar.getType({ flags: SymbolTypeFlag.runtime });
             expectTypeToBe(msgVarType, UnionType);
@@ -6142,7 +6142,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let msgVar = printStmts[0].expressions[0];
             let msgVarType = msgVar.getType({ flags: SymbolTypeFlag.runtime });
             expectTypeToBe(msgVarType, UnionType);
@@ -6161,7 +6161,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let dataType = printStmts[0].expressions[0];
             let dataTypeType = dataType.getType({ flags: SymbolTypeFlag.runtime });
             expectTypeToBe(dataTypeType, IntegerType);
@@ -6254,7 +6254,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let itemVar = printStmts[0].expressions[0];
             expectTypeToBe(itemVar.getType({ flags: SymbolTypeFlag.runtime }), StringType);
             itemVar = printStmts[1].expressions[0];
@@ -6279,7 +6279,7 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            const printStmts = testFile.code.ast.findChildren<PrintStatement>(isPrintStatement);
+            const printStmts = getBrsCode(testFile).ast.findChildren<PrintStatement>(isPrintStatement);
             let itemVar = printStmts[0].expressions[0];
             expectTypeToBe(itemVar.getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
             itemVar = printStmts[1].expressions[0];
@@ -6322,7 +6322,7 @@ describe('Scope', () => {
             const opts = { flags: 3 as SymbolTypeFlag };
 
             function getSymbolTableList() {
-                const namespaceContainingDelta = file.code.ast.findChild(x => isFunctionStatement(x) && x.tokens.name.text === 'delta').findAncestor(x => isNamespaceStatement(x));
+                const namespaceContainingDelta = getBrsCode(file).ast.findChild(x => isFunctionStatement(x) && x.tokens.name.text === 'delta').findAncestor(x => isNamespaceStatement(x));
                 return {
                     statements: [
                         (namespaceContainingDelta as NamespaceStatement).getSymbolTable()
@@ -6412,14 +6412,14 @@ describe('Scope', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
-            expect(file1.code.requiredSymbols.length).to.eq(1);
-            expect(file1.code.requiredSymbols[0].containingNamespaces).to.have.members(['Alpha']);
-            expect(file1.code.requiredSymbols[0].endChainFlags).to.eq(SymbolTypeFlag.typetime);
-            expect(file1.code.requiredSymbols[0].typeChain.length).to.eq(4);
-            expect(file1.code.requiredSymbols[0].typeChain.map(x => x.name)).to.have.members(['Alpha', 'Beta', 'Charlie', 'SomeEnum']);
-            expect(file2.code.requiredSymbols.length).to.eq(0);
-            expect(file2.code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).size).to.eq(1);
-            const file2TypeProvides = file2.code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
+            expect(getBrsCode(file1).requiredSymbols.length).to.eq(1);
+            expect(getBrsCode(file1).requiredSymbols[0].containingNamespaces).to.have.members(['Alpha']);
+            expect(getBrsCode(file1).requiredSymbols[0].endChainFlags).to.eq(SymbolTypeFlag.typetime);
+            expect(getBrsCode(file1).requiredSymbols[0].typeChain.length).to.eq(4);
+            expect(getBrsCode(file1).requiredSymbols[0].typeChain.map(x => x.name)).to.have.members(['Alpha', 'Beta', 'Charlie', 'SomeEnum']);
+            expect(getBrsCode(file2).requiredSymbols.length).to.eq(0);
+            expect(getBrsCode(file2).providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).size).to.eq(1);
+            const file2TypeProvides = getBrsCode(file2).providedSymbols.symbolMap.get(SymbolTypeFlag.typetime);
             expectTypeToBe(file2TypeProvides.get('alpha.beta.charlie.someenum').symbol.type, EnumType);
         });
 
@@ -6624,8 +6624,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                expect(file1.code.requiredSymbols.length).to.eq(0);
-                const validationSegments = file1.code.validationSegmenter.getSegmentsWithChangedSymbols(file1.code.providedSymbols.changes);
+                expect(getBrsCode(file1).requiredSymbols.length).to.eq(0);
+                const validationSegments = getBrsCode(file1).validationSegmenter.getSegmentsWithChangedSymbols(getBrsCode(file1).providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
             });
 
@@ -6669,8 +6669,8 @@ describe('Scope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
-                expect(file1.code.requiredSymbols.length).to.eq(2);
-                const validationSegments = file1.code.validationSegmenter.getSegmentsWithChangedSymbols(file1.code.providedSymbols.changes);
+                expect(getBrsCode(file1).requiredSymbols.length).to.eq(2);
+                const validationSegments = getBrsCode(file1).validationSegmenter.getSegmentsWithChangedSymbols(getBrsCode(file1).providedSymbols.changes);
                 expect(validationSegments).to.not.undefined;
             });
         });

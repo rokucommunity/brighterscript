@@ -95,9 +95,10 @@ export class BrsFile implements BscFile {
     public program: Program;
 
     /**
-     * The code in this file
+     * The BrightScript that makes up this file. Kept private so nothing outside the file assumes a file holds a
+     * single piece of code; use `codes` instead.
      */
-    public code: BrsCode;
+    private code: BrsCode;
 
     /**
      * Indicates whether this file has been validated. Set by the program during validation

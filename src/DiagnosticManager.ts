@@ -197,10 +197,10 @@ export class DiagnosticManager {
             for (const scope of affectedScopes) {
                 if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
                     relatedInformation.push({
-                        message: `In component scope '${scope?.xmlFile?.code.componentName?.text}'`,
+                        message: `In component scope '${scope?.xmlFile?.componentCode.componentName?.text}'`,
                         location: util.createLocationFromRange(
                             util.pathToUri(scope.xmlFile?.srcPath),
-                            scope?.xmlFile?.code.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
+                            scope?.xmlFile?.componentCode.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
                         )
                     });
                 } else {

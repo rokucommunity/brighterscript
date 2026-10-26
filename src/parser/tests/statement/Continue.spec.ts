@@ -4,7 +4,7 @@ import { isContinueStatement } from '../../../astUtils/reflection';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { Program } from '../../../Program';
-import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, getBrsCode } from '../../../testHelpers.spec';
 import { rootDir } from '../../../testHelpers.spec';
 import type { BrsFile } from '../../../files/BrsFile';
 import { BrsTranspileState } from '../../BrsTranspileState';
@@ -32,7 +32,7 @@ describe('parser continue statements', () => {
             end sub
         `);
         expectZeroDiagnostics(program);
-        expect(file.code.ast.findChild(isContinueStatement)).to.exist;
+        expect(getBrsCode(file).ast.findChild(isContinueStatement)).to.exist;
     });
 
     it('flags incorrect loop type', () => {
@@ -55,7 +55,7 @@ describe('parser continue statements', () => {
             DiagnosticMessages.expectedToken(TokenKind.For),
             DiagnosticMessages.expectedToken(TokenKind.While)
         ]);
-        expect(file.code.ast.findChild(isContinueStatement)).to.exist;
+        expect(getBrsCode(file).ast.findChild(isContinueStatement)).to.exist;
     });
 
     it('flags missing `for` or `while` but still creates the node', () => {
@@ -69,7 +69,7 @@ describe('parser continue statements', () => {
         expectDiagnostics(program, [
             DiagnosticMessages.expectedToken(TokenKind.While, TokenKind.For)
         ]);
-        expect(file.code.ast.findChild(isContinueStatement)).to.exist;
+        expect(getBrsCode(file).ast.findChild(isContinueStatement)).to.exist;
     });
 
     it('detects `continue` used outside of a loop', () => {
@@ -229,14 +229,14 @@ describe('parser continue statements', () => {
                 end for
             end sub
         `);
-        const state = new BrsTranspileState(file.code);
+        const state = new BrsTranspileState(getBrsCode(file));
         //strip the newer api from this instance only (the host's state would never have had it)
         const legacyState = Object.create(state);
         for (let name of ['firmwareCapabilities', 'pushLoopLabel', 'popLoopLabel', 'peekLoopLabel', 'getLoopLabel']) {
             legacyState[name] = undefined;
         }
         expect(
-            new SourceNode(null, null, null, file.code.ast.transpile(legacyState) as any).toString()
+            new SourceNode(null, null, null, getBrsCode(file).ast.transpile(legacyState) as any).toString()
         ).to.include('continue for');
     });
 

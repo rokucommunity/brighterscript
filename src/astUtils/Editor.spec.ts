@@ -8,6 +8,7 @@ import { Program } from '../Program';
 import { BrsFile } from '../files/BrsFile';
 import { LiteralExpression } from '../parser/Expression';
 import { SourceNode } from 'source-map';
+import { getBrsCode } from '../testHelpers.spec';
 
 describe('Editor', () => {
     let editor: Editor;
@@ -168,11 +169,11 @@ describe('Editor', () => {
     });
 
     describe('overrideTranspileResult', () => {
-        const state = new BrsTranspileState(new BrsFile({
+        const state = new BrsTranspileState(getBrsCode(new BrsFile({
             srcPath: '',
             destPath: '',
             program: new Program({})
-        }).code);
+        })));
         function transpileToString(transpilable: { transpile: (state: BrsTranspileState) => any }) {
             if (transpilable.transpile) {
                 const result = transpilable.transpile(state);

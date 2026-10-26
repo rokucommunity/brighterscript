@@ -2,7 +2,7 @@ import { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
-import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getBrsCode } from './testHelpers.spec';
 import util from './util';
 import { expect } from 'chai';
 import { DiagnosticMessages } from './DiagnosticMessages';
@@ -23,7 +23,7 @@ describe('DiagnosticManager', () => {
                 location: { uri: util.pathToUri(file?.srcPath), range: undefined }
             };
 
-            file.code.commentFlags.push({
+            getBrsCode(file).commentFlags.push({
                 affectedRange: util.createRange(1, 2, 3, 4),
                 codes: [1, 2, 3],
                 file: file,
@@ -44,7 +44,7 @@ describe('DiagnosticManager', () => {
                 location: { uri: undefined, range: util.createRange(1, 2, 3, 4) }
             };
 
-            file.code.commentFlags.push({
+            getBrsCode(file).commentFlags.push({
                 affectedRange: util.createRange(1, 2, 3, 4),
                 codes: [1, 2, 3],
                 file: file,
@@ -71,7 +71,7 @@ describe('DiagnosticManager', () => {
         ].join('\n');
 
         function setFeature(file: BrsFile, isEnabled: boolean) {
-            file.code.ast.bsConsts = new Map([['feature', isEnabled]]);
+            getBrsCode(file).ast.bsConsts = new Map([['feature', isEnabled]]);
             file.isValidated = false;
             program.validate();
         }

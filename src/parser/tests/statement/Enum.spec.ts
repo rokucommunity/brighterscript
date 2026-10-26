@@ -1,7 +1,7 @@
 import { expect } from '../../../chai-config.spec';
 import { LiteralExpression } from '../../Expression';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim, getBrsCode } from '../../../testHelpers.spec';
 import { ParseMode, Parser } from '../../Parser';
 import { util, standardizePath as s } from '../../../util';
 import { EnumStatement, InterfaceStatement } from '../../Statement';
@@ -194,7 +194,7 @@ describe('EnumStatement', () => {
         program.validate();
 
         expectZeroDiagnostics(program);
-        expect(file.code.ast.findChildren<EnumStatement>(isEnumStatement).map(x => x.fullName)).to.eql([
+        expect(getBrsCode(file).ast.findChildren<EnumStatement>(isEnumStatement).map(x => x.fullName)).to.eql([
             'entities.Person',
             'Direction'
         ]);
@@ -477,7 +477,7 @@ describe('EnumStatement', () => {
             const file = program.setFile<BrsFile>('source/lib.brs', code);
             const cancel = new CancellationTokenSource();
             let firstEnum: EnumStatement | undefined;
-            file.code.ast.walk(statement => {
+            getBrsCode(file).ast.walk(statement => {
                 if (isEnumStatement(statement)) {
                     firstEnum = statement;
                     cancel.cancel();

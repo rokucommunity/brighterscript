@@ -18,7 +18,7 @@ import type { BscCode } from './files/BscCode';
 import type { BrsCode } from './files/BrsCode';
 import type { ClassStatement, ConstStatement, EnumMemberStatement, EnumStatement, InterfaceStatement, NamespaceStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
-import { globalFile } from './globalCallables';
+import { globalCode } from './globalCallables';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import type { InheritableType } from './types';
 
@@ -572,7 +572,7 @@ export class CrossScopeValidator {
                     dupesSet.add({ code: code, symbol: providedDupeSymbol });
                 }
                 if (globalSymbol) {
-                    dupesSet.add({ code: globalFile.code, symbol: globalSymbol[0] });
+                    dupesSet.add({ code: globalCode, symbol: globalSymbol[0] });
                 }
             }
         };
@@ -784,7 +784,7 @@ export class CrossScopeValidator {
             const component = this.program.getComponent(componentName);
             const componentSymbol = this.program.globalScope.symbolTable.getSymbol(typeName, SymbolTypeFlag.typetime)?.[0];
             if (componentSymbol && component) {
-                this.componentsMap.set(typeName, { code: component.file.code, symbol: componentSymbol });
+                this.componentsMap.set(typeName, { code: component.file.componentCode, symbol: componentSymbol });
             }
         }
     }

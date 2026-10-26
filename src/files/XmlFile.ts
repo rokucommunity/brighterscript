@@ -38,7 +38,7 @@ export class XmlFile implements BscFile {
         pkgPath?: string;
         program: Program;
     }) {
-        this.code = new XmlCode({
+        this.componentCode = new XmlCode({
             document: this,
             program: options?.program
         });
@@ -72,9 +72,11 @@ export class XmlFile implements BscFile {
     public program: Program;
 
     /**
-     * The SceneGraph component code in this file
+     * The code that declares this file's component: the `<component>` element, its interface and its script tags.
+     * A component file declares exactly one component, so this describes the document. To work with all of the
+     * code this file provides (including the BrightScript in its `<script>` blocks), use `codes`.
      */
-    public code: XmlCode;
+    public readonly componentCode: XmlCode;
 
     /**
      * Indicates whether this file has been validated. Set by the program during validation
@@ -84,7 +86,7 @@ export class XmlFile implements BscFile {
     /**
      * The BrightScript embedded in this component's `<script>` blocks (`<![CDATA[ ... ]]>`), in the order they appear
      */
-    public scriptCodes = [] as BrsCode[];
+    private scriptCodes = [] as BrsCode[];
 
     /**
      * The `<script>` element each piece of embedded code came from
@@ -95,7 +97,7 @@ export class XmlFile implements BscFile {
      * All of the code this file provides: the component itself, then the BrightScript in its `<script>` blocks
      */
     public get codes(): BscCode[] {
-        return [this.code, ...this.scriptCodes];
+        return [this.componentCode, ...this.scriptCodes];
     }
 
     /**
@@ -121,7 +123,7 @@ export class XmlFile implements BscFile {
 
         const cdataOpen = '<![CDATA[';
         const cdataClose = ']]>';
-        for (const script of this.code.ast.componentElement?.scriptElements ?? []) {
+        for (const script of this.componentCode.ast.componentElement?.scriptElements ?? []) {
             const cdata = script.cdata;
             const range = cdata?.location?.range;
             if (!range) {
@@ -272,7 +274,7 @@ export class XmlFile implements BscFile {
             return this._needsTranspiled;
         }
         return !!(
-            this.editor?.hasChanges || this.code.ast.componentElement?.scriptElements?.some(
+            this.editor?.hasChanges || this.componentCode.ast.componentElement?.scriptElements?.some(
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
             ) ||
             //embedded code that needs transpiling has to be written back into this file
@@ -295,7 +297,7 @@ export class XmlFile implements BscFile {
      */
     public parse(fileContents: string) {
         this.fileContents = fileContents;
-        this.code.parse(fileContents);
+        this.componentCode.parse(fileContents);
         this.createScriptCodes();
     }
 
@@ -332,7 +334,7 @@ export class XmlFile implements BscFile {
      */
     public get dependencies() {
         const dependencies = [
-            ...this.code.scriptTagImports.map(x => x.destPath.toLowerCase()),
+            ...this.componentCode.scriptTagImports.map(x => x.destPath.toLowerCase()),
             //`import` statements in the code embedded in `<script>` blocks
             ...this.scriptCodes.flatMap(code => code.ownScriptImports).filter(x => !!x.destPath).map(x => x.destPath.toLowerCase())
         ];
@@ -355,7 +357,7 @@ export class XmlFile implements BscFile {
             }
         }
 
-        if (this.code.parentComponentName) {
+        if (this.componentCode.parentComponentName) {
             dependencies.push(this.parentComponentDependencyGraphKey);
         }
         return dependencies;
@@ -377,8 +379,8 @@ export class XmlFile implements BscFile {
      */
     public get dependencyGraphKey() {
         let key: string;
-        if (this.code.componentName) {
-            key = `component:${this.code.componentName.text}`.toLowerCase();
+        if (this.componentCode.componentName) {
+            key = `component:${this.componentCode.componentName.text}`.toLowerCase();
         } else {
             key = this.destPath.toLowerCase();
         }
@@ -399,8 +401,8 @@ export class XmlFile implements BscFile {
      * If we have aparent, we will use that. If we don't, this will return undefined
      */
     public get parentComponentDependencyGraphKey() {
-        if (this.code.parentComponentName) {
-            return `component:${this.code.parentComponentName.text}`.toLowerCase();
+        if (this.componentCode.parentComponentName) {
+            return `component:${this.componentCode.parentComponentName.text}`.toLowerCase();
         } else {
             return undefined;
         }
@@ -437,7 +439,7 @@ export class XmlFile implements BscFile {
      */
     public get parentComponent() {
         const result = this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.code.parentComponentName?.text)?.file;
+            return this.program.getComponent(this.componentCode.parentComponentName?.text)?.file;
         });
         return result;
     }
@@ -454,7 +456,7 @@ export class XmlFile implements BscFile {
         let result = [] as FileReference[];
         let parent = this.parentComponent;
         while (parent) {
-            result.push(...parent.code.scriptTagImports);
+            result.push(...parent.componentCode.scriptTagImports);
             parent = parent.parentComponent;
         }
         return result;
@@ -487,7 +489,7 @@ export class XmlFile implements BscFile {
         }, {});
 
         //if the XML already has this import, skip this one
-        let alreadyThereScriptImportMap = this.code.scriptTagImports.reduce((map, fileReference) => {
+        let alreadyThereScriptImportMap = this.componentCode.scriptTagImports.reduce((map, fileReference) => {
             map[fileReference.destPath.toLowerCase()] = true;
             return map;
         }, {});
@@ -524,7 +526,7 @@ export class XmlFile implements BscFile {
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.code.parser.ast.transpile(state));
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.componentCode.parser.ast.transpile(state));
         } else if (this.program.options.sourceMap) {
             //emit code as-is with a simple map to the original file location
             transpileResult = util.simpleMap(state.srcPath, this.fileContents);

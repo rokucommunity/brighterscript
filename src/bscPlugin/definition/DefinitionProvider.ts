@@ -275,7 +275,7 @@ export class DefinitionProvider {
             for (const scope of this.event.program.getScopes()) {
                 //does this xml file declare this function in its interface?
                 if (isXmlScope(scope)) {
-                    const apiFunc = scope.xmlFile.code.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
+                    const apiFunc = scope.xmlFile.componentCode.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                     if (apiFunc) {
                         this.event.definitions.push(
                             util.createLocationFromRange(util.pathToUri(scope.xmlFile.srcPath), apiFunc.getAttribute('name').tokens.value.location?.range)
@@ -449,8 +449,8 @@ export class DefinitionProvider {
         if (
             isXmlFile(file) &&
             file.parentComponent &&
-            file.code.parentComponentName &&
-            util.rangeContains(file.code.parentComponentName.location?.range, this.event.position)
+            file.componentCode.parentComponentName &&
+            util.rangeContains(file.componentCode.parentComponentName.location?.range, this.event.position)
         ) {
             this.event.definitions.push({
                 range: util.createRange(0, 0, 0, 0),
@@ -463,7 +463,7 @@ export class DefinitionProvider {
         // Walk the entire component tree (component attributes, script tags, children nodes,
         // customization nodes) and return a definition for the first attribute value that
         // looks like a file path and resolves to a known file.
-        const component = file.code.ast?.componentElement;
+        const component = file.componentCode.ast?.componentElement;
         if (!component) {
             return;
         }

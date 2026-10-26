@@ -16,7 +16,8 @@ import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
 import type { LspDiagnostic } from './lsp/LspProject';
 import { Project } from './lsp/Project';
-import { isProgram, isProject } from './astUtils/reflection';
+import { isBrsCode, isProgram, isProject } from './astUtils/reflection';
+import type { BrsCode } from './files/BrsCode';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 
 export const cwd = s`${__dirname}/../`;
@@ -552,4 +553,18 @@ export async function once<T = any>(
             resolve(args);
         });
     });
+}
+
+/**
+ * Get the brightscript code a file provides: a brs/bs file's code, or the code in an xml file's `<script>` blocks, in order
+ */
+export function getBrsCodes(file: BscFile): BrsCode[] {
+    return (file?.codes ?? []).filter(isBrsCode);
+}
+
+/**
+ * Get one piece of the brightscript code a file provides (the first one by default)
+ */
+export function getBrsCode(file: BscFile, index = 0): BrsCode {
+    return getBrsCodes(file)[index];
 }

@@ -14,7 +14,7 @@ import { Program } from './Program';
 import { standardizePath as s, util } from './util';
 import type { FunctionStatement, PrintStatement } from './parser/Statement';
 import { EmptyStatement } from './parser/Statement';
-import { expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap, getBrsCode } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { isBrsFile } from './astUtils/reflection';
@@ -212,7 +212,7 @@ describe('Program', () => {
                     'some comment
                 end sub
             `);
-            (file.code.parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
+            (getBrsCode(file).parser.ast.statements[0] as FunctionStatement).func.body.statements[0] = new EmptyStatement();
             await program.build({
                 files: [file],
                 outDir: tempDir
@@ -377,9 +377,9 @@ describe('Program', () => {
                     }
                 });
                 program.validate();
-                expect(validatedCode).to.have.members([brsFile.code, xmlFile.code]);
-                expect(brsFile.code.isValidated).to.be.true;
-                expect(xmlFile.code.isValidated).to.be.true;
+                expect(validatedCode).to.have.members([getBrsCode(brsFile), xmlFile.componentCode]);
+                expect(getBrsCode(brsFile).isValidated).to.be.true;
+                expect(xmlFile.componentCode.isValidated).to.be.true;
             });
 
             it('wraps the code events in the file events', () => {
@@ -418,7 +418,7 @@ describe('Program', () => {
                 program.plugins.add({
                     name: 'test',
                     afterValidateFile: (event) => {
-                        hadSymbolInfo = !!program.getCodeSymbolInfo((event.file as BrsFile).code);
+                        hadSymbolInfo = !!program.getCodeSymbolInfo(getBrsCode(event.file));
                     }
                 });
                 program.validate();
@@ -525,9 +525,9 @@ describe('Program', () => {
                 end sub
             `);
             //disable the plugins
-            expect(file.code['_cachedLookups'].expressions).to.be.lengthOf(1);
+            expect(getBrsCode(file)['_cachedLookups'].expressions).to.be.lengthOf(1);
             program.validate();
-            expect(file.code['_cachedLookups'].expressions).to.be.lengthOf(1);
+            expect(getBrsCode(file)['_cachedLookups'].expressions).to.be.lengthOf(1);
         });
         it('catches duplicate XML component names', () => {
             //add 2 components which both reference the same errored file
@@ -1200,8 +1200,8 @@ describe('Program', () => {
 
                 //the symbol table should have exactly one entry for MyClass per flag
                 const file = program.getFile<BrsFile>('source/types.bs');
-                const runtimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === 'MyClass');
-                const typetimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === 'MyClass');
+                const runtimeEntries = getBrsCode(file).parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === 'MyClass');
+                const typetimeEntries = getBrsCode(file).parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === 'MyClass');
                 expect(runtimeEntries).to.have.lengthOf(1);
                 expect(typetimeEntries).to.have.lengthOf(1);
 
@@ -1236,8 +1236,8 @@ describe('Program', () => {
 
                 for (let i = 0; i < fileCount; i++) {
                     const file = program.getFile<BrsFile>(`source/types${i}.bs`);
-                    const runtimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === `MyClass${i}`);
-                    const typetimeEntries = file.code.parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === `MyClass${i}`);
+                    const runtimeEntries = getBrsCode(file).parser.symbolTable.getOwnSymbols(SymbolTypeFlag.runtime).filter(s => s.name === `MyClass${i}`);
+                    const typetimeEntries = getBrsCode(file).parser.symbolTable.getOwnSymbols(SymbolTypeFlag.typetime).filter(s => s.name === `MyClass${i}`);
                     expect(runtimeEntries, `runtime entries for MyClass${i}`).to.have.lengthOf(1);
                     expect(typetimeEntries, `typetime entries for MyClass${i}`).to.have.lengthOf(1);
                 }
@@ -1635,19 +1635,19 @@ describe('Program', () => {
             `);
             scriptCode = new BrsCode({ document: xmlFile, program: program });
             scriptCode.range = util.createRange(3, 0, 5, 0);
-            Object.defineProperty(xmlFile, 'codes', { value: [xmlFile.code, scriptCode] });
+            Object.defineProperty(xmlFile, 'codes', { value: [xmlFile.componentCode, scriptCode] });
         });
 
         it('finds the innermost code at a position', () => {
-            expect(program.getCodeAt(xmlFile, util.createPosition(1, 5))).to.equal(xmlFile.code);
+            expect(program.getCodeAt(xmlFile, util.createPosition(1, 5))).to.equal(xmlFile.componentCode);
             expect(program.getCodeAt(xmlFile, util.createPosition(4, 5))).to.equal(scriptCode);
-            expect(program.getCodeAt(xmlFile, util.createPosition(6, 5))).to.equal(xmlFile.code);
+            expect(program.getCodeAt(xmlFile, util.createPosition(6, 5))).to.equal(xmlFile.componentCode);
         });
 
         it('finds the code of a single-code file anywhere in it', () => {
             const brsFile = program.setFile<BrsFile>('source/main.brs', `sub main()\nend sub`);
-            expect(program.getCodeAt(brsFile, util.createPosition(0, 0))).to.equal(brsFile.code);
-            expect(program.getCodeAt(brsFile, util.createPosition(99, 0))).to.equal(brsFile.code);
+            expect(program.getCodeAt(brsFile, util.createPosition(0, 0))).to.equal(getBrsCode(brsFile));
+            expect(program.getCodeAt(brsFile, util.createPosition(99, 0))).to.equal(getBrsCode(brsFile));
         });
 
         it('returns undefined for files that provide no code', () => {
@@ -1665,7 +1665,7 @@ describe('Program', () => {
             });
             program.getHover(xmlFile.srcPath, util.createPosition(1, 5));
             program.getHover(xmlFile.srcPath, util.createPosition(4, 5));
-            expect(hoveredCode).to.eql([xmlFile.code, scriptCode]);
+            expect(hoveredCode).to.eql([xmlFile.componentCode, scriptCode]);
         });
 
         it('emits file-wide requests once per code and collects every result', () => {
@@ -1723,7 +1723,7 @@ describe('Program', () => {
                 }
             });
             program.getSourceFixAllCodeActions(xmlFile.srcPath);
-            expect(messagesByCode.get(xmlFile.code)).to.include('in the component').and.not.include('in the script');
+            expect(messagesByCode.get(xmlFile.componentCode)).to.include('in the component').and.not.include('in the script');
             expect(messagesByCode.get(scriptCode)).to.eql(['in the script']);
         });
     });
@@ -2554,7 +2554,7 @@ describe('Program', () => {
                     if (event.file !== file) {
                         return;
                     }
-                    const stmt = ((event.file as BrsFile).code.ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    const stmt = (getBrsCode(event.file).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 },
                 afterPrepareFile: sinon.spy()
@@ -2580,7 +2580,7 @@ describe('Program', () => {
             program.plugins.add({
                 name: 'TestPlugin',
                 beforePrepareCode: (event) => {
-                    if (event.code === file.code) {
+                    if (event.code === getBrsCode(file)) {
                         calls.push('beforePrepareCode');
                     }
                 },
@@ -2590,12 +2590,12 @@ describe('Program', () => {
                     }
                 },
                 prepareCode: (event) => {
-                    if (event.code !== file.code) {
+                    if (event.code !== getBrsCode(file)) {
                         return;
                     }
                     calls.push('prepareCode');
                     expect(event.editor).to.equal(file.editor);
-                    expect(event.scope).to.equal(program.getFirstScopeForCode(file.code));
+                    expect(event.scope).to.equal(program.getFirstScopeForCode(getBrsCode(file)));
                     const stmt = ((event.code as BrsCode).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello code"');
                 },
@@ -2605,7 +2605,7 @@ describe('Program', () => {
                     }
                 },
                 afterPrepareCode: (event) => {
-                    if (event.code === file.code) {
+                    if (event.code === getBrsCode(file)) {
                         calls.push('afterPrepareCode');
                     }
                 },
@@ -2717,7 +2717,7 @@ describe('Program', () => {
                     if (event.file !== file) {
                         return;
                     }
-                    const stmt = ((event.file as BrsFile).code.ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
+                    const stmt = (getBrsCode(event.file).ast.statements[0] as FunctionStatement).func.body.statements[0] as PrintStatement;
                     event.editor.setProperty((stmt.expressions[0] as LiteralExpression).tokens.value, 'text', '"hello there"');
                 }
             });
@@ -2746,7 +2746,7 @@ describe('Program', () => {
                 name: 'TestPlugin',
                 beforePrepareFile: (event) => {
                     if (event.file === file && isBrsFile(event.file)) {
-                        event.file.code.ast.walk(createVisitor({
+                        getBrsCode(event.file).ast.walk(createVisitor({
                             LiteralExpression: (literal) => {
                                 literalExpression = literal;
                                 event.editor.setProperty(literal.tokens.value, 'text', '"goodbye world"');
@@ -2785,7 +2785,7 @@ describe('Program', () => {
             program.plugins.add({
                 name: 'TestPlugin',
                 beforePrepareProgram: (event) => {
-                    file.code.ast.walk(createVisitor({
+                    getBrsCode(file).ast.walk(createVisitor({
                         LiteralExpression: (literal) => {
                             literalExpression = literal;
                             event.editor.setProperty(literal.tokens.value, 'text', '"goodbye world"');
@@ -4193,7 +4193,7 @@ describe('Program', () => {
                 beforeSerializeFile: (event) => {
                     if (event.file === lateFile) {
                         //edit the file's AST so we can verify the edit gets undone after the build
-                        const func = (event.file as BrsFile).code.ast.statements[0] as FunctionStatement;
+                        const func = getBrsCode(event.file).ast.statements[0] as FunctionStatement;
                         event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
                     }
                 }
@@ -4206,7 +4206,7 @@ describe('Program', () => {
 
             //the edit made to the late-added file should have been undone
             expect(
-                (lateFile.code.ast.statements[0] as FunctionStatement).tokens.name.text
+                (getBrsCode(lateFile).ast.statements[0] as FunctionStatement).tokens.name.text
             ).to.eql('late');
         });
 
@@ -4231,7 +4231,7 @@ describe('Program', () => {
                 },
                 beforeSerializeFile: (event) => {
                     if (event.file === lateFile) {
-                        const func = (event.file as BrsFile).code.ast.statements[0] as FunctionStatement;
+                        const func = getBrsCode(event.file).ast.statements[0] as FunctionStatement;
                         event.file.editor.setProperty(func.tokens.name, 'text', 'renamed');
                     }
                 }
@@ -4240,7 +4240,7 @@ describe('Program', () => {
 
             //the edit made to the late-added file should have been undone
             expect(
-                (lateFile.code.ast.statements[0] as FunctionStatement).tokens.name.text
+                (getBrsCode(lateFile).ast.statements[0] as FunctionStatement).tokens.name.text
             ).to.eql('late');
         });
     });

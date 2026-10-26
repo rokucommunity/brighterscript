@@ -1,6 +1,6 @@
 import { expect } from '../chai-config.spec';
 import { Program } from '../Program';
-import { rootDir, trim } from '../testHelpers.spec';
+import { rootDir, trim, getBrsCode } from '../testHelpers.spec';
 import type { XmlFile } from './XmlFile';
 import type { BrsFile } from './BrsFile';
 import { isBrsCode, isXmlCode } from '../astUtils/reflection';
@@ -22,10 +22,10 @@ describe('XmlCode', () => {
             <component name="Widget" extends="Group">
             </component>
         `);
-        expect(file.code).to.exist;
-        expect(file.code.document).to.equal(file);
-        expect(file.code.srcPath).to.equal(file.srcPath);
-        expect(file.code.destPath).to.equal(file.destPath);
+        expect(file.componentCode).to.exist;
+        expect(file.componentCode.document).to.equal(file);
+        expect(file.componentCode.srcPath).to.equal(file.srcPath);
+        expect(file.componentCode.destPath).to.equal(file.destPath);
     });
 
     it('holds the parsed component for its file', () => {
@@ -35,11 +35,11 @@ describe('XmlCode', () => {
                 <script type="text/brightscript" uri="Widget.brs" />
             </component>
         `);
-        expect(file.code.componentName.text).to.equal('Widget');
-        expect(file.code.parentComponentName.text).to.equal('Group');
-        expect(file.code.scriptTagImports.map(x => x.text)).to.eql(['Widget.brs']);
-        expect(file.code.ast).to.equal(file.code.ast);
-        expect(file.code.componentName).to.equal(file.code.componentName);
+        expect(file.componentCode.componentName.text).to.equal('Widget');
+        expect(file.componentCode.parentComponentName.text).to.equal('Group');
+        expect(file.componentCode.scriptTagImports.map(x => x.text)).to.eql(['Widget.brs']);
+        expect(file.componentCode.ast).to.equal(file.componentCode.ast);
+        expect(file.componentCode.componentName).to.equal(file.componentCode.componentName);
     });
 
     it('updates its required symbols when its file is re-parsed', () => {
@@ -51,7 +51,7 @@ describe('XmlCode', () => {
                 </interface>
             </component>
         `);
-        expect(file.code.requiredSymbols.map(x => x.name)).to.eql(['first']);
+        expect(file.componentCode.requiredSymbols.map(x => x.name)).to.eql(['first']);
         file.parse(trim`
             <?xml version="1.0" encoding="utf-8" ?>
             <component name="Widget" extends="Group">
@@ -60,7 +60,7 @@ describe('XmlCode', () => {
                 </interface>
             </component>
         `);
-        expect(file.code.requiredSymbols.map(x => x.name)).to.eql(['second']);
+        expect(file.componentCode.requiredSymbols.map(x => x.name)).to.eql(['second']);
     });
 
     it('collects comment flags', () => {
@@ -70,8 +70,8 @@ describe('XmlCode', () => {
             <component name="Widget" extends="Group">
             </component>
         `);
-        expect(file.code.commentFlags).to.be.lengthOf(1);
-        expect(file.code.commentFlags).to.equal(file.code.commentFlags);
+        expect(file.componentCode.commentFlags).to.be.lengthOf(1);
+        expect(file.componentCode.commentFlags).to.equal(file.componentCode.commentFlags);
     });
 
     describe('codes', () => {
@@ -82,8 +82,8 @@ describe('XmlCode', () => {
                 <component name="Widget" extends="Group">
                 </component>
             `);
-            expect(brsFile.codes).to.eql([brsFile.code]);
-            expect(xmlFile.codes).to.eql([xmlFile.code]);
+            expect(brsFile.codes).to.eql([getBrsCode(brsFile)]);
+            expect(xmlFile.codes).to.eql([xmlFile.componentCode]);
         });
 
         it('can tell the kinds of code apart', () => {
@@ -93,10 +93,10 @@ describe('XmlCode', () => {
                 <component name="Widget" extends="Group">
                 </component>
             `);
-            expect(isBrsCode(brsFile.code)).to.be.true;
-            expect(isXmlCode(brsFile.code)).to.be.false;
-            expect(isXmlCode(xmlFile.code)).to.be.true;
-            expect(isBrsCode(xmlFile.code)).to.be.false;
+            expect(isBrsCode(getBrsCode(brsFile))).to.be.true;
+            expect(isXmlCode(getBrsCode(brsFile))).to.be.false;
+            expect(isXmlCode(xmlFile.componentCode)).to.be.true;
+            expect(isBrsCode(xmlFile.componentCode)).to.be.false;
             expect(isBrsCode(undefined)).to.be.false;
         });
     });

@@ -13,7 +13,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { Program } from './Program';
 import * as assert from 'assert';
 import type { PartialDiagnostic } from './testHelpers.spec';
-import { createInactivityStub, expectZeroDiagnostics, normalizeDiagnostics, trim } from './testHelpers.spec';
+import { createInactivityStub, expectZeroDiagnostics, normalizeDiagnostics, trim, getBrsCode } from './testHelpers.spec';
 import { isBrsFile, isLiteralString } from './astUtils/reflection';
 import { createVisitor, WalkMode } from './astUtils/visitors';
 import { tempDir, rootDir } from './testHelpers.spec';
@@ -2327,7 +2327,7 @@ describe('LanguageServer', () => {
                         const { program, editor } = event;
                         const file = program.getFile('source/main.bs');
                         if (isBrsFile(file)) {
-                            file.code.ast.walk(createVisitor({
+                            getBrsCode(file).ast.walk(createVisitor({
                                 LiteralExpression: (expression) => {
                                     if (isLiteralString(expression)) {
                                         editor.setProperty(expression.tokens.value, 'text', 'hello moon');

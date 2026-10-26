@@ -5,7 +5,7 @@ import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
 import { isClassStatement, isNamespaceStatement } from '../astUtils/reflection';
 import { Program } from '../Program';
-import { trim } from '../testHelpers.spec';
+import { trim, getBrsCode } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
 import { tempDir } from '../testHelpers.spec';
 import { createStringLiteral, createToken, createVariableExpression } from '../astUtils/creators';
@@ -61,7 +61,7 @@ describe('Statement', () => {
                 end namespace
             `);
             program.validate();
-            let node = program.getFile<BrsFile>('source/main.brs')!.code.ast.findChild<NamespaceStatement>(isNamespaceStatement);
+            let node = getBrsCode(program.getFile<BrsFile>('source/main.brs')!).ast.findChild<NamespaceStatement>(isNamespaceStatement);
             while (node!.findChild(isNamespaceStatement)) {
                 node = node!.findChild<NamespaceStatement>(isNamespaceStatement);
             }
@@ -78,7 +78,7 @@ describe('Statement', () => {
                     end class
                 `);
                 program.validate();
-                const stmt = file.code.ast.findChildren<ClassStatement>(isClassStatement)[0];
+                const stmt = getBrsCode(file).ast.findChildren<ClassStatement>(isClassStatement)[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('Animal');
             });
@@ -90,7 +90,7 @@ describe('Statement', () => {
                     end namespace
                 `);
                 program.validate();
-                const stmt = file.code.ast.findChildren<ClassStatement>(isClassStatement)[0];
+                const stmt = getBrsCode(file).ast.findChildren<ClassStatement>(isClassStatement)[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
             });

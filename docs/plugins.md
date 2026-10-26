@@ -159,10 +159,10 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 
 Files provide code. A file (`BrsFile`, `XmlFile`, `AssetFile`) holds the paths, contents, dependencies and output. The code it provides holds the tokens, AST, symbols and everything else about the code itself, and is what validation, scopes and the editor features work on:
 
-- `BrsCode` is a piece of BrightScript or BrighterScript. A `.brs` or `.bs` file provides one (`file.code`). A component's `.xml` file provides one for each `<script>` block with its code inline in a `<![CDATA[ ... ]]>` section (`xmlFile.scriptCodes`). Its AST can be modified by a plugin.
-- `XmlCode` is a SceneGraph component (`xmlFile.code`); it doesn't have a proper AST currently but it can be "patched".
+- `BrsCode` is a piece of BrightScript or BrighterScript. A `.brs` or `.bs` file provides its BrightScript as `BrsCode`. A component's `.xml` file provides one for each `<script>` block with its code inline in a `<![CDATA[ ... ]]>` section. Its AST can be modified by a plugin.
+- `XmlCode` is a SceneGraph component; it doesn't have a proper AST currently but it can be "patched". A component's `.xml` file declares exactly one component, available as `xmlFile.componentCode`.
 
-`file.codes` lists all of the code a file provides. Use `code.document` to get from code back to the file it lives in.
+`file.codes` lists all of the code a file provides, and is the way to get at it: don't assume how many pieces of code, or which kinds, a file provides. `file.codes.filter(isBrsCode)` gets the BrightScript. Use `code.document` to get from code back to the file it lives in.
 
 `Scope` is a logical group of files; for instance `source` files, or each component's individual scope (XML definition, related components and imported scripts). A file can be included in multiple scopes.
 
@@ -908,7 +908,8 @@ Every plugin gets every piece of BrightScript, wherever it lives, with no opt-in
 | `prepareFile` (and before/after) with `event.file` | `prepareCode` (and before/after) with `event.code` and `event.editor`. Keep `prepareFile` for changes to the file itself |
 | `event.file` on editor events (`provideHover`, `provideCompletions`, etc.) | `event.code`. Use `event.code.document` if you need the file |
 | `isBrsFile(event.file)` / `isXmlFile(event.file)` | `isBrsCode(event.code)` / `isXmlCode(event.code)` |
-| `file.ast`, `file.parser`, `file.callables`, `file.getTokenAt()`, ... | `file.code.ast`, `file.code.parser`, ... (or `code.ast` from the event) |
+| `file.ast`, `file.parser`, `file.callables`, `file.getTokenAt()`, ... | `code.ast`, `code.parser`, ... on the event's code, or on each of `file.codes` |
+| `xmlFile.componentName`, `xmlFile.ast`, `xmlFile.scriptTagImports`, ... | `xmlFile.componentCode.componentName`, ... |
 | `callable.file`, `fileLink.file`, `namespaceContainer.file` | `callable.code`, `fileLink.code`, ... (`.code.document` for the file) |
 | `scope.enumerateBrsFiles()` | `scope.enumerateBrsCode()` |
 | `program.getFileSymbolInfo(file)` | `program.getCodeSymbolInfo(code)` |
@@ -917,6 +918,7 @@ Every plugin gets every piece of BrightScript, wherever it lives, with no opt-in
 The file events wrap the code events: `beforeValidateFile`, then `beforeValidateCode`, `validateCode` and `afterValidateCode` for each piece of code, then `validateFile` and `afterValidateFile`. The same goes for prepare.
 
 ### Things not to assume about code
+- **A file doesn't provide a fixed number of pieces of code.** A `.brs` file has one today and an `.xml` file has one per CDATA block, but new syntax can change that. Iterate `file.codes`.
 - **Code doesn't always start at the top of its file.** Embedded code starts partway into the xml file, often partway through a line, and every location is in the coordinates of the file it lives in. To insert something at the top of the code, use `code.startPosition`, never `0:0`.
 - **The file's contents are not the code's text.** Use `code.getText()`, or `code.getText(range)` for part of it (ranges are in the file's coordinates).
 - **Keep edits inside `code.range`.** Code that covers its whole file has no range.

@@ -55,6 +55,7 @@ import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
 import type { BscCode } from './files/BscCode';
 import type { BrsCode } from './files/BrsCode';
+import type { CachedLookups } from './astUtils/CachedLookups';
 import { firstBy } from 'thenby';
 import { CrossScopeValidator } from './CrossScopeValidator';
 import { DiagnosticManager } from './DiagnosticManager';
@@ -618,7 +619,7 @@ export class Program {
      */
     private addDeferredComponentTypeSymbolCreation(xmlFile: XmlFile) {
         const componentKey = this.getComponentKey(xmlFile);
-        const componentName = xmlFile.code.componentName?.text;
+        const componentName = xmlFile.componentCode.componentName?.text;
         if (this.componentSymbolsToUpdate.has(componentKey)) {
             return;
         }
@@ -626,7 +627,7 @@ export class Program {
     }
 
     private getComponentKey(xmlFile: XmlFile) {
-        return (xmlFile.code.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
+        return (xmlFile.componentCode.componentName?.text ?? xmlFile.pkgPath).toLowerCase();
     }
 
     /**
@@ -785,7 +786,7 @@ export class Program {
             namesByLowerName.set(node.name.toLowerCase(), node.name);
         }
         for (const componentName in this.components) {
-            const displayName = this.components[componentName][0]?.file.code.componentName?.text;
+            const displayName = this.components[componentName][0]?.file.componentCode.componentName?.text;
             if (displayName) {
                 namesByLowerName.set(displayName.toLowerCase(), displayName);
             }
@@ -850,10 +851,10 @@ export class Program {
             //prefer a project component (a project component can shadow a built-in of the same name)
             const component = this.getComponent(currentNodeName);
             if (component) {
-                for (const field of component.file.code.ast.componentElement?.interfaceElement?.fields ?? []) {
+                for (const field of component.file.componentCode.ast.componentElement?.interfaceElement?.fields ?? []) {
                     addField({ name: field.id, type: field.type, default: field.value, origin: origin });
                 }
-                const parentName = component.file.code.ast.componentElement?.extends;
+                const parentName = component.file.componentCode.ast.componentElement?.extends;
                 if (parentName) {
                     walk(parentName, 'inherited');
                 }
@@ -1686,7 +1687,7 @@ export class Program {
     }
 
     private doesXmlFileRequireProvidedSymbols(file: XmlFile, providedSymbolsByFlag: Map<SymbolTypeFlag, Set<string>>) {
-        for (const required of file.code.requiredSymbols) {
+        for (const required of file.componentCode.requiredSymbols) {
             const symbolNameLower = (required as UnresolvedXMLSymbol).name.toLowerCase();
             const requiredSymbolIsProvided = providedSymbolsByFlag.get(required.flags).has(symbolNameLower);
             if (requiredSymbolIsProvided) {
@@ -1703,8 +1704,8 @@ export class Program {
         const componentsByName = Object.keys(this.files).reduce<Record<string, XmlFile[]>>((map, filePath) => {
             const file = this.files[filePath];
             //if this is an XmlFile, and it has a valid `componentName` property
-            if (isXmlFile(file) && file.code.componentName?.text) {
-                let lowerName = file.code.componentName.text.toLowerCase();
+            if (isXmlFile(file) && file.componentCode.componentName?.text) {
+                let lowerName = file.componentCode.componentName.text.toLowerCase();
                 if (!map[lowerName]) {
                     map[lowerName] = [];
                 }
@@ -1718,13 +1719,13 @@ export class Program {
             //add diagnostics for every duplicate component with this name
             if (xmlFiles.length > 1) {
                 for (let xmlFile of xmlFiles) {
-                    const { componentName } = xmlFile.code;
+                    const { componentName } = xmlFile.componentCode;
                     this.diagnostics.register({
                         ...DiagnosticMessages.duplicateComponentName(componentName.text),
-                        location: xmlFile.code.componentName.location,
+                        location: xmlFile.componentCode.componentName.location,
                         relatedInformation: xmlFiles.filter(x => x !== xmlFile).map(x => {
                             return {
-                                location: x.code.componentName.location,
+                                location: x.componentCode.componentName.location,
                                 message: 'Also defined here'
                             };
                         })
@@ -1976,7 +1977,7 @@ export class Program {
         let funcNames = new Set<string>();
         let currentScope = scope;
         while (isXmlScope(currentScope)) {
-            for (let name of currentScope.xmlFile.code.ast.componentElement.interfaceElement?.functions.map((f) => f.name) ?? []) {
+            for (let name of currentScope.xmlFile.componentCode.ast.componentElement.interfaceElement?.functions.map((f) => f.name) ?? []) {
                 if (!filterName || name === filterName) {
                     funcNames.add(name);
                 }
@@ -2665,84 +2666,54 @@ export class Program {
 
 
     /**
-     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     * Find the brs files that provide code matching the given check. Used to suggest imports, so xml files
+     * (which can't be imported) are not included, even when their `<script>` blocks match.
      */
-    public findFilesForFunction(functionName: string) {
+    private findBrsFilesWithCode(matches: (lookups: CachedLookups) => boolean) {
         const files = [] as BscFile[];
-        const lowerFunctionName = functionName.toLowerCase();
-        //find every file with this function defined
         for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-                //TODO handle namespace-relative function calls
-                //if the file has a function with this name
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file.code['_cachedLookups'].functionStatementMap.get(lowerFunctionName)) {
-                    files.push(file);
-                }
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            if (isBrsFile(file) && file.codes.some(code => isBrsCode(code) && matches(code['_cachedLookups']))) {
+                files.push(file);
             }
         }
         return files;
     }
 
     /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForFunction(functionName: string) {
+        const lowerFunctionName = functionName.toLowerCase();
+        //TODO handle namespace-relative function calls
+        return this.findBrsFilesWithCode(lookups => !!lookups.functionStatementMap.get(lowerFunctionName));
+    }
+
+    /**
      * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
-        const files = [] as BscFile[];
         const lowerClassName = className.toLowerCase();
-        //find every file with this class defined
-        for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-                //TODO handle namespace-relative classes
-                //if the file has a function with this name
-
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file.code['_cachedLookups'].classStatementMap.get(lowerClassName) !== undefined) {
-                    files.push(file);
-                }
-            }
-        }
-        return files;
+        //TODO handle namespace-relative classes
+        return this.findBrsFilesWithCode(lookups => lookups.classStatementMap.get(lowerClassName) !== undefined);
     }
 
     public findFilesForNamespace(name: string) {
-        const files = [] as BscFile[];
         const lowerName = name.toLowerCase();
-        //find every file with this class defined
-        for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file.code['_cachedLookups'].namespaceStatements.find((x) => {
-                    const namespaceName = x.name.toLowerCase();
-                    return (
-                        //the namespace name matches exactly
-                        namespaceName === lowerName ||
-                        //the full namespace starts with the name (honoring the part boundary)
-                        namespaceName.startsWith(lowerName + '.')
-                    );
-                })) {
-                    files.push(file);
-                }
-            }
-        }
-
-        return files;
+        return this.findBrsFilesWithCode(lookups => lookups.namespaceStatements.some((x) => {
+            const namespaceName = x.name.toLowerCase();
+            return (
+                //the namespace name matches exactly
+                namespaceName === lowerName ||
+                //the full namespace starts with the name (honoring the part boundary)
+                namespaceName.startsWith(lowerName + '.')
+            );
+        }));
     }
 
     public findFilesForEnum(name: string) {
-        const files = [] as BscFile[];
         const lowerName = name.toLowerCase();
-        //find every file with this enum defined
-        for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file.code['_cachedLookups'].enumStatementMap.get(lowerName)) {
-                    files.push(file);
-                }
-            }
-        }
-        return files;
+        return this.findBrsFilesWithCode(lookups => !!lookups.enumStatementMap.get(lowerName));
     }
 
     private _manifest: Map<string, string>;
