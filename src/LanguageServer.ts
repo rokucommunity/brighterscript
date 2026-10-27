@@ -542,6 +542,7 @@ export class LanguageServer {
         if (
             micromatch.some(changes.map(x => x.srcPath), [
                 '**/.gitignore',
+                '**/.git/info/exclude',
                 '**/.vscode/settings.json',
                 '**/*bsconfig*.json'
             ], {
@@ -891,12 +892,21 @@ export class LanguageServer {
                 this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns)
             );
 
-            //get any .gitignore patterns from the client from this workspace
-            const gitignorePath = path.resolve(rootDir, '.gitignore');
-            if (await fsExtra.pathExists(gitignorePath)) {
-                const matcher = ignore({ ignoreCase: true }).add(
-                    fsExtra.readFileSync(gitignorePath).toString()
-                );
+            //get any .gitignore and .git/info/exclude patterns from this workspace (both use the same syntax)
+            const ignoreFilePaths = [
+                path.resolve(rootDir, '.gitignore'),
+                path.resolve(rootDir, '.git', 'info', 'exclude')
+            ];
+            const ignoreFileContents: string[] = [];
+            for (const ignoreFilePath of ignoreFilePaths) {
+                if (await fsExtra.pathExists(ignoreFilePath)) {
+                    ignoreFileContents.push(
+                        (await fsExtra.readFile(ignoreFilePath)).toString()
+                    );
+                }
+            }
+            if (ignoreFileContents.length > 0) {
+                const matcher = ignore({ ignoreCase: true }).add(ignoreFileContents);
                 this.pathFiltererDisposables.push(
                     this.pathFilterer.registerExcludeMatcher((p: string) => {
                         const relPath = path.relative(rootDir, p);
