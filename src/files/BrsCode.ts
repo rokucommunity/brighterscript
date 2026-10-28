@@ -56,16 +56,11 @@ export class BrsCode implements BscCode {
          * Is this code embedded in a file of another language (i.e. a `<script>` block in an xml file)? Defaults to false
          */
         isEmbedded?: boolean;
-        /**
-         * Called when the parser is requested but this code has not been parsed yet (i.e. a `.brs` file whose parse was skipped because it has a typedef)
-         */
-        onParserRequested?: () => void;
     }) {
         this.document = options.document;
         this.program = options.program;
         this.parseMode = options.parseMode ?? ParseMode.BrightScript;
         this.isEmbedded = options.isEmbedded ?? false;
-        this.onParserRequested = options.onParserRequested;
         this._cachedLookups = new CachedLookups(this as unknown as BscFileLike);
         this.validationSegmenter = new AstValidationSegmenter(this);
     }
@@ -89,7 +84,12 @@ export class BrsCode implements BscCode {
      */
     public parseMode: ParseMode;
 
-    private onParserRequested: () => void;
+    /**
+     * The code of the typedef that describes this code, if there is one (i.e. the code in `lib.d.bs` for `lib.brs`).
+     * Code with a typedef isn't parsed until something asks for its parser, since the typedef provides its symbols.
+     * Set by the file this code lives in, which knows where its typedef is.
+     */
+    public typedef?: BrsCode;
 
     public get srcPath() {
         return this.document.srcPath;
@@ -122,8 +122,9 @@ export class BrsCode implements BscCode {
     public isValidated = false;
 
     public get parser() {
+        //code with a typedef skips parsing, so parse it now that something needs it
         if (!this._parser) {
-            this.onParserRequested?.();
+            this.parseText();
         }
         return this._parser;
     }
@@ -204,11 +205,25 @@ export class BrsCode implements BscCode {
      * @param options.startCharacter the zero-indexed character on `startLine` where this code starts
      */
     public parse(text: string, options?: { startLine?: number; startCharacter?: number }) {
-        const diagnostics = [] as Array<BsDiagnostic>;
         this.text = text;
         this.startLine = options?.startLine ?? 0;
         this.startCharacter = options?.startCharacter ?? 0;
 
+        //if a typedef describes this code, skip parsing it (and skip validation, since the typedef provides the symbols).
+        //It gets parsed if anything asks for its parser
+        if (this.typedef) {
+            this.isValidated = true;
+            return;
+        }
+        this.parseText();
+    }
+
+    /**
+     * Tokenize and parse this code's text
+     */
+    private parseText() {
+        const diagnostics = [] as Array<BsDiagnostic>;
+        const text = this.text;
         try {
             //tokenize the input file
             let lexer = this.program.logger.time('debug', ['lexer.lex', chalk.green(this.srcPath)], () => {

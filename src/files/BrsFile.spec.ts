@@ -5667,10 +5667,11 @@ describe('BrsFile', () => {
 
             const stub = sinon.stub(file, 'parse').callThrough();
 
-            //`file.parser` is a getter, so that should force the parse to occur
-            expect(getBrsCode(file).parser.ast).to.exist;
-            expect(stub.called).to.be.true;
-            //parse should have been called
+            //`parser` is a getter, so asking for it should make the code parse its own text
+            expect(getBrsCode(file).parser.ast.statements).to.be.lengthOf(1);
+            //the code parses itself, without going back through the file
+            expect(stub.called).to.be.false;
+            expect(file.hasTypedef).to.be.true;
         });
     });
 

@@ -50,8 +50,7 @@ export class BrsFile implements BscFile {
     }) {
         this.code = new BrsCode({
             document: this,
-            program: options?.program,
-            onParserRequested: () => this.parseSkippedCode()
+            program: options?.program
         });
         if (options) {
             this.srcPath = s`${options.srcPath}`;
@@ -162,22 +161,6 @@ export class BrsFile implements BscFile {
     public _needsTranspiled: boolean;
 
 
-    /**
-     * Parse the code that was skipped during `parse()` because this file has a typedef.
-     * Called when something asks for the parser anyway.
-     */
-    private parseSkippedCode() {
-        //remove the typedef file (if it exists)
-        this.hasTypedef = false;
-        this.typedefFile = undefined;
-
-        //parse the file (it should parse fully since there's no linked typedef
-        this.parse(this.fileContents);
-
-        //re-link the typedef (if it exists...which it should)
-        this.resolveTypedef();
-    }
-
     public fileContents: string;
 
     /**
@@ -192,21 +175,24 @@ export class BrsFile implements BscFile {
     public typedefKey?: string;
 
     /**
-     * If the file was given type definitions during parse
+     * Does a typedef file describe this file?
      */
-    public hasTypedef;
+    public get hasTypedef(): boolean {
+        return !!this.code.typedef;
+    }
 
     /**
-     * A reference to the typedef file (if one exists)
+     * The typedef file that describes this file (if one exists)
      */
-    public typedefFile?: BrsFile;
+    public get typedefFile(): BrsFile | undefined {
+        return this.code.typedef?.document as BrsFile;
+    }
 
     /**
-     * Find and set the typedef variables (if a matching typedef file exists)
+     * Find this file's typedef file (if a matching one exists) and link its code to this file's code
      */
     private resolveTypedef() {
-        this.typedefFile = this.program.getFile<BrsFile>(this.typedefKey);
-        this.hasTypedef = !!this.typedefFile;
+        this.code.typedef = this.program.getFile<BrsFile>(this.typedefKey)?.code;
     }
 
     public onDependenciesChanged(event: DependencyChangedEvent) {
@@ -241,15 +227,11 @@ export class BrsFile implements BscFile {
      */
     public parse(fileContents: string) {
         this.fileContents = fileContents;
-
-        //if we have a typedef file, skip parsing this file
-        if (this.hasTypedef) {
-            //skip validation since the typedef is shadowing this file
-            this.isValidated = true;
-            this.code.isValidated = true;
-            return;
-        }
         this.code.parse(fileContents);
+        //code that a typedef describes skips parsing and validation, so the file is already validated too
+        if (this.hasTypedef) {
+            this.isValidated = true;
+        }
     }
 
 

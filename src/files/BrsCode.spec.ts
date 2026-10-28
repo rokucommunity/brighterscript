@@ -118,7 +118,66 @@ describe('BrsCode', () => {
 
         //asking the code for its parser forces the parse
         expect(getBrsCode(file).parser.ast.statements).to.be.lengthOf(1);
-        //the typedef link is restored afterwards
+        //the typedef link is untouched by the parse
         expect(file.hasTypedef).to.be.true;
+    });
+
+    describe('typedef', () => {
+        it('links a .brs file\'s code to the code of its typedef', () => {
+            const typedef = program.setFile<BrsFile>('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            expect(getBrsCode(file).typedef).to.equal(getBrsCode(typedef));
+            expect(getBrsCode(file).isValidated).to.be.true;
+            expect(file.hasTypedef).to.be.true;
+            expect(file.typedefFile).to.equal(typedef);
+            expect(file.isValidated).to.be.true;
+        });
+
+        it('parses normally once its typedef is removed', () => {
+            const typedef = program.setFile('source/main.d.bs', `
+                sub main()
+                end sub
+            `);
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                end sub
+            `);
+            program.removeFile(typedef.srcPath);
+            expect(getBrsCode(file).typedef).not.to.exist;
+            expect(file.hasTypedef).to.be.false;
+
+            file.parse(`
+                sub main()
+                end sub
+                sub other()
+                end sub
+            `);
+            expect(getBrsCode(file)['_parser']).to.exist;
+            expect(getBrsCode(file).callables.map(x => x.name)).to.eql(['main', 'other']);
+        });
+
+        it('is never set for code that has no typedef', () => {
+            const bsFile = program.setFile<BrsFile>('source/lib.bs', `
+                sub lib()
+                end sub
+            `);
+            const xmlFile = program.setFile('components/Widget.xml', `<?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brightscript"><![CDATA[
+                        sub init()
+                        end sub
+                    ]]></script>
+                </component>
+            `);
+            expect(getBrsCode(bsFile).typedef).not.to.exist;
+            expect(getBrsCode(xmlFile).typedef).not.to.exist;
+            expect(getBrsCode(xmlFile)['_parser']).to.exist;
+        });
     });
 });
