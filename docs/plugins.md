@@ -62,6 +62,7 @@ Full compiler lifecycle:
         - `afterAddFile`
         - `afterProvideScope` (component scope)
     - `beforeValidateProgram`
+    - `validateProgram`
     - For each file:
         - `beforeValidateFile`
         - For each BrightScript code segment the file provides:
@@ -72,13 +73,15 @@ Full compiler lifecycle:
         - `afterValidateFile`
     - For each scope:
         - `beforeValidateScope`
+    - For each scope:
         - `validateScope`
+    - For each scope:
         - `afterValidateScope`
     - `afterValidateProgram`
-- `beforePrepublish`
-- `afterPrepublish`
-- `beforeSerializeProgram`
-    - `beforeBuildProgram`
+- `beforeBuildProgram`
+- `buildProgram`
+    - `beforePrepareProgram`
+    - `prepareProgram`
     - For each file:
         - `beforePrepareFile`
         - For each BrightScript code segment the file provides:
@@ -91,9 +94,30 @@ Full compiler lifecycle:
         - `afterPrepareFile`
         - For each BrightScript code segment the file provides:
             - `afterPrepareBrsCodeSegment`
-    - `afterBuildProgram`
-- `afterSerializeProgram`
+    - Repeat the three prepare passes for any files that plugins added during them
+    - `afterPrepareProgram`
+    - `beforeSerializeProgram`
+    - `serializeProgram`
+    - For each file:
+        - `beforeSerializeFile`
+    - For each file:
+        - `serializeFile`
+    - For each file:
+        - `afterSerializeFile`
+    - `afterSerializeProgram`
+    - `beforeWriteProgram`
+    - `writeProgram`
+    - For each output file:
+        - `beforeWriteFile`
+    - For each output file:
+        - `writeFile`
+    - For each output file:
+        - `afterWriteFile`
+    - `afterWriteProgram`
+- `afterBuildProgram`
 - `beforeRemoveProgram`
+- `removeProgram`
+- `afterRemoveProgram`
 
 ### Language server
 
@@ -121,6 +145,7 @@ When any file is modified:
 After file addition/removal (note: throttled/debounced):
 
 - `beforeValidateProgram`
+- `validateProgram`
 - For each invalidated/not-yet-validated file
     - `beforeValidateFile`
     - For each BrightScript code segment the file provides:
@@ -131,6 +156,9 @@ After file addition/removal (note: throttled/debounced):
     - `afterValidateFile`
 - For each invalidated scope:
     - `beforeValidateScope`
+- For each invalidated scope:
+    - `validateScope`
+- For each invalidated scope:
     - `afterValidateScope`
 - `afterValidateProgram`
 
