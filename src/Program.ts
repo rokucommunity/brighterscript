@@ -2458,52 +2458,16 @@ export class Program {
         const outDir = this.getOutDir();
 
         //plugins are allowed to add files to `programEvent.files` while we're iterating (and they may insert or reorder
-        //rather than append), so track which files we've handled instead of relying on array position. Keep draining
-        //until every file in the list has been prepared exactly once.
+        //rather than append), so track which files we've handled instead of relying on array position. Files added
+        //during a round get a full round of their own, until every file in the list has been prepared exactly once.
         const preparedFiles = new Set<BscFile>();
         let filesToPrepare = [...programEvent.files];
         while (filesToPrepare.length > 0) {
             for (const file of filesToPrepare) {
                 preparedFiles.add(file);
-
-                const scope = this.getFirstScopeForFile(file);
-                //link the symbol table for all the files in this scope
-                scope?.linkSymbolTable();
-
-                //if the file doesn't have an editor yet, assign one now
-                if (!file.editor) {
-                    file.editor = new Editor();
-                }
-                const event = {
-                    program: this,
-                    file: file,
-                    editor: file.editor,
-                    scope: scope,
-                    outputPath: this.getOutputPath(file, outDir)
-                } as PrepareFileEvent & { outputPath: string };
-
-                //the file's events wrap the events for each piece of code it provides. Code is prepared in the code
-                //events; the file events are only for changes to the file itself
-                await this.plugins.emitAsync('beforePrepareFile', event);
-                for (const code of file.codes ?? []) {
-                    const codeEvent: PrepareCodeEvent = {
-                        program: this,
-                        file: file,
-                        code: code,
-                        editor: code.editor ?? file.editor,
-                        scope: scope
-                    };
-                    await this.plugins.emitAsync('beforePrepareCode', codeEvent);
-                    await this.plugins.emitAsync('prepareCode', codeEvent);
-                    await this.plugins.emitAsync('afterPrepareCode', codeEvent);
-                }
-                await this.plugins.emitAsync('prepareFile', event);
-                await this.plugins.emitAsync('afterPrepareFile', event);
-
-                //unlink the symbolTable so the next loop iteration can link theirs
-                scope?.unlinkSymbolTable();
             }
-            //pick up any files the plugins added during this pass
+            await this.prepareFiles(filesToPrepare, outDir);
+            //pick up any files the plugins added during this round
             filesToPrepare = programEvent.files.filter(x => !preparedFiles.has(x));
         }
 
@@ -2513,6 +2477,69 @@ export class Program {
         this.assignEditors(programEvent.files);
 
         return programEvent.files;
+    }
+
+    /**
+     * Prepare a round of files. Each phase runs for every file before the next phase starts: every `beforePrepareFile`
+     * (and the `beforePrepareCode` for that file's code), then every `prepareFile`/`prepareCode`, then every `afterPrepareFile`/`afterPrepareCode`.
+     */
+    private async prepareFiles(files: BscFile[], outDir: string) {
+        const entries = files.map(file => {
+            const scope = this.getFirstScopeForFile(file);
+            //if the file doesn't have an editor yet, assign one now
+            if (!file.editor) {
+                file.editor = new Editor();
+            }
+            const event = {
+                program: this,
+                file: file,
+                editor: file.editor,
+                scope: scope,
+                outputPath: this.getOutputPath(file, outDir)
+            } as PrepareFileEvent & { outputPath: string };
+            const codeEvents = (file.codes ?? []).map((code): PrepareCodeEvent => ({
+                program: this,
+                file: file,
+                code: code,
+                editor: code.editor ?? file.editor,
+                scope: scope
+            }));
+            return { scope: scope, event: event, codeEvents: codeEvents };
+        });
+
+        const phases = [
+            ['beforePrepareFile', 'beforePrepareCode'],
+            ['prepareFile', 'prepareCode'],
+            ['afterPrepareFile', 'afterPrepareCode']
+        ] as const;
+        for (const [fileEventName, codeEventName] of phases) {
+            await this.runWithScopes(entries, async (entry) => {
+                await this.plugins.emitAsync(fileEventName, entry.event);
+                for (const codeEvent of entry.codeEvents) {
+                    await this.plugins.emitAsync(codeEventName, codeEvent);
+                }
+            });
+        }
+    }
+
+    /**
+     * Run `action` for each item in order, with the item's scope's symbol table linked. Consecutive items in the same
+     * scope share one link, so the symbol table is only relinked when the scope changes.
+     */
+    private async runWithScopes<T extends { scope?: Scope }>(items: T[], action: (item: T) => Promise<void>) {
+        let linkedScope: Scope;
+        try {
+            for (const item of items) {
+                if (item.scope !== linkedScope) {
+                    linkedScope?.unlinkSymbolTable();
+                    linkedScope = item.scope;
+                    linkedScope?.linkSymbolTable();
+                }
+                await action(item);
+            }
+        } finally {
+            linkedScope?.unlinkSymbolTable();
+        }
     }
 
     /**
@@ -2552,8 +2579,8 @@ export class Program {
         //plugins may have added files during the serializeProgram events, so make sure every file has an editor
         this.assignEditors(files);
 
-        // serialize each file
-        for (const file of files) {
+        //serialize the files in phases: every `beforeSerializeFile`, then every `serializeFile`, then every `afterSerializeFile`
+        const entries = files.map(file => {
             let scope = this.getFirstScopeForFile(file);
 
             //if the file doesn't have a scope, create a temporary scope for the file so it can depend on scope-level items
@@ -2562,20 +2589,18 @@ export class Program {
                 scope.getAllFiles = () => [file];
                 scope.getOwnFiles = scope.getAllFiles;
             }
-
-            //link the symbol table for all the files in this scope
-            scope?.linkSymbolTable();
             const event: SerializeFileEvent = {
                 program: this,
                 file: file,
                 scope: scope,
                 result: allFiles
             };
-            await this.plugins.emitAsync('beforeSerializeFile', event);
-            await this.plugins.emitAsync('serializeFile', event);
-            await this.plugins.emitAsync('afterSerializeFile', event);
-            //unlink the symbolTable so the next loop iteration can link theirs
-            scope?.unlinkSymbolTable();
+            return { scope: scope, event: event };
+        });
+        for (const eventName of ['beforeSerializeFile', 'serializeFile', 'afterSerializeFile'] as const) {
+            await this.runWithScopes(entries, async (entry) => {
+                await this.plugins.emitAsync(eventName, entry.event);
+            });
         }
 
         this.plugins.emit('afterSerializeProgram', serializeProgramEvent);
@@ -2602,21 +2627,18 @@ export class Program {
             .map(([, serializedFiles]) => serializedFiles)
             .flat();
 
-        //write all the files to disk (asynchronously)
-        await Promise.all(
-            serializedFiles.map(async (file) => {
-                const event = await this.plugins.emitAsync('beforeWriteFile', {
-                    program: this,
-                    file: file,
-                    outputPath: this.getOutputPath(file, outDir),
-                    processedFiles: new Set<SerializedFile>()
-                });
-
-                await this.plugins.emitAsync('writeFile', event);
-
-                await this.plugins.emitAsync('afterWriteFile', event);
-            })
+        //write all the files to disk in phases: every `beforeWriteFile`, then every `writeFile`, then every `afterWriteFile`.
+        //The files within each phase are handled in parallel
+        const writeEvents = await Promise.all(
+            serializedFiles.map(file => this.plugins.emitAsync('beforeWriteFile', {
+                program: this,
+                file: file,
+                outputPath: this.getOutputPath(file, outDir),
+                processedFiles: new Set<SerializedFile>()
+            }))
         );
+        await Promise.all(writeEvents.map(event => this.plugins.emitAsync('writeFile', event)));
+        await Promise.all(writeEvents.map(event => this.plugins.emitAsync('afterWriteFile', event)));
 
         await this.plugins.emitAsync('afterWriteProgram', programEvent);
     }

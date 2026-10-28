@@ -2624,10 +2624,10 @@ describe('Program', () => {
             expect(calls).to.eql([
                 'beforePrepareFile',
                 'beforePrepareCode',
-                'prepareCode',
-                'afterPrepareCode',
                 'prepareFile',
-                'afterPrepareFile'
+                'prepareCode',
+                'afterPrepareFile',
+                'afterPrepareCode'
             ]);
         });
 
@@ -4136,6 +4136,108 @@ describe('Program', () => {
             expect(
                 fsExtra.readFileSync(`${outDir}/source/late.brs`).toString()
             ).to.include('bslib_ternary');
+        });
+
+        it('runs each prepare phase for every file before starting the next phase', async () => {
+            program.setFile('source/a.brs', `sub a()\nend sub`);
+            program.setFile('source/b.brs', `sub b()\nend sub`);
+            const calls = [] as string[];
+            const record = (name: string) => (event: { file: BscFile }) => {
+                if (/source[\\/][ab]\.brs$/.test(event.file.srcPath)) {
+                    calls.push(`${name} ${path.basename(event.file.srcPath)}`);
+                }
+            };
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforePrepareFile: record('beforePrepareFile'),
+                beforePrepareCode: record('beforePrepareCode'),
+                prepareFile: record('prepareFile'),
+                prepareCode: record('prepareCode'),
+                afterPrepareFile: record('afterPrepareFile'),
+                afterPrepareCode: record('afterPrepareCode')
+            });
+            await program.build();
+
+            expect(calls).to.eql([
+                'beforePrepareFile a.brs',
+                'beforePrepareCode a.brs',
+                'beforePrepareFile b.brs',
+                'beforePrepareCode b.brs',
+                'prepareFile a.brs',
+                'prepareCode a.brs',
+                'prepareFile b.brs',
+                'prepareCode b.brs',
+                'afterPrepareFile a.brs',
+                'afterPrepareCode a.brs',
+                'afterPrepareFile b.brs',
+                'afterPrepareCode b.brs'
+            ]);
+        });
+
+        it('gives a file added during a prepare phase a full round of its own', async () => {
+            program.setFile('source/main.brs', `sub main()\nend sub`);
+            let programFiles: BscFile[];
+            const calls = [] as string[];
+            const record = (name: string) => (event: { file: BscFile }) => {
+                if (/source[\\/](main|late)\.brs$/.test(event.file.srcPath)) {
+                    calls.push(`${name} ${path.basename(event.file.srcPath)}`);
+                }
+            };
+            program.plugins.add({
+                name: 'TestPlugin',
+                prepareProgram: (event) => {
+                    programFiles = event.files;
+                },
+                beforePrepareFile: record('beforePrepareFile'),
+                prepareFile: (event) => {
+                    record('prepareFile')(event);
+                    if (event.file.srcPath.endsWith('main.brs')) {
+                        programFiles.push(program.setFile('source/late.brs', `sub late()\nend sub`));
+                    }
+                },
+                afterPrepareFile: record('afterPrepareFile')
+            });
+            await program.build();
+
+            expect(calls).to.eql([
+                'beforePrepareFile main.brs',
+                'prepareFile main.brs',
+                'afterPrepareFile main.brs',
+                'beforePrepareFile late.brs',
+                'prepareFile late.brs',
+                'afterPrepareFile late.brs'
+            ]);
+            expect(fsExtra.pathExistsSync(`${outDir}/source/late.brs`)).to.be.true;
+        });
+
+        it('runs each serialize and write phase for every file before starting the next phase', async () => {
+            program.setFile('source/a.brs', `sub a()\nend sub`);
+            program.setFile('source/b.brs', `sub b()\nend sub`);
+            const calls = [] as string[];
+            const record = (name: string) => (event: { file: { pkgPath?: string } }) => {
+                if (/source[\\/][ab]\.brs$/.test(event.file.pkgPath)) {
+                    calls.push(name);
+                }
+            };
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforeSerializeFile: record('beforeSerializeFile'),
+                serializeFile: record('serializeFile'),
+                afterSerializeFile: record('afterSerializeFile'),
+                beforeWriteFile: record('beforeWriteFile'),
+                writeFile: record('writeFile'),
+                afterWriteFile: record('afterWriteFile')
+            });
+            await program.build();
+
+            expect(calls).to.eql([
+                'beforeSerializeFile', 'beforeSerializeFile',
+                'serializeFile', 'serializeFile',
+                'afterSerializeFile', 'afterSerializeFile',
+                'beforeWriteFile', 'beforeWriteFile',
+                'writeFile', 'writeFile',
+                'afterWriteFile', 'afterWriteFile'
+            ]);
         });
 
         it('prepares each file exactly once when a plugin inserts a file during prepareFile', async () => {

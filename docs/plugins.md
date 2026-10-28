@@ -83,10 +83,14 @@ Full compiler lifecycle:
         - `beforePrepareFile`
         - For each piece of code the file provides:
             - `beforePrepareCode`
-            - `prepareCode`
-            - `afterPrepareCode`
+    - For each file:
         - `prepareFile`
+        - For each piece of code the file provides:
+            - `prepareCode`
+    - For each file:
         - `afterPrepareFile`
+        - For each piece of code the file provides:
+            - `afterPrepareCode`
     - `afterBuildProgram`
 - `afterSerializeProgram`
 - `beforeRemoveProgram`
@@ -915,7 +919,9 @@ Files provide code, and plugins work on that code. Every plugin gets every piece
 | `program.getFileSymbolInfo(file)` | `program.getCodeSymbolInfo(code)` |
 | `file.commentFlags` | `code.commentFlags` |
 
-The file events wrap the code events: `beforeValidateFile`, then `beforeValidateCode`, `validateCode` and `afterValidateCode` for each piece of code, then `validateFile` and `afterValidateFile`. The same goes for prepare.
+Validation runs each file's events together, with the code events inside the file events: `beforeValidateFile`, then `beforeValidateCode`, `validateCode` and `afterValidateCode` for each piece of code, then `validateFile` and `afterValidateFile`. A file is either fully validated or not at all, so a validation that gets cancelled never leaves a file half done.
+
+Building runs in phases instead. Every file gets its `before` event (followed by its code's) before any file gets its main event, and every file gets its main event before any file gets its `after` event. This applies to prepare (`beforePrepareFile`/`beforePrepareCode`, then `prepareFile`/`prepareCode`, then `afterPrepareFile`/`afterPrepareCode`), serialize (`beforeSerializeFile`, `serializeFile`, `afterSerializeFile`) and write (`beforeWriteFile`, `writeFile`, `afterWriteFile`). So a plugin that keeps state between a file's events needs to key it by file. A file that a plugin adds to the build while files are being prepared gets a full round of the prepare phases of its own, after the current round.
 
 ### Things not to assume about code
 - **A file doesn't provide a fixed number of pieces of code.** A `.brs` file has one today and an `.xml` file has one per CDATA block, but new syntax can change that. Iterate `file.codes`.
