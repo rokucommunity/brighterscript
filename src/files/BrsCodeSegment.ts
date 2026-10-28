@@ -34,26 +34,25 @@ import { getBsConst } from '../preprocessor/Manifest';
 import type { BscType } from '../types';
 import { NamespaceType } from '../types';
 import type { BscFile } from './BscFile';
-import type { BscCode } from './BscCode';
 import type { ProvidedSymbol } from './BrsFile';
 
 /**
  * A piece of BrightScript or BrighterScript code. This holds everything about the code itself (tokens, AST, symbols, callables, etc.),
  * while the file it lives in (its `document`) holds the paths, contents, dependencies and output.
  */
-export class BrsCode implements BscCode {
+export class BrsCodeSegment {
     constructor(options: {
         /**
-         * The file this code lives in
+         * The file this code segment lives in
          */
         document: BscFile;
         program: Program;
         /**
-         * The parse mode to use for this code
+         * The parse mode to use for this code segment
          */
         parseMode?: ParseMode;
         /**
-         * Is this code embedded in a file of another language (i.e. a `<script>` block in an xml file)? Defaults to false
+         * Is this code segment embedded in a file of another language (i.e. a `<script>` block in an xml file)? Defaults to false
          */
         isEmbedded?: boolean;
     }) {
@@ -65,31 +64,31 @@ export class BrsCode implements BscCode {
         this.validationSegmenter = new AstValidationSegmenter(this);
     }
 
-    public type = 'BrsCode';
+    public type = 'BrsCodeSegment';
 
     /**
-     * The file this code lives in
+     * The file this code segment lives in
      */
     public document: BscFile;
 
     public program: Program;
 
     /**
-     * The region of the document this code covers. Undefined means this code covers the whole document.
+     * The region of the document this code segment covers. Undefined means this code segment covers the whole document.
      */
     public range?: Range;
 
     /**
-     * The parseMode used for the parser for this code
+     * The parseMode used for the parser for this code segment
      */
     public parseMode: ParseMode;
 
     /**
-     * The code of the typedef that describes this code, if there is one (i.e. the code in `lib.d.bs` for `lib.brs`).
+     * The code of the typedef that describes this code segment, if there is one (i.e. the code in `lib.d.bs` for `lib.brs`).
      * Code with a typedef isn't parsed until something asks for its parser, since the typedef provides its symbols.
-     * Set by the file this code lives in, which knows where its typedef is.
+     * Set by the file this code segment lives in, which knows where its typedef is.
      */
-    public typedef?: BrsCode;
+    public typedef?: BrsCodeSegment;
 
     public get srcPath() {
         return this.document.srcPath;
@@ -100,7 +99,7 @@ export class BrsCode implements BscCode {
     }
 
     /**
-     * A key that identifies this code in the program. Defaults to the file's `pkgPath`, which is right for code that covers the whole file.
+     * A key that identifies this code segment in the program. Defaults to the file's `pkgPath`, which is right for code that covers the whole file.
      */
     public get key() {
         return this._key ?? this.document.pkgPath;
@@ -117,7 +116,7 @@ export class BrsCode implements BscCode {
     private _cachedLookups: CachedLookups;
 
     /**
-     * Indicates whether this code has been validated
+     * Indicates whether this code segment has been validated
      */
     public isValidated = false;
 
@@ -131,36 +130,36 @@ export class BrsCode implements BscCode {
     private _parser: Parser;
 
     /**
-     * The source code of this code (not the whole document, unless this code spans the whole document)
+     * The source code of this code segment (not the whole document, unless this code segment spans the whole document)
      */
     public text: string;
 
     /**
-     * The zero-indexed line in the document where this code starts
+     * The zero-indexed line in the document where this code segment starts
      */
     public startLine = 0;
 
     /**
-     * The zero-indexed character on `startLine` where this code starts
+     * The zero-indexed character on `startLine` where this code segment starts
      */
     public startCharacter = 0;
 
     /**
-     * The position in the document where this code starts. Use this instead of `0:0` when inserting at the top of the code.
+     * The position in the document where this code segment starts. Use this instead of `0:0` when inserting at the top of the code.
      */
     public get startPosition(): Position {
         return util.createPosition(this.startLine, this.startCharacter);
     }
 
     /**
-     * Get the source code of this code, or of the given range within it
-     * @param range a range in document coordinates. If omitted, all of this code's text is returned
+     * Get the source code of this code segment, or of the given range within it
+     * @param range a range in document coordinates. If omitted, all of this code segment's text is returned
      */
     public getText(range?: Range) {
         if (!range) {
             return this.text;
         }
-        //convert the range from document coordinates into coordinates within this code's text
+        //convert the range from document coordinates into coordinates within this code segment's text
         const toCodePosition = (position: Position) => util.createPosition(
             position.line - this.startLine,
             position.line === this.startLine ? position.character - this.startCharacter : position.character
@@ -172,14 +171,14 @@ export class BrsCode implements BscCode {
     }
 
     /**
-     * Is this code embedded in a file of another language (i.e. a `<script>` block in an xml file)?
+     * Is this code segment embedded in a file of another language (i.e. a `<script>` block in an xml file)?
      * Code that is the whole of its `.brs`/`.bs` file is not embedded. Set when the code is created, since it decides which editor the code uses.
      */
     public readonly isEmbedded: boolean;
 
     /**
-     * The editor for changes to this code during the build. Embedded code has an editor of its own, so its file can tell whether
-     * this code was changed (and needs to be transpiled) apart from changes to the rest of the file. Other code uses its file's editor.
+     * The editor for changes to this code segment during the build. Embedded code has an editor of its own, so its file can tell whether
+     * this code segment was changed (and needs to be transpiled) apart from changes to the rest of the file. Other code uses its file's editor.
      */
     public get editor(): Editor {
         return this.isEmbedded ? (this._editor ??= new Editor()) : (this.document as { editor?: Editor }).editor;
@@ -187,7 +186,7 @@ export class BrsCode implements BscCode {
     private _editor: Editor;
 
     /**
-     * Does this code need to be transpiled? Embedded code needs it when it is BrighterScript or it was changed during the build;
+     * Does this code segment need to be transpiled? Embedded code needs it when it is BrighterScript or it was changed during the build;
      * any other code follows the file it lives in.
      */
     public get needsTranspiled() {
@@ -198,18 +197,18 @@ export class BrsCode implements BscCode {
     }
 
     /**
-     * Tokenize and parse this code
+     * Tokenize and parse this code segment
      * @param text the source code to parse
      * @param options options for parsing
-     * @param options.startLine the zero-indexed line in the document where this code starts (for code embedded in a larger file)
-     * @param options.startCharacter the zero-indexed character on `startLine` where this code starts
+     * @param options.startLine the zero-indexed line in the document where this code segment starts (for code embedded in a larger file)
+     * @param options.startCharacter the zero-indexed character on `startLine` where this code segment starts
      */
     public parse(text: string, options?: { startLine?: number; startCharacter?: number }) {
         this.text = text;
         this.startLine = options?.startLine ?? 0;
         this.startCharacter = options?.startCharacter ?? 0;
 
-        //if a typedef describes this code, skip parsing it (and skip validation, since the typedef provides the symbols).
+        //if a typedef describes this code segment, skip parsing it (and skip validation, since the typedef provides the symbols).
         //It gets parsed if anything asks for its parser
         if (this.typedef) {
             this.isValidated = true;
@@ -219,7 +218,7 @@ export class BrsCode implements BscCode {
     }
 
     /**
-     * Tokenize and parse this code's text
+     * Tokenize and parse this code segment's text
      */
     private parseText() {
         const diagnostics = [] as Array<BsDiagnostic>;
@@ -313,7 +312,7 @@ export class BrsCode implements BscCode {
                             //class. Subsequent `??=` assignments mutate values without
                             //changing the object shape, which keeps property access fast.
                             contributions.set(lowerLoopName, {
-                                code: this,
+                                codeSegment: this,
                                 fullName: loopName,
                                 lastPartName: part,
                                 nameRange: namespaceStatement.nameExpression.location?.range,
@@ -447,7 +446,7 @@ export class BrsCode implements BscCode {
         const lowerClassName = className.toLowerCase();
         const lowerContainingNamespace = containingNamespace?.toLowerCase();
 
-        const scopes = this.program.getScopesForCode(this);
+        const scopes = this.program.getScopesForCodeSegment(this);
         //find the first class in the first scope that has it
         for (let scope of scopes) {
             const cls = scope.getClassFileLink(lowerClassName, lowerContainingNamespace);
@@ -625,7 +624,7 @@ export class BrsCode implements BscCode {
                     isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
                     name: statement.tokens.name?.text,
                     nameRange: statement.tokens.name?.location?.range,
-                    code: this,
+                    codeSegment: this,
                     params: params,
                     range: statement.func.location?.range,
                     type: funcType,
@@ -885,7 +884,7 @@ export class BrsCode implements BscCode {
         const nsTable = this.getNamespaceSymbolTable(false);
         this.linkSymbolTableDisposables.push(this.ast.symbolTable.addSibling(nsTable));
         this.validationSegmenter.processTree(this.ast);
-        this.program.addCodeSymbolInfo(this);
+        this.program.addCodeSegmentSymbolInfo(this);
         this.unlinkNamespaceSymbolTables();
     }
 
@@ -1090,7 +1089,7 @@ export class BrsCode implements BscCode {
         const changes = new Map<SymbolTypeFlag, Set<string>>();
         changes.set(SymbolTypeFlag.runtime, new Set<string>());
         changes.set(SymbolTypeFlag.typetime, new Set<string>());
-        const previouslyProvidedSymbols = this.program.getCodeSymbolInfo(this)?.provides.symbolMap;
+        const previouslyProvidedSymbols = this.program.getCodeSegmentSymbolInfo(this)?.provides.symbolMap;
         const previousSymbolsChecked = new Map<SymbolTypeFlag, Set<string>>();
         previousSymbolsChecked.set(SymbolTypeFlag.runtime, new Set<string>());
         previousSymbolsChecked.set(SymbolTypeFlag.typetime, new Set<string>());
@@ -1174,7 +1173,7 @@ export class BrsCode implements BscCode {
                 if (!namespaceLookup.has(lowerLoopName)) {
                     namespaceLookup.set(lowerLoopName, {
                         isTopLevel: i === 0,
-                        code: this,
+                        codeSegment: this,
                         fullName: loopName,
                         fullNameLower: lowerLoopName,
                         parentNameLower: parentNameLower,
@@ -1197,7 +1196,7 @@ export class BrsCode implements BscCode {
         return namespaceLookup;
     }
     /**
-     * Transpile this code into BrightScript. The result maps back to this code's location in its document, so code embedded in a
+     * Transpile this code segment into BrightScript. The result maps back to this code segment's location in its document, so code embedded in a
      * larger file maps to its place in that file.
      */
     public transpile(): SourceNode {
@@ -1222,7 +1221,7 @@ export class BrsCode implements BscCode {
     }
 
     /**
-     * Find the locations of every class method and field named `textToSearchFor` in this code
+     * Find the locations of every class method and field named `textToSearchFor` in this code segment
      * @param textToSearchFor the lower-case member name
      */
     public getClassMemberDefinitions(textToSearchFor: string): Location[] {

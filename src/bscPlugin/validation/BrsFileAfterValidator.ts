@@ -1,16 +1,15 @@
-import type { BrsCode } from '../../files/BrsCode';
-import type { AfterValidateCodeEvent } from '../../interfaces';
+import type { AfterValidateBrsCodeSegmentEvent } from '../../interfaces';
 
 
 export class BrsFileAfterValidator {
     constructor(
-        public event: AfterValidateCodeEvent<BrsCode>
+        public event: AfterValidateBrsCodeSegmentEvent
     ) {
     }
 
     public process() {
-        const unlinkGlobalSymbolTable = this.event.code.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
-        this.event.code.processSymbolInformation();
+        const unlinkGlobalSymbolTable = this.event.codeSegment.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
+        this.event.codeSegment.processSymbolInformation();
         unlinkGlobalSymbolTable();
     }
 }

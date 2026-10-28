@@ -3,14 +3,13 @@ import { codeActionUtil } from '../../CodeActionUtil';
 import type { DeleteChange, InsertChange, ReplaceChange } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap, isDiagnosticOfType } from '../../DiagnosticMessages';
-import type { BrsCode } from '../../files/BrsCode';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { BscFile } from '../../files/BscFile';
-import type { BscCode } from '../../files/BscCode';
-import type { XmlCode } from '../../files/XmlCode';
+import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
-import { isBrsCode, isFunctionExpression, isMethodStatement, isVoidType, isXmlCode } from '../../astUtils/reflection';
+import { isBrsCodeSegment, isFunctionExpression, isMethodStatement, isVoidType, isXmlFile } from '../../astUtils/reflection';
 import type { FunctionExpression } from '../../parser/Expression';
 import type { MethodStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
@@ -122,12 +121,13 @@ export class CodeActionsProcessor {
         if (code === undefined || code === null || code === DiagnosticCodeMap.inactiveConditionalCompileBranch) {
             return;
         }
-        const file = this.event.code;
-        if (!isBrsCode(file) && !isXmlCode(file)) {
+        //the BrightScript the diagnostic is in, or the xml file when it's in a component's xml
+        const file: BrsCodeSegment | XmlFile = this.event.codeSegment ?? (isXmlFile(this.event.file) ? this.event.file : undefined);
+        if (!file) {
             return;
         }
         const codeStr = String(code);
-        const isXml = isXmlCode(file);
+        const isXml = isXmlFile(file);
         //existing.forLine: any line/next-line directive on or above the diagnostic line that the line action could extend
         //existing.forFile: any header-level bs:disable that the file action could extend
         const existing = this.findExistingDisableDirectives(file, diagnostic.location?.range.start.line);
@@ -187,7 +187,7 @@ export class CodeActionsProcessor {
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     //a block's `bs:disable` only covers that block, so say so for code embedded in a file
-                    title: `Disable ${code} for this ${isBrsCode(file) && file.isEmbedded ? 'script block' : 'file'}: ${diagnostic.message}`,
+                    title: `Disable ${code} for this ${isBrsCodeSegment(file) && file.isEmbedded ? 'script block' : 'file'}: ${diagnostic.message}`,
                     diagnostics: [diagnostic],
                     kind: CodeActionKind.QuickFix,
                     changes: [fileAction]
@@ -220,7 +220,7 @@ export class CodeActionsProcessor {
             }
             return {
                 type: 'replace',
-                filePath: this.event.code.srcPath,
+                filePath: this.event.file.srcPath,
                 range: existing.range,
                 newText: buildReplacementText()
             };
@@ -228,7 +228,7 @@ export class CodeActionsProcessor {
         const insert = buildInsert();
         return {
             type: 'insert',
-            filePath: this.event.code.srcPath,
+            filePath: this.event.file.srcPath,
             position: insert.position,
             newText: insert.newText
         };
@@ -243,8 +243,8 @@ export class CodeActionsProcessor {
      * `bs:disable` directives that would cover the diagnostic on `diagLine`. Used so the suppression
      * quick fixes can extend an existing directive instead of stacking new ones.
      */
-    private findExistingDisableDirectives(code: BscCode, diagLine: number): { forLine: ExistingDirective | null; forFile: ExistingDirective | null } {
-        const isXml = isXmlCode(code);
+    private findExistingDisableDirectives(code: BrsCodeSegment | XmlFile, diagLine: number): { forLine: ExistingDirective | null; forFile: ExistingDirective | null } {
+        const isXml = isXmlFile(code);
         const tokens: any[] = (code as any).parser?.tokens ?? [];
         let inHeader = true;
         let forLine: ExistingDirective | null = null;
@@ -291,8 +291,8 @@ export class CodeActionsProcessor {
      * the position plus any prefix/suffix needed so the directive lands on its own line in
      * the header (before the first executable statement / root XML element).
      */
-    private getDisableFileInsertion(code: BscCode): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
-        if (isXmlCode(code)) {
+    private getDisableFileInsertion(code: BrsCodeSegment | XmlFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
+        if (isXmlFile(code)) {
             //insert after the `<?xml ?>` declaration if present, otherwise at the very top
             const declCloseToken = code.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
             if (declCloseToken) {
@@ -308,7 +308,7 @@ export class CodeActionsProcessor {
         }
         return {
             //the top of the code, which is not always the top of the document
-            position: isBrsCode(code) ? code.startPosition : util.createPosition(0, 0),
+            position: isBrsCodeSegment(code) ? code.startPosition : util.createPosition(0, 0),
             prefix: '',
             suffix: '\n'
         };
@@ -320,7 +320,7 @@ export class CodeActionsProcessor {
      * are sourced from `program.getDiagnostics()` (fetched lazily, only when needed).
      */
     private collectFixAllDiagnostics(eventCodes: Set<number | string>): Map<number | string, BsDiagnostic[]> {
-        const fileUri = util.pathToUri(this.event.code.srcPath);
+        const fileUri = util.pathToUri(this.event.file.srcPath);
         const fileDiagnostics = this.event.program.getDiagnostics().filter(d => d.location?.uri === fileUri) as BsDiagnostic[];
 
         const fileDiagsByCode = new Map<number | string, BsDiagnostic[]>();
@@ -354,9 +354,9 @@ export class CodeActionsProcessor {
 
         this.suggestedImports.add(key);
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        const importStatements = (this.event.code as BrsCode)['_cachedLookups'].importStatements;
+        const importStatements = (this.event.codeSegment as BrsCodeSegment)['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? (this.event.code as BrsCode).startPosition;
+        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
 
         //find all files that reference this function
         for (const file of files) {
@@ -369,7 +369,7 @@ export class CodeActionsProcessor {
                     kind: CodeActionKind.QuickFix,
                     changes: [{
                         type: 'insert',
-                        filePath: this.event.code.srcPath,
+                        filePath: this.event.file.srcPath,
                         position: insertPosition,
                         newText: `import "${pkgPath}"\n`
                     }]
@@ -383,7 +383,7 @@ export class CodeActionsProcessor {
      */
     private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
-        if (!isBrsCode(this.event.code) || (this.event.code as BrsCode).parseMode !== ParseMode.BrighterScript) {
+        if (!isBrsCodeSegment(this.event.codeSegment) || (this.event.codeSegment as BrsCodeSegment).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
@@ -407,13 +407,13 @@ export class CodeActionsProcessor {
      * automatically choose one.
      */
     private suggestMissingImportsFixAllQuickFix() {
-        if (!isBrsCode(this.event.code) || this.event.code.parseMode !== ParseMode.BrighterScript) {
+        if (!isBrsCodeSegment(this.event.codeSegment) || this.event.codeSegment.parseMode !== ParseMode.BrighterScript) {
             return;
         }
-        const file = this.event.code;
+        const file = this.event.codeSegment;
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = file['_cachedLookups'].importStatements;
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? (this.event.code as BrsCode).startPosition;
+        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
 
         const changes: InsertChange[] = [];
         const addedPaths = new Set<string>();
@@ -472,8 +472,8 @@ export class CodeActionsProcessor {
      * Offers Group, Task, and ContentNode as common choices.
      */
     private suggestMissingExtendsQuickFix(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
-        const srcPath = this.event.code.srcPath;
-        const pos = getMissingExtendsInsertPosition(this.event.code as XmlCode);
+        const srcPath = this.event.file.srcPath;
+        const pos = getMissingExtendsInsertPosition(this.event.file as XmlFile);
         this.event.codeActions.push(
             codeActionUtil.createCodeAction({
                 title: `Extend "Group"`,
@@ -525,15 +525,15 @@ export class CodeActionsProcessor {
         this.emitOrFixAll(`Remove return value`, `Fix all: Remove void return values`, changes, diagnostics[0]);
 
         //contextual BrsFile actions only apply to the individual (single-violation) case
-        if (changes.length === 1 && isBrsCode(this.event.code)) {
+        if (changes.length === 1 && isBrsCodeSegment(this.event.codeSegment)) {
             const diagnostic = diagnostics[0];
-            const expression = this.event.code.getClosestExpression(diagnostic.location.range.start);
+            const expression = this.event.codeSegment.getClosestExpression(diagnostic.location.range.start);
             const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
 
             //if we're in a sub and we do not have a return type, suggest converting to a function
             if (func.tokens.functionType.kind === TokenKind.Sub && !func.returnTypeExpression) {
                 //find the first function in a file that uses the `function` keyword
-                const referenceFunction = this.event.code.parser.ast.findChild<FunctionExpression>((node) => {
+                const referenceFunction = this.event.codeSegment.parser.ast.findChild<FunctionExpression>((node) => {
                     return isFunctionExpression(node) && node.tokens.functionType.kind === TokenKind.Function;
                 });
                 const functionTypeText = referenceFunction?.tokens.functionType.text ?? 'function';
@@ -545,9 +545,9 @@ export class CodeActionsProcessor {
                         kind: CodeActionKind.QuickFix,
                         changes: [
                             //function
-                            { type: 'replace', filePath: this.event.code.srcPath, range: func.tokens.functionType.location.range, newText: functionTypeText },
+                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.functionType.location.range, newText: functionTypeText },
                             //end function
-                            { type: 'replace', filePath: this.event.code.srcPath, range: func.tokens.endFunctionType.location.range, newText: endFunctionTypeText }
+                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.endFunctionType.location.range, newText: endFunctionTypeText }
                         ]
                     })
                 );
@@ -572,10 +572,10 @@ export class CodeActionsProcessor {
      * Offers removing the return type from a sub, adding `as void` to a function, or converting function→sub.
      */
     private suggestNonVoidFunctionReturnQuickFixes(diagnostics: BsDiagnostic[]) {
-        if (!isBrsCode(this.event.code)) {
+        if (!isBrsCodeSegment(this.event.codeSegment)) {
             return;
         }
-        const file = this.event.code;
+        const file = this.event.codeSegment;
 
         //find tokens for `as`, `void`, `sub`, `end sub` in the file if possible
         let asText: string;
@@ -620,7 +620,7 @@ export class CodeActionsProcessor {
             } else if (fn.tokens.functionType.kind === TokenKind.Function && !fn.returnTypeExpression) {
                 addVoidChanges.push({
                     type: 'insert',
-                    filePath: this.event.code.srcPath,
+                    filePath: this.event.file.srcPath,
                     position: fn.tokens.rightParen.location.range.end,
                     newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
                 });
@@ -672,7 +672,7 @@ export class CodeActionsProcessor {
         const changes = diagnostics.map<DeleteChange>(diagnostic => {
             return {
                 type: 'delete',
-                filePath: this.event.code.srcPath,
+                filePath: this.event.file.srcPath,
                 range: util.createRange(
                     diagnostic.location.range.start.line,
                     0,
@@ -696,7 +696,7 @@ export class CodeActionsProcessor {
             }
             changes.push({
                 type: 'replace',
-                filePath: this.event.code.srcPath,
+                filePath: this.event.file.srcPath,
                 range: diagnostic.location.range,
                 newText: correctFilePath
             });
@@ -715,10 +715,10 @@ export class CodeActionsProcessor {
      * Adds code actions to insert the missing `override` keyword before a method declaration.
      */
     private suggestMissingOverrideQuickFixes(diagnostics: BsDiagnostic[]) {
-        if (!isBrsCode(this.event.code)) {
+        if (!isBrsCodeSegment(this.event.codeSegment)) {
             return;
         }
-        const file = this.event.code;
+        const file = this.event.codeSegment;
         const changes: InsertChange[] = [];
 
         for (const diagnostic of diagnostics) {
@@ -761,7 +761,7 @@ export class CodeActionsProcessor {
             const replacement = expected[index];
             const changes = diagnostics.map<ReplaceChange>(diagnostic => ({
                 type: 'replace',
-                filePath: this.event.code.srcPath,
+                filePath: this.event.file.srcPath,
                 range: diagnostic.location.range,
                 newText: replacement
             }));
@@ -781,7 +781,7 @@ export class CodeActionsProcessor {
     private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: BsDiagnostic[]) {
         const changes: DeleteChange[] = diagnostics.map(d => ({
             type: 'delete' as const,
-            filePath: this.event.code.srcPath,
+            filePath: this.event.file.srcPath,
             // delete "override " (the keyword token plus the trailing space before function/sub)
             range: util.createRange(
                 d.location.range.start.line,
@@ -807,7 +807,7 @@ export class CodeActionsProcessor {
     private getRemoveReturnValueChange(diagnostic: BsDiagnostic): DeleteChange {
         return {
             type: 'delete',
-            filePath: this.event.code.srcPath,
+            filePath: this.event.file.srcPath,
             range: util.createRange(
                 diagnostic.location.range.start.line,
                 diagnostic.location.range.start.character + 'return'.length,
@@ -824,7 +824,7 @@ export class CodeActionsProcessor {
     private getRemoveFunctionReturnTypeChange(func: FunctionExpression): DeleteChange {
         return {
             type: 'delete',
-            filePath: this.event.code.srcPath,
+            filePath: this.event.file.srcPath,
             // )| as <type>|
             range: util.createRange(
                 func.tokens.rightParen.location.range.start.line,

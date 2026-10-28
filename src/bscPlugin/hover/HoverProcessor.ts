@@ -1,6 +1,6 @@
-import { isAssignmentStatement, isBrsCode, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlCode } from '../../astUtils/reflection';
-import type { BrsCode } from '../../files/BrsCode';
-import type { XmlCode } from '../../files/XmlCode';
+import { isAssignmentStatement, isBrsCodeSegment, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
+import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
 import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
@@ -26,10 +26,10 @@ export class HoverProcessor {
 
     public process() {
         let hover: Hover | undefined;
-        if (isBrsCode(this.event.code)) {
-            hover = this.getBrsCodeHover(this.event.code);
-        } else if (isXmlCode(this.event.code)) {
-            hover = this.getXmlCodeHover(this.event.code);
+        if (isBrsCodeSegment(this.event.codeSegment)) {
+            hover = this.getBrsCodeHover(this.event.codeSegment);
+        } else if (isXmlFile(this.event.file)) {
+            hover = this.getXmlFileHover(this.event.file);
         }
 
         //if we got a result, "return" it
@@ -69,7 +69,7 @@ export class HoverProcessor {
         return (token && hoverTokenTypes.includes(token.kind));
     }
 
-    private getConstHover(token: Token, code: BrsCode, scope: Scope, expression: Expression) {
+    private getConstHover(token: Token, code: BrsCodeSegment, scope: Scope, expression: Expression) {
         let containingNamespace = code.getNamespaceStatementForPosition(expression?.location?.range?.start)?.getName(ParseMode.BrighterScript);
         const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
@@ -129,7 +129,7 @@ export class HoverProcessor {
         return result;
     }
 
-    private getBrsCodeHover(code: BrsCode): Hover {
+    private getBrsCodeHover(code: BrsCodeSegment): Hover {
         //get the token at the position
         let token = code.getTokenAt(this.event.position);
 
@@ -248,9 +248,9 @@ export class HoverProcessor {
     }
 
     /**
-     * @param code the code
+     * @param file the xml file
      */
-    private getXmlCodeHover(code: XmlCode) {
+    private getXmlFileHover(file: XmlFile) {
         //TODO add xml hovers
         return undefined;
     }

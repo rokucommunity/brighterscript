@@ -7,7 +7,7 @@ import { util } from './util';
 import type { ClassStatement, NamespaceStatement } from './parser/Statement';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Token } from './lexer/Token';
-import type { BrsCode } from './files/BrsCode';
+import type { BrsCodeSegment } from './files/BrsCodeSegment';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscSymbol } from './SymbolTable';
 
@@ -22,9 +22,9 @@ export interface UnresolvedSymbol {
     endChainFlags: SymbolTypeFlag;
     containingNamespaces: string[];
     /**
-     * The code this symbol is in. Use `code.document` for the file it lives in
+     * The code segment this symbol is in. Use `codeSegment.document` for the file it lives in
      */
-    code: BrsCode;
+    codeSegment: BrsCodeSegment;
     lookups: string[];
 }
 
@@ -46,7 +46,7 @@ export class AstValidationSegmenter {
         /**
          * The code this segmenter splits into validation segments
          */
-        public code: BrsCode
+        public codeSegment: BrsCodeSegment
     ) { }
 
     reset() {
@@ -147,7 +147,7 @@ export class AstValidationSegmenter {
                     flags: typeChain[0].data.flags,
                     endChainFlags: flag,
                     containingNamespaces: this.currentNamespaceStatement?.getNameParts()?.map(t => t.text),
-                    code: this.code,
+                    codeSegment: this.codeSegment,
                     lookups: possibleNamesLower
                 });
             }

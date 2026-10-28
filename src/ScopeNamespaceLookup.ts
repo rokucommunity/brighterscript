@@ -1,6 +1,6 @@
-import type { BrsCode } from './files/BrsCode';
+import type { BrsCodeSegment } from './files/BrsCodeSegment';
 import type { Scope, NamespaceContainer, NamespaceFileContribution } from './Scope';
-import { isBrsCode } from './astUtils/reflection';
+import { isBrsCodeSegment } from './astUtils/reflection';
 
 /**
  * The per-scope namespace lookup. Implements `Map<string, NamespaceContainer>` so existing
@@ -36,8 +36,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
     private nameSet: Set<string> | undefined;
     /** Map from lower-cased parent name to lower-cased immediate child names. */
     private childrenByParent: Map<string, string[]> | undefined;
-    /** Cached `Set<BrsCode>` for `scope.getAllCodes()`, used when filtering contributors. */
-    private inScopeBrsCodes: Set<BrsCode> | undefined;
+    /** Cached `Set<BrsCodeSegment>` for `scope.getAllCodeSegments()`, used when filtering contributors. */
+    private inScopeBrsCodes: Set<BrsCodeSegment> | undefined;
     /** Set to true after `populateAll` runs so iteration doesn't keep re-checking. */
     private isFullyBuilt = false;
 
@@ -47,8 +47,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         }
         const nameSet = new Set<string>();
         const childrenByParent = new Map<string, string[]>();
-        for (const code of this.scope.getAllCodes()) {
-            if (isBrsCode(code)) {
+        for (const code of this.scope.getAllCodeSegments()) {
+            if (isBrsCodeSegment(code)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (const nameLower of code['getNamespaceContributions']().keys()) {
                     nameSet.add(nameLower);
@@ -71,11 +71,11 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         this.childrenByParent = childrenByParent;
     }
 
-    private getInScopeBrsCodes(): Set<BrsCode> {
+    private getInScopeBrsCodes(): Set<BrsCodeSegment> {
         if (!this.inScopeBrsCodes) {
-            const set = new Set<BrsCode>();
-            for (const code of this.scope.getAllCodes()) {
-                if (isBrsCode(code)) {
+            const set = new Set<BrsCodeSegment>();
+            for (const code of this.scope.getAllCodeSegments()) {
+                if (isBrsCodeSegment(code)) {
                     set.add(code);
                 }
             }
@@ -199,7 +199,7 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         //field order matches the NamespaceContainer interface declaration so the
         //fast-path and slow-path containers share a single V8 hidden class.
         return {
-            code: contribution.code,
+            codeSegment: contribution.codeSegment,
             fullName: contribution.fullName,
             nameRange: contribution.nameRange,
             lastPartName: contribution.lastPartName,
@@ -230,7 +230,7 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         //field order matches the NamespaceContainer interface declaration so fast-path
         //and slow-path containers share a single V8 hidden class
         return {
-            code: aggregate.code,
+            codeSegment: aggregate.codeSegment,
             fullName: aggregate.fullName,
             nameRange: aggregate.nameRange,
             lastPartName: aggregate.lastPartName,

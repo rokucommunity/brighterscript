@@ -4,7 +4,7 @@ import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
 import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypecastExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from './Expression';
-import { expectZeroDiagnostics, getBrsCode } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getBrsCodeSegment } from '../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypecastExpression, isUnaryExpression, isVariableExpression, isLiteralExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
@@ -62,7 +62,7 @@ describe('AstNode', () => {
             expectZeroDiagnostics(program);
             //NOTE: must match by name; a bare isVariableExpression matches the
             //namespace's own name expression, which has no class in its chain
-            const node = getBrsCode(file).ast.findChild<VariableExpression>(
+            const node = getBrsCodeSegment(file).ast.findChild<VariableExpression>(
                 (x) => isVariableExpression(x) && x.name.text.toLowerCase() === 'delta'
             );
             expect(node).to.exist;
@@ -211,10 +211,10 @@ describe('AstNode', () => {
                 `);
             program.validate();
             expectZeroDiagnostics(program);
-            const delta = getBrsCode(file).ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
+            const delta = getBrsCodeSegment(file).ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
             expect(delta.tokens.name.text).to.eql('delta');
 
-            const foxtrot = getBrsCode(file).ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
+            const foxtrot = getBrsCodeSegment(file).ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
             expect(foxtrot.tokens.name.text).to.eql('foxtrot');
         });
     });
@@ -228,7 +228,7 @@ describe('AstNode', () => {
                 end sub
             `);
             expect(
-                getBrsCode(file).ast.findChild((node) => {
+                getBrsCodeSegment(file).ast.findChild((node) => {
                     return isAssignmentStatement(node) && node.tokens.name.text === 'alpha';
                 })
             ).instanceof(AssignmentStatement);
@@ -242,7 +242,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            const instance = getBrsCode(file).ast.findChild((node) => {
+            const instance = getBrsCodeSegment(file).ast.findChild((node) => {
                 if (isAssignmentStatement(node)) {
                     count++;
                     if (count === 2) {
@@ -250,7 +250,7 @@ describe('AstNode', () => {
                     }
                 }
             });
-            const expected = (getBrsCode(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const expected = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
             expect(instance).to.equal(expected);
         });
 
@@ -262,7 +262,7 @@ describe('AstNode', () => {
                 end sub
             `);
             expect(
-                getBrsCode(file).ast.findChild((node) => false)
+                getBrsCodeSegment(file).ast.findChild((node) => false)
             ).not.to.exist;
         });
 
@@ -273,9 +273,9 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const secondStatement = (getBrsCode(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const secondStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
             expect(
-                getBrsCode(file).ast.findChild((node) => secondStatement)
+                getBrsCodeSegment(file).ast.findChild((node) => secondStatement)
             ).to.equal(secondStatement);
         });
 
@@ -287,7 +287,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            getBrsCode(file).ast.findChild((node, cancelToken) => {
+            getBrsCodeSegment(file).ast.findChild((node, cancelToken) => {
                 count++;
                 cancelToken.cancel();
             });
@@ -303,8 +303,8 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const secondStatement = (getBrsCode(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
-            const foxtrot = getBrsCode(file).ast.findChild((node) => {
+            const secondStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const foxtrot = getBrsCodeSegment(file).ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -319,7 +319,7 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const foxtrot = getBrsCode(file).ast.findChild((node) => {
+            const foxtrot = getBrsCodeSegment(file).ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -334,8 +334,8 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const firstStatement = (getBrsCode(file).ast.statements[0] as FunctionStatement).func.body.statements[0];
-            const foxtrot = getBrsCode(file).ast.findChild((node) => {
+            const firstStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[0];
+            const foxtrot = getBrsCodeSegment(file).ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -351,7 +351,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            const firstStatement = (getBrsCode(file).ast.statements[0] as FunctionStatement).func.body.statements[0];
+            const firstStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[0];
             firstStatement.findAncestor((node, cancel) => {
                 count++;
                 cancel.cancel();

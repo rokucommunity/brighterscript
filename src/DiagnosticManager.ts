@@ -3,7 +3,7 @@ import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isBlock, isBrsCode, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
+import { isBlock, isBrsCodeSegment, isBsDiagnostic, isXmlFile, isXmlScope } from './astUtils/reflection';
 import type { DiagnosticRelatedInformation, Location, Range } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
@@ -197,10 +197,10 @@ export class DiagnosticManager {
             for (const scope of affectedScopes) {
                 if (isXmlScope(scope) && scope.xmlFile?.srcPath) {
                     relatedInformation.push({
-                        message: `In component scope '${scope?.xmlFile?.componentCode.componentName?.text}'`,
+                        message: `In component scope '${scope?.xmlFile?.componentName?.text}'`,
                         location: util.createLocationFromRange(
                             util.pathToUri(scope.xmlFile?.srcPath),
-                            scope?.xmlFile?.componentCode.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
+                            scope?.xmlFile?.ast?.componentElement?.getAttribute('name')?.tokens?.value?.location?.range ?? util.createRange(0, 0, 0, 10)
                         )
                     });
                 } else {
@@ -245,8 +245,8 @@ export class DiagnosticManager {
                 const file = this.program?.getFile(uri);
                 inactiveRanges = [];
                 //every piece of BrightScript in the file (a file can provide several, i.e. the `<script>` blocks of an xml file)
-                for (const code of file?.codes ?? []) {
-                    if (!isBrsCode(code)) {
+                for (const code of file?.codeSegments ?? []) {
+                    if (!isBrsCodeSegment(code)) {
                         continue;
                     }
                     // eslint-disable-next-line @typescript-eslint/dot-notation
@@ -296,20 +296,20 @@ export class DiagnosticManager {
     }
 
     /**
-     * Get the comment flags that apply at a location. When a file provides several pieces of code (i.e. the `<script>` blocks
-     * of an xml file), that is the flags of the code at the location plus the flags of the code covering the whole file.
-     * A block's own flags (like `' bs:disable`) stay within that block.
+     * Get the comment flags that apply at a location: the flags in an xml file's own comments, plus the flags of the code
+     * segment at the location, plus the flags of any code segment that covers the whole file.
+     * A `<script>` block's own flags (like `' bs:disable`) stay within that block.
      */
     private getCommentFlagsForLocation(location: Location) {
         const file = this.program?.getFile(location?.uri);
-        if (!file?.codes || file.codes.length <= 1) {
-            return file?.codes?.[0]?.commentFlags ?? [];
+        if (!file) {
+            return [];
         }
-        const codeAtLocation = this.program.getCodeAt(file, location.range?.start);
-        const flags = [] as CommentFlag[];
-        for (const code of file.codes) {
-            if (code === codeAtLocation || !code.range) {
-                flags.push(...code.commentFlags);
+        const flags = isXmlFile(file) ? [...file.commentFlags] : [] as CommentFlag[];
+        const codeSegmentAtLocation = this.program.getCodeSegmentAt(file, location.range?.start);
+        for (const codeSegment of file.codeSegments ?? []) {
+            if (codeSegment === codeSegmentAtLocation || !codeSegment.range) {
+                flags.push(...codeSegment.commentFlags);
             }
         }
         return flags;

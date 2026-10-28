@@ -3,7 +3,7 @@ import * as EventEmitter from 'eventemitter3';
 import util, { standardizePath as s } from '../util';
 import * as path from 'path';
 import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject, FileRenameTextEdit } from './LspProject';
-import { isBrsCode, isXmlFile } from '../astUtils/reflection';
+import { isBrsCodeSegment, isXmlFile } from '../astUtils/reflection';
 import type { Plugin, Hover, MaybePromise } from '../interfaces';
 import { Deferred } from '../deferred';
 import type { StandardizedFileEntry } from 'roku-deploy';
@@ -466,7 +466,7 @@ export class Project implements LspProject {
         const result: FileRenameTextEdit[] = [];
         for (const file of Object.values(this.builder.program.files)) {
             //`import` statements can live in any brightscript code, including an xml file's `<script>` blocks
-            for (const code of (file.codes ?? []).filter(isBrsCode)) {
+            for (const code of (file.codeSegments ?? []).filter(isBrsCodeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (const importStatement of code['_cachedLookups']?.importStatements ?? []) {
                     if (!importStatement.tokens.path || !importStatement.filePath) {
@@ -488,7 +488,7 @@ export class Project implements LspProject {
                 }
             }
             if (isXmlFile(file)) {
-                for (const scriptTag of file.componentCode.parser?.references?.scriptTagImports ?? []) {
+                for (const scriptTag of file.parser?.references?.scriptTagImports ?? []) {
                     if (!scriptTag.filePathRange || !scriptTag.text) {
                         continue;
                     }

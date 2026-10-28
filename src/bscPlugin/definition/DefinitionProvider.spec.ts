@@ -47,7 +47,7 @@ describe('DefinitionProvider', () => {
         const result = new DefinitionProvider({
             program: program,
             file: undefined,
-            code: undefined,
+            codeSegment: undefined,
             position: util.createPosition(1, 2),
             definitions: []
         }).process();
@@ -445,7 +445,7 @@ describe('DefinitionProvider', () => {
             </component>
         `);
         // Corrupt the XML parser's AST to simulate a mangled parse result
-        const parserRef = xmlFile.componentCode.parser;
+        const parserRef = xmlFile.parser;
         const originalAst = parserRef?.ast;
         if (parserRef) {
             parserRef.ast = null;

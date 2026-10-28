@@ -3,10 +3,10 @@ import { WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { DocumentSymbol, SymbolKind } from 'vscode-languageserver-protocol';
 import type { AstNode } from '../../parser/AstNode';
 import util from '../../util';
-import type { BrsCode } from '../../files/BrsCode';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 
-export function getDocumentSymbolsFromBrsCode(code: BrsCode) {
+export function getDocumentSymbolsFromBrsCode(code: BrsCodeSegment) {
     let result: DocumentSymbol[] = [];
     const symbols = getSymbolsFromAstNode(code.ast);
     for (let symbol of symbols) {
@@ -28,7 +28,7 @@ export function getDocumentSymbolsFromBrsCode(code: BrsCode) {
     }
 }
 
-export function getWorkspaceSymbolsFromBrsCode(code: BrsCode) {
+export function getWorkspaceSymbolsFromBrsCode(code: BrsCodeSegment) {
     const result: WorkspaceSymbol[] = [];
     //code uses its document's uri, so embedded code links to the file it lives in
     const uri = util.pathToUri(code.srcPath);

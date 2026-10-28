@@ -1,20 +1,19 @@
 import { createSGScript } from '../../astUtils/creators';
-import { isXmlCode } from '../../astUtils/reflection';
+import { isXmlFile } from '../../astUtils/reflection';
 import { isSGScript } from '../../astUtils/xml';
 import type { XmlFile } from '../../files/XmlFile';
-import type { XmlCode } from '../../files/XmlCode';
-import type { PrepareCodeEvent } from '../../interfaces';
+import type { PrepareFileEvent } from '../../interfaces';
 import type { SGScript } from '../../parser/SGTypes';
 import util from '../../util';
 
 export class XmlFilePreTranspileProcessor {
     public constructor(
-        private event: PrepareCodeEvent<XmlCode>
+        private event: PrepareFileEvent<XmlFile>
     ) {
     }
 
     public process() {
-        if (!isXmlCode(this.event.code)) {
+        if (!isXmlFile(this.event.file)) {
             return;
         }
 
@@ -22,7 +21,7 @@ export class XmlFilePreTranspileProcessor {
         this.injectScriptImports();
 
         //transform any brighterscript `type` attributes to `brightscript`
-        for (const script of this.event.code.ast?.componentElement?.scriptElements ?? []) {
+        for (const script of this.event.file.ast?.componentElement?.scriptElements ?? []) {
             const type = script.getAttribute('type');
             if (/text\/brighterscript/i.test(type?.value)) {
                 this.event.editor.setProperty(
@@ -48,8 +47,8 @@ export class XmlFilePreTranspileProcessor {
      * Inject any missing scripts into the xml file
      */
     private injectScriptImports() {
-        //which scripts are missing depends on the file's dependencies, so ask the file
-        const extraImportScripts = (this.event.file as XmlFile).getMissingImportsForTranspile().map(uri => {
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const extraImportScripts = this.event.file['getMissingImportsForTranspile']().map(uri => {
             return createSGScript({
                 type: 'text/brightscript',
                 uri: util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'))
@@ -58,7 +57,7 @@ export class XmlFilePreTranspileProcessor {
 
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const [, publishableScripts] = this.checkScriptsForPublishableImports([
-            ...this.event.code.ast.componentElement?.scriptElements ?? [],
+            ...this.event.file.ast.componentElement?.scriptElements ?? [],
             ...extraImportScripts
         ]);
 
@@ -69,7 +68,7 @@ export class XmlFilePreTranspileProcessor {
             publishableScripts.push(bslib);
         }
 
-        const elements = this.event.code.ast.componentElement.elements;
+        const elements = this.event.file.ast.componentElement.elements;
         //remove any unreferenced scripts
         let set = new Set(publishableScripts);
         for (let i = elements.length - 1; i >= 0; i--) {
@@ -84,7 +83,7 @@ export class XmlFilePreTranspileProcessor {
         }
 
         //add new scripts after the LAST `<script>` tag that was created explicitly by the user, or at the top of the component if it has no scripts
-        let lastScriptIndex = util.findLastIndex(this.event.code.ast.componentElement.elements, x => x.tokens.startTagName.text.toLowerCase() === 'script');
+        let lastScriptIndex = util.findLastIndex(this.event.file.ast.componentElement.elements, x => x.tokens.startTagName.text.toLowerCase() === 'script');
         lastScriptIndex = lastScriptIndex >= 0
             ? lastScriptIndex + 1
             : 0;
@@ -100,7 +99,7 @@ export class XmlFilePreTranspileProcessor {
         }
         const publishableScripts = scripts.filter(script => {
             const uriAttributeValue = script.uri || '';
-            const pkgMapPath = util.getPkgPathFromTarget(this.event.code.pkgPath, uriAttributeValue);
+            const pkgMapPath = util.getPkgPathFromTarget(this.event.file.pkgPath, uriAttributeValue);
             let file = program.getFile(pkgMapPath);
             if (!file && pkgMapPath.endsWith(program.bslibPkgPath)) {
                 return true;

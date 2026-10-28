@@ -6,7 +6,7 @@ import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import type { XmlFile } from '../XmlFile';
 import type { BrsFile } from '../BrsFile';
-import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap, getBrsCode } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap, getBrsCodeSegment } from '../../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../../testHelpers.spec';
 
 let sinon = sinonImport.createSandbox();
@@ -256,8 +256,8 @@ describe('import statements', () => {
             import "pkg:"
             import "pkg:/"
         `);
-        expect(getBrsCode(brsFile).ownScriptImports.length).to.equal(5);
-        expect(getBrsCode(brsFile).ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
+        expect(getBrsCodeSegment(brsFile).ownScriptImports.length).to.equal(5);
+        expect(getBrsCodeSegment(brsFile).ownScriptImports.filter(p => !!p.destPath).length).to.equal(3);
     });
 
     it('keeps the original import path when transpiled', async () => {

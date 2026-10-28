@@ -1,5 +1,5 @@
-import { isBrsCode } from '../../astUtils/reflection';
-import type { BrsCode } from '../../files/BrsCode';
+import { isBrsCodeSegment } from '../../astUtils/reflection';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideDocumentSymbolsEvent } from '../../interfaces';
 import { getDocumentSymbolsFromBrsCode } from './symbolUtils';
 
@@ -11,12 +11,12 @@ export class DocumentSymbolProcessor {
     }
 
     public process() {
-        if (isBrsCode(this.event.code)) {
-            return this.getBrsCodeDocumentSymbols(this.event.code);
+        if (isBrsCodeSegment(this.event.codeSegment)) {
+            return this.getBrsCodeDocumentSymbols(this.event.codeSegment);
         }
     }
 
-    private getBrsCodeDocumentSymbols(code: BrsCode) {
+    private getBrsCodeDocumentSymbols(code: BrsCodeSegment) {
         const symbols = getDocumentSymbolsFromBrsCode(code);
         this.event.documentSymbols.push(...symbols);
         return this.event.documentSymbols;

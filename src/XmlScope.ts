@@ -28,7 +28,7 @@ export class XmlScope extends Scope {
     public getParentScope() {
         return this.cache.getOrAdd('parentScope', () => {
             let scope: Scope | undefined;
-            let parentComponentName = this.xmlFile.componentCode.parentComponentName?.text;
+            let parentComponentName = this.xmlFile.parentComponentName?.text;
             if (parentComponentName) {
                 scope = this.program.getComponentScope(parentComponentName);
             }
@@ -41,7 +41,7 @@ export class XmlScope extends Scope {
     }
 
     public getComponentType() {
-        let componentElement = this.xmlFile.componentCode.ast.componentElement;
+        let componentElement = this.xmlFile.ast.componentElement;
         if (!componentElement?.name) {
             return;
         }

@@ -2,9 +2,8 @@ import * as path from 'path';
 import * as fsExtra from 'fs-extra';
 import { rokuDeploy } from 'roku-deploy';
 import type { StandardizedFileEntry, FileEntry } from 'roku-deploy';
-import { isBrsCode, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isVariableExpression, isXmlCode, isXmlFile, isXmlScope } from '../../astUtils/reflection';
-import type { BrsCode } from '../../files/BrsCode';
-import type { XmlCode } from '../../files/XmlCode';
+import { isBrsCodeSegment, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isVariableExpression, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Location, LocationLink, Range } from 'vscode-languageserver-protocol';
@@ -23,10 +22,10 @@ export class DefinitionProvider {
 
     public process(): Array<Location | LocationLink> {
         try {
-            if (isBrsCode(this.event.code)) {
-                this.brsCodeGetDefinition(this.event.code);
-            } else if (isXmlCode(this.event.code)) {
-                this.xmlCodeGetDefinition(this.event.code);
+            if (isBrsCodeSegment(this.event.codeSegment)) {
+                this.brsCodeGetDefinition(this.event.codeSegment);
+            } else if (isXmlFile(this.event.file)) {
+                this.xmlFileGetDefinition(this.event.file);
             }
         } catch (e) {
             //a mangled or partially-parsed AST should never fail the whole LSP request, so log the
@@ -200,7 +199,7 @@ export class DefinitionProvider {
     /**
      * For a position in a BrsFile, get the location where the token at that position was defined
      */
-    private brsCodeGetDefinition(code: BrsCode): void {
+    private brsCodeGetDefinition(code: BrsCodeSegment): void {
         //get the token at the position
         const token = code.getTokenAt(this.event.position);
 
@@ -215,7 +214,7 @@ export class DefinitionProvider {
             return;
         }
 
-        const scopesForFile = this.event.program.getScopesForCode(code);
+        const scopesForFile = this.event.program.getScopesForCodeSegment(code);
         const [scope] = scopesForFile;
 
         const expression = code.getClosestExpression(this.event.position);
@@ -275,7 +274,7 @@ export class DefinitionProvider {
             for (const scope of this.event.program.getScopes()) {
                 //does this xml file declare this function in its interface?
                 if (isXmlScope(scope)) {
-                    const apiFunc = scope.xmlFile.componentCode.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
+                    const apiFunc = scope.xmlFile.ast?.componentElement?.interfaceElement?.functions?.find(x => x.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                     if (apiFunc) {
                         this.event.definitions.push(
                             util.createLocationFromRange(util.pathToUri(scope.xmlFile.srcPath), apiFunc.getAttribute('name').tokens.value.location?.range)
@@ -283,7 +282,7 @@ export class DefinitionProvider {
                         const callable = scope.getAllCallables().find((c) => c.callable.name.toLowerCase() === textToSearchFor); // eslint-disable-line @typescript-eslint/no-loop-func
                         if (callable) {
                             this.event.definitions.push(
-                                util.createLocationFromRange(util.pathToUri(callable.callable.code.srcPath), callable.callable.functionStatement.tokens.name.location?.range)
+                                util.createLocationFromRange(util.pathToUri(callable.callable.codeSegment.srcPath), callable.callable.functionStatement.tokens.name.location?.range)
                             );
                         }
                     }
@@ -300,7 +299,7 @@ export class DefinitionProvider {
                 const nameParts = cs.parentClassName.getNameParts();
                 let extendedClass = code.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
-                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.code.srcPath), extendedClass.item.location?.range));
+                    this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.codeSegment.srcPath), extendedClass.item.location?.range));
                 }
             }
             return;
@@ -371,11 +370,11 @@ export class DefinitionProvider {
             }
         }
 
-        const codesSearched = new Set<BrsCode>();
+        const codesSearched = new Set<BrsCodeSegment>();
         //look through all files in scope for matches
         for (const scope of scopesForFile) {
-            for (const scopeCode of scope.getAllCodes()) {
-                if (!isBrsCode(scopeCode) || codesSearched.has(scopeCode)) {
+            for (const scopeCode of scope.getAllCodeSegments()) {
+                if (!isBrsCodeSegment(scopeCode) || codesSearched.has(scopeCode)) {
                     continue;
                 }
                 codesSearched.add(scopeCode);
@@ -403,14 +402,14 @@ export class DefinitionProvider {
     }
 
 
-    private brsCodeGetDefinitionsForNamespace(token: Token, code: BrsCode): Location {
+    private brsCodeGetDefinitionsForNamespace(token: Token, code: BrsCodeSegment): Location {
         //BrightScript does not support namespaces, so return an empty list in that case
         if (!token) {
             return undefined;
         }
         let location;
 
-        const nameParts = (this.event.code as BrsCode).getPartialVariableName(token, [TokenKind.New]).split('.');
+        const nameParts = (this.event.codeSegment as BrsCodeSegment).getPartialVariableName(token, [TokenKind.New]).split('.');
         const endName = nameParts[nameParts.length - 1].toLowerCase();
         const namespaceName = nameParts.slice(0, -1).join('.').toLowerCase();
 
@@ -442,15 +441,13 @@ export class DefinitionProvider {
         return location;
     }
 
-    private xmlCodeGetDefinition(code: XmlCode) {
-        //the parent component is found through the file's dependencies, so ask the file
-        const file = this.event.file as XmlFile;
+    private xmlFileGetDefinition(file: XmlFile) {
         //if the position is within the file's parent component name
         if (
             isXmlFile(file) &&
             file.parentComponent &&
-            file.componentCode.parentComponentName &&
-            util.rangeContains(file.componentCode.parentComponentName.location?.range, this.event.position)
+            file.parentComponentName &&
+            util.rangeContains(file.parentComponentName.location?.range, this.event.position)
         ) {
             this.event.definitions.push({
                 range: util.createRange(0, 0, 0, 0),
@@ -463,7 +460,7 @@ export class DefinitionProvider {
         // Walk the entire component tree (component attributes, script tags, children nodes,
         // customization nodes) and return a definition for the first attribute value that
         // looks like a file path and resolves to a known file.
-        const component = file.componentCode.ast?.componentElement;
+        const component = file.ast?.componentElement;
         if (!component) {
             return;
         }

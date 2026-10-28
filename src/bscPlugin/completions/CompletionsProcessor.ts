@@ -1,6 +1,6 @@
-import { isAliasStatement, isBrsCode, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlCode, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isBrsCodeSegment, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
-import type { BscCode } from '../../files/BscCode';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
@@ -10,9 +10,8 @@ import type { CompletionItem, Position } from 'vscode-languageserver';
 import { CompletionItemKind, TextEdit } from 'vscode-languageserver';
 import type { BscSymbol } from '../../SymbolTable';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { XmlCode } from '../../files/XmlCode';
+import type { XmlFile } from '../../files/XmlFile';
 import type { Program } from '../../Program';
-import type { BrsCode } from '../../files/BrsCode';
 import type { FunctionScope } from '../../FunctionScope';
 import { BooleanType } from '../../types/BooleanType';
 import { InvalidType } from '../../types/InvalidType';
@@ -34,7 +33,7 @@ export class CompletionsProcessor {
     }
 
     public process() {
-        let code = this.event.code;
+        let code = this.event.codeSegment;
         this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
 
             // Find the scopes for this file - Only process the first few scopes
@@ -44,9 +43,9 @@ export class CompletionsProcessor {
             let completionResults: CompletionItem[] = [];
             let globalResults: CompletionItem[] = [];
 
-            if (isXmlCode(code)) {
-                completionResults = this.getXmlCodeCompletions(this.event.position, code);
-            } else if (isBrsCode(code)) {
+            if (!code && isXmlFile(this.event.file)) {
+                completionResults = this.getXmlFileCompletions(this.event.position, this.event.file);
+            } else if (isBrsCodeSegment(code)) {
                 //handle script import completions
                 let scriptImport = util.getScriptImportAtPosition(code.ownScriptImports, this.event.position);
                 if (scriptImport) {
@@ -102,13 +101,13 @@ export class CompletionsProcessor {
      * Get all available completions for the specified position
      * @param position the position to get completions
      */
-    public getXmlCodeCompletions(position: Position, code: XmlCode): CompletionItem[] {
-        let scriptImport = util.getScriptImportAtPosition(code.scriptTagImports, position);
+    public getXmlFileCompletions(position: Position, file: XmlFile): CompletionItem[] {
+        let scriptImport = util.getScriptImportAtPosition(file.scriptTagImports, position);
         if (scriptImport) {
-            return this.getScriptImportCompletions(code.program, code.pkgPath, scriptImport);
+            return this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport);
         }
         //xml element/attribute completions (scenegraph nodes, interface field/function, node fields)
-        return code.getCompletions(position);
+        return file.getCompletions(position);
     }
 
     /**
@@ -175,7 +174,7 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsCodeCompletions(position: Position, code: BrsCode, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
+    public getBrsCodeCompletions(position: Position, code: BrsCodeSegment, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
         const currentTokenByFilePosition = code.getTokenAt(position);
         const currentToken = currentTokenByFilePosition ?? code.getTokenAt(code.getClosestExpression(position)?.location?.range.start);
@@ -361,7 +360,7 @@ export class CompletionsProcessor {
         return { global: globalCompletions, scoped: result };
     }
 
-    private getScopeSymbolCompletions(code: BrsCode, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
+    private getScopeSymbolCompletions(code: BrsCodeSegment, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
         // get all scope available symbols
 
         const scopeSymbols = code.parseMode === ParseMode.BrighterScript
@@ -568,7 +567,7 @@ export class CompletionsProcessor {
      */
     public getPropertyNameCompletions(scope: Scope) {
         let results = [] as CompletionItem[];
-        scope.enumerateBrsCode((code) => {
+        scope.enumerateBrsCodeSegments((code) => {
             results.push(...code.propertyNameCompletions);
         });
         return results;
@@ -579,9 +578,9 @@ export class CompletionsProcessor {
      */
     public getAllClassMemberCompletions(scope: Scope) {
         let results = new Map<string, CompletionItem>();
-        let codesSearched = new Set<BscCode>();
-        for (const code of scope.getAllCodes()) {
-            if (isBrsCode(code) && !codesSearched.has(code)) {
+        let codesSearched = new Set<BrsCodeSegment>();
+        for (const code of scope.getAllCodeSegments()) {
+            if (isBrsCodeSegment(code) && !codesSearched.has(code)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (let cs of code['_cachedLookups'].classStatements) {
                     for (let s of cs.members) {
@@ -646,7 +645,7 @@ export class CompletionsProcessor {
         ];
     }
 
-    private isPositionInComment(code: BrsCode, position: Position) {
+    private isPositionInComment(code: BrsCodeSegment, position: Position) {
         const currentToken = code.getCurrentOrNextTokenAt(position);
         const tokenKind = currentToken?.kind;
         if (!currentToken) {
@@ -664,11 +663,11 @@ export class CompletionsProcessor {
         return false;
     }
 
-    private isTokenAdjacentTo(code: BrsCode, currentToken: Token, targetKind: TokenKind) {
+    private isTokenAdjacentTo(code: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
         return code.getPreviousToken(currentToken)?.kind === targetKind || code.isTokenNextToTokenKind(currentToken, targetKind);
     }
 
-    private getAdjacentToken(code: BrsCode, currentToken: Token, targetKind: TokenKind) {
+    private getAdjacentToken(code: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
         return currentToken.kind === targetKind ? currentToken : code.getTokenBefore(currentToken, targetKind);
     }
 }

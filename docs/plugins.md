@@ -64,10 +64,10 @@ Full compiler lifecycle:
     - `beforeValidateProgram`
     - For each file:
         - `beforeValidateFile`
-        - For each piece of code the file provides:
-            - `beforeValidateCode`
-            - `validateCode`
-            - `afterValidateCode`
+        - For each BrightScript code segment the file provides:
+            - `beforeValidateBrsCodeSegment`
+            - `validateBrsCodeSegment`
+            - `afterValidateBrsCodeSegment`
         - `validateFile`
         - `afterValidateFile`
     - For each scope:
@@ -81,16 +81,16 @@ Full compiler lifecycle:
     - `beforeBuildProgram`
     - For each file:
         - `beforePrepareFile`
-        - For each piece of code the file provides:
-            - `beforePrepareCode`
+        - For each BrightScript code segment the file provides:
+            - `beforePrepareBrsCodeSegment`
     - For each file:
         - `prepareFile`
-        - For each piece of code the file provides:
-            - `prepareCode`
+        - For each BrightScript code segment the file provides:
+            - `prepareBrsCodeSegment`
     - For each file:
         - `afterPrepareFile`
-        - For each piece of code the file provides:
-            - `afterPrepareCode`
+        - For each BrightScript code segment the file provides:
+            - `afterPrepareBrsCodeSegment`
     - `afterBuildProgram`
 - `afterSerializeProgram`
 - `beforeRemoveProgram`
@@ -123,10 +123,10 @@ After file addition/removal (note: throttled/debounced):
 - `beforeValidateProgram`
 - For each invalidated/not-yet-validated file
     - `beforeValidateFile`
-    - For each piece of code the file provides:
-        - `beforeValidateCode`
-        - `validateCode`
-        - `afterValidateCode`
+    - For each BrightScript code segment the file provides:
+        - `beforeValidateBrsCodeSegment`
+        - `validateBrsCodeSegment`
+        - `afterValidateBrsCodeSegment`
     - `validateFile`
     - `afterValidateFile`
 - For each invalidated scope:
@@ -150,7 +150,7 @@ Hovers
 Semantic Tokens
  - `provideSemanticTokens`
 
-Requests at a position (completions, hovers, definitions, references, code actions) are sent to the code at that position. Requests for a whole file (semantic tokens, document symbols, inlay hints, source fix-all) are sent once for each piece of code in the file, and the results are combined.
+Every editor event has the `file` it's about. Requests at a position (completions, hovers, definitions, references, code actions) also have the `codeSegment` at that position, if the position is inside BrightScript; outside of it (i.e. in the xml of a component) `codeSegment` is undefined. Requests for a whole file (semantic tokens, document symbols, inlay hints, source fix-all) are sent once for the file itself (without a `codeSegment`), then once for each of its code segments, and the results are combined.
 
 
 ## Compiler API
@@ -161,14 +161,14 @@ The top level object is the `ProgramBuilder` which runs the overall process: pre
 
 `Program` is the compiler itself; it handles the creation of program objects (`Scope`, `BrsFile`, `XmlFile`) and overal validation.
 
-Files provide code. A file (`BrsFile`, `XmlFile`, `AssetFile`) holds the paths, contents, dependencies and output. The code it provides holds the tokens, AST, symbols and everything else about the code itself, and is what validation, scopes and the editor features work on:
+Files hold the paths, contents, dependencies and output (`BrsFile`, `XmlFile`, `AssetFile`). The BrightScript a file contains is provided as code segments (`BrsCodeSegment`), which hold the tokens, AST, symbols and everything else about that BrightScript, and are what BrightScript validation, scopes and the editor features work on:
 
-- `BrsCode` is a piece of BrightScript or BrighterScript. A `.brs` or `.bs` file provides its BrightScript as `BrsCode`. A component's `.xml` file provides one for each `<script>` block with its code inline in a `<![CDATA[ ... ]]>` section. Its AST can be modified by a plugin.
-- `XmlCode` is a SceneGraph component; it doesn't have a proper AST currently but it can be "patched". A component's `.xml` file declares exactly one component, available as `xmlFile.componentCode`.
+- A `.brs` or `.bs` file provides one `BrsCodeSegment`.
+- A component's `.xml` file provides one for each `<script>` block with its code inline in a `<![CDATA[ ... ]]>` section. The component itself (its name, parent, interface, script tags and xml AST) is on the `XmlFile`, as before. It doesn't have a proper AST currently but it can be "patched".
 
-`file.codes` lists all of the code a file provides, and is the way to get at it: don't assume how many pieces of code, or which kinds, a file provides. `file.codes.filter(isBrsCode)` gets the BrightScript. Use `code.document` to get from code back to the file it lives in.
+A code segment's AST can be modified by a plugin. `file.codeSegments` lists the code segments a file provides, and is the way to get at them: don't assume how many a file provides. Use `codeSegment.document` to get from a code segment back to the file it lives in.
 
-Events about code carry both the `code` and the `file` it lives in. Decide what to do based on the kind of code (`isBrsCode(event.code)`), not the kind of file: an `.xml` file's `<script>` blocks are BrightScript too.
+The code segment events (`validateBrsCodeSegment`, `prepareBrsCodeSegment` and their before/after events) carry the `codeSegment` and the `file` it lives in. They're sent for every piece of BrightScript, including the `<script>` blocks of an `.xml` file, so handle BrightScript there rather than by checking the kind of file.
 
 `Scope` is a logical group of files; for instance `source` files, or each component's individual scope (XML definition, related components and imported scripts). A file can be included in multiple scopes.
 
@@ -386,18 +386,18 @@ export interface CompilerPlugin {
     afterValidateFile?(event: AfterValidateFileEvent): any;
 
     /**
-     * Called before each piece of code is validated. A file can provide several pieces of code
-     * (i.e. an xml file provides its component, plus any BrightScript in its `<script>` blocks).
+     * Called before each BrightScript code segment is validated. A file can provide several code segments
+     * (i.e. an xml file provides one for each of its `<script>` blocks).
      */
-    beforeValidateCode?(event: BeforeValidateCodeEvent): any;
+    beforeValidateBrsCodeSegment?(event: BeforeValidateBrsCodeSegmentEvent): any;
     /**
      * Called during the code validation process. If your plugin contributes code validations, this is a good place to contribute them.
      */
-    validateCode?(event: ValidateCodeEvent): any;
+    validateBrsCodeSegment?(event: ValidateBrsCodeSegmentEvent): any;
     /**
-     * Called after each piece of code is validated
+     * Called after each BrightScript code segment is validated
      */
-    afterValidateCode?(event: AfterValidateCodeEvent): any;
+    afterValidateBrsCodeSegment?(event: AfterValidateBrsCodeSegmentEvent): any;
 
 
     /**
@@ -424,17 +424,17 @@ export interface CompilerPlugin {
     afterPrepareFile?(event: AfterPrepareFileEvent): any;
 
     /**
-     * Before preparing a piece of code for building
+     * Before preparing a BrightScript code segment for building
      */
-    beforePrepareCode?(event: BeforePrepareCodeEvent): any;
+    beforePrepareBrsCodeSegment?(event: BeforePrepareBrsCodeSegmentEvent): any;
     /**
-     * Prepare a piece of code for building
+     * Prepare a BrightScript code segment for building
      */
-    prepareCode?(event: PrepareCodeEvent): any;
+    prepareBrsCodeSegment?(event: PrepareBrsCodeSegmentEvent): any;
     /**
-     * After preparing a piece of code for building
+     * After preparing a BrightScript code segment for building
      */
-    afterPrepareCode?(event: AfterPrepareCodeEvent): any;
+    afterPrepareBrsCodeSegment?(event: AfterPrepareBrsCodeSegmentEvent): any;
 
 
     /**
@@ -605,7 +605,7 @@ npx tsc myPlugin.ts -m commonjs --sourceMap --watch
 
 Diagnostics must run every time it is relevant:
 
-- Code has one out-of-context validation step (`afterValidateCode`),
+- BrightScript has one out-of-context validation step (`afterValidateBrsCodeSegment`),
 - Scopes are validated once all the the files have been collected (`before/afterValidateScope`).
 
 Note: in a language-server context, Scope validation happens every time a file changes.
@@ -614,31 +614,29 @@ To add a diagnostic, register it with the `DiagnosticManager`, available from th
 
 ```typescript
 // bsc-plugin-no-underscores.ts
-import { CompilerPlugin, AfterValidateCodeEvent, isBrsCode, createVisitor, WalkMode } from 'brighterscript';
+import { CompilerPlugin, AfterValidateBrsCodeSegmentEvent, createVisitor, WalkMode } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
         name: 'no-underscores',
         // post-parsing validation. Runs for all BrightScript code: `.brs`/`.bs` files and `<script>` blocks in xml files
-        afterValidateCode: (event: AfterValidateCodeEvent) => {
-            if (isBrsCode(event.code)) {
-                // visit function statements and validate their name
-                event.code.ast.walk(createVisitor({
-                    FunctionStatement: (funcStmt) => {
-                        if (funcStmt.tokens.name.text.includes('_')) {
-                            event.program.diagnostics.register({
-                                code: 9000,
-                                message: 'Do not use underscores in function names',
-                                //locations are already in the coordinates of the file the code lives in
-                                location: funcStmt.tokens.name.location
-                            }, { tags: ['no-underscores-plugin'] });
-                        }
+        afterValidateBrsCodeSegment: (event: AfterValidateBrsCodeSegmentEvent) => {
+            // visit function statements and validate their name
+            event.codeSegment.ast.walk(createVisitor({
+                FunctionStatement: (funcStmt) => {
+                    if (funcStmt.tokens.name.text.includes('_')) {
+                        event.program.diagnostics.register({
+                            code: 9000,
+                            message: 'Do not use underscores in function names',
+                            //locations are already in the coordinates of the file the code segment lives in
+                            location: funcStmt.tokens.name.location
+                        }, { tags: ['no-underscores-plugin'] });
                     }
-                }), {
-                    walkMode: WalkMode.visitStatements
-                });
-            }
+                }
+            }), {
+                walkMode: WalkMode.visitStatements
+            });
         }
     } as CompilerPlugin;
 };
@@ -647,7 +645,7 @@ export default function () {
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
 
-Instead, we provide an instance of an `Editor` class in the `beforePrepareCode` event that allows you to modify AST before the code is transpiled, and then those modifications are undone after the build.
+Instead, we provide an instance of an `Editor` class in the `beforePrepareBrsCodeSegment` event that allows you to modify AST before the code is transpiled, and then those modifications are undone after the build.
 
 For example, consider the following brightscript code:
 ```brightscript
@@ -659,26 +657,24 @@ end sub
 Here's the plugin:
 
 ```typescript
-import { CompilerPlugin, BeforePrepareCodeEvent, isBrsCode, WalkMode, createVisitor, TokenKind } from 'brighterscript';
+import { CompilerPlugin, BeforePrepareBrsCodeSegmentEvent, WalkMode, createVisitor, TokenKind } from 'brighterscript';
 
 // plugin factory
 export default function () {
     return {
         name: 'replacePlaceholders',
         // transform AST before transpilation
-        beforePrepareCode: (event: BeforePrepareCodeEvent) => {
-            if (isBrsCode(event.code)) {
-                event.code.ast.walk(createVisitor({
-                    LiteralExpression: (literal) => {
-                        //replace every occurance of <FIRST_NAME> in strings with "world"
-                        if (literal.token.kind === TokenKind.StringLiteral && literal.token.text.includes('<FIRST_NAME>')) {
-                            event.editor.setProperty(literal.token, 'text', literal.token.text.replace('<FIRST_NAME>', 'world'));
-                        }
+        beforePrepareBrsCodeSegment: (event: BeforePrepareBrsCodeSegmentEvent) => {
+            event.codeSegment.ast.walk(createVisitor({
+                LiteralExpression: (literal) => {
+                    //replace every occurance of <FIRST_NAME> in strings with "world"
+                    if (literal.token.kind === TokenKind.StringLiteral && literal.token.text.includes('<FIRST_NAME>')) {
+                        event.editor.setProperty(literal.token, 'text', literal.token.text.replace('<FIRST_NAME>', 'world'));
                     }
-                }), {
-                    walkMode: WalkMode.visitExpressionsRecursive
-                });
-            }
+                }
+            }), {
+                walkMode: WalkMode.visitExpressionsRecursive
+            });
         }
     } as CompilerPlugin;
 };
@@ -693,19 +689,16 @@ Another common use case is to remove print statements and comments. Here's a plu
 Note: Comments are not regular nodes in the AST. They're considered "trivia". To access them, you need to ask each AstNode for its trivia. to help with this, we've included the `AstNode` visitor method. Here's how you'd do that:
 
 ```typescript
-import { Plugin, BeforePrepareCodeEvent, isBrsCode, WalkMode, createVisitor, TokenKind, AstNode, EmptyStatement } from 'brighterscript';
+import { Plugin, BeforePrepareBrsCodeSegmentEvent, WalkMode, createVisitor, TokenKind, AstNode, EmptyStatement } from 'brighterscript';
 
 export default function (): Plugin {
     return {
         name: 'removeCommentAndPrintStatements',
-        beforePrepareCode: (event: BeforePrepareCodeEvent) => {
-            if (!isBrsCode(event.code)) {
-                return;
-            }
+        beforePrepareBrsCodeSegment: (event: BeforePrepareBrsCodeSegmentEvent) => {
             //delete comments from the EOF token
-            event.editor.arraySplice(event.code.parser.eofToken.leadingTrivia, 0, Number.MAX_SAFE_INTEGER);
+            event.editor.arraySplice(event.codeSegment.parser.eofToken.leadingTrivia, 0, Number.MAX_SAFE_INTEGER);
 
-            event.code.ast.walk(createVisitor({
+            event.codeSegment.ast.walk(createVisitor({
                 PrintStatement: (node: AstNode, _parent, owner, key) => {
                     return new EmptyStatement();
                 },
@@ -892,41 +885,42 @@ Here's an example file showing all three paths:
 }
 ```
 
-## Files provide code
-Files provide code, and plugins work on that code. Every plugin gets every piece of BrightScript, wherever it lives, with no opt-in. A `.brs`/`.bs` file provides one piece of BrightScript (`BrsCode`). A component's `.xml` file provides its component (`XmlCode`), plus a piece of BrightScript for each `<script>` block with its code inline:
+## Files provide code segments
+Files provide BrightScript as code segments, and plugins work on those code segments. Every plugin gets every piece of BrightScript, wherever it lives, with no opt-in. A `.brs`/`.bs` file provides one code segment (`BrsCodeSegment`). A component's `.xml` file provides one for each `<script>` block with its code inline:
 
 ```xml
 <component name="Widget" extends="Group">
     <script type="text/brightscript"><![CDATA[
         sub init()
-            print "this is BrsCode too"
+            print "this is a BrsCodeSegment too"
         end sub
     ]]></script>
 </component>
 ```
 
+Everything about the component itself (its xml, name, parent, interface and script tags) is on the `XmlFile`, and is validated and prepared in the file events.
+
 ### Migrating a plugin
 | Before | After |
 |---|---|
-| `validateFile` (and before/after) with `event.file` | `validateCode` (and before/after) with `event.code`. Keep `validateFile` for checks about the file itself |
-| `prepareFile` (and before/after) with `event.file` | `prepareCode` (and before/after) with `event.code` and `event.editor`. Keep `prepareFile` for changes to the file itself |
-| `event.file` on editor events (`provideHover`, `provideCompletions`, etc.) | `event.code` for the code the request is about. `event.file` is still there for the file it lives in |
-| `isBrsFile(event.file)` / `isXmlFile(event.file)` | `isBrsCode(event.code)` / `isXmlCode(event.code)` |
-| `file.ast`, `file.parser`, `file.callables`, `file.getTokenAt()`, ... | `code.ast`, `code.parser`, ... on the event's code, or on each of `file.codes` |
-| `xmlFile.componentName`, `xmlFile.ast`, `xmlFile.scriptTagImports`, ... | `xmlFile.componentCode.componentName`, ... |
-| `callable.file`, `fileLink.file`, `namespaceContainer.file` | `callable.code`, `fileLink.code`, ... (`.code.document` for the file) |
-| `scope.enumerateBrsFiles()` | `scope.enumerateBrsCode()` |
-| `program.getFileSymbolInfo(file)` | `program.getCodeSymbolInfo(code)` |
-| `file.commentFlags` | `code.commentFlags` |
+| BrightScript checks in `validateFile` (and before/after) with `event.file` | `validateBrsCodeSegment` (and before/after) with `event.codeSegment`. Keep `validateFile` for checks about the file itself, including xml |
+| BrightScript changes in `prepareFile` (and before/after) with `event.file` | `prepareBrsCodeSegment` (and before/after) with `event.codeSegment` and `event.editor`. Keep `prepareFile` for changes to the file itself, including xml |
+| `isBrsFile(event.file)` on editor events (`provideHover`, `provideCompletions`, etc.) | `event.codeSegment` for the BrightScript the request is about. `isXmlFile(event.file)` with no `codeSegment` for the xml of a component |
+| `brsFile.ast`, `brsFile.parser`, `brsFile.callables`, `brsFile.getTokenAt()`, ... | `codeSegment.ast`, `codeSegment.parser`, ... on the event's code segment, or on each of `file.codeSegments` |
+| `callable.file`, `fileLink.file`, `namespaceContainer.file` | `callable.codeSegment`, `fileLink.codeSegment`, ... (`.codeSegment.document` for the file) |
+| `scope.enumerateBrsFiles()` | `scope.enumerateBrsCodeSegments()` |
+| `program.getFileSymbolInfo(file)` | `program.getCodeSegmentSymbolInfo(codeSegment)` |
+| `brsFile.commentFlags` | `codeSegment.commentFlags` |
+| `new BrsTranspileState(brsFile)`, `state.file` | `new BrsTranspileState(codeSegment)`, `state.codeSegment` |
 
-Validation runs each file's events together, with the code events inside the file events: `beforeValidateFile`, then `beforeValidateCode`, `validateCode` and `afterValidateCode` for each piece of code, then `validateFile` and `afterValidateFile`. A file is either fully validated or not at all, so a validation that gets cancelled never leaves a file half done.
+Validation runs each file's events together, with the code segment events inside the file events: `beforeValidateFile`, then `beforeValidateBrsCodeSegment`, `validateBrsCodeSegment` and `afterValidateBrsCodeSegment` for each code segment, then `validateFile` and `afterValidateFile`. A file is either fully validated or not at all, so a validation that gets cancelled never leaves a file half done.
 
-Building runs in phases instead. Every file gets its `before` event (followed by its code's) before any file gets its main event, and every file gets its main event before any file gets its `after` event. This applies to prepare (`beforePrepareFile`/`beforePrepareCode`, then `prepareFile`/`prepareCode`, then `afterPrepareFile`/`afterPrepareCode`), serialize (`beforeSerializeFile`, `serializeFile`, `afterSerializeFile`) and write (`beforeWriteFile`, `writeFile`, `afterWriteFile`). So a plugin that keeps state between a file's events needs to key it by file. A file that a plugin adds to the build while files are being prepared gets a full round of the prepare phases of its own, after the current round.
+Building runs in phases instead. Every file gets its `before` event (followed by its code segments') before any file gets its main event, and every file gets its main event before any file gets its `after` event. This applies to prepare (`beforePrepareFile`/`beforePrepareBrsCodeSegment`, then `prepareFile`/`prepareBrsCodeSegment`, then `afterPrepareFile`/`afterPrepareBrsCodeSegment`), serialize (`beforeSerializeFile`, `serializeFile`, `afterSerializeFile`) and write (`beforeWriteFile`, `writeFile`, `afterWriteFile`). So a plugin that keeps state between a file's events needs to key it by file. A file that a plugin adds to the build while files are being prepared gets a full round of the prepare phases of its own, after the current round.
 
-### Things not to assume about code
-- **A file doesn't provide a fixed number of pieces of code.** A `.brs` file has one today and an `.xml` file has one per CDATA block, but new syntax can change that. Iterate `file.codes`.
-- **Code doesn't always start at the top of its file.** Embedded code starts partway into the xml file, often partway through a line, and every location is in the coordinates of the file it lives in. To insert something at the top of the code, use `code.startPosition`, never `0:0`.
-- **The file's contents are not the code's text.** Use `code.getText()`, or `code.getText(range)` for part of it (ranges are in the file's coordinates).
-- **Keep edits inside `code.range`.** Code that covers its whole file has no range.
-- **Several pieces of code can share one file and path.** Key any caches by the `code` object or by `code.key` (i.e. `components/Widget.xml#script-0`), never by `srcPath` or `pkgPath`.
-- **Locations use the uri of the file the code lives in**, so diagnostics and results need no remapping.
+### Things not to assume about code segments
+- **A file doesn't provide a fixed number of code segments.** A `.brs` file has one today and an `.xml` file has one per CDATA block (or none), but new syntax can change that. Iterate `file.codeSegments`.
+- **A code segment doesn't always start at the top of its file.** An embedded code segment starts partway into the xml file, often partway through a line, and every location is in the coordinates of the file it lives in. To insert something at the top of a code segment, use `codeSegment.startPosition`, never `0:0`.
+- **The file's contents are not the code segment's text.** Use `codeSegment.getText()`, or `codeSegment.getText(range)` for part of it (ranges are in the file's coordinates).
+- **Keep edits inside `codeSegment.range`.** A code segment that covers its whole file has no range.
+- **Several code segments can share one file and path.** Key any caches by the code segment object or by `codeSegment.key` (i.e. `components/Widget.xml#script-0`), never by `srcPath` or `pkgPath`.
+- **Locations use the uri of the file the code segment lives in**, so diagnostics and results need no remapping.

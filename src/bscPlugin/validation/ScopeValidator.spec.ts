@@ -2,7 +2,7 @@ import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
 import { util } from '../../util';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim, getBrsCode } from '../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim, getBrsCodeSegment } from '../../testHelpers.spec';
 import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
 import { IntegerType } from '../../types/IntegerType';
@@ -53,11 +53,11 @@ describe('ScopeValidator', () => {
                 }
             end function
         `);
-        const returnStatement = getBrsCode(file).ast.findChild<ReturnStatement>(isReturnStatement);
+        const returnStatement = getBrsCodeSegment(file).ast.findChild<ReturnStatement>(isReturnStatement);
         delete returnStatement.parent;
         const validator = new ScopeValidator();
         //should not crash
-        validator['validateReturnStatement'](getBrsCode(file), returnStatement);
+        validator['validateReturnStatement'](getBrsCodeSegment(file), returnStatement);
     });
 
     describe('mismatchArgumentCount', () => {
@@ -5450,11 +5450,11 @@ describe('ScopeValidator', () => {
                 const validateCodeEvent = {
                     program: program,
                     file: file,
-                    code: getBrsCode(file)
+                    codeSegment: getBrsCodeSegment(file)
                 };
                 //emit an event to allow plugins to contribute to the code validation process
-                program.plugins.emit('validateCode', validateCodeEvent);
-                program.plugins.emit('afterValidateCode', validateCodeEvent);
+                program.plugins.emit('validateBrsCodeSegment', validateCodeEvent);
+                program.plugins.emit('afterValidateBrsCodeSegment', validateCodeEvent);
             }
 
             const commonContents = `
@@ -5470,10 +5470,10 @@ describe('ScopeValidator', () => {
 
             let commonBs: BrsFile = program.setFile('source/common.bs', commonContents);
             validateFile(commonBs);
-            expect(getBrsCode(commonBs).validationSegmenter.segmentsForValidation.length).to.eq(2); // 1 func,  1 classField
-            expect(getBrsCode(commonBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(0);
-            getBrsCode(commonBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
-            expect(getBrsCode(commonBs).validationSegmenter.singleValidationSegments.size).to.eq(2); // no references needed to other files
+            expect(getBrsCodeSegment(commonBs).validationSegmenter.segmentsForValidation.length).to.eq(2); // 1 func,  1 classField
+            expect(getBrsCodeSegment(commonBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(0);
+            getBrsCodeSegment(commonBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(getBrsCodeSegment(commonBs).validationSegmenter.singleValidationSegments.size).to.eq(2); // no references needed to other files
 
             let common2Contents = `
                 sub doesValidationForEachScope()
@@ -5487,10 +5487,10 @@ describe('ScopeValidator', () => {
             `;
             let common2Bs: BrsFile = program.setFile('source/common2.bs', common2Contents);
             validateFile(common2Bs);
-            expect(getBrsCode(common2Bs).validationSegmenter.segmentsForValidation.length).to.eq(2); // 2 func
-            expect(getBrsCode(common2Bs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(1);
-            getBrsCode(commonBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
-            expect(getBrsCode(common2Bs).validationSegmenter.singleValidationSegments.size).to.eq(1); // alsoNoValidationForEachScope() does not reference other files
+            expect(getBrsCodeSegment(common2Bs).validationSegmenter.segmentsForValidation.length).to.eq(2); // 2 func
+            expect(getBrsCodeSegment(common2Bs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(1);
+            getBrsCodeSegment(commonBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(getBrsCodeSegment(common2Bs).validationSegmenter.singleValidationSegments.size).to.eq(1); // alsoNoValidationForEachScope() does not reference other files
 
             let klassContents = `
                 class KlassInDiffFile
@@ -5500,10 +5500,10 @@ describe('ScopeValidator', () => {
 
             let klassBs: BrsFile = program.setFile('source/klass.bs', klassContents);
             validateFile(klassBs);
-            expect(getBrsCode(klassBs).validationSegmenter.segmentsForValidation.length).to.eq(1); //  1 classField
-            expect(getBrsCode(klassBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(0);
-            getBrsCode(klassBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
-            expect(getBrsCode(klassBs).validationSegmenter.singleValidationSegments.size).to.eq(1); // does not reference other files
+            expect(getBrsCodeSegment(klassBs).validationSegmenter.segmentsForValidation.length).to.eq(1); //  1 classField
+            expect(getBrsCodeSegment(klassBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(0);
+            getBrsCodeSegment(klassBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(getBrsCodeSegment(klassBs).validationSegmenter.singleValidationSegments.size).to.eq(1); // does not reference other files
 
             const widgetFileContents = `
                 sub init()
@@ -5518,10 +5518,10 @@ describe('ScopeValidator', () => {
             let widgetBs: BrsFile = program.setFile('components/Widget.bs', widgetFileContents);
 
             validateFile(widgetBs);
-            expect(getBrsCode(widgetBs).validationSegmenter.segmentsForValidation.length).to.eq(2); // 2 funcs
-            expect(getBrsCode(widgetBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(1); // 1 func (init)
-            getBrsCode(widgetBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
-            expect(getBrsCode(widgetBs).validationSegmenter.singleValidationSegments.size).to.eq(1); // 1 func (anotherFunction)
+            expect(getBrsCodeSegment(widgetBs).validationSegmenter.segmentsForValidation.length).to.eq(2); // 2 funcs
+            expect(getBrsCodeSegment(widgetBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(1); // 1 func (init)
+            getBrsCodeSegment(widgetBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(getBrsCodeSegment(widgetBs).validationSegmenter.singleValidationSegments.size).to.eq(1); // 1 func (anotherFunction)
 
             const diffKlassContent = `
                 class KlassInDiffFile
@@ -5530,10 +5530,10 @@ describe('ScopeValidator', () => {
             `;
             let diffKlassBs: BrsFile = program.setFile('components/diffKlass.bs', diffKlassContent);
             validateFile(diffKlassBs);
-            expect(getBrsCode(diffKlassBs).validationSegmenter.segmentsForValidation.length).to.eq(1); //  1 classField
-            expect(getBrsCode(diffKlassBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(0);
-            getBrsCode(diffKlassBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
-            expect(getBrsCode(diffKlassBs).validationSegmenter.singleValidationSegments.size).to.eq(1);
+            expect(getBrsCodeSegment(diffKlassBs).validationSegmenter.segmentsForValidation.length).to.eq(1); //  1 classField
+            expect(getBrsCodeSegment(diffKlassBs).validationSegmenter.unresolvedSegmentsSymbols.size).to.eq(0);
+            getBrsCodeSegment(diffKlassBs).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.false);
+            expect(getBrsCodeSegment(diffKlassBs).validationSegmenter.singleValidationSegments.size).to.eq(1);
 
 
             program.setFile('components/Widget.xml', trim`
@@ -5556,8 +5556,8 @@ describe('ScopeValidator', () => {
             program.validate();
             // all segments should be validated
             [commonBs, common2Bs, klassBs, widgetBs, diffKlassBs].forEach(file => {
-                expect(getBrsCode(file).validationSegmenter.validatedSegments.size).to.gte(getBrsCode(file).validationSegmenter.segmentsForValidation.length);
-                getBrsCode(file).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.true);
+                expect(getBrsCodeSegment(file).validationSegmenter.validatedSegments.size).to.gte(getBrsCodeSegment(file).validationSegmenter.segmentsForValidation.length);
+                getBrsCodeSegment(file).validationSegmenter.validatedSegments.forEach(x => expect(x).to.be.true);
             });
 
             expectZeroDiagnostics(program);
@@ -7563,7 +7563,7 @@ describe('ScopeValidator', () => {
 
             program.validate();
             expectZeroDiagnostics(program);
-            const unvalidatedSegments = getBrsCode(fileNotValidated).validationSegmenter.getAllUnvalidatedSegments();
+            const unvalidatedSegments = getBrsCodeSegment(fileNotValidated).validationSegmenter.getAllUnvalidatedSegments();
             expect(unvalidatedSegments).to.lengthOf(1);
             expect(isFunctionStatement(unvalidatedSegments[0])).to.be.true;
             expect((unvalidatedSegments[0] as FunctionStatement).getName(ParseMode.BrighterScript)).to.equal('doStuff');

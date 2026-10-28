@@ -1,7 +1,7 @@
 import type { SourceMapGenerator } from 'source-map';
 import type { Editor } from '../astUtils/Editor';
 import type { DependencyChangedEvent } from '../DependencyGraph';
-import type { BscCode } from './BscCode';
+import type { BrsCodeSegment } from './BrsCodeSegment';
 
 export interface BscFile {
     /**
@@ -43,9 +43,9 @@ export interface BscFile {
      */
     pkgPath?: string; // "images\\profile.jpg"   file.bs   file.brs
     /**
-     * The code this file provides. Files that contain no code (i.e. images and other assets) leave this undefined.
+     * The BrightScript code segments this file provides. Files that contain no BrightScript (i.e. images and other assets) leave this undefined.
      */
-    readonly codes?: readonly BscCode[];
+    readonly codeSegments?: readonly BrsCodeSegment[];
     /**
      * The key used to identify this file in the dependency graph.
      * If omitted, the pkgPath is used.

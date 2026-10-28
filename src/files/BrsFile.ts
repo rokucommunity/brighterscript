@@ -13,8 +13,7 @@ import type { BscSymbol } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { Editor } from '../astUtils/Editor';
 import type { BscFile } from './BscFile';
-import { BrsCode } from './BrsCode';
-import type { BscCode } from './BscCode';
+import { BrsCodeSegment } from './BrsCodeSegment';
 
 export interface ProvidedSymbol {
     symbol: BscSymbol;
@@ -48,7 +47,7 @@ export class BrsFile implements BscFile {
         pkgPath?: string;
         program: Program;
     }) {
-        this.code = new BrsCode({
+        this.codeSegment = new BrsCodeSegment({
             document: this,
             program: options?.program
         });
@@ -71,7 +70,7 @@ export class BrsFile implements BscFile {
 
             //all BrighterScript files need to be transpiled
             if (this.extension?.endsWith('.bs') || this.program?.options?.allowBrighterScriptInBrightScript) {
-                this.code.parseMode = ParseMode.BrighterScript;
+                this.codeSegment.parseMode = ParseMode.BrighterScript;
             }
             this.isTypedef = this.extension === '.d.bs';
             if (!this.isTypedef) {
@@ -95,9 +94,9 @@ export class BrsFile implements BscFile {
 
     /**
      * The BrightScript that makes up this file. Kept private so nothing outside the file assumes a file holds a
-     * single piece of code; use `codes` instead.
+     * single code segment; use `codeSegments` instead.
      */
-    private code: BrsCode;
+    private codeSegment: BrsCodeSegment;
 
     /**
      * Indicates whether this file has been validated. Set by the program during validation
@@ -105,10 +104,10 @@ export class BrsFile implements BscFile {
     public isValidated = false;
 
     /**
-     * All of the code this file provides
+     * The BrightScript code segments this file provides
      */
-    public get codes(): readonly BscCode[] {
-        return [this.code];
+    public get codeSegments(): readonly BrsCodeSegment[] {
+        return [this.codeSegment];
     }
 
     /**
@@ -121,7 +120,7 @@ export class BrsFile implements BscFile {
      */
     public get canBePruned() {
         let canPrune = true;
-        this.code.ast.walk(createVisitor({
+        this.codeSegment.ast.walk(createVisitor({
             FunctionStatement: () => {
                 canPrune = false;
             },
@@ -178,21 +177,21 @@ export class BrsFile implements BscFile {
      * Does a typedef file describe this file?
      */
     public get hasTypedef(): boolean {
-        return !!this.code.typedef;
+        return !!this.codeSegment.typedef;
     }
 
     /**
      * The typedef file that describes this file (if one exists)
      */
     public get typedefFile(): BrsFile | undefined {
-        return this.code.typedef?.document as BrsFile;
+        return this.codeSegment.typedef?.document as BrsFile;
     }
 
     /**
      * Find this file's typedef file (if a matching one exists) and link its code to this file's code
      */
     private resolveTypedef() {
-        this.code.typedef = this.program.getFile<BrsFile>(this.typedefKey)?.code;
+        this.codeSegment.typedef = this.program.getFile<BrsFile>(this.typedefKey)?.codeSegment;
     }
 
     public onDependenciesChanged(event: DependencyChangedEvent) {
@@ -210,7 +209,7 @@ export class BrsFile implements BscFile {
      * The list of files that this file depends on
      */
     public get dependencies() {
-        const result = this.code.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
+        const result = this.codeSegment.ownScriptImports.filter(x => !!x.destPath).map(x => x.destPath.toLowerCase());
 
         //if this is a .brs file, watch for typedef changes
         if (this.extension === '.brs') {
@@ -227,7 +226,7 @@ export class BrsFile implements BscFile {
      */
     public parse(fileContents: string) {
         this.fileContents = fileContents;
-        this.code.parse(fileContents);
+        this.codeSegment.parse(fileContents);
         //code that a typedef describes skips parsing and validation, so the file is already validated too
         if (this.hasTypedef) {
             this.isValidated = true;
@@ -270,20 +269,20 @@ export class BrsFile implements BscFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new BrsTranspileState(this.code);
+        const state = new BrsTranspileState(this.codeSegment);
         state.editor = this.editor ?? new Editor();
         let transpileResult: SourceNode | undefined;
 
         if (this.needsTranspiled) {
-            const astTranspile = this.code.ast.transpile(state);
+            const astTranspile = this.codeSegment.ast.transpile(state);
             const trailingComments = [];
-            if (util.hasLeadingComments(this.code.parser.eofToken)) {
-                if (util.isLeadingCommentOnSameLine(this.code.ast.statements[this.code.ast.statements.length - 1]?.location, this.code.parser.eofToken)) {
+            if (util.hasLeadingComments(this.codeSegment.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(this.codeSegment.ast.statements[this.codeSegment.ast.statements.length - 1]?.location, this.codeSegment.parser.eofToken)) {
                     trailingComments.push(' ');
                 } else {
                     trailingComments.push('\n');
                 }
-                trailingComments.push(...state.transpileLeadingComments(this.code.parser.eofToken));
+                trailingComments.push(...state.transpileLeadingComments(this.codeSegment.parser.eofToken));
             }
 
             transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, [...astTranspile, ...trailingComments]);
@@ -319,14 +318,14 @@ export class BrsFile implements BscFile {
 
 
     public getTypedef() {
-        const state = new BrsTranspileState(this.code);
-        const typedef = this.code.ast.getTypedef(state);
+        const state = new BrsTranspileState(this.codeSegment);
+        const typedef = this.codeSegment.ast.getTypedef(state);
         const programNode = util.sourceNodeFromTranspileResult(null, null, this.srcPath, typedef);
         return programNode.toString();
     }
 
     public dispose() {
-        this.code?.dispose();
+        this.codeSegment?.dispose();
 
         //deleting these properties result in lower memory usage (garbage collection is magic!)
         delete this.fileContents;

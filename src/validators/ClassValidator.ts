@@ -284,7 +284,7 @@ export class BsClassValidator {
 
     private findClasses() {
         this.classes = new Map();
-        this.scope.enumerateBrsCode((code) => {
+        this.scope.enumerateBrsCodeSegments((code) => {
 
             // eslint-disable-next-line @typescript-eslint/dot-notation
             for (let x of code['_cachedLookups'].classStatements ?? []) {

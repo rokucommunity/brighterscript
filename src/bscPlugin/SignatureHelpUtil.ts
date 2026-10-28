@@ -14,7 +14,7 @@ import { util } from '../util';
 export class SignatureHelpUtil {
     getSignatureHelpItems(callExpressionInfo: CallExpressionInfo): SignatureInfoObj[] {
         let signatureHelpItems: SignatureInfoObj[] = [];
-        let code = callExpressionInfo.code;
+        let code = callExpressionInfo.codeSegment;
         let dotPart = callExpressionInfo.dotPart;
         let name = callExpressionInfo.name;
         let results = new Map<string, SignatureInfoObj>();
@@ -27,7 +27,7 @@ export class SignatureHelpUtil {
             case CallExpressionType.myClassCall:
                 let statement = code.getClassMethod(callExpressionInfo.myClass, name, true);
                 if (statement) {
-                    signatureHelpItems = [this.getSignatureHelpForStatement({ item: statement, code: code })];
+                    signatureHelpItems = [this.getSignatureHelpForStatement({ item: statement, codeSegment: code })];
                 }
                 break;
 
@@ -69,7 +69,7 @@ export class SignatureHelpUtil {
 
     public getSignatureHelpForStatement(fileLink: FileLink<Statement>, namespaceName?: string): SignatureInfoObj {
         let statement = fileLink.item;
-        let code = fileLink.code;
+        let code = fileLink.codeSegment;
 
         if (!isFunctionStatement(statement) && !isMethodStatement(statement)) {
             return undefined;
@@ -131,11 +131,11 @@ export class SignatureHelpUtil {
     }
 
     public getClassSignatureHelp(fileLink: FileLink<ClassStatement>): SignatureInfoObj | undefined {
-        let code = fileLink.code;
+        let code = fileLink.codeSegment;
         let classStatement = fileLink.item;
 
         const classConstructor = code.getClassMethod(classStatement, 'new');
-        let sigHelp = classConstructor ? this.getSignatureHelpForStatement({ item: classConstructor, code: code }) : undefined;
+        let sigHelp = classConstructor ? this.getSignatureHelpForStatement({ item: classConstructor, codeSegment: code }) : undefined;
         let className = classStatement.getName(ParseMode.BrighterScript);
         if (sigHelp) {
             sigHelp.key = className;

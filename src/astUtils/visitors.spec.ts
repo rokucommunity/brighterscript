@@ -16,7 +16,7 @@ import { createStackedVisitor } from './stackedVisitor';
 import { Editor } from './Editor';
 import { ParseMode, Parser } from '../parser/Parser';
 import type { Statement, Expression, AstNode } from '../parser/AstNode';
-import { expectZeroDiagnostics, getBrsCode } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getBrsCodeSegment } from '../testHelpers.spec';
 import type { VariableExpression } from '../parser/Expression';
 import { BinaryExpression, type FunctionExpression, type LiteralExpression } from '../parser/Expression';
 
@@ -88,7 +88,7 @@ describe('astUtils visitors', () => {
 
     function functionsWalker(visitor: (statement: Statement, parent: Statement) => void, cancel?: CancellationToken) {
         return (file: BrsFile) => {
-            const funcExpressions = getBrsCode(file).ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitExpressionsRecursive });
+            const funcExpressions = getBrsCodeSegment(file).ast.findChildren<FunctionExpression>(isFunctionExpression, { walkMode: WalkMode.visitExpressionsRecursive });
             funcExpressions.some(functionExpression => {
                 visitor(functionExpression.body, undefined);
                 walkStatements(functionExpression.body, (statement, parent) => visitor(statement, parent), cancel);
@@ -116,7 +116,7 @@ describe('astUtils visitors', () => {
                 Block: track,
                 LiteralExpression: track
             });
-            getBrsCode(file).ast.walk(visitor, { walkMode: WalkMode.visitAllRecursive });
+            getBrsCodeSegment(file).ast.walk(visitor, { walkMode: WalkMode.visitAllRecursive });
             expect(nodes.map(x => x.constructor.name)).to.eql([
                 'FunctionStatement',
                 'FunctionStatement',
@@ -389,7 +389,7 @@ describe('astUtils visitors', () => {
             const file = program.setFile<BrsFile>('source/main.bs', text);
             const items = [];
             let index = 1;
-            getBrsCode(file).ast.walk((element: any) => {
+            getBrsCodeSegment(file).ast.walk((element: any) => {
                 element._testId = index++;
                 items.push(element);
             }, {
@@ -400,7 +400,7 @@ describe('astUtils visitors', () => {
         }
 
         it('links every ast node to its parent when walked', () => {
-            const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', `
+            const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', `
                 library "v30/bslCore.brs"
                 import "source/main.bs"
                 namespace alpha
@@ -510,7 +510,7 @@ describe('astUtils visitors', () => {
             let count = 0;
             const stopIndex = 5;
 
-            getBrsCode(file).ast.walk((statement, parent) => {
+            getBrsCodeSegment(file).ast.walk((statement, parent) => {
                 count++;
                 if (count === stopIndex) {
                     cancel.cancel();
@@ -1256,7 +1256,7 @@ describe('astUtils visitors', () => {
 
             // do not walk into print statements
             const skipper = new ChildrenSkipper();
-            getBrsCode(file).ast.walk((node) => {
+            getBrsCodeSegment(file).ast.walk((node) => {
                 actual.push(node.kind);
                 if (isPrintStatement(node)) {
                     skipper.skip();
@@ -1331,7 +1331,7 @@ describe('astUtils visitors', () => {
             program.validate();
             expectZeroDiagnostics(program);
 
-            getBrsCode(file).ast.walk(createVisitor({
+            getBrsCodeSegment(file).ast.walk(createVisitor({
                 AstNode: (node) => {
                     const endNodeComments = node.endTrivia?.filter(t => t.kind === TokenKind.Comment) ?? [];
                     comments.push(...endNodeComments);
@@ -1370,7 +1370,7 @@ describe('astUtils visitors', () => {
         });
 
         it('uses ast.bsConsts at the next full walk', () => {
-            const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+            const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                 #if FEATURE
                 sub main()
                 end sub
@@ -1396,7 +1396,7 @@ describe('astUtils visitors', () => {
         });
 
         it('can walk false cc blocks', () => {
-            const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+            const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                 #if false
                 sub main()
                 end sub
@@ -1422,7 +1422,7 @@ describe('astUtils visitors', () => {
         });
 
         it('will correctly walk `not condition` cc blocks', () => {
-            const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+            const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                 #const LOGGING = false
                 #if not LOGGING
                 sub notDebug()
@@ -1448,7 +1448,7 @@ describe('astUtils visitors', () => {
         });
 
         it('evaluates literals and `not` correctly', () => {
-            const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+            const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                 #if true
                 sub ifTrue()
                 end sub
@@ -1474,7 +1474,7 @@ describe('astUtils visitors', () => {
         });
 
         it('uses the file-level #const values', () => {
-            const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+            const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                 #const DEBUG = true
                 #if DEBUG
                 sub active()
@@ -1512,7 +1512,7 @@ describe('astUtils visitors', () => {
             }
 
             it('uses different branches for two full walks with different ast.bsConsts', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if FEATURE
                     sub debugOnly()
                     end sub
@@ -1537,7 +1537,7 @@ describe('astUtils visitors', () => {
                     end sub
                     #end if
                 `);
-                const ast = getBrsCode(file).ast;
+                const ast = getBrsCodeSegment(file).ast;
                 const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatements })).to.eql(['releaseOnly']);
                 (statement.tokens as any).condition = createToken(TokenKind.True, 'true');
@@ -1563,7 +1563,7 @@ describe('astUtils visitors', () => {
                     #end if
                 `);
                 program.validate();
-                const ast = getBrsCode(file).ast;
+                const ast = getBrsCodeSegment(file).ast;
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['releaseOnly']);
                 ast.statements.unshift(createHashConst('FEATURE', true));
                 expect(collectFunctionNames(ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['debugOnly']);
@@ -1579,14 +1579,14 @@ describe('astUtils visitors', () => {
                     #end if
                 `);
                 program.validate();
-                getBrsCode(file).ast.statements.unshift(createHashConst('FEATURE', true));
-                getBrsCode(file).ast.link();
+                getBrsCodeSegment(file).ast.statements.unshift(createHashConst('FEATURE', true));
+                getBrsCodeSegment(file).ast.link();
                 program.validate();
-                expect(collectFunctionNames(getBrsCode(file).ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
+                expect(collectFunctionNames(getBrsCodeSegment(file).ast, { walkMode: WalkMode.visitStatements })).to.eql(['debugOnly']);
             });
 
             it('resolves with constants passed in the walk options, even in a partial walk, and adds each active #const to them', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #const LATE = true
                     #if FEATURE
                     sub debugOnly()
@@ -1603,7 +1603,7 @@ describe('astUtils visitors', () => {
             });
 
             it('resolves again when the same options object is used for another full walk', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if FEATURE
                     sub debugOnly()
                     end sub
@@ -1620,7 +1620,7 @@ describe('astUtils visitors', () => {
             });
 
             it('does not walk a literal #if true that is nested inside an inactive branch', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if false
                         #if true
                         sub nested()
@@ -1634,7 +1634,7 @@ describe('astUtils visitors', () => {
             });
 
             it('does not add anything to the walk options', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if true
                     sub a()
                     end sub
@@ -1662,11 +1662,11 @@ describe('astUtils visitors', () => {
                         #end if
                     end sub
                 `);
-                expect(collectFunctionNames(getBrsCode(file).ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['a', 'b', 'c']);
+                expect(collectFunctionNames(getBrsCodeSegment(file).ast, { walkMode: WalkMode.visitStatementsRecursive })).to.eql(['a', 'b', 'c']);
             });
 
             it('applies a #const declared inside a function to a later #if, even in a walk that does not step into functions', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     sub a()
                         #const LATE = true
                     end sub
@@ -1681,7 +1681,7 @@ describe('astUtils visitors', () => {
             });
 
             it('sets isActive on the nodes of a branch that a full walk does not visit', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if FEATURE
                     sub a()
                     end sub
@@ -1699,7 +1699,7 @@ describe('astUtils visitors', () => {
             });
 
             it('does not evaluate anything when walking every branch', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if false
                     sub a()
                     end sub
@@ -1794,7 +1794,7 @@ describe('astUtils visitors', () => {
             }
 
             it('marks the nodes of every inactive branch inactive, at any depth', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 expect(findPrint(ast, 'a').isActive).to.be.true;
                 expect(findPrint(ast, 'b').isActive).to.be.false;
                 expect(findPrint(ast, 'c').isActive).to.be.false;
@@ -1812,7 +1812,7 @@ describe('astUtils visitors', () => {
             });
 
             it('does not change any isActive value when walking any subtree with any walk mode', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const nodes = getAllNodes(ast);
                 const expected = getIsActive(nodes);
                 expect(expected).not.to.include(undefined);
@@ -1849,7 +1849,7 @@ describe('astUtils visitors', () => {
             });
 
             it('does not change the stored #if results when walking any subtree', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const statements = findConditionalCompiles(ast);
                 const expected = statements.map(x => [x.isConditionTrue, x.isConditionDeclared]);
                 for (const node of getAllNodes(ast)) {
@@ -1860,7 +1860,7 @@ describe('astUtils visitors', () => {
             });
 
             it('follows the stored branch when the walk starts at an #if statement', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const [statement] = findConditionalCompiles(findFunction(ast, 'main'));
                 const printed: string[] = [];
                 statement.walk(createVisitor({
@@ -1872,7 +1872,7 @@ describe('astUtils visitors', () => {
             });
 
             it('does not apply changed ast.bsConsts in a subtree walk, only at the next full walk', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     sub main()
                         #if MANIFEST
                             print "a"
@@ -1896,7 +1896,7 @@ describe('astUtils visitors', () => {
             });
 
             it('sets isActive on a node inserted into an active branch when a subtree walk reaches it', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const main = findFunction(ast, 'main');
                 const [statement] = findConditionalCompiles(main);
                 const inserted = findPrint(ast, 'g').clone();
@@ -1910,7 +1910,7 @@ describe('astUtils visitors', () => {
             });
 
             it('sets isActive on a node inserted into an inactive branch once a walk reaches that branch', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const main = findFunction(ast, 'main');
                 const [statement] = findConditionalCompiles(main);
                 //a node copied from active code carries its old value until a walk reaches it
@@ -1933,7 +1933,7 @@ describe('astUtils visitors', () => {
             });
 
             it('updates isActive when a node moves from an inactive branch to an active one', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const main = findFunction(ast, 'main');
                 const [statement] = findConditionalCompiles(main);
                 const elseBlock = (statement.elseBranch as ConditionalCompileStatement).elseBranch as Block;
@@ -1946,7 +1946,7 @@ describe('astUtils visitors', () => {
             });
 
             it('sets isActive on a node a visitor returns as a replacement in a subtree walk', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const main = findFunction(ast, 'main');
                 const replacements = new Map<string, PrintStatement>();
                 main.func.body.walk(createVisitor({
@@ -1971,7 +1971,7 @@ describe('astUtils visitors', () => {
             });
 
             it('treats the start of a walk on a detached subtree as the root', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 const clone = findFunction(ast, 'inactive').clone();
                 clone.walk(() => { }, { walkMode: WalkMode.visitAllRecursive });
                 expect(clone.func.isActive).to.be.true;
@@ -1980,7 +1980,7 @@ describe('astUtils visitors', () => {
             });
 
             it('resolves a cloned file ast with the original manifest constants', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if MANIFEST
                         sub a()
                         end sub
@@ -1999,7 +1999,7 @@ describe('astUtils visitors', () => {
             });
 
             function testReplacedHashIf(editor?: Editor) {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.bs', source));
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.bs', source));
                 let replacement: ConditionalCompileStatement;
                 ast.walk(createVisitor({
                     ConditionalCompileStatement: (node) => {
@@ -2023,7 +2023,7 @@ describe('astUtils visitors', () => {
             });
 
             it('applies a #const a visitor returns as a replacement during a full walk', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #const FEATURE = true
                     #if FEATURE
                         sub a()
@@ -2039,7 +2039,7 @@ describe('astUtils visitors', () => {
             });
 
             it('only resolves the statements a full walk reaches before it is cancelled', () => {
-                const { ast } = getBrsCode(program.setFile<BrsFile>('source/main.brs', `
+                const { ast } = getBrsCodeSegment(program.setFile<BrsFile>('source/main.brs', `
                     #if FIRST
                         sub first()
                         end sub

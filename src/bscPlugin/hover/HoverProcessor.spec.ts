@@ -2,7 +2,7 @@ import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';
-import { expectDiagnostics, expectZeroDiagnostics, rootDir, trim, getBrsCode } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, rootDir, trim, getBrsCodeSegment } from '../../testHelpers.spec';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { HoverProcessor } from './HoverProcessor';
 import { createIdentifier, createIntegerLiteral } from '../../astUtils/creators';
@@ -47,7 +47,7 @@ describe('HoverProcessor', () => {
             const processor = new HoverProcessor({} as any);
             const expression = createIntegerLiteral('1');
             expect(
-                processor['getConstHover'](createIdentifier('hello'), getBrsCode(file), program.getScopeByName('source'), expression)
+                processor['getConstHover'](createIdentifier('hello'), getBrsCodeSegment(file), program.getScopeByName('source'), expression)
             ).to.eql(undefined);
         });
 

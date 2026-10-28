@@ -1,4 +1,4 @@
-import type { XmlCode } from '../../files/XmlCode';
+import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic } from '../../interfaces';
 import { util } from '../../util';
 
@@ -7,8 +7,8 @@ import { util } from '../../util';
  * a component that is missing one: after the last existing attribute, or after
  * the `<component` tag itself if there are no attributes yet.
  */
-export function getMissingExtendsInsertPosition(code: XmlCode) {
-    const componentElement = code.parser.ast.componentElement;
+export function getMissingExtendsInsertPosition(file: XmlFile) {
+    const componentElement = file.parser.ast.componentElement;
     const lastAttribute = componentElement.attributes[componentElement.attributes.length - 1];
     const range = lastAttribute?.location?.range ?? componentElement.tokens.startTagName?.location?.range;
     return range?.end;

@@ -26,7 +26,7 @@ describe('ReferencesProvider', () => {
         const result = new ReferencesProvider({
             program: program,
             file: undefined,
-            code: undefined,
+            codeSegment: undefined,
             position: util.createPosition(1, 2),
             references: []
         }).process();

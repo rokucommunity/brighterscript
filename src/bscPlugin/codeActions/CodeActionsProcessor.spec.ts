@@ -288,7 +288,7 @@ describe('CodeActionsProcessor', () => {
             const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file,
-                code: program.getCodeAt(file, range.start),
+                codeSegment: program.getCodeSegmentAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),
                 diagnostics: program.getDiagnostics().filter(d => d.location?.uri === fileUri && util.rangesIntersectOrTouch(d.location.range, range)),
@@ -1283,7 +1283,7 @@ describe('CodeActionsProcessor', () => {
             const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file,
-                code: program.getCodeAt(file, range.start),
+                codeSegment: program.getCodeSegmentAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),
                 diagnostics: [{ code: undefined, message: 'no code', range: range, file: file } as any],
@@ -1366,7 +1366,7 @@ describe('CodeActionsProcessor', () => {
             const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file,
-                code: program.getCodeAt(file, range.start),
+                codeSegment: program.getCodeSegmentAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),
                 diagnostics: [{
@@ -1394,7 +1394,7 @@ describe('CodeActionsProcessor', () => {
             const event: ProvideCodeActionsEvent = {
                 program: program,
                 file: file,
-                code: program.getCodeAt(file, range.start),
+                codeSegment: program.getCodeSegmentAt(file, range.start),
                 range: range,
                 scopes: program.getScopesForFile(file),
                 diagnostics: [{

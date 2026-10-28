@@ -2,7 +2,7 @@ import type { Expression } from '../parser/AstNode';
 import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
-import type { BrsCode } from '../files/BrsCode';
+import type { BrsCodeSegment } from '../files/BrsCodeSegment';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { ParseMode } from '../parser/Parser';
@@ -29,9 +29,9 @@ export class CallExpressionInfo {
     type: CallExpressionType;
 
     /**
-     * The code the call is in
+     * The code segment the call is in
      */
-    code: BrsCode;
+    codeSegment: BrsCodeSegment;
     myClass: ClassStatement;
     namespace?: NamespaceContainer;
     dotPart: string;
@@ -44,9 +44,9 @@ export class CallExpressionInfo {
 
     private position: Position;
 
-    constructor(code: BrsCode, position: Position) {
+    constructor(code: BrsCodeSegment, position: Position) {
         this.expression = code.ast.findChildAtPosition<Expression>(position);
-        this.code = code;
+        this.codeSegment = code;
         this.position = position;
         this.process();
     }
@@ -152,7 +152,7 @@ export class CallExpressionInfo {
     }
 
     private getNamespace(): NamespaceContainer {
-        let scope = this.code.program.getFirstScopeForCode(this.code);
+        let scope = this.codeSegment.program.getFirstScopeForCodeSegment(this.codeSegment);
         return scope.namespaceLookup.get(this.dotPart);
     }
 

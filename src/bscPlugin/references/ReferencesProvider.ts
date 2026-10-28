@@ -1,10 +1,10 @@
-import type { BrsCode } from '../../files/BrsCode';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideReferencesEvent } from '../../interfaces';
 import type { Location } from 'vscode-languageserver-protocol';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { XmlCode } from '../../files/XmlCode';
-import { isBrsCode, isXmlCode } from '../../astUtils/reflection';
+import type { XmlFile } from '../../files/XmlFile';
+import { isBrsCodeSegment, isXmlFile } from '../../astUtils/reflection';
 
 export class ReferencesProvider {
     constructor(
@@ -12,10 +12,10 @@ export class ReferencesProvider {
     ) { }
 
     public process(): Location[] {
-        if (isBrsCode(this.event.code)) {
-            this.brsCodeGetReferences(this.event.code);
-        } else if (isXmlCode(this.event.code)) {
-            this.xmlCodeGetReferences(this.event.code);
+        if (isBrsCodeSegment(this.event.codeSegment)) {
+            this.brsCodeGetReferences(this.event.codeSegment);
+        } else if (isXmlFile(this.event.file)) {
+            this.xmlFileGetReferences(this.event.file);
         }
         return this.event.references;
     }
@@ -23,7 +23,7 @@ export class ReferencesProvider {
     /**
      * For a position in BrightScript code, get the location where the token at that position was defined
      */
-    private brsCodeGetReferences(code: BrsCode): void {
+    private brsCodeGetReferences(code: BrsCodeSegment): void {
 
         const callSiteToken = code.getTokenAt(this.event.position);
 
@@ -34,15 +34,15 @@ export class ReferencesProvider {
 
         const searchFor = callSiteToken.text.toLowerCase();
 
-        const scopes = this.event.program.getScopesForCode(code);
+        const scopes = this.event.program.getScopesForCodeSegment(code);
 
         //track processed code across all scopes. Code's references are the same no matter which
         //scope it was reached through, so walking it once per scope would emit duplicate results
-        const processedCodes = new Set<BrsCode>();
+        const processedCodes = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
-            for (const scopeCode of scope.getAllCodes()) {
-                if (!isBrsCode(scopeCode) || processedCodes.has(scopeCode)) {
+            for (const scopeCode of scope.getAllCodeSegments()) {
+                if (!isBrsCodeSegment(scopeCode) || processedCodes.has(scopeCode)) {
                     continue;
                 }
                 processedCodes.add(scopeCode);
@@ -64,7 +64,7 @@ export class ReferencesProvider {
         }
     }
 
-    private xmlCodeGetReferences(code: XmlCode) {
+    private xmlFileGetReferences(file: XmlFile) {
 
     }
 }

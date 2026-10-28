@@ -2,7 +2,7 @@ import { expect } from '../chai-config.spec';
 import type { BrsFile } from '../files/BrsFile';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
-import { expectZeroDiagnostics, getBrsCode } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getBrsCodeSegment } from '../testHelpers.spec';
 import { CachedLookups } from './CachedLookups';
 
 describe('CachedLookups', () => {
@@ -25,9 +25,9 @@ describe('CachedLookups', () => {
         const loggerDebug = sinon.stub(program.logger, 'debug');
         program.validate();
         expectZeroDiagnostics(program);
-        const cache = new CachedLookups({ program: program, _parser: getBrsCode(file).parser });
+        const cache = new CachedLookups({ program: program, _parser: getBrsCodeSegment(file).parser });
 
-        expect(getBrsCode(file).ast).to.exist;
+        expect(getBrsCodeSegment(file).ast).to.exist;
         expect(cache.expressions.size).to.be.greaterThan(0);
         const loggerCalls = loggerDebug.getCalls();
         const unknownExpressionCall = loggerCalls.find((call) => {

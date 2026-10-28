@@ -1,6 +1,6 @@
 import { SelectionRange } from 'vscode-languageserver-types';
 import type { Range, Position } from 'vscode-languageserver-protocol';
-import { isBrsCode } from '../../astUtils/reflection';
+import { isBrsCodeSegment } from '../../astUtils/reflection';
 import type { ProvideSelectionRangesEvent } from '../../interfaces';
 import type { AstNode } from '../../parser/AstNode';
 
@@ -10,7 +10,7 @@ export class SelectionRangesProcessor {
     ) { }
 
     public process() {
-        if (!isBrsCode(this.event.code)) {
+        if (!isBrsCodeSegment(this.event.codeSegment)) {
             return;
         }
 
@@ -23,8 +23,8 @@ export class SelectionRangesProcessor {
     }
 
     private buildSelectionRange(position: Position): SelectionRange | undefined {
-        const code = this.event.code;
-        if (!isBrsCode(code)) {
+        const code = this.event.codeSegment;
+        if (!isBrsCodeSegment(code)) {
             return undefined;
         }
 

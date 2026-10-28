@@ -1,9 +1,9 @@
 import type { BsDiagnostic } from '../../interfaces';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
-import type { XmlCode } from '../../files/XmlCode';
+import type { XmlFile } from '../../files/XmlFile';
 import type { ProvideSourceFixAllCodeActionsEvent } from '../../interfaces';
-import { isXmlCode } from '../../astUtils/reflection';
+import { isXmlFile } from '../../astUtils/reflection';
 import { getMissingExtendsInsertPosition, getRemoveReturnValueChange } from './codeActionHelpers';
 
 export class FixAllCodeActionsProcessor {
@@ -37,7 +37,7 @@ export class FixAllCodeActionsProcessor {
      * remove the return value expression, leaving the bare `return` keyword.
      */
     private processVoidFunctionReturnActions(diagnostics: BsDiagnostic[]) {
-        const changes = diagnostics.map(diagnostic => getRemoveReturnValueChange(diagnostic, this.event.code.srcPath));
+        const changes = diagnostics.map(diagnostic => getRemoveReturnValueChange(diagnostic, this.event.file.srcPath));
         this.event.actions.push({
             title: 'Remove all void return values',
             kind: 'source.fixAll.brighterscript',
@@ -52,14 +52,14 @@ export class FixAllCodeActionsProcessor {
      * per-diagnostic quick-fix.
      */
     private processMissingExtends(diagnostics: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>[]) {
-        if (!isXmlCode(this.event.code)) {
+        if (this.event.codeSegment || !isXmlFile(this.event.file)) {
             return;
         }
 
         const changes = diagnostics.map(() => ({
             type: 'insert' as const,
-            filePath: this.event.code.srcPath,
-            position: getMissingExtendsInsertPosition(this.event.code as XmlCode),
+            filePath: this.event.file.srcPath,
+            position: getMissingExtendsInsertPosition(this.event.file as XmlFile),
             newText: ' extends="Group"'
         }));
 
