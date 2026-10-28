@@ -1960,17 +1960,21 @@ end sub`);
             expect(xmlFile.getCodeForScript(xmlFile.componentCode.ast.componentElement.scriptElements[1])).to.be.undefined;
         });
 
-        it('treats `text/bs` as brighterscript', () => {
+        it('treats only `text/brighterscript` (in any case) as brighterscript', () => {
             const xmlFile = program.setFile<XmlFile>('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="Widget" extends="Group">
+                    <script type="Text/BrighterScript"><![CDATA[
+                        sub first()
+                        end sub
+                    ]]></script>
                     <script type="text/bs"><![CDATA[
-                        sub init()
+                        sub second()
                         end sub
                     ]]></script>
                 </component>
             `);
-            expect(getBrsCodes(xmlFile)[0].parseMode).to.equal(ParseMode.BrighterScript);
+            expect(getBrsCodes(xmlFile).map(x => x.parseMode)).to.eql([ParseMode.BrighterScript, ParseMode.BrightScript]);
         });
 
         it('locates the code in the xml file', () => {

@@ -1869,9 +1869,6 @@ export class Program {
     }
 
     /**
-     * Get the first found scope for a file.
-     */
-    /**
      * Get the code in a file at the given position. When pieces of code are nested (i.e. a `<script>` block inside an xml component),
      * the innermost one is returned.
      * @returns the code at that position, or undefined if the file provides no code

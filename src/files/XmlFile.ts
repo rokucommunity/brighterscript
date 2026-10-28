@@ -129,7 +129,7 @@ export class XmlFile implements BscFile {
             if (!range) {
                 continue;
             }
-            const isBrighterScript = /brighterscript|text\/bs\b/i.test(script.type ?? '') || this.program?.options?.allowBrighterScriptInBrightScript;
+            const isBrighterScript = script.type?.toLowerCase() === 'text/brighterscript' || this.program?.options?.allowBrighterScriptInBrightScript;
             const code = new BrsCode({
                 document: this,
                 program: this.program,

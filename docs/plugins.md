@@ -887,7 +887,7 @@ Here's an example file showing all three paths:
 ```
 
 ## Files provide code
-In v1, files provide code, and plugins work on code instead of files. A `.brs`/`.bs` file provides one piece of BrightScript (`BrsCode`). A component's `.xml` file provides its component (`XmlCode`), plus a piece of BrightScript for each `<script>` block with its code inline:
+Files provide code, and plugins work on that code. Every plugin gets every piece of BrightScript, wherever it lives, with no opt-in. A `.brs`/`.bs` file provides one piece of BrightScript (`BrsCode`). A component's `.xml` file provides its component (`XmlCode`), plus a piece of BrightScript for each `<script>` block with its code inline:
 
 ```xml
 <component name="Widget" extends="Group">
@@ -898,8 +898,6 @@ In v1, files provide code, and plugins work on code instead of files. A `.brs`/`
     ]]></script>
 </component>
 ```
-
-Every plugin gets every piece of BrightScript, wherever it lives, with no opt-in. Handling code embedded in a larger file correctly is part of being a plugin.
 
 ### Migrating a plugin
 | Before | After |
