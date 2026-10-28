@@ -5874,7 +5874,11 @@ describe('BrsFile', () => {
                     return 1
                 end function
             `);
-            validateFile(mainFile);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('validateFile', validateFileEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -5896,7 +5900,11 @@ describe('BrsFile', () => {
                     end sub
                 end class
             `);
-            validateFile(mainFile);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('validateFile', validateFileEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -5911,7 +5919,11 @@ describe('BrsFile', () => {
                 label.text = text
                 end sub
             `);
-            validateFile(mainFile);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('validateFile', validateFileEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
@@ -6170,7 +6182,11 @@ describe('BrsFile', () => {
                 end function
             `);
             const mainFile = program.getFile<BrsFile>('source/main.bs');
-            validateFile(mainFile);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('validateFile', validateFileEvent);
 
             expect(mainFile.requiredSymbols.length).to.eq(0);
         });
