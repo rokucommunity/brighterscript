@@ -49,7 +49,7 @@ export class XmlFilePreTranspileProcessor {
      */
     private injectScriptImports() {
         //which scripts are missing depends on the file's dependencies, so ask the file
-        const extraImportScripts = (this.event.code.document as XmlFile).getMissingImportsForTranspile().map(uri => {
+        const extraImportScripts = (this.event.file as XmlFile).getMissingImportsForTranspile().map(uri => {
             return createSGScript({
                 type: 'text/brightscript',
                 uri: util.sanitizePkgPath(uri.replace(/\.bs$/, '.brs'))

@@ -164,6 +164,8 @@ Files provide code. A file (`BrsFile`, `XmlFile`, `AssetFile`) holds the paths, 
 
 `file.codes` lists all of the code a file provides, and is the way to get at it: don't assume how many pieces of code, or which kinds, a file provides. `file.codes.filter(isBrsCode)` gets the BrightScript. Use `code.document` to get from code back to the file it lives in.
 
+Events about code carry both the `code` and the `file` it lives in. Decide what to do based on the kind of code (`isBrsCode(event.code)`), not the kind of file: an `.xml` file's `<script>` blocks are BrightScript too.
+
 `Scope` is a logical group of files; for instance `source` files, or each component's individual scope (XML definition, related components and imported scripts). A file can be included in multiple scopes.
 
 > Files are superficially validated after parsing, then re-validated as part of the scope they are included in.
@@ -904,7 +906,7 @@ Files provide code, and plugins work on that code. Every plugin gets every piece
 |---|---|
 | `validateFile` (and before/after) with `event.file` | `validateCode` (and before/after) with `event.code`. Keep `validateFile` for checks about the file itself |
 | `prepareFile` (and before/after) with `event.file` | `prepareCode` (and before/after) with `event.code` and `event.editor`. Keep `prepareFile` for changes to the file itself |
-| `event.file` on editor events (`provideHover`, `provideCompletions`, etc.) | `event.code`. Use `event.code.document` if you need the file |
+| `event.file` on editor events (`provideHover`, `provideCompletions`, etc.) | `event.code` for the code the request is about. `event.file` is still there for the file it lives in |
 | `isBrsFile(event.file)` / `isXmlFile(event.file)` | `isBrsCode(event.code)` / `isXmlCode(event.code)` |
 | `file.ast`, `file.parser`, `file.callables`, `file.getTokenAt()`, ... | `code.ast`, `code.parser`, ... on the event's code, or on each of `file.codes` |
 | `xmlFile.componentName`, `xmlFile.ast`, `xmlFile.scriptTagImports`, ... | `xmlFile.componentCode.componentName`, ... |

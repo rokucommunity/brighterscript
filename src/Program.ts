@@ -1409,6 +1409,7 @@ export class Program {
                 for (const code of codes) {
                     const codeEvent = {
                         program: this,
+                        file: file,
                         code: code
                     };
                     this.plugins.emit('beforeValidateCode', codeEvent);
@@ -2018,6 +2019,7 @@ export class Program {
 
         const event: ProvideCompletionsEvent = {
             program: this,
+            file: file,
             code: this.getCodeAt(file, position),
             scopes: this.getScopesForFile(file),
             position: position,
@@ -2059,6 +2061,7 @@ export class Program {
 
         const event: ProvideDefinitionEvent = {
             program: this,
+            file: file,
             code: this.getCodeAt(file, position),
             position: position,
             definitions: []
@@ -2077,6 +2080,7 @@ export class Program {
         if (file) {
             const event = {
                 program: this,
+                file: file,
                 code: this.getCodeAt(file, position),
                 position: position,
                 scopes: this.getScopesForFile(file),
@@ -2103,6 +2107,7 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 const event: ProvideDocumentSymbolsEvent = {
                     program: this,
+                    file: file,
                     code: code,
                     documentSymbols: documentSymbols
                 };
@@ -2140,6 +2145,7 @@ export class Program {
             for (const [code, indexes] of indexesByCode) {
                 const event: ProvideSelectionRangesEvent = {
                     program: this,
+                    file: file,
                     code: code,
                     positions: indexes.map(i => positions[i]),
                     selectionRanges: []
@@ -2173,6 +2179,7 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 const event: ProvideInlayHintsEvent = {
                     program: this,
+                    file: file,
                     code: code,
                     range: range,
                     scopes: scopes,
@@ -2208,6 +2215,7 @@ export class Program {
 
             this.plugins.emit('beforeProvideCodeActions', {
                 program: this,
+                file: file,
                 code: code,
                 range: range,
                 diagnostics: diagnostics,
@@ -2217,6 +2225,7 @@ export class Program {
 
             this.plugins.emit('provideCodeActions', {
                 program: this,
+                file: file,
                 code: code,
                 range: range,
                 diagnostics: diagnostics,
@@ -2226,6 +2235,7 @@ export class Program {
 
             this.plugins.emit('afterProvideCodeActions', {
                 program: this,
+                file: file,
                 code: code,
                 range: range,
                 diagnostics: diagnostics,
@@ -2255,6 +2265,7 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 const event: ProvideSourceFixAllCodeActionsEvent = {
                     program: this,
+                    file: file,
                     code: code,
                     diagnostics: diagnostics.filter(x => this.isLocationInCode(file, x.location, code)),
                     scopes: scopes,
@@ -2283,18 +2294,21 @@ export class Program {
             for (const code of this.getCodesForRequest(file)) {
                 this.plugins.emit('beforeProvideSemanticTokens', {
                     program: this,
+                    file: file,
                     code: code,
                     scopes: scopes,
                     semanticTokens: undefined
                 });
                 this.plugins.emit('provideSemanticTokens', {
                     program: this,
+                    file: file,
                     code: code,
                     scopes: scopes,
                     semanticTokens: result
                 });
                 this.plugins.emit('afterProvideSemanticTokens', {
                     program: this,
+                    file: file,
                     code: code,
                     scopes: scopes,
                     semanticTokens: result
@@ -2321,6 +2335,7 @@ export class Program {
 
         const event: ProvideReferencesEvent = {
             program: this,
+            file: file,
             code: this.getCodeAt(file, position),
             position: position,
             references: []
@@ -2473,6 +2488,7 @@ export class Program {
                 for (const code of file.codes ?? []) {
                     const codeEvent: PrepareCodeEvent = {
                         program: this,
+                        file: file,
                         code: code,
                         editor: code.editor ?? file.editor,
                         scope: scope

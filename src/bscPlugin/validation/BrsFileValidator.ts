@@ -89,8 +89,8 @@ export class BrsFileValidator {
         this.validateGotosAndLabels();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
-        const document = this.event.code.document;
-        if (!(isBrsFile(document) && document.hasTypedef)) {
+        const file = this.event.file;
+        if (!(isBrsFile(file) && file.hasTypedef)) {
             this.validateTopOfFileStatements();
             this.validateTypecastStatements();
         }

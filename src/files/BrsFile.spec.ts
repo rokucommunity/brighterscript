@@ -44,10 +44,10 @@ describe('BrsFile', () => {
 
     function validateFile(...files: BrsFile[]) {
         for (const file of files) {
-            program.plugins.emit('validateCode', { program: program, code: getBrsCode(file) });
+            program.plugins.emit('validateCode', { program: program, file: file, code: getBrsCode(file) });
         }
         for (const file of files) {
-            program.plugins.emit('afterValidateCode', { program: program, code: getBrsCode(file) });
+            program.plugins.emit('afterValidateCode', { program: program, file: file, code: getBrsCode(file) });
         }
 
     }
@@ -5876,6 +5876,7 @@ describe('BrsFile', () => {
             `);
             const validateCodeEvent = {
                 program: program,
+                file: mainFile,
                 code: getBrsCode(mainFile)
             };
             program.plugins.emit('validateCode', validateCodeEvent);
@@ -5902,6 +5903,7 @@ describe('BrsFile', () => {
             `);
             const validateCodeEvent = {
                 program: program,
+                file: mainFile,
                 code: getBrsCode(mainFile)
             };
             program.plugins.emit('validateCode', validateCodeEvent);
@@ -5921,6 +5923,7 @@ describe('BrsFile', () => {
             `);
             const validateCodeEvent = {
                 program: program,
+                file: mainFile,
                 code: getBrsCode(mainFile)
             };
             program.plugins.emit('validateCode', validateCodeEvent);
@@ -6184,6 +6187,7 @@ describe('BrsFile', () => {
             const mainFile = program.getFile<BrsFile>('source/main.bs');
             const validateCodeEvent = {
                 program: program,
+                file: mainFile,
                 code: getBrsCode(mainFile)
             };
             program.plugins.emit('validateCode', validateCodeEvent);
@@ -6918,7 +6922,7 @@ describe('BrsFile', () => {
                         west = "W"
                     end enum
                 `);
-                program.plugins.emit('validateCode', { program: program, code: getBrsCode(mainFile) });
+                program.plugins.emit('validateCode', { program: program, file: mainFile, code: getBrsCode(mainFile) });
                 runtimeSymbols = getBrsCode(mainFile).providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
                 let runtimeChanges = getBrsCode(mainFile).providedSymbols.changes.get(SymbolTypeFlag.runtime);
@@ -8317,7 +8321,7 @@ describe('BrsFile', () => {
                     [...BrighterScriptSourceLiterals, TokenKind.LineNumLiteral].sort()
                 );
 
-                const validator = new BrsFileValidator({ program: program, code: getBrsCode(file) });
+                const validator = new BrsFileValidator({ program: program, file: file, code: getBrsCode(file) });
                 for (const sourceLiteral of sourceLiterals) {
                     const transpiled = sourceLiteral.transpile(new BrsTranspileState(getBrsCode(file))).map(x => x.toString()).join('');
                     const parts = validator['getSourceLiteralReplacements'](sourceLiteral, getBrsCode(file));
@@ -8572,7 +8576,7 @@ describe('BrsFile', () => {
         it('counts the same literals in a .bs file as the device sees in its transpiled output', async () => {
             //the device compiles the transpiled .brs, so the .bs pools must match the pools of that output
             const getPools = (targetProgram: Program, file: BrsFile) => {
-                const validator = new BrsFileValidator({ program: targetProgram, code: getBrsCode(file) });
+                const validator = new BrsFileValidator({ program: targetProgram, file: file, code: getBrsCode(file) });
                 validator.process();
                 const pools = validator['literalPools'];
                 return Object.keys(pools).sort().map(poolName => {

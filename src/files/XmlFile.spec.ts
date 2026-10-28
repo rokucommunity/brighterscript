@@ -13,6 +13,8 @@ import { ProgramBuilder } from '../ProgramBuilder';
 import { LogLevel } from '../logging';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import type { BrsFile } from './BrsFile';
+import type { BscFile } from './BscFile';
+import type { BscCode } from './BscCode';
 import { SGNode } from '../parser/SGTypes';
 import { TranspileState } from '../parser/TranspileState';
 import { ParseMode } from '../parser/Parser';
@@ -1958,6 +1960,26 @@ end sub`);
             expect(getBrsCodes(xmlFile).map(x => x.callables.map(c => c.name))).to.eql([['first'], ['second']]);
             expect(xmlFile.getCodeForScript(xmlFile.componentCode.ast.componentElement.scriptElements[2])).to.equal(getBrsCodes(xmlFile)[1]);
             expect(xmlFile.getCodeForScript(xmlFile.componentCode.ast.componentElement.scriptElements[1])).to.be.undefined;
+        });
+
+        it('includes the xml file in the events for its embedded code', () => {
+            const filesByEvent = new Map<string, BscFile[]>();
+            const record = (name: string) => (event: { code: BscCode; file: BscFile }) => {
+                if (isBrsCode(event.code) && event.code.isEmbedded) {
+                    filesByEvent.set(name, [...filesByEvent.get(name) ?? [], event.file]);
+                }
+            };
+            program.plugins.add({
+                name: 'test',
+                validateCode: record('validateCode'),
+                provideHover: record('provideHover')
+            });
+            const xmlFile = program.setFile<XmlFile>('components/Widget.xml', widgetXml);
+            program.validate();
+            program.getHover(xmlFile.srcPath, util.createPosition(3, 12));
+
+            expect(filesByEvent.get('validateCode')).to.eql([xmlFile]);
+            expect(filesByEvent.get('provideHover')).to.eql([xmlFile]);
         });
 
         it('treats only `text/brighterscript` (in any case) as brighterscript', () => {

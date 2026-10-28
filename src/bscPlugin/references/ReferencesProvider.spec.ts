@@ -25,6 +25,7 @@ describe('ReferencesProvider', () => {
     it('handles unknown file type', () => {
         const result = new ReferencesProvider({
             program: program,
+            file: undefined,
             code: undefined,
             position: util.createPosition(1, 2),
             references: []

@@ -642,7 +642,12 @@ export interface Plugin {
 export interface BeforeProvideCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
-     * The code this request applies to. Use `code.document` for the file it lives in.
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
+     * The code this request applies to.
      */
     code: TCode;
     range: Range;
@@ -653,9 +658,14 @@ export interface BeforeProvideCodeActionsEvent<TCode extends BscCode = BscCode> 
 export interface ProvideCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     range: Range;
@@ -666,7 +676,12 @@ export interface ProvideCodeActionsEvent<TCode extends BscCode = BscCode> {
 export interface AfterProvideCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
-     * The code this request applies to. Use `code.document` for the file it lives in.
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
+     * The code this request applies to.
      */
     code: TCode;
     range: Range;
@@ -702,9 +717,14 @@ export interface AfterValidateProgramEvent extends BeforeValidateProgramEvent {
 export interface ProvideSourceFixAllCodeActionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /** All diagnostics for this file (not range-filtered) */
@@ -727,9 +747,14 @@ export type OnGetSourceFixAllCodeActionsEvent = ProvideSourceFixAllCodeActionsEv
 export interface ProvideCompletionsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /**
@@ -754,9 +779,14 @@ export type AfterBuildProgramEvent = BeforeBuildProgramEvent;
 export interface ProvideHoverEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     position: Position;
@@ -827,9 +857,14 @@ export interface AfterFileParseEvent {
 export interface ProvideDefinitionEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /**
@@ -850,9 +885,14 @@ export type AfterProvideDefinitionEvent<TCode extends BscCode = BscCode> = Provi
 export interface ProvideReferencesEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /**
@@ -871,9 +911,14 @@ export type AfterProvideReferencesEvent<TCode extends BscCode = BscCode> = Provi
 export interface ProvideDocumentSymbolsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /**
@@ -902,7 +947,12 @@ export interface BeforeProvideSemanticTokensEvent<TCode extends BscCode = BscCod
      */
     program: Program;
     /**
-     * The code this request applies to. Use `code.document` for the file it lives in.
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
+     * The code this request applies to.
      */
     code: TCode;
     /**
@@ -920,9 +970,14 @@ export interface ProvideSemanticTokensEvent<TCode extends BscCode = BscCode> {
      */
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /**
@@ -940,7 +995,12 @@ export interface AfterProvideSemanticTokensEvent<TCode extends BscCode = BscCode
      */
     program: Program;
     /**
-     * The code this request applies to. Use `code.document` for the file it lives in.
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
+     * The code this request applies to.
      */
     code: TCode;
     /**
@@ -956,9 +1016,14 @@ export interface AfterProvideSemanticTokensEvent<TCode extends BscCode = BscCode
 export interface ProvideSelectionRangesEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /**
@@ -977,9 +1042,14 @@ export type AfterProvideSelectionRangesEvent<TCode extends BscCode = BscCode> = 
 export interface ProvideInlayHintsEvent<TCode extends BscCode = BscCode> {
     program: Program;
     /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
+    /**
      * The code this request applies to. A file can provide several pieces of code (i.e. an xml file provides its component,
      * plus any BrightScript in its `<script>` blocks), and requests are routed to the code they concern.
-     * Use `code.document` for the file it lives in.
+     *
      */
     code: TCode;
     /**
@@ -1014,6 +1084,11 @@ export interface ValidateFileEvent<T extends BscFile = BscFile> {
 export type BeforeValidateCodeEvent<T extends BscCode = BscCode> = ValidateCodeEvent<T>;
 export interface ValidateCodeEvent<T extends BscCode = BscCode> {
     program: Program;
+    /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
     /**
      * The code being validated
      */
@@ -1150,6 +1225,11 @@ export type BeforePrepareCodeEvent<TCode extends BscCode = BscCode> = PrepareCod
  */
 export interface PrepareCodeEvent<TCode extends BscCode = BscCode> {
     program: Program;
+    /**
+     * The file the code lives in. Check what kind of code this is with `isBrsCode(event.code)` rather than by the kind of file,
+     * since an xml file's `<script>` blocks provide BrightScript too.
+     */
+    file: BscFile;
     /**
      * The code being prepared
      */

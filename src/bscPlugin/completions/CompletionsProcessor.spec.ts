@@ -820,6 +820,7 @@ describe('CompletionsProcessor', () => {
                 let completions = program.getCompletions(`${rootDir}/source/main.brs`, position);
                 const completionProcessor = new CompletionsProcessor({
                     program: program,
+                    file: mainFile,
                     code: program.getCodeAt(mainFile, position),
                     position: position,
                     scopes: [],

@@ -444,7 +444,7 @@ export class DefinitionProvider {
 
     private xmlCodeGetDefinition(code: XmlCode) {
         //the parent component is found through the file's dependencies, so ask the file
-        const file = code.document as XmlFile;
+        const file = this.event.file as XmlFile;
         //if the position is within the file's parent component name
         if (
             isXmlFile(file) &&

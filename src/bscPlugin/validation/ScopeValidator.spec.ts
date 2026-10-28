@@ -5449,6 +5449,7 @@ describe('ScopeValidator', () => {
             function validateFile(file: BrsFile) {
                 const validateCodeEvent = {
                     program: program,
+                    file: file,
                     code: getBrsCode(file)
                 };
                 //emit an event to allow plugins to contribute to the code validation process
