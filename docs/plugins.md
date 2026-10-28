@@ -57,11 +57,9 @@ BrighterScript's own built-in work (parsing, validation, hovers, completions, tr
 - `<event>`: runs before BrighterScript. Use this to contribute results alongside BrighterScript or to handle something yourself first. For example, providing a file in `provideFile` keeps BrighterScript from providing that file, and adding a file to `processedFiles` in `writeFile` keeps BrighterScript from writing it.
 - `after<Event>`: runs after BrighterScript. BrighterScript's results are available here, so this is the place to inspect, modify, or remove them.
 
-Under the hood, BrighterScript does this work in the `after<Event>` hook, and it is always registered before every other plugin. That's an implementation detail; think of it as the last plugin to handle the "during" event.
-
 There are two exceptions:
-- **bslib**: BrighterScript adds `source/bslib.brs` to the build in `beforeBuildProgram`, since it has to be present before files are prepared.
-- **Scope validation**: BrighterScript validates scopes in `validateScope`, since that is the only time a scope's symbol tables are linked. Your `validateScope` handler runs after BrighterScript's scope validation, and so does `afterValidateScope`.
+- **bslib**: BrighterScript adds `source/bslib.brs` to the build in `beforeBuildProgram`.
+- **Scope validation**: BrighterScript validates scopes first in `validateScope`, so your `validateScope` handler runs after BrighterScript's scope validation.
 
 Full compiler lifecycle:
 
