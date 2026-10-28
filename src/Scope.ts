@@ -905,8 +905,6 @@ export class Scope {
             };
             t0 = performance.now();
             this.program.plugins.emit('validateScope', scopeValidateEvent);
-            //emitted here (rather than after every scope has validated) so plugins still have access to the linked symbol tables
-            this.program.plugins.emit('afterValidateScope', scopeValidateEvent);
             this.validationMetrics.validationTime = performance.now() - t0;
             //unlink all symbol tables from this scope (so they don't accidentally stick around)
             this.unlinkSymbolTable();

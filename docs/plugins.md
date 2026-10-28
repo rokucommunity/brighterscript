@@ -59,7 +59,9 @@ BrighterScript's own built-in work (parsing, validation, hovers, completions, tr
 
 Under the hood, BrighterScript does this work in the `after<Event>` hook, and it is always registered before every other plugin. That's an implementation detail; think of it as the last plugin to handle the "during" event.
 
-The one exception is bslib: BrighterScript adds `source/bslib.brs` to the build in `beforeBuildProgram`, since it has to be present before files are prepared.
+There are two exceptions:
+- **bslib**: BrighterScript adds `source/bslib.brs` to the build in `beforeBuildProgram`, since it has to be present before files are prepared.
+- **Scope validation**: BrighterScript validates scopes in `validateScope`, since that is the only time a scope's symbol tables are linked. Your `validateScope` handler runs after BrighterScript's scope validation, and so does `afterValidateScope`.
 
 Full compiler lifecycle:
 
@@ -319,7 +321,7 @@ export interface CompilerPlugin {
     provideSemanticTokens?: PluginHandler<ProvideSemanticTokensEvent>;
     //scope events
     validateScope?(event: ValidateScopeEvent): any;
-    afterValidateScope?(event: AfterValidateScopeEvent): any;
+    afterValidateScope?(event: BeforeValidateScopeEvent): any;
 
     provideCodeActions?(event: ProvideCodeActionsEvent): any;
     provideSemanticTokens?(event: ProvideSemanticTokensEvent): any;

@@ -1575,8 +1575,13 @@ export class Program {
                 });
             })
             .forEach('validate scope', () => scopesToValidate, (scope) => {
-                //emits `validateScope` and `afterValidateScope`
                 scope.validate(this.currentScopeValidationOptions);
+            })
+            .forEach('afterValidateScope', () => scopesToValidate, (scope) => {
+                this.plugins.emit('afterValidateScope', {
+                    program: this,
+                    scope: scope
+                });
             })
             .once('detect duplicate component names', () => {
                 this.detectDuplicateComponentNames();

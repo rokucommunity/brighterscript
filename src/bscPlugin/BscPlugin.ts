@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, AfterValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
+import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, ValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -93,7 +93,10 @@ export class BscPlugin implements Plugin {
 
     private scopeValidator = new ScopeValidator();
 
-    public afterValidateScope(event: AfterValidateScopeEvent) {
+    /**
+     * Exception to the `after*` rule: scope validation needs the scope's symbol tables linked, and they are only linked during `validateScope`
+     */
+    public validateScope(event: ValidateScopeEvent) {
         this.scopeValidator.processEvent(event);
     }
 

@@ -751,7 +751,7 @@ export interface BeforeValidateScopeEvent {
     program: Program;
     scope: Scope;
 }
-export type AfterValidateScopeEvent = ValidateScopeEvent;
+export type AfterValidateScopeEvent = BeforeValidateScopeEvent;
 
 export interface BeforeFileParseEvent {
     program: Program;
