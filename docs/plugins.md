@@ -48,6 +48,19 @@ While there are no restrictions on plugin names, it helps others to find your pl
 
 ## Compiler events
 
+### When does BrighterScript run?
+Most events come in three phases: `before<Event>`, `<event>` (the "during" phase), and `after<Event>`. Every plugin's handler for a phase runs before the next phase starts.
+
+BrighterScript's own built-in work (parsing, validation, hovers, completions, transpiling, writing files, etc.) is the **last participant in the "during" phase** of every event. So:
+
+- `before<Event>`: runs before BrighterScript has done anything for this event.
+- `<event>`: runs before BrighterScript. Use this to contribute results alongside BrighterScript or to handle something yourself first. For example, providing a file in `provideFile` keeps BrighterScript from providing that file, and adding a file to `processedFiles` in `writeFile` keeps BrighterScript from writing it.
+- `after<Event>`: runs after BrighterScript. BrighterScript's results are available here, so this is the place to inspect, modify, or remove them.
+
+Under the hood, BrighterScript does this work in the `after<Event>` hook, and it is always registered before every other plugin. That's an implementation detail; think of it as the last plugin to handle the "during" event.
+
+The one exception is bslib: BrighterScript adds `source/bslib.brs` to the build in `beforeBuildProgram`, since it has to be present before files are prepared.
+
 Full compiler lifecycle:
 
 - `beforeProvideProgram`
@@ -306,7 +319,7 @@ export interface CompilerPlugin {
     provideSemanticTokens?: PluginHandler<ProvideSemanticTokensEvent>;
     //scope events
     validateScope?(event: ValidateScopeEvent): any;
-    afterValidateScope?(event: BeforeValidateScopeEvent): any;
+    afterValidateScope?(event: AfterValidateScopeEvent): any;
 
     provideCodeActions?(event: ProvideCodeActionsEvent): any;
     provideSemanticTokens?(event: ProvideSemanticTokensEvent): any;

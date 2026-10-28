@@ -751,7 +751,7 @@ export interface BeforeValidateScopeEvent {
     program: Program;
     scope: Scope;
 }
-export type AfterValidateScopeEvent = BeforeValidateScopeEvent;
+export type AfterValidateScopeEvent = ValidateScopeEvent;
 
 export interface BeforeFileParseEvent {
     program: Program;
@@ -935,7 +935,7 @@ export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
-export type AfterValidateFileEvent<T extends BscFile = BscFile> = ValidateFileEvent;
+export type AfterValidateFileEvent<T extends BscFile = BscFile> = ValidateFileEvent<T>;
 
 export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;

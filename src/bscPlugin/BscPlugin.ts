@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, OnPrepareFileEvent, WriteFileEvent, ProvideSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
+import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, AfterValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -25,6 +25,10 @@ import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
 import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
 import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
 
+/**
+ * The built-in plugin. It is registered before every other plugin and does its work in the `after*` hooks,
+ * so from a plugin author's point of view it is the last participant in each event's "during" phase.
+ */
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
 
@@ -32,69 +36,64 @@ export class BscPlugin implements Plugin {
         new FileProvider(event).process();
     }
 
-    public provideCodeActions(event: ProvideCodeActionsEvent) {
+    public afterProvideCodeActions(event: AfterProvideCodeActionsEvent) {
         new CodeActionsProcessor(event).process();
     }
 
-    public provideSourceFixAllCodeActions(event: ProvideSourceFixAllCodeActionsEvent) {
+    public afterProvideSourceFixAllCodeActions(event: AfterProvideSourceFixAllCodeActionsEvent) {
         new FixAllCodeActionsProcessor(event).process();
     }
 
-    public provideHover(event: ProvideHoverEvent) {
+    public afterProvideHover(event: AfterProvideHoverEvent) {
         return new HoverProcessor(event).process();
     }
 
-    public provideDocumentSymbols(event: ProvideDocumentSymbolsEvent) {
+    public afterProvideDocumentSymbols(event: AfterProvideDocumentSymbolsEvent) {
         return new DocumentSymbolProcessor(event).process();
     }
 
-    public provideWorkspaceSymbols(event: ProvideWorkspaceSymbolsEvent) {
+    public afterProvideWorkspaceSymbols(event: AfterProvideWorkspaceSymbolsEvent) {
         return new WorkspaceSymbolProcessor(event).process();
     }
 
-    public provideCompletions(event: ProvideCompletionsEvent) {
+    public afterProvideCompletions(event: AfterProvideCompletionsEvent) {
         new CompletionsProcessor(event).process();
     }
 
-    public provideDefinition(event: ProvideDefinitionEvent) {
+    public afterProvideDefinition(event: AfterProvideDefinitionEvent) {
         new DefinitionProvider(event).process();
     }
 
-    public provideReferences(event: ProvideReferencesEvent) {
+    public afterProvideReferences(event: AfterProvideReferencesEvent) {
         new ReferencesProvider(event).process();
     }
 
-    public provideSelectionRanges(event: ProvideSelectionRangesEvent) {
+    public afterProvideSelectionRanges(event: AfterProvideSelectionRangesEvent) {
         new SelectionRangesProcessor(event).process();
     }
 
-    public provideInlayHints(event: ProvideInlayHintsEvent) {
+    public afterProvideInlayHints(event: AfterProvideInlayHintsEvent) {
         new InlayHintProcessor(event).process();
     }
 
-    public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
+    public afterProvideSemanticTokens(event: AfterProvideSemanticTokensEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileSemanticTokensProcessor(event as ProvideSemanticTokensEvent<BrsFile>).process();
-        }
-    }
-
-    public validateFile(event: ValidateFileEvent) {
-        if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as ValidateFileEvent<BrsFile>).process();
-        } else if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as ValidateFileEvent<XmlFile>).process();
+            return new BrsFileSemanticTokensProcessor(event as AfterProvideSemanticTokensEvent<BrsFile>).process();
         }
     }
 
     public afterValidateFile(event: AfterValidateFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileAfterValidator(event as AfterValidateFileEvent<BrsFile>).process();
+            new BrsFileValidator(event as AfterValidateFileEvent<BrsFile>).process();
+            new BrsFileAfterValidator(event as AfterValidateFileEvent<BrsFile>).process();
+        } else if (isXmlFile(event.file)) {
+            new XmlFileValidator(event as AfterValidateFileEvent<XmlFile>).process();
         }
     }
 
     private scopeValidator = new ScopeValidator();
 
-    public validateScope(event: ValidateScopeEvent) {
+    public afterValidateScope(event: AfterValidateScopeEvent) {
         this.scopeValidator.processEvent(event);
     }
 
@@ -104,19 +103,20 @@ export class BscPlugin implements Plugin {
         this.scopeValidator.reset();
     }
 
+    /**
+     * This is the one exception to the `after*` rule: bslib must be in the file list before files are prepared,
+     * and `afterBuildProgram` fires after the build is finished.
+     */
     public beforeBuildProgram(event: BeforeBuildProgramEvent) {
         this.bslibManager.addBslibFileIfMissing(event);
     }
     private bslibManager = new BslibManager();
 
-    /**
-     * Do transpiling-related work after all plugins had a chance to operate on the files
-     */
-    public prepareFile(event: OnPrepareFileEvent) {
+    public afterPrepareFile(event: AfterPrepareFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFilePreTranspileProcessor(event as OnPrepareFileEvent<BrsFile>).process();
+            return new BrsFilePreTranspileProcessor(event as AfterPrepareFileEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
-            return new XmlFilePreTranspileProcessor(event as OnPrepareFileEvent<XmlFile>).process();
+            return new XmlFilePreTranspileProcessor(event as AfterPrepareFileEvent<XmlFile>).process();
         }
     }
 
@@ -124,7 +124,7 @@ export class BscPlugin implements Plugin {
         await new FileSerializer(event).process();
     }
 
-    public async writeFile(event: WriteFileEvent) {
+    public async afterWriteFile(event: AfterWriteFileEvent) {
         await new FileWriter(event).process();
     }
 
