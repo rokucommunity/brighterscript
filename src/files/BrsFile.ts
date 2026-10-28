@@ -108,7 +108,7 @@ export class BrsFile implements BscFile {
     /**
      * All of the code this file provides
      */
-    public get codes(): BscCode[] {
+    public get codes(): readonly BscCode[] {
         return [this.code];
     }
 

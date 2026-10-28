@@ -96,7 +96,7 @@ export class XmlFile implements BscFile {
     /**
      * All of the code this file provides: the component itself, then the BrightScript in its `<script>` blocks
      */
-    public get codes(): BscCode[] {
+    public get codes(): readonly BscCode[] {
         return [this.componentCode, ...this.scriptCodes];
     }
 
@@ -133,9 +133,9 @@ export class XmlFile implements BscFile {
             const code = new BrsCode({
                 document: this,
                 program: this.program,
-                parseMode: isBrighterScript ? ParseMode.BrighterScript : ParseMode.BrightScript
+                parseMode: isBrighterScript ? ParseMode.BrighterScript : ParseMode.BrightScript,
+                isEmbedded: true
             });
-            code.isEmbedded = true;
             code.key = `${this.pkgPath}#script-${this.scriptCodes.length}`;
             //the code is everything between `<![CDATA[` and `]]>`
             const hasClose = cdata.text.endsWith(cdataClose);

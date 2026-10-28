@@ -53,6 +53,10 @@ export class BrsCode implements BscCode {
          */
         parseMode?: ParseMode;
         /**
+         * Is this code embedded in a file of another language (i.e. a `<script>` block in an xml file)? Defaults to false
+         */
+        isEmbedded?: boolean;
+        /**
          * Called when the parser is requested but this code has not been parsed yet (i.e. a `.brs` file whose parse was skipped because it has a typedef)
          */
         onParserRequested?: () => void;
@@ -60,6 +64,7 @@ export class BrsCode implements BscCode {
         this.document = options.document;
         this.program = options.program;
         this.parseMode = options.parseMode ?? ParseMode.BrightScript;
+        this.isEmbedded = options.isEmbedded ?? false;
         this.onParserRequested = options.onParserRequested;
         this._cachedLookups = new CachedLookups(this as unknown as BscFileLike);
         this.validationSegmenter = new AstValidationSegmenter(this);
@@ -167,9 +172,9 @@ export class BrsCode implements BscCode {
 
     /**
      * Is this code embedded in a file of another language (i.e. a `<script>` block in an xml file)?
-     * Code that is the whole of its `.brs`/`.bs` file is not embedded.
+     * Code that is the whole of its `.brs`/`.bs` file is not embedded. Set when the code is created, since it decides which editor the code uses.
      */
-    public isEmbedded = false;
+    public readonly isEmbedded: boolean;
 
     /**
      * The editor for changes to this code during the build. Embedded code has an editor of its own, so its file can tell whether

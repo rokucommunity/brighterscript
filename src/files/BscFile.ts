@@ -45,7 +45,7 @@ export interface BscFile {
     /**
      * The code this file provides. Files that contain no code (i.e. images and other assets) leave this undefined.
      */
-    codes?: BscCode[];
+    readonly codes?: readonly BscCode[];
     /**
      * The key used to identify this file in the dependency graph.
      * If omitted, the pkgPath is used.

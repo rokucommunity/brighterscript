@@ -1892,7 +1892,7 @@ export class Program {
     /**
      * Get the code a file-wide request should be emitted for: each piece of code the file provides
      */
-    private getCodesForRequest(file: BscFile): BscCode[] {
+    private getCodesForRequest(file: BscFile): readonly BscCode[] {
         return file.codes ?? [];
     }
 
