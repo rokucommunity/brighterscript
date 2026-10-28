@@ -94,7 +94,7 @@ export class BscPlugin implements Plugin {
     private scopeValidator = new ScopeValidator();
 
     /**
-     * Exception to the `after*` rule: scope validation needs the scope's symbol tables linked, and they are only linked during `validateScope`
+     * Uses `validateScope` instead of `afterValidateScope` because the scope's symbol tables are only linked during `validateScope`
      */
     public validateScope(event: ValidateScopeEvent) {
         this.scopeValidator.processEvent(event);
@@ -107,8 +107,7 @@ export class BscPlugin implements Plugin {
     }
 
     /**
-     * This is the one exception to the `after*` rule: bslib must be in the file list before files are prepared,
-     * and `afterBuildProgram` fires after the build is finished.
+     * Uses `beforeBuildProgram` because bslib must be in the file list before files are prepared
      */
     public beforeBuildProgram(event: BeforeBuildProgramEvent) {
         this.bslibManager.addBslibFileIfMissing(event);
