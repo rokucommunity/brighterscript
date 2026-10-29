@@ -829,7 +829,7 @@ describe('CompletionsProcessor', () => {
                 program.validate();
                 //get the name of all global completions
                 const globalCompletions = program.globalScope.getAllFiles().flatMap((x) => {
-                    return completionProcessor.getBrsCodeCompletions(position, getBrsCodeSegment(x), program.getScopesForFile(x)).global;
+                    return completionProcessor['getBrsCodeCompletions'](position, getBrsCodeSegment(x), program.getScopesForFile(x)).global;
                 }).map(x => x.label);
                 //filter out completions from global scope
                 completions = completions.filter(x => !globalCompletions.includes(x.label));

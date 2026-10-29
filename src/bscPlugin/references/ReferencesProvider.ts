@@ -38,14 +38,14 @@ export class ReferencesProvider {
 
         //track processed code across all scopes. Code's references are the same no matter which
         //scope it was reached through, so walking it once per scope would emit duplicate results
-        const processedCodes = new Set<BrsCodeSegment>();
+        const processedCodeSegments = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
             for (const scopeCode of scope.getAllCodeSegments()) {
-                if (!isBrsCodeSegment(scopeCode) || processedCodes.has(scopeCode)) {
+                if (!isBrsCodeSegment(scopeCode) || processedCodeSegments.has(scopeCode)) {
                     continue;
                 }
-                processedCodes.add(scopeCode);
+                processedCodeSegments.add(scopeCode);
                 scopeCode.ast.walk(createVisitor({
                     AssignmentStatement: (s) => {
                         if (s.tokens.name?.text?.toLowerCase() === searchFor) {

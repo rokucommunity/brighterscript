@@ -37,7 +37,7 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
     /** Map from lower-cased parent name to lower-cased immediate child names. */
     private childrenByParent: Map<string, string[]> | undefined;
     /** Cached `Set<BrsCodeSegment>` for `scope.getAllCodeSegments()`, used when filtering contributors. */
-    private inScopeBrsCodes: Set<BrsCodeSegment> | undefined;
+    private inScopeBrsCodeSegments: Set<BrsCodeSegment> | undefined;
     /** Set to true after `populateAll` runs so iteration doesn't keep re-checking. */
     private isFullyBuilt = false;
 
@@ -71,17 +71,17 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         this.childrenByParent = childrenByParent;
     }
 
-    private getInScopeBrsCodes(): Set<BrsCodeSegment> {
-        if (!this.inScopeBrsCodes) {
+    private getInScopeBrsCodeSegments(): Set<BrsCodeSegment> {
+        if (!this.inScopeBrsCodeSegments) {
             const set = new Set<BrsCodeSegment>();
             for (const code of this.scope.getAllCodeSegments()) {
                 if (isBrsCodeSegment(code)) {
                     set.add(code);
                 }
             }
-            this.inScopeBrsCodes = set;
+            this.inScopeBrsCodeSegments = set;
         }
-        return this.inScopeBrsCodes;
+        return this.inScopeBrsCodeSegments;
     }
 
     public override has(key: string): boolean {
@@ -166,14 +166,14 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
 
     private buildContainer(nameLower: string): NamespaceContainer | undefined {
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        const candidateCodes = this.scope.program['getNamespaceContributors'](nameLower);
-        if (!candidateCodes || candidateCodes.size === 0) {
+        const candidateCodeSegments = this.scope.program['getNamespaceContributors'](nameLower);
+        if (!candidateCodeSegments || candidateCodeSegments.size === 0) {
             return undefined;
         }
-        const inScopeCodes = this.getInScopeBrsCodes();
+        const inScopeCodeSegments = this.getInScopeBrsCodeSegments();
         const inScopeContributions: NamespaceFileContribution[] = [];
-        for (const code of candidateCodes) {
-            if (inScopeCodes.has(code)) {
+        for (const code of candidateCodeSegments) {
+            if (inScopeCodeSegments.has(code)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 const contribution = code['getNamespaceContributions']().get(nameLower);
                 if (contribution) {

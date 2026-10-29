@@ -174,7 +174,7 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsCodeCompletions(position: Position, code: BrsCodeSegment, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
+    private getBrsCodeCompletions(position: Position, code: BrsCodeSegment, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
         const currentTokenByFilePosition = code.getTokenAt(position);
         const currentToken = currentTokenByFilePosition ?? code.getTokenAt(code.getClosestExpression(position)?.location?.range.start);

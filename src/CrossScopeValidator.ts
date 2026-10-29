@@ -108,13 +108,13 @@ export class ProvidedSymbolIndex {
                 let dotIndex = symbolName.indexOf('.');
                 while (dotIndex > 0) {
                     const namespaceName = symbolName.substring(0, dotIndex);
-                    let namespaceCodes = this.namespaceEvents.get(namespaceName);
-                    if (!namespaceCodes) {
-                        namespaceCodes = new Map();
-                        this.namespaceEvents.set(namespaceName, namespaceCodes);
+                    let namespaceCodeSegments = this.namespaceEvents.get(namespaceName);
+                    if (!namespaceCodeSegments) {
+                        namespaceCodeSegments = new Map();
+                        this.namespaceEvents.set(namespaceName, namespaceCodeSegments);
                     }
-                    if (!namespaceCodes.has(code)) {
-                        namespaceCodes.set(code, order);
+                    if (!namespaceCodeSegments.has(code)) {
+                        namespaceCodeSegments.set(code, order);
                         indexed.namespaceNames.push(namespaceName);
                     }
                     dotIndex = symbolName.indexOf('.', dotIndex + 1);
@@ -139,9 +139,9 @@ export class ProvidedSymbolIndex {
             }
         }
         for (const namespaceName of indexed.namespaceNames) {
-            const namespaceCodes = this.namespaceEvents.get(namespaceName);
-            namespaceCodes.delete(code);
-            if (namespaceCodes.size === 0) {
+            const namespaceCodeSegments = this.namespaceEvents.get(namespaceName);
+            namespaceCodeSegments.delete(code);
+            if (namespaceCodeSegments.size === 0) {
                 this.namespaceEvents.delete(namespaceName);
             }
         }
@@ -744,14 +744,14 @@ export class CrossScopeValidator {
      */
     getFilesRequiringChangedSymbol(scopes: Scope[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         const filesThatNeedRevalidation = new Set<BscFile>();
-        const codesAlreadyChecked = new Set<BrsCodeSegment>();
+        const codeSegmentsAlreadyChecked = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
             scope.enumerateBrsCodeSegments((code) => {
-                if (codesAlreadyChecked.has(code)) {
+                if (codeSegmentsAlreadyChecked.has(code)) {
                     return;
                 }
-                codesAlreadyChecked.add(code);
+                codeSegmentsAlreadyChecked.add(code);
                 if (util.hasAnyRequiredSymbolChanged(code.requiredSymbols, changedSymbols)) {
                     filesThatNeedRevalidation.add(code.document);
                 }
@@ -762,14 +762,14 @@ export class CrossScopeValidator {
 
     getScopesRequiringChangedSymbol(scopes: Scope[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         const scopesThatNeedRevalidation = new Set<Scope>();
-        const codesAlreadyChecked = new Set<BrsCodeSegment>();
+        const codeSegmentsAlreadyChecked = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
             scope.enumerateBrsCodeSegments((code) => {
-                if (codesAlreadyChecked.has(code) || scopesThatNeedRevalidation.has(scope)) {
+                if (codeSegmentsAlreadyChecked.has(code) || scopesThatNeedRevalidation.has(scope)) {
                     return;
                 }
-                codesAlreadyChecked.add(code);
+                codeSegmentsAlreadyChecked.add(code);
 
                 if (util.hasAnyRequiredSymbolChanged(code.requiredSymbols, changedSymbols)) {
                     scopesThatNeedRevalidation.add(scope);

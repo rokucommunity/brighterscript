@@ -1401,12 +1401,12 @@ export class Program {
                 //each phase runs the file's event, then the event for each code segment it provides: every `before`, then
                 //every main event, then every `after`. Code segments are validated in their events; the file events are
                 //for checks about the file itself (including xml). All of a file's events run here, in one action
-                const codes = file.codeSegments ?? [];
+                const codeSegments = file.codeSegments ?? [];
                 const fileEvent = {
                     program: this,
                     file: file
                 };
-                const codeEvents = codes.map(code => ({
+                const codeEvents = codeSegments.map(code => ({
                     program: this,
                     file: file,
                     codeSegment: code
@@ -1430,7 +1430,7 @@ export class Program {
                 } else if (isXmlFile(file)) {
                     xmlFilesValidated.push(file);
                 }
-                for (const code of codes) {
+                for (const code of codeSegments) {
                     if (isBrsCodeSegment(code)) {
                         brsCodeSegmentsValidated.push(code);
                     }
@@ -1571,11 +1571,11 @@ export class Program {
                 this.validationDetails.changedComponentTypes = [];
             })
             .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
-                const brsCodes = (file.codeSegments ?? []).filter(code => isBrsCodeSegment(code)) as BrsCodeSegment[];
-                for (const code of brsCodes) {
+                const brsCodeSegments = (file.codeSegments ?? []).filter(code => isBrsCodeSegment(code)) as BrsCodeSegment[];
+                for (const code of brsCodeSegments) {
                     code.validationSegmenter.unValidateAllSegments();
                 }
-                if (brsCodes.length > 0 && !this.isFirstValidation) {
+                if (brsCodeSegments.length > 0 && !this.isFirstValidation) {
                     scopesToInvalidate.push(...this.getScopesForFile(file));
                 }
             })
@@ -1930,7 +1930,7 @@ export class Program {
 
     public getStatementsByName(name: string, origin: BrsCodeSegment, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
-        const codesSearched = new Set<BrsCodeSegment>();
+        const codeSegmentsSearched = new Set<BrsCodeSegment>();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
 
@@ -1947,10 +1947,10 @@ export class Program {
         for (const scope of this.getScopesForCodeSegment(origin)) {
             for (const code of scope.getAllCodeSegments()) {
                 //skip non-brs code, or code we've already processed
-                if (!isBrsCodeSegment(code) || codesSearched.has(code)) {
+                if (!isBrsCodeSegment(code) || codeSegmentsSearched.has(code)) {
                     continue;
                 }
-                codesSearched.add(code);
+                codeSegmentsSearched.add(code);
 
                 code.ast.walk(createVisitor({
                     FunctionStatement: (statement: FunctionStatement) => {
@@ -1969,7 +1969,7 @@ export class Program {
 
     public getStatementsForXmlFile(scope: XmlScope, filterName?: string): FileLink<FunctionStatement>[] {
         let results = new Map<Statement, FileLink<FunctionStatement>>();
-        const codesSearched = new Set<BrsCodeSegment>();
+        const codeSegmentsSearched = new Set<BrsCodeSegment>();
 
         //get all function names for the xml file and parents
         let funcNames = new Set<string>();
@@ -1986,10 +1986,10 @@ export class Program {
         //look through all files in scope for matches
         for (const code of scope.getOwnFiles().flatMap(file => file.codeSegments ?? [])) {
             //skip non-brs code, or code we've already processed
-            if (!isBrsCodeSegment(code) || codesSearched.has(code)) {
+            if (!isBrsCodeSegment(code) || codeSegmentsSearched.has(code)) {
                 continue;
             }
-            codesSearched.add(code);
+            codeSegmentsSearched.add(code);
 
             code.ast.walk(createVisitor({
                 FunctionStatement: (statement: FunctionStatement) => {
@@ -2317,8 +2317,8 @@ export class Program {
             const scopes = this.getScopesForFile(file);
             //one event for the file, then one for each of its code segments, collecting all of their tokens.
             //Each phase runs for every one of them before the next phase starts
-            const codes = this.getCodeSegmentsForRequest(file);
-            for (const code of codes) {
+            const codeSegments = this.getCodeSegmentsForRequest(file);
+            for (const code of codeSegments) {
                 this.plugins.emit('beforeProvideSemanticTokens', {
                     program: this,
                     file: file,
@@ -2327,7 +2327,7 @@ export class Program {
                     semanticTokens: undefined
                 });
             }
-            for (const code of codes) {
+            for (const code of codeSegments) {
                 this.plugins.emit('provideSemanticTokens', {
                     program: this,
                     file: file,
@@ -2336,7 +2336,7 @@ export class Program {
                     semanticTokens: result
                 });
             }
-            for (const code of codes) {
+            for (const code of codeSegments) {
                 this.plugins.emit('afterProvideSemanticTokens', {
                     program: this,
                     file: file,
