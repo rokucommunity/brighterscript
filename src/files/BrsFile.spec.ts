@@ -47,7 +47,7 @@ describe('BrsFile', () => {
             program.plugins.emit('validateBrsCodeSegment', { program: program, file: file, codeSegment: getBrsCodeSegment(file) });
         }
         for (const file of files) {
-            program.plugins.emit('afterValidateBrsCodeSegment', { program: program, file: file, codeSegment: getBrsCodeSegment(file) });
+            program.plugins.emit('afterValidateFile', { program: program, file: file });
         }
 
     }

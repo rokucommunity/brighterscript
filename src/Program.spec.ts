@@ -408,6 +408,23 @@ describe('Program', () => {
                 ]);
             });
 
+            it('has finished the built-in code validation by the time plugins see afterValidateFile', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        print "hello"
+                    end sub
+                `);
+                let hadSymbolInfo: boolean;
+                program.plugins.add({
+                    name: 'test',
+                    afterValidateFile: (event) => {
+                        hadSymbolInfo = !!program.getCodeSegmentSymbolInfo(getBrsCodeSegment(event.file));
+                    }
+                });
+                program.validate();
+                expect(hadSymbolInfo).to.be.true;
+            });
+
             it('has finished the built-in code validation by the time plugins see afterValidateBrsCodeSegment', () => {
                 program.setFile('source/main.brs', `
                     sub main()

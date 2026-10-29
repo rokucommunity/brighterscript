@@ -5454,7 +5454,7 @@ describe('ScopeValidator', () => {
                 };
                 //emit an event to allow plugins to contribute to the code validation process
                 program.plugins.emit('validateBrsCodeSegment', validateCodeEvent);
-                program.plugins.emit('afterValidateBrsCodeSegment', validateCodeEvent);
+                program.plugins.emit('afterValidateFile', { program: program, file: file });
             }
 
             const commonContents = `

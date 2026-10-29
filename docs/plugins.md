@@ -945,7 +945,7 @@ Everything about the component itself (its xml, name, parent, interface and scri
 | `brsFile.commentFlags` | `codeSegment.commentFlags` |
 | `new BrsTranspileState(brsFile)`, `state.file` | `new BrsTranspileState(codeSegment)`, `state.codeSegment` |
 
-Wherever there are code segment events, each phase runs the file's event, then the event for each of its code segments: `beforeValidateFile` then each `beforeValidateBrsCodeSegment`, `validateFile` then each `validateBrsCodeSegment`, `afterValidateFile` then each `afterValidateBrsCodeSegment`. The built-in BrightScript validation finishes in `afterValidateBrsCodeSegment`, so a plugin that needs it done for a code segment should use that event (or `afterValidateProgram` for everything), not `afterValidateFile`.
+Wherever there are code segment events, each phase runs the file's event, then the event for each of its code segments: `beforeValidateFile` then each `beforeValidateBrsCodeSegment`, `validateFile` then each `validateBrsCodeSegment`, `afterValidateFile` then each `afterValidateBrsCodeSegment`. The built-in BrightScript validation of all of a file's code segments finishes in `afterValidateFile`, before other plugins see that event, so a plugin's `afterValidateFile` and `afterValidateBrsCodeSegment` both see it done. Use `afterValidateProgram` to see every file done.
 
 Validation runs all of one file's phases together before moving to the next file, so a file is either fully validated or not at all, and a validation that gets cancelled never leaves a file half done.
 
