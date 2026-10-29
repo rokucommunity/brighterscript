@@ -2508,6 +2508,79 @@ end sub`);
                 }]);
             });
 
+            describe('code actions for a range', () => {
+                const twoBlocksXml = trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Two" extends="Group">
+                        <script type="text/brightscript"><![CDATA[
+                            sub first()
+                                missingOne()
+                            end sub
+                        ]]></script>
+                        <script type="text/brightscript"><![CDATA[
+                            sub second()
+                                missingTwo()
+                            end sub
+                        ]]></script>
+                    </component>
+                `;
+
+                /**
+                 * Request code actions for a range, and get which target each event was for along with the lines of its diagnostics
+                 */
+                function getEvents(range: Range) {
+                    const xmlFile = program.getFile<XmlFile>('components/Two.xml');
+                    const events = [] as Array<{ target: string; diagnosticLines: number[] }>;
+                    program.plugins.add({
+                        name: 'test',
+                        provideCodeActions: (event) => {
+                            events.push({
+                                target: event.codeSegment ? `segment ${getBrsCodeSegments(xmlFile).indexOf(event.codeSegment)}` : 'file',
+                                diagnosticLines: event.diagnostics.map(x => x.location.range.start.line)
+                            });
+                        }
+                    });
+                    program.getCodeActions(xmlFile.srcPath, range);
+                    return events;
+                }
+
+                beforeEach(() => {
+                    program.setFile('components/Two.xml', twoBlocksXml);
+                    program.validate();
+                });
+
+                it('sends a select-all to the file and each code segment, each with only its own diagnostics', () => {
+                    expect(getEvents(util.createRange(0, 0, 12, 12))).to.eql([
+                        { target: 'file', diagnosticLines: [] },
+                        { target: 'segment 0', diagnosticLines: [4] },
+                        { target: 'segment 1', diagnosticLines: [9] }
+                    ]);
+                });
+
+                it('sends a selection that spans two code segments to both of them and the xml between them', () => {
+                    expect(getEvents(util.createRange(4, 0, 9, 20))).to.eql([
+                        { target: 'file', diagnosticLines: [] },
+                        { target: 'segment 0', diagnosticLines: [4] },
+                        { target: 'segment 1', diagnosticLines: [9] }
+                    ]);
+                });
+
+                it('sends a cursor inside a code segment only to that code segment', () => {
+                    expect(getEvents(util.createRange(9, 12, 9, 12))).to.eql([
+                        { target: 'segment 1', diagnosticLines: [9] }
+                    ]);
+                });
+
+                it('uses brightscript comments to disable a CDATA diagnostic in a select-all', () => {
+                    const actions = program.getCodeActions(s`${rootDir}/components/Two.xml`, util.createRange(0, 0, 12, 12));
+                    const disableLine = actions.filter(x => x.title.startsWith('Disable cannot-find-function for this line'));
+                    expect(disableLine.flatMap(x => Object.values(x.edit.changes)[0].map(change => change.newText))).to.eql([
+                        `            ' bs:disable-next-line: cannot-find-function\n`,
+                        `            ' bs:disable-next-line: cannot-find-function\n`
+                    ]);
+                });
+            });
+
             it('provides signature help for a function in a CDATA block', () => {
                 const help = program.getSignatureHelp(s`${rootDir}/components/Widget.brs`, util.createPosition(2, 31));
                 expect(help.map(x => x.signature.label)).to.eql(['sub helper(value as integer)']);

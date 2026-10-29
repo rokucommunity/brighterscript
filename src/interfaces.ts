@@ -651,6 +651,10 @@ export interface BeforeProvideCodeActionsEvent {
     codeSegment?: BrsCodeSegment;
     range: Range;
     scopes: Scope[];
+    /**
+     * The diagnostics in the requested range that belong to this event's `codeSegment`, or, when there is no code segment,
+     * to the file outside of its code segments. A range that touches several code segments gets one event for each of them.
+     */
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
@@ -667,6 +671,10 @@ export interface ProvideCodeActionsEvent {
     codeSegment?: BrsCodeSegment;
     range: Range;
     scopes: Scope[];
+    /**
+     * The diagnostics in the requested range that belong to this event's `codeSegment`, or, when there is no code segment,
+     * to the file outside of its code segments. A range that touches several code segments gets one event for each of them.
+     */
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }
@@ -683,6 +691,10 @@ export interface AfterProvideCodeActionsEvent {
     codeSegment?: BrsCodeSegment;
     range: Range;
     scopes: Scope[];
+    /**
+     * The diagnostics in the requested range that belong to this event's `codeSegment`, or, when there is no code segment,
+     * to the file outside of its code segments. A range that touches several code segments gets one event for each of them.
+     */
     diagnostics: BsDiagnostic[];
     codeActions: CodeAction[];
 }

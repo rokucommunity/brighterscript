@@ -9,7 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareBrsCodeSegmentEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareBrsCodeSegmentEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent, ProvideCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -2231,37 +2231,36 @@ export class Program {
                 .filter(x => util.rangesIntersectOrTouch(x.location.range, range));
 
             const scopes = this.getScopesForFile(file);
-            const code = this.getCodeSegmentAt(file, range.start);
-
-            this.plugins.emit('beforeProvideCodeActions', {
+            //one event for each code segment the range touches, plus one for the file itself when part of the range is
+            //outside of its code segments (i.e. in the xml of a component). Each event only gets the diagnostics that
+            //belong to it, the same as source fix-all. A range inside a single code segment (like a cursor) gets one event
+            const codeSegments = file.codeSegments ?? [];
+            const isRangeInOneCodeSegment = codeSegments.some(code => {
+                return !code.range || (util.rangeContains(code.range, range.start) && util.rangeContains(code.range, range.end));
+            });
+            const targets = [
+                ...(isRangeInOneCodeSegment ? [] : [undefined]),
+                ...codeSegments.filter(code => !code.range || util.rangesIntersectOrTouch(code.range, range))
+            ];
+            const events = targets.map((code): ProvideCodeActionsEvent => ({
                 program: this,
                 file: file,
                 codeSegment: code,
                 range: range,
-                diagnostics: diagnostics,
+                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, code)),
                 scopes: scopes,
                 codeActions: codeActions
-            });
-
-            this.plugins.emit('provideCodeActions', {
-                program: this,
-                file: file,
-                codeSegment: code,
-                range: range,
-                diagnostics: diagnostics,
-                scopes: scopes,
-                codeActions: codeActions
-            });
-
-            this.plugins.emit('afterProvideCodeActions', {
-                program: this,
-                file: file,
-                codeSegment: code,
-                range: range,
-                diagnostics: diagnostics,
-                scopes: scopes,
-                codeActions: codeActions
-            });
+            }));
+            //each phase runs for every event before the next phase starts
+            for (const event of events) {
+                this.plugins.emit('beforeProvideCodeActions', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('provideCodeActions', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('afterProvideCodeActions', event);
+            }
         }
         return codeActions;
     }
