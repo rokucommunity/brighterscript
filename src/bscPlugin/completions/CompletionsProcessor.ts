@@ -33,7 +33,7 @@ export class CompletionsProcessor {
     }
 
     public process() {
-        let code = this.event.codeSegment;
+        let codeSegment = this.event.codeSegment;
         this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
 
             // Find the scopes for this file - Only process the first few scopes
@@ -43,17 +43,17 @@ export class CompletionsProcessor {
             let completionResults: CompletionItem[] = [];
             let globalResults: CompletionItem[] = [];
 
-            if (!code && isXmlFile(this.event.file)) {
+            if (isXmlFile(this.event.file) && !codeSegment) {
                 completionResults = this.getXmlFileCompletions(this.event.position, this.event.file);
-            } else if (isBrsCodeSegment(code)) {
+            } else if (isBrsCodeSegment(codeSegment)) {
                 //handle script import completions
-                let scriptImport = util.getScriptImportAtPosition(code.ownScriptImports, this.event.position);
+                let scriptImport = util.getScriptImportAtPosition(codeSegment.ownScriptImports, this.event.position);
                 if (scriptImport) {
-                    this.event.completions.push(...this.getScriptImportCompletions(code.program, code.pkgPath, scriptImport));
+                    this.event.completions.push(...this.getScriptImportCompletions(codeSegment.program, codeSegment.pkgPath, scriptImport));
                     return;
                 }
 
-                const results = this.getBrsCodeCompletions(this.event.position, code, scopesToProcess);
+                const results = this.getBrsCodeCompletions(this.event.position, codeSegment, scopesToProcess);
                 completionResults = results.scoped;
                 globalResults = results.global;
             }
