@@ -1389,8 +1389,8 @@ export class Program {
             })
             //run before/validate/after as a single per-file action so the Sequencer can't cancel
             //between them. Splitting into three forEach steps would let cancellation land after
-            //`validateFile` (where BrsFileValidator pushes per-node symbols via addSymbol) but
-            //before `afterValidateFile` (where processSymbolInformation registers validation
+            //`validateBrsCodeSegment` (where BrsFileValidator pushes per-node symbols via addSymbol) but
+            //before `afterValidateBrsCodeSegment` (where processSymbolInformation registers validation
             //segments) — leaving the file in a half-processed state. The next pass would either
             //re-run BrsFileValidator (pushing duplicate symbols → CrossScopeValidator name-
             //collision) or skip the file in scope validation (no segments to walk → no
@@ -1398,32 +1398,32 @@ export class Program {
             //it's untouched. Plugins that need an all-files-done signal should use
             //`afterValidateProgram` instead of `afterValidateFile`.
             .forEach('validateFile', () => filesToProcess, (file) => {
-                //the file's events wrap the events for each code segment it provides. Code is validated in the code
-                //events; the file events are only for checks about the file itself
+                //each phase runs the file's event, then the event for each code segment it provides: every `before`, then
+                //every main event, then every `after`. Code segments are validated in their events; the file events are
+                //for checks about the file itself (including xml). All of a file's events run here, in one action
                 const codes = file.codeSegments ?? [];
-                this.plugins.emit('beforeValidateFile', {
+                const fileEvent = {
                     program: this,
                     file: file
-                });
-                for (const code of codes) {
-                    const codeEvent = {
-                        program: this,
-                        file: file,
-                        codeSegment: code
-                    };
+                };
+                const codeEvents = codes.map(code => ({
+                    program: this,
+                    file: file,
+                    codeSegment: code
+                }));
+                this.plugins.emit('beforeValidateFile', fileEvent);
+                for (const codeEvent of codeEvents) {
                     this.plugins.emit('beforeValidateBrsCodeSegment', codeEvent);
-                    this.plugins.emit('validateBrsCodeSegment', codeEvent);
-                    this.plugins.emit('afterValidateBrsCodeSegment', codeEvent);
-                    code.isValidated = true;
                 }
-                this.plugins.emit('validateFile', {
-                    program: this,
-                    file: file
-                });
-                this.plugins.emit('afterValidateFile', {
-                    program: this,
-                    file: file
-                });
+                this.plugins.emit('validateFile', fileEvent);
+                for (const codeEvent of codeEvents) {
+                    this.plugins.emit('validateBrsCodeSegment', codeEvent);
+                }
+                this.plugins.emit('afterValidateFile', fileEvent);
+                for (const codeEvent of codeEvents) {
+                    this.plugins.emit('afterValidateBrsCodeSegment', codeEvent);
+                    codeEvent.codeSegment.isValidated = true;
+                }
                 file.isValidated = true;
                 if (isBrsFile(file)) {
                     brsFilesValidated.push(file);

@@ -382,7 +382,7 @@ describe('Program', () => {
                 expect(xmlFile.isValidated).to.be.true;
             });
 
-            it('wraps the code events in the file events', () => {
+            it('runs the file event, then its code segments\' events, for each phase', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                     end sub
@@ -401,14 +401,14 @@ describe('Program', () => {
                 expect(calls).to.eql([
                     'beforeValidateFile',
                     'beforeValidateBrsCodeSegment',
-                    'validateBrsCodeSegment',
-                    'afterValidateBrsCodeSegment',
                     'validateFile',
-                    'afterValidateFile'
+                    'validateBrsCodeSegment',
+                    'afterValidateFile',
+                    'afterValidateBrsCodeSegment'
                 ]);
             });
 
-            it('has finished the built-in code validation by the time plugins see validateFile', () => {
+            it('has finished the built-in code validation by the time plugins see afterValidateBrsCodeSegment', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                         print "hello"
@@ -417,8 +417,8 @@ describe('Program', () => {
                 let hadSymbolInfo: boolean;
                 program.plugins.add({
                     name: 'test',
-                    afterValidateFile: (event) => {
-                        hadSymbolInfo = !!program.getCodeSegmentSymbolInfo(getBrsCodeSegment(event.file));
+                    afterValidateBrsCodeSegment: (event) => {
+                        hadSymbolInfo = !!program.getCodeSegmentSymbolInfo(event.codeSegment);
                     }
                 });
                 program.validate();

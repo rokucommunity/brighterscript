@@ -67,10 +67,12 @@ Full compiler lifecycle:
         - `beforeValidateFile`
         - For each BrightScript code segment the file provides:
             - `beforeValidateBrsCodeSegment`
-            - `validateBrsCodeSegment`
-            - `afterValidateBrsCodeSegment`
         - `validateFile`
+        - For each BrightScript code segment the file provides:
+            - `validateBrsCodeSegment`
         - `afterValidateFile`
+        - For each BrightScript code segment the file provides:
+            - `afterValidateBrsCodeSegment`
     - For each scope:
         - `beforeValidateScope`
     - For each scope:
@@ -150,10 +152,12 @@ After file addition/removal (note: throttled/debounced):
     - `beforeValidateFile`
     - For each BrightScript code segment the file provides:
         - `beforeValidateBrsCodeSegment`
-        - `validateBrsCodeSegment`
-        - `afterValidateBrsCodeSegment`
     - `validateFile`
+    - For each BrightScript code segment the file provides:
+        - `validateBrsCodeSegment`
     - `afterValidateFile`
+    - For each BrightScript code segment the file provides:
+        - `afterValidateBrsCodeSegment`
 - For each invalidated scope:
     - `beforeValidateScope`
 - For each invalidated scope:
@@ -941,9 +945,11 @@ Everything about the component itself (its xml, name, parent, interface and scri
 | `brsFile.commentFlags` | `codeSegment.commentFlags` |
 | `new BrsTranspileState(brsFile)`, `state.file` | `new BrsTranspileState(codeSegment)`, `state.codeSegment` |
 
-Validation runs each file's events together, with the code segment events inside the file events: `beforeValidateFile`, then `beforeValidateBrsCodeSegment`, `validateBrsCodeSegment` and `afterValidateBrsCodeSegment` for each code segment, then `validateFile` and `afterValidateFile`. A file is either fully validated or not at all, so a validation that gets cancelled never leaves a file half done.
+Wherever there are code segment events, each phase runs the file's event, then the event for each of its code segments: `beforeValidateFile` then each `beforeValidateBrsCodeSegment`, `validateFile` then each `validateBrsCodeSegment`, `afterValidateFile` then each `afterValidateBrsCodeSegment`. The built-in BrightScript validation finishes in `afterValidateBrsCodeSegment`, so a plugin that needs it done for a code segment should use that event (or `afterValidateProgram` for everything), not `afterValidateFile`.
 
-Building runs in phases instead. Every file gets its `before` event (followed by its code segments') before any file gets its main event, and every file gets its main event before any file gets its `after` event. This applies to prepare (`beforePrepareFile`/`beforePrepareBrsCodeSegment`, then `prepareFile`/`prepareBrsCodeSegment`, then `afterPrepareFile`/`afterPrepareBrsCodeSegment`), serialize (`beforeSerializeFile`, `serializeFile`, `afterSerializeFile`) and write (`beforeWriteFile`, `writeFile`, `afterWriteFile`). So a plugin that keeps state between a file's events needs to key it by file. A file that a plugin adds to the build while files are being prepared gets a full round of the prepare phases of its own, after the current round.
+Validation runs all of one file's phases together before moving to the next file, so a file is either fully validated or not at all, and a validation that gets cancelled never leaves a file half done.
+
+Building runs each phase across all files instead. Every file gets its `before` event (followed by its code segments') before any file gets its main event, and every file gets its main event before any file gets its `after` event. This applies to prepare (`beforePrepareFile`/`beforePrepareBrsCodeSegment`, then `prepareFile`/`prepareBrsCodeSegment`, then `afterPrepareFile`/`afterPrepareBrsCodeSegment`), serialize (`beforeSerializeFile`, `serializeFile`, `afterSerializeFile`) and write (`beforeWriteFile`, `writeFile`, `afterWriteFile`). So a plugin that keeps state between a file's events needs to key it by file. A file that a plugin adds to the build while files are being prepared gets a full round of the prepare phases of its own, after the current round.
 
 ### Things not to assume about code segments
 - **A file doesn't provide a fixed number of code segments.** A `.brs` file has one today and an `.xml` file has one per CDATA block (or none), but new syntax can change that. Iterate `file.codeSegments`.
