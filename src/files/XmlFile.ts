@@ -5,7 +5,7 @@ import type { CompletionItem, Location, Position, Range } from 'vscode-languages
 import { CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import type { IToken, TokenType } from 'chevrotain';
 import { diagnosticCodes } from '../DiagnosticMessages';
-import type { Callable, FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
+import type { FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import { standardizePath as s } from '../util';
@@ -20,7 +20,6 @@ import { ParseMode } from '../parser/Parser';
 import SGParser from '../parser/SGParser';
 import type { SGInterfaceField, SGInterfaceFunction, SGScript, SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
-import type { FunctionScope } from '../FunctionScope';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 /**
@@ -591,11 +590,6 @@ export class XmlFile implements BscFile {
         return this.parser.ast;
     }
 
-    //TODO implement the xml CDATA parsing, which would populate this list
-    public callables = [] as Callable[];
-
-    public functionScopes = [] as FunctionScope[];
-
     /**
      * Collect all bs: comment flags
      */
@@ -943,10 +937,6 @@ export class XmlFile implements BscFile {
         );
     }
 
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope { //eslint-disable-line
-        //TODO implement
-        return null;
-    }
 
     public dispose() {
         //unsubscribe from any DependencyGraph subscriptions
