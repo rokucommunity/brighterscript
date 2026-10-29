@@ -2103,16 +2103,21 @@ export class Program {
         let file = this.getFile(srcPath);
         if (file) {
             const documentSymbols = [] as DocumentSymbol[];
-            //emit once for each code segment in the file, collecting all of their symbols
-            for (const code of this.getCodeSegmentsForRequest(file)) {
-                const event: ProvideDocumentSymbolsEvent = {
-                    program: this,
-                    file: file,
-                    codeSegment: code,
-                    documentSymbols: documentSymbols
-                };
+            //one event for the file, then one for each of its code segments, collecting all of their symbols.
+            //Each phase runs for every event before the next phase starts
+            const events = this.getCodeSegmentsForRequest(file).map((code): ProvideDocumentSymbolsEvent => ({
+                program: this,
+                file: file,
+                codeSegment: code,
+                documentSymbols: documentSymbols
+            }));
+            for (const event of events) {
                 this.plugins.emit('beforeProvideDocumentSymbols', event);
+            }
+            for (const event of events) {
                 this.plugins.emit('provideDocumentSymbols', event);
+            }
+            for (const event of events) {
                 this.plugins.emit('afterProvideDocumentSymbols', event);
             }
             return documentSymbols;
@@ -2139,28 +2144,38 @@ export class Program {
                 }
                 indexesByCode.get(code).push(i);
             }
-            const selectionRanges = [] as SelectionRange[];
-            //plugins may contribute more ranges than there are positions. Those go after the per-position results
-            const extraSelectionRanges = [] as SelectionRange[];
-            for (const [code, indexes] of indexesByCode) {
-                const event: ProvideSelectionRangesEvent = {
+            const groups = [...indexesByCode].map(([code, indexes]) => ({
+                indexes: indexes,
+                event: {
                     program: this,
                     file: file,
                     codeSegment: code,
                     positions: indexes.map(i => positions[i]),
                     selectionRanges: []
-                };
-                this.plugins.emit('beforeProvideSelectionRanges', event);
-                this.plugins.emit('provideSelectionRanges', event);
-                this.plugins.emit('afterProvideSelectionRanges', event);
-                //when every position is in the same code, the event's results are already in order
-                if (indexesByCode.size === 1) {
-                    return event.selectionRanges;
+                } as ProvideSelectionRangesEvent
+            }));
+            //each phase runs for every event before the next phase starts
+            for (const group of groups) {
+                this.plugins.emit('beforeProvideSelectionRanges', group.event);
+            }
+            for (const group of groups) {
+                this.plugins.emit('provideSelectionRanges', group.event);
+            }
+            for (const group of groups) {
+                this.plugins.emit('afterProvideSelectionRanges', group.event);
+            }
+            //when every position is in the same code segment, the event's results are already in order
+            if (groups.length === 1) {
+                return groups[0].event.selectionRanges;
+            }
+            const selectionRanges = [] as SelectionRange[];
+            //plugins may contribute more ranges than there are positions. Those go after the per-position results
+            const extraSelectionRanges = [] as SelectionRange[];
+            for (const group of groups) {
+                for (let j = 0; j < group.indexes.length; j++) {
+                    selectionRanges[group.indexes[j]] = group.event.selectionRanges[j];
                 }
-                for (let j = 0; j < indexes.length; j++) {
-                    selectionRanges[indexes[j]] = event.selectionRanges[j];
-                }
-                extraSelectionRanges.push(...event.selectionRanges.slice(indexes.length));
+                extraSelectionRanges.push(...group.event.selectionRanges.slice(group.indexes.length));
             }
             return [...selectionRanges, ...extraSelectionRanges];
         }
@@ -2175,18 +2190,23 @@ export class Program {
         if (file) {
             const inlayHints = [] as InlayHint[];
             const scopes = this.getScopesForFile(file);
-            //emit once for each code segment in the file, collecting all of their hints
-            for (const code of this.getCodeSegmentsForRequest(file)) {
-                const event: ProvideInlayHintsEvent = {
-                    program: this,
-                    file: file,
-                    codeSegment: code,
-                    range: range,
-                    scopes: scopes,
-                    inlayHints: inlayHints
-                };
+            //one event for the file, then one for each of its code segments, collecting all of their hints.
+            //Each phase runs for every event before the next phase starts
+            const events = this.getCodeSegmentsForRequest(file).map((code): ProvideInlayHintsEvent => ({
+                program: this,
+                file: file,
+                codeSegment: code,
+                range: range,
+                scopes: scopes,
+                inlayHints: inlayHints
+            }));
+            for (const event of events) {
                 this.plugins.emit('beforeProvideInlayHints', event);
+            }
+            for (const event of events) {
                 this.plugins.emit('provideInlayHints', event);
+            }
+            for (const event of events) {
                 this.plugins.emit('afterProvideInlayHints', event);
             }
             return inlayHints;
@@ -2261,18 +2281,23 @@ export class Program {
                 .getDiagnostics()
                 .filter(x => x.location?.uri === fileUri);
             const scopes = this.getScopesForFile(file);
-            //emit once for each code segment in the file, each with only the diagnostics that belong to it
-            for (const code of this.getCodeSegmentsForRequest(file)) {
-                const event: ProvideSourceFixAllCodeActionsEvent = {
-                    program: this,
-                    file: file,
-                    codeSegment: code,
-                    diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, code)),
-                    scopes: scopes,
-                    actions: actions
-                };
+            //one event for the file, then one for each of its code segments, each with only the diagnostics that belong
+            //to it. Each phase runs for every event before the next phase starts
+            const events = this.getCodeSegmentsForRequest(file).map((code): ProvideSourceFixAllCodeActionsEvent => ({
+                program: this,
+                file: file,
+                codeSegment: code,
+                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, code)),
+                scopes: scopes,
+                actions: actions
+            }));
+            for (const event of events) {
                 this.plugins.emit('beforeProvideSourceFixAllCodeActions', event);
+            }
+            for (const event of events) {
                 this.plugins.emit('provideSourceFixAllCodeActions', event);
+            }
+            for (const event of events) {
                 this.plugins.emit('afterProvideSourceFixAllCodeActions', event);
             }
         }
@@ -2290,8 +2315,10 @@ export class Program {
         if (file) {
             const result = [] as SemanticToken[];
             const scopes = this.getScopesForFile(file);
-            //emit once for each code segment in the file, collecting all of their tokens
-            for (const code of this.getCodeSegmentsForRequest(file)) {
+            //one event for the file, then one for each of its code segments, collecting all of their tokens.
+            //Each phase runs for every one of them before the next phase starts
+            const codes = this.getCodeSegmentsForRequest(file);
+            for (const code of codes) {
                 this.plugins.emit('beforeProvideSemanticTokens', {
                     program: this,
                     file: file,
@@ -2299,6 +2326,8 @@ export class Program {
                     scopes: scopes,
                     semanticTokens: undefined
                 });
+            }
+            for (const code of codes) {
                 this.plugins.emit('provideSemanticTokens', {
                     program: this,
                     file: file,
@@ -2306,6 +2335,8 @@ export class Program {
                     scopes: scopes,
                     semanticTokens: result
                 });
+            }
+            for (const code of codes) {
                 this.plugins.emit('afterProvideSemanticTokens', {
                     program: this,
                     file: file,

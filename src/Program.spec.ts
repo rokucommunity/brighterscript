@@ -1684,6 +1684,28 @@ describe('Program', () => {
             expect(requested).to.eql([undefined, scriptCode]);
         });
 
+        it('runs each phase of a file-wide request for the file and every code segment before the next phase', () => {
+            const calls = [] as string[];
+            const record = (name: string) => (event: { codeSegment?: BrsCodeSegment }) => {
+                calls.push(`${name} ${event.codeSegment === scriptCode ? 'segment' : 'file'}`);
+            };
+            program.plugins.add({
+                name: 'test',
+                beforeProvideDocumentSymbols: record('before'),
+                provideDocumentSymbols: record('provide'),
+                afterProvideDocumentSymbols: record('after')
+            });
+            program.getDocumentSymbols(xmlFile.srcPath);
+            expect(calls).to.eql([
+                'before file',
+                'before segment',
+                'provide file',
+                'provide segment',
+                'after file',
+                'after segment'
+            ]);
+        });
+
         it('keeps selection ranges in the order the positions were requested', () => {
             program.plugins.add({
                 name: 'test',

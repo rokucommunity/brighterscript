@@ -182,7 +182,7 @@ Hovers
 Semantic Tokens
  - `provideSemanticTokens`
 
-Every editor event has the `file` it's about. Requests at a position (completions, hovers, definitions, references, code actions) also have the `codeSegment` at that position, if the position is inside BrightScript; outside of it (i.e. in the xml of a component) `codeSegment` is undefined. Requests for a whole file (semantic tokens, document symbols, inlay hints, source fix-all) are sent once for the file itself (without a `codeSegment`), then once for each of its code segments, and the results are combined.
+Every editor event has the `file` it's about. Requests at a position (completions, hovers, definitions, references, code actions) also have the `codeSegment` at that position, if the position is inside BrightScript; outside of it (i.e. in the xml of a component) `codeSegment` is undefined. Requests for a whole file (semantic tokens, document symbols, selection ranges, inlay hints, source fix-all) are sent for the file itself (without a `codeSegment`) and for each of its code segments, and the results are combined. Like every other place with code segment events, each phase runs for the file and then each code segment before the next phase starts: every `before…` event, then every `provide…` event, then every `after…` event.
 
 
 ## Compiler API
