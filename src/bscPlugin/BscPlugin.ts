@@ -83,7 +83,8 @@ export class BscPlugin implements Plugin {
     }
 
     /**
-     * Uses `validateFile` instead of `afterValidateFile` so that every plugin's `validateFile` handler can look up the file's symbols and types
+     * Uses `validateFile` instead of `afterValidateFile`. BscPlugin is registered before every other plugin, so it runs first in `validateFile`.
+     * Linking here ensures every other plugin's `validateFile` handler can look up the file's symbols and types
      */
     public validateFile(event: ValidateFileEvent) {
         if (isBrsFile(event.file)) {
