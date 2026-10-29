@@ -53,7 +53,7 @@ export class CompletionsProcessor {
                     return;
                 }
 
-                const results = this.getBrsCodeCompletions(this.event.position, codeSegment, scopesToProcess);
+                const results = this.getBrsCodeSegmentCompletions(this.event.position, codeSegment, scopesToProcess);
                 completionResults = results.scoped;
                 globalResults = results.global;
             }
@@ -174,10 +174,10 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    private getBrsCodeCompletions(position: Position, code: BrsCodeSegment, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
+    private getBrsCodeSegmentCompletions(position: Position, codeSegment: BrsCodeSegment, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
-        const currentTokenByFilePosition = code.getTokenAt(position);
-        const currentToken = currentTokenByFilePosition ?? code.getTokenAt(code.getClosestExpression(position)?.location?.range.start);
+        const currentTokenByFilePosition = codeSegment.getTokenAt(position);
+        const currentToken = currentTokenByFilePosition ?? codeSegment.getTokenAt(codeSegment.getClosestExpression(position)?.location?.range.start);
 
         const emptyResult = { global: [], scoped: [] };
 
@@ -187,7 +187,7 @@ export class CompletionsProcessor {
         const tokenKind = currentToken?.kind;
 
         //if cursor is after a comment, disable completions
-        if (this.isPositionInComment(code, position)) {
+        if (this.isPositionInComment(codeSegment, position)) {
             return emptyResult;
         }
 
@@ -197,36 +197,36 @@ export class CompletionsProcessor {
         let symbolTableLookupFlag = SymbolTypeFlag.runtime;
         let beforeDotToken: Token;
 
-        if (code.tokenFollows(currentToken, TokenKind.Goto)) {
-            let functionScope = code.getFunctionScopeAtPosition(position);
+        if (codeSegment.tokenFollows(currentToken, TokenKind.Goto)) {
+            let functionScope = codeSegment.getFunctionScopeAtPosition(position);
             return { global: [], scoped: this.getLabelCompletion(functionScope) };
         }
 
-        if (this.isTokenAdjacentTo(code, currentToken, TokenKind.Dot)) {
-            const dotToken = this.getAdjacentToken(code, currentToken, TokenKind.Dot);
-            beforeDotToken = code.getTokenBefore(dotToken);
-            expression = code.getClosestExpression(beforeDotToken?.location?.range.end);
+        if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Dot)) {
+            const dotToken = this.getAdjacentToken(codeSegment, currentToken, TokenKind.Dot);
+            beforeDotToken = codeSegment.getTokenBefore(dotToken);
+            expression = codeSegment.getClosestExpression(beforeDotToken?.location?.range.end);
             shouldLookForMembers = true;
-        } else if (this.isTokenAdjacentTo(code, currentToken, TokenKind.Callfunc)) {
-            const dotToken = this.getAdjacentToken(code, currentToken, TokenKind.Callfunc);
-            beforeDotToken = code.getTokenBefore(dotToken);
-            expression = code.getClosestExpression(beforeDotToken?.location?.range.end);
+        } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Callfunc)) {
+            const dotToken = this.getAdjacentToken(codeSegment, currentToken, TokenKind.Callfunc);
+            beforeDotToken = codeSegment.getTokenBefore(dotToken);
+            expression = codeSegment.getClosestExpression(beforeDotToken?.location?.range.end);
             shouldLookForCallFuncMembers = true;
-        } else if (this.isTokenAdjacentTo(code, currentToken, TokenKind.As)) {
-            if (code.parseMode === ParseMode.BrightScript) {
+        } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.As)) {
+            if (codeSegment.parseMode === ParseMode.BrightScript) {
                 return { global: NativeTypeCompletions, scoped: [] };
             }
-            expression = code.getClosestExpression(this.event.position);
+            expression = codeSegment.getClosestExpression(this.event.position);
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
-        } else if (this.isTokenAdjacentTo(code, currentToken, TokenKind.Equal)) {
-            expression = code.getClosestExpression(this.event.position);
+        } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Equal)) {
+            expression = codeSegment.getClosestExpression(this.event.position);
             if (expression?.findAncestor<AliasStatement>(isAliasStatement)) {
                 // allow runtime and typetime lookups in alias statements
                 // eslint-disable-next-line no-bitwise
                 symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
             }
         } else {
-            expression = code.getClosestExpression(this.event.position);
+            expression = codeSegment.getClosestExpression(this.event.position);
         }
 
         if (isFunctionExpression(expression)) {
@@ -238,7 +238,7 @@ export class CompletionsProcessor {
             return emptyResult;
         }
 
-        const tokenBefore = code.getTokenBefore(code.getClosestToken(expression.location?.range?.start));
+        const tokenBefore = codeSegment.getTokenBefore(codeSegment.getClosestToken(expression.location?.range?.start));
 
         // helper to check get correct symbol tables for look ups
         function getSymbolTableForLookups() {
@@ -335,7 +335,7 @@ export class CompletionsProcessor {
                         currentSymbols.push(...nameSpaceTypeSofar.getMemberTable().getAllSymbols(symbolTableLookupFlag));
                     }
                 }
-                currentSymbols.push(...this.getScopeSymbolCompletions(code, scope, symbolTableLookupFlag));
+                currentSymbols.push(...this.getScopeSymbolCompletions(codeSegment, scope, symbolTableLookupFlag));
             }
 
             let ignoreAllPropertyNames = false;
@@ -360,24 +360,24 @@ export class CompletionsProcessor {
         return { global: globalCompletions, scoped: result };
     }
 
-    private getScopeSymbolCompletions(code: BrsCodeSegment, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
+    private getScopeSymbolCompletions(codeSegment: BrsCodeSegment, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
         // get all scope available symbols
 
-        const scopeSymbols = code.parseMode === ParseMode.BrighterScript
+        const scopeSymbols = codeSegment.parseMode === ParseMode.BrighterScript
             ? [...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag), ...scope.allNamespaceTypeTable.getOwnSymbols(symbolTableLookupFlag)]
             : scope.symbolTable.getOwnSymbols(symbolTableLookupFlag);
 
-        const fileSymbols = code.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
+        const fileSymbols = codeSegment.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
         scopeSymbols.push(...fileSymbols);
 
         const scopeAvailableSymbols = scopeSymbols.filter(sym => {
-            if (code.parseMode === ParseMode.BrighterScript) {
+            if (codeSegment.parseMode === ParseMode.BrighterScript) {
                 // eslint-disable-next-line no-bitwise
                 if (sym.flags & SymbolTypeFlag.postTranspile) {
                     // underscored symbols should not be available in Brighterscript files
                     return false;
                 }
-            } else if (code.parseMode === ParseMode.BrightScript) {
+            } else if (codeSegment.parseMode === ParseMode.BrightScript) {
                 if (isNamespaceType(sym.type)) {
                     return false;
                 }
@@ -567,8 +567,8 @@ export class CompletionsProcessor {
      */
     public getPropertyNameCompletions(scope: Scope) {
         let results = [] as CompletionItem[];
-        scope.enumerateBrsCodeSegments((code) => {
-            results.push(...code.propertyNameCompletions);
+        scope.enumerateBrsCodeSegments((codeSegment) => {
+            results.push(...codeSegment.propertyNameCompletions);
         });
         return results;
     }
@@ -578,11 +578,11 @@ export class CompletionsProcessor {
      */
     public getAllClassMemberCompletions(scope: Scope) {
         let results = new Map<string, CompletionItem>();
-        let codesSearched = new Set<BrsCodeSegment>();
-        for (const code of scope.getAllCodeSegments()) {
-            if (isBrsCodeSegment(code) && !codesSearched.has(code)) {
+        let codeSegmentsSearched = new Set<BrsCodeSegment>();
+        for (const codeSegment of scope.getAllCodeSegments()) {
+            if (isBrsCodeSegment(codeSegment) && !codeSegmentsSearched.has(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (let cs of code['_cachedLookups'].classStatements) {
+                for (let cs of codeSegment['_cachedLookups'].classStatements) {
                     for (let s of cs.members) {
                         if (s.isActive !== false && !results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
                             results.set(s.tokens.name.text, {
@@ -593,7 +593,7 @@ export class CompletionsProcessor {
                     }
                 }
             }
-            codesSearched.add(code);
+            codeSegmentsSearched.add(codeSegment);
         }
         return results;
     }
@@ -645,8 +645,8 @@ export class CompletionsProcessor {
         ];
     }
 
-    private isPositionInComment(code: BrsCodeSegment, position: Position) {
-        const currentToken = code.getCurrentOrNextTokenAt(position);
+    private isPositionInComment(codeSegment: BrsCodeSegment, position: Position) {
+        const currentToken = codeSegment.getCurrentOrNextTokenAt(position);
         const tokenKind = currentToken?.kind;
         if (!currentToken) {
             return true;
@@ -655,7 +655,7 @@ export class CompletionsProcessor {
             return true;
         }
 
-        const nextNonComment = code.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
+        const nextNonComment = codeSegment.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
         const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
         if (firstComment && util.comparePosition(position, firstComment?.location?.range.start) >= 0) {
             return true;
@@ -663,12 +663,12 @@ export class CompletionsProcessor {
         return false;
     }
 
-    private isTokenAdjacentTo(code: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
-        return code.getPreviousToken(currentToken)?.kind === targetKind || code.isTokenNextToTokenKind(currentToken, targetKind);
+    private isTokenAdjacentTo(codeSegment: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
+        return codeSegment.getPreviousToken(currentToken)?.kind === targetKind || codeSegment.isTokenNextToTokenKind(currentToken, targetKind);
     }
 
-    private getAdjacentToken(code: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
-        return currentToken.kind === targetKind ? currentToken : code.getTokenBefore(currentToken, targetKind);
+    private getAdjacentToken(codeSegment: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
+        return currentToken.kind === targetKind ? currentToken : codeSegment.getTokenBefore(currentToken, targetKind);
     }
 }
 

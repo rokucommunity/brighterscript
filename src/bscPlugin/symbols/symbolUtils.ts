@@ -6,9 +6,9 @@ import util from '../../util';
 import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 
-export function getDocumentSymbolsFromBrsCode(code: BrsCodeSegment) {
+export function getDocumentSymbolsFromBrsCodeSegment(codeSegment: BrsCodeSegment) {
     let result: DocumentSymbol[] = [];
-    const symbols = getSymbolsFromAstNode(code.ast);
+    const symbols = getSymbolsFromAstNode(codeSegment.ast);
     for (let symbol of symbols) {
         result.push(
             createSymbol(symbol)
@@ -28,11 +28,11 @@ export function getDocumentSymbolsFromBrsCode(code: BrsCodeSegment) {
     }
 }
 
-export function getWorkspaceSymbolsFromBrsCode(code: BrsCodeSegment) {
+export function getWorkspaceSymbolsFromBrsCodeSegment(codeSegment: BrsCodeSegment) {
     const result: WorkspaceSymbol[] = [];
     //code uses its document's uri, so embedded code links to the file it lives in
-    const uri = util.pathToUri(code.srcPath);
-    let symbolsToProcess = getSymbolsFromAstNode(code.ast);
+    const uri = util.pathToUri(codeSegment.srcPath);
+    let symbolsToProcess = getSymbolsFromAstNode(codeSegment.ast);
     while (symbolsToProcess.length > 0) {
         //get the symbol
         const symbolInfo = symbolsToProcess.shift();

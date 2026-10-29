@@ -44,9 +44,9 @@ export class CallExpressionInfo {
 
     private position: Position;
 
-    constructor(code: BrsCodeSegment, position: Position) {
-        this.expression = code.ast.findChildAtPosition<Expression>(position);
-        this.codeSegment = code;
+    constructor(codeSegment: BrsCodeSegment, position: Position) {
+        this.expression = codeSegment.ast.findChildAtPosition<Expression>(position);
+        this.codeSegment = codeSegment;
         this.position = position;
         this.process();
     }

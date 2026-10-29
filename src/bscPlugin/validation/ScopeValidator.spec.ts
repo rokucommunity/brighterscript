@@ -5447,13 +5447,13 @@ describe('ScopeValidator', () => {
 
         it('validates only parts of files that need revalidation on scope validation', () => {
             function validateFile(file: BrsFile) {
-                const validateCodeEvent = {
+                const validateCodeSegmentEvent = {
                     program: program,
                     file: file,
                     codeSegment: getBrsCodeSegment(file)
                 };
                 //emit an event to allow plugins to contribute to the code validation process
-                program.plugins.emit('validateBrsCodeSegment', validateCodeEvent);
+                program.plugins.emit('validateBrsCodeSegment', validateCodeSegmentEvent);
                 program.plugins.emit('afterValidateFile', { program: program, file: file });
             }
 

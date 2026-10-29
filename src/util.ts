@@ -1976,7 +1976,7 @@ export class Util {
      * Gathers expressions, variables, and unique names from an expression.
      * This is mostly used for the ternary expression
      */
-    public getExpressionInfo(expression: Expression, code: BrsCodeSegment): ExpressionInfo {
+    public getExpressionInfo(expression: Expression, codeSegment: BrsCodeSegment): ExpressionInfo {
         const expressions = [expression];
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
@@ -2000,12 +2000,12 @@ export class Util {
         //handle the expression itself (for situations when expression is a VariableExpression)
         expressionWalker(expression);
 
-        const scope = code.program.getFirstScopeForCodeSegment(code);
+        const scope = codeSegment.program.getFirstScopeForCodeSegment(codeSegment);
         let filteredVarNames = [...uniqueVarNames];
         if (scope) {
             //a parameter or local variable can share a namespace's name, so only treat a name as a namespace when the enclosing function doesn't declare it
             const func = expression?.findAncestor<FunctionExpression>(isFunctionExpression);
-            const functionScope = func ? this.findFunctionScope(code.functionScopes, func) : undefined;
+            const functionScope = func ? this.findFunctionScope(codeSegment.functionScopes, func) : undefined;
             filteredVarNames = filteredVarNames.filter((varName: string) => {
                 const varNameLower = varName.toLowerCase();
                 const isNamespace = scope.namespaceLookup.has(varNameLower) && !functionScope?.getVariableByName(varNameLower);

@@ -122,9 +122,9 @@ export class XmlFile implements BscFile {
      * Get the code embedded in a `<script>` element, if it has any
      */
     public getCodeSegmentForScript(script: SGScript): BrsCodeSegment | undefined {
-        for (const [code, scriptElement] of this.scriptElementsByCodeSegment) {
+        for (const [codeSegment, scriptElement] of this.scriptElementsByCodeSegment) {
             if (scriptElement === script) {
-                return code;
+                return codeSegment;
             }
         }
     }
@@ -133,8 +133,8 @@ export class XmlFile implements BscFile {
      * Create a piece of BrightScript code for every `<script>` element that has its code inline in a CDATA block
      */
     private createScriptCodeSegments() {
-        for (const code of this.scriptCodeSegments) {
-            code.dispose();
+        for (const codeSegment of this.scriptCodeSegments) {
+            codeSegment.dispose();
         }
         this.scriptCodeSegments = [];
         this.scriptElementsByCodeSegment.clear();
@@ -148,28 +148,28 @@ export class XmlFile implements BscFile {
                 continue;
             }
             const isBrighterScript = script.type?.toLowerCase() === 'text/brighterscript' || this.program?.options?.allowBrighterScriptInBrightScript;
-            const code = new BrsCodeSegment({
+            const codeSegment = new BrsCodeSegment({
                 document: this,
                 program: this.program,
                 parseMode: isBrighterScript ? ParseMode.BrighterScript : ParseMode.BrightScript,
                 isEmbedded: true
             });
-            code.key = `${this.pkgPath}#script-${this.scriptCodeSegments.length}`;
+            codeSegment.key = `${this.pkgPath}#script-${this.scriptCodeSegments.length}`;
             //the code is everything between `<![CDATA[` and `]]>`
             const hasClose = cdata.text.endsWith(cdataClose);
             const startCharacter = range.start.character + cdataOpen.length;
-            code.range = util.createRange(
+            codeSegment.range = util.createRange(
                 range.start.line,
                 startCharacter,
                 range.end.line,
                 hasClose ? range.end.character - cdataClose.length : range.end.character
             );
-            code.parse(
+            codeSegment.parse(
                 cdata.text.substring(cdataOpen.length, hasClose ? cdata.text.length - cdataClose.length : cdata.text.length),
                 { startLine: range.start.line, startCharacter: startCharacter }
             );
-            this.scriptCodeSegments.push(code);
-            this.scriptElementsByCodeSegment.set(code, script);
+            this.scriptCodeSegments.push(codeSegment);
+            this.scriptElementsByCodeSegment.set(codeSegment, script);
         }
     }
 
@@ -296,7 +296,7 @@ export class XmlFile implements BscFile {
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
             ) ||
             //embedded code that needs transpiling has to be written back into this file
-            this.scriptCodeSegments.some(code => code.needsTranspiled)
+            this.scriptCodeSegments.some(codeSegment => codeSegment.needsTranspiled)
         );
     }
     public set needsTranspiled(value) {
@@ -364,7 +364,7 @@ export class XmlFile implements BscFile {
         const dependencies = [
             ...this.scriptTagImports.map(x => x.destPath.toLowerCase()),
             //`import` statements in the code embedded in `<script>` blocks
-            ...this.scriptCodeSegments.flatMap(code => code.ownScriptImports).filter(x => !!x.destPath).map(x => x.destPath.toLowerCase())
+            ...this.scriptCodeSegments.flatMap(codeSegment => codeSegment.ownScriptImports).filter(x => !!x.destPath).map(x => x.destPath.toLowerCase())
         ];
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program?.options?.autoImportComponentScript) {
@@ -941,8 +941,8 @@ export class XmlFile implements BscFile {
     public dispose() {
         //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
-        for (const code of this.scriptCodeSegments) {
-            code.dispose();
+        for (const codeSegment of this.scriptCodeSegments) {
+            codeSegment.dispose();
         }
     }
 }

@@ -156,46 +156,46 @@ export class ScopeValidator {
     /**
      * Is this code from a typedef file (`.d.bs`)? Typedefs are ambient declarations, so they are never validated for diagnostics
      */
-    private isTypedefCode(code: BrsCodeSegment) {
-        return isBrsFile(code.document) && code.document.isTypedef;
+    private isTypedefCodeSegment(codeSegment: BrsCodeSegment) {
+        return isBrsFile(codeSegment.document) && codeSegment.document.isTypedef;
     }
 
     private walkFiles() {
         const hasChangeInfo = this.event.changedFiles && this.event.changedSymbols;
 
         //do many per-file checks for every file in this (and parent) scopes
-        this.event.scope.enumerateBrsCodeSegments((code) => {
-            if (this.isTypedefCode(code)) {
+        this.event.scope.enumerateBrsCodeSegments((codeSegment) => {
+            if (this.isTypedefCodeSegment(codeSegment)) {
                 return;
             }
 
-            const thisFileHasChanges = this.event.changedFiles.includes(code.document);
+            const thisFileHasChanges = this.event.changedFiles.includes(codeSegment.document);
 
-            if (thisFileHasChanges || this.doesFileProvideChangedSymbol(code, this.event.changedSymbols)) {
-                this.diagnosticDetectFunctionCollisions(code);
+            if (thisFileHasChanges || this.doesFileProvideChangedSymbol(codeSegment, this.event.changedSymbols)) {
+                this.diagnosticDetectFunctionCollisions(codeSegment);
             }
         });
         const fileWalkStopWatch = new Stopwatch();
 
-        this.event.scope.enumerateOwnBrsCodeSegments((code) => {
-            if (isBrsCodeSegment(code)) {
+        this.event.scope.enumerateOwnBrsCodeSegments((codeSegment) => {
+            if (isBrsCodeSegment(codeSegment)) {
 
                 //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics
-                if (this.isTypedefCode(code)) {
+                if (this.isTypedefCodeSegment(codeSegment)) {
                     return;
                 }
 
-                if (this.event.program.diagnostics.canSkipScopeValidationForFile(code)) {
+                if (this.event.program.diagnostics.canSkipScopeValidationForFile(codeSegment)) {
                     return;
                 }
 
                 fileWalkStopWatch.reset();
                 fileWalkStopWatch.start();
 
-                const fileUri = util.pathToUri(code.srcPath);
-                const thisFileHasChanges = this.event.changedFiles.includes(code.document);
+                const fileUri = util.pathToUri(codeSegment.srcPath);
+                const thisFileHasChanges = this.event.changedFiles.includes(codeSegment.document);
 
-                const hasUnvalidatedSegments = code.validationSegmenter.hasUnvalidatedSegments();
+                const hasUnvalidatedSegments = codeSegment.validationSegmenter.hasUnvalidatedSegments();
 
                 if (hasChangeInfo && !hasUnvalidatedSegments) {
                     return;
@@ -204,95 +204,95 @@ export class ScopeValidator {
                 const validationVisitor = createVisitor({
                     VariableExpression: (varExpr) => {
                         this.addValidationKindMetric('VariableExpression', () => {
-                            this.validateVariableAndDottedGetExpressions(code, varExpr);
+                            this.validateVariableAndDottedGetExpressions(codeSegment, varExpr);
                         });
                     },
                     DottedGetExpression: (dottedGet) => {
                         this.addValidationKindMetric('DottedGetExpression', () => {
-                            this.validateVariableAndDottedGetExpressions(code, dottedGet);
+                            this.validateVariableAndDottedGetExpressions(codeSegment, dottedGet);
                         });
                     },
                     CallExpression: (functionCall) => {
                         this.addValidationKindMetric('CallExpression', () => {
-                            this.validateCallExpression(code, functionCall);
-                            this.validateCreateObjectCall(code, functionCall);
-                            this.validateComponentMethods(code, functionCall);
+                            this.validateCallExpression(codeSegment, functionCall);
+                            this.validateCreateObjectCall(codeSegment, functionCall);
+                            this.validateComponentMethods(codeSegment, functionCall);
                         });
                     },
                     CallfuncExpression: (functionCall) => {
                         this.addValidationKindMetric('CallfuncExpression', () => {
-                            this.validateCallFuncExpression(code, functionCall);
+                            this.validateCallFuncExpression(codeSegment, functionCall);
                         });
                     },
                     ReturnStatement: (returnStatement) => {
                         this.addValidationKindMetric('ReturnStatement', () => {
-                            this.validateReturnStatement(code, returnStatement);
+                            this.validateReturnStatement(codeSegment, returnStatement);
                         });
                     },
                     DottedSetStatement: (dottedSetStmt) => {
                         this.addValidationKindMetric('DottedSetStatement', () => {
-                            this.validateDottedSetStatement(code, dottedSetStmt);
+                            this.validateDottedSetStatement(codeSegment, dottedSetStmt);
                         });
                     },
                     BinaryExpression: (binaryExpr) => {
                         this.addValidationKindMetric('BinaryExpression', () => {
-                            this.validateBinaryExpression(code, binaryExpr);
+                            this.validateBinaryExpression(codeSegment, binaryExpr);
                         });
                     },
                     UnaryExpression: (unaryExpr) => {
                         this.addValidationKindMetric('UnaryExpression', () => {
-                            this.validateUnaryExpression(code, unaryExpr);
+                            this.validateUnaryExpression(codeSegment, unaryExpr);
                         });
                     },
                     SpreadExpression: (spreadExpr) => {
                         this.addValidationKindMetric('SpreadExpression', () => {
-                            this.validateSpreadExpression(code, spreadExpr);
+                            this.validateSpreadExpression(codeSegment, spreadExpr);
                         });
                     },
                     AssignmentStatement: (assignStmt) => {
                         this.addValidationKindMetric('AssignmentStatement', () => {
-                            this.validateAssignmentStatement(code, assignStmt);
+                            this.validateAssignmentStatement(codeSegment, assignStmt);
                             // Note: this also includes For statements
-                            this.detectShadowedLocalVar(code, {
+                            this.detectShadowedLocalVar(codeSegment, {
                                 expr: assignStmt,
                                 name: assignStmt.tokens.name.text,
-                                type: this.getNodeTypeWrapper(code, assignStmt, { flags: SymbolTypeFlag.runtime }),
+                                type: this.getNodeTypeWrapper(codeSegment, assignStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: assignStmt.tokens.name.location?.range
                             });
                         });
                     },
                     AugmentedAssignmentStatement: (binaryExpr) => {
                         this.addValidationKindMetric('AugmentedAssignmentStatement', () => {
-                            this.validateBinaryExpression(code, binaryExpr);
+                            this.validateBinaryExpression(codeSegment, binaryExpr);
                         });
                     },
                     IncrementStatement: (stmt) => {
                         this.addValidationKindMetric('IncrementStatement', () => {
-                            this.validateIncrementStatement(code, stmt);
+                            this.validateIncrementStatement(codeSegment, stmt);
                         });
                     },
                     NewExpression: (newExpr) => {
                         this.addValidationKindMetric('NewExpression', () => {
-                            this.validateNewExpression(code, newExpr);
+                            this.validateNewExpression(codeSegment, newExpr);
                         });
                     },
                     ForEachStatement: (forEachStmt) => {
                         this.addValidationKindMetric('ForEachStatement', () => {
-                            this.detectShadowedLocalVar(code, {
+                            this.detectShadowedLocalVar(codeSegment, {
                                 expr: forEachStmt,
                                 name: forEachStmt.tokens.item.text,
-                                type: this.getNodeTypeWrapper(code, forEachStmt, { flags: SymbolTypeFlag.runtime }),
+                                type: this.getNodeTypeWrapper(codeSegment, forEachStmt, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: forEachStmt.tokens.item.location?.range
                             });
-                            this.validateForEachStatement(code, forEachStmt);
+                            this.validateForEachStatement(codeSegment, forEachStmt);
                         });
                     },
                     FunctionParameterExpression: (funcParam) => {
                         this.addValidationKindMetric('FunctionParameterExpression', () => {
-                            this.detectShadowedLocalVar(code, {
+                            this.detectShadowedLocalVar(codeSegment, {
                                 expr: funcParam,
                                 name: funcParam.tokens.name.text,
-                                type: this.getNodeTypeWrapper(code, funcParam, { flags: SymbolTypeFlag.runtime }),
+                                type: this.getNodeTypeWrapper(codeSegment, funcParam, { flags: SymbolTypeFlag.runtime }),
                                 nameRange: funcParam.tokens.name.location?.range
                             });
                         });
@@ -304,17 +304,17 @@ export class ScopeValidator {
                     },
                     ForStatement: (forStmt) => {
                         this.addValidationKindMetric('ForStatement', () => {
-                            this.validateForStatement(code, forStmt);
+                            this.validateForStatement(codeSegment, forStmt);
                         });
                     },
                     SelectCaseStatement: (selectCaseStmt) => {
                         this.addValidationKindMetric('SelectCaseStatement', () => {
-                            this.validateSelectCaseStatement(code, selectCaseStmt);
+                            this.validateSelectCaseStatement(codeSegment, selectCaseStmt);
                         });
                     },
                     AAIndexedMemberExpression: (member) => {
                         this.addValidationKindMetric('AAIndexedMemberExpression', () => {
-                            this.validateAAIndexedMemberExpression(code, member);
+                            this.validateAAIndexedMemberExpression(codeSegment, member);
                         });
                     },
                     AstNode: (node) => {
@@ -330,8 +330,8 @@ export class ScopeValidator {
                 // validate only what's needed in the file
 
                 const segmentsToWalkForValidation = thisFileHasChanges
-                    ? code.validationSegmenter.getAllUnvalidatedSegments()
-                    : code.validationSegmenter.getSegmentsWithChangedSymbols(this.event.changedSymbols);
+                    ? codeSegment.validationSegmenter.getAllUnvalidatedSegments()
+                    : codeSegment.validationSegmenter.getSegmentsWithChangedSymbols(this.event.changedSymbols);
 
                 let segmentsValidated = 0;
 
@@ -342,7 +342,7 @@ export class ScopeValidator {
 
 
                 for (const segment of segmentsToWalkForValidation) {
-                    if (!thisFileHasChanges && !code.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
+                    if (!thisFileHasChanges && !codeSegment.validationSegmenter.checkIfSegmentNeedsRevalidation(segment, this.event.changedSymbols)) {
                         continue;
                     }
                     this.currentSegmentBeingValidated = segment;
@@ -354,12 +354,12 @@ export class ScopeValidator {
                     segment.walk(validationVisitor, {
                         walkMode: InsideSegmentWalkMode
                     });
-                    code.markSegmentAsValidated(segment);
+                    codeSegment.markSegmentAsValidated(segment);
                     this.currentSegmentBeingValidated = null;
                 }
                 fileWalkStopWatch.stop();
                 const timeString = fileWalkStopWatch.getDurationText();
-                this.segmentsMetrics.set(code.pkgPath, { segments: segmentsValidated, time: timeString });
+                this.segmentsMetrics.set(codeSegment.pkgPath, { segments: segmentsValidated, time: timeString });
             }
         });
     }
@@ -377,7 +377,7 @@ export class ScopeValidator {
     }
 
 
-    private validateAAIndexedMemberExpression(code: BrsCodeSegment, member: AAIndexedMemberExpression) {
+    private validateAAIndexedMemberExpression(codeSegment: BrsCodeSegment, member: AAIndexedMemberExpression) {
         const scope = this.event.scope;
         // Direct string literal (e.g. ["my-key"]) is valid
         if (isLiteralExpression(member.key)) {
@@ -461,12 +461,12 @@ export class ScopeValidator {
     }
 
 
-    private doesFileProvideChangedSymbol(code: BrsCodeSegment, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+    private doesFileProvideChangedSymbol(codeSegment: BrsCodeSegment, changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         if (!changedSymbols) {
             return true;
         }
         for (const flag of [SymbolTypeFlag.runtime, SymbolTypeFlag.typetime]) {
-            const providedSymbolKeysFlag = code.providedSymbols.symbolMap.get(flag).keys();
+            const providedSymbolKeysFlag = codeSegment.providedSymbols.symbolMap.get(flag).keys();
             const changedSymbolSetForFlag = changedSymbols.get(flag);
 
             for (let providedKey of providedSymbolKeysFlag) {
@@ -555,7 +555,7 @@ export class ScopeValidator {
 
         const walkConst = (
             constStatement: ConstStatement,
-            code: BrsCodeSegment,
+            codeSegment: BrsCodeSegment,
             chain: ConstStatement[]
         ) => {
             const cycleStart = chain.indexOf(constStatement);
@@ -607,7 +607,7 @@ export class ScopeValidator {
      * what these calls are supposed to look like, and this is a very common thing for brs devs to do, so just
      * do this manually for now.
      */
-    protected validateCreateObjectCall(code: BrsCodeSegment, call: CallExpression) {
+    protected validateCreateObjectCall(codeSegment: BrsCodeSegment, call: CallExpression) {
 
         //skip non CreateObject function calls
         if (!isVariableExpression(call.callee)) {
@@ -687,7 +687,7 @@ export class ScopeValidator {
     /**
      * Validate every method call to `component.callfunc()`, `component.createChild()`, etc.
      */
-    protected validateComponentMethods(code: BrsCodeSegment, call: CallExpression) {
+    protected validateComponentMethods(codeSegment: BrsCodeSegment, call: CallExpression) {
         const lowerMethodNamesChecked = ['callfunc', 'createchild'];
         if (!isDottedGetExpression(call.callee)) {
             return;
@@ -715,25 +715,25 @@ export class ScopeValidator {
                     location: firstArgToken?.location
                 });
             } else {
-                this.validateFunctionCall(code, call, funcType, firstArgToken.location, call.args, 1);
+                this.validateFunctionCall(codeSegment, call, funcType, firstArgToken.location, call.args, 1);
             }
         }
     }
 
 
-    private validateCallExpression(code: BrsCodeSegment, expression: CallExpression) {
+    private validateCallExpression(codeSegment: BrsCodeSegment, expression: CallExpression) {
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
-        let funcType = this.getNodeTypeWrapper(code, expression?.callee, getTypeOptions);
+        let funcType = this.getNodeTypeWrapper(codeSegment, expression?.callee, getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
             funcType = funcType.getMemberType('new', getTypeOptions);
         }
         const callErrorLocation = expression?.callee?.location;
-        return this.validateFunctionCall(code, expression.callee, funcType, callErrorLocation, expression.args);
+        return this.validateFunctionCall(codeSegment, expression.callee, funcType, callErrorLocation, expression.args);
 
     }
 
-    private validateCallFuncExpression(code: BrsCodeSegment, expression: CallfuncExpression) {
+    private validateCallFuncExpression(codeSegment: BrsCodeSegment, expression: CallfuncExpression) {
         const callerType = expression.callee?.getType({ flags: SymbolTypeFlag.runtime });
         if (isDynamicType(callerType)) {
             return;
@@ -758,13 +758,13 @@ export class ScopeValidator {
             });
         }
 
-        return this.validateFunctionCall(code, expression, funcType, callErrorLocation, expression.args);
+        return this.validateFunctionCall(codeSegment, expression, funcType, callErrorLocation, expression.args);
     }
 
     /**
      * Detect calls to functions with the incorrect number of parameters, or wrong types of arguments
      */
-    private validateFunctionCall(code: BrsCodeSegment, callee: Expression, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
+    private validateFunctionCall(codeSegment: BrsCodeSegment, callee: Expression, funcType: BscType, callErrorLocation: Location, args: Expression[], argOffset = 0) {
         while (isTypeStatementType(funcType)) {
             funcType = funcType.wrappedType;
         }
@@ -866,7 +866,7 @@ export class ScopeValidator {
                 break;
             }
             const data = {} as ExtraSymbolData;
-            let argType = this.getNodeTypeWrapper(code, arg, { flags: SymbolTypeFlag.runtime, data: data });
+            let argType = this.getNodeTypeWrapper(codeSegment, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
             }
@@ -894,13 +894,13 @@ export class ScopeValidator {
     /**
      * Detect return statements with incompatible types vs. declared return type
      */
-    private validateReturnStatement(code: BrsCodeSegment, returnStmt: ReturnStatement) {
+    private validateReturnStatement(codeSegment: BrsCodeSegment, returnStmt: ReturnStatement) {
         const data: ExtraSymbolData = {};
         const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: data };
         let funcType = returnStmt.findAncestor(isFunctionExpression)?.getType({ flags: SymbolTypeFlag.typetime });
         if (isTypedFunctionType(funcType)) {
             let actualReturnType = returnStmt?.value
-                ? this.getNodeTypeWrapper(code, returnStmt?.value, getTypeOptions)
+                ? this.getNodeTypeWrapper(codeSegment, returnStmt?.value, getTypeOptions)
                 : VoidType.instance;
             if (!actualReturnType) {
                 // the type of the returned value could not be determined. A separate diagnostic
@@ -930,12 +930,12 @@ export class ScopeValidator {
     /**
      * Detect assigned type different from expected member type
      */
-    private validateDottedSetStatement(code: BrsCodeSegment, dottedSetStmt: DottedSetStatement) {
+    private validateDottedSetStatement(codeSegment: BrsCodeSegment, dottedSetStmt: DottedSetStatement) {
         const typeChainExpectedLHS = [] as TypeChainEntry[];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        const expectedLHSType = this.getNodeTypeWrapper(code, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
-        const actualRHSType = this.getNodeTypeWrapper(code, dottedSetStmt?.value, getTypeOpts);
+        const expectedLHSType = this.getNodeTypeWrapper(codeSegment, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = this.getNodeTypeWrapper(codeSegment, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         // check if anything in typeChain is an AA - if so, just allow it
         if (typeChainExpectedLHS.find(typeChainItem => isAssociativeArrayType(typeChainItem.type))) {
@@ -952,7 +952,7 @@ export class ScopeValidator {
             return;
         }
 
-        let accessibilityIsOk = this.checkMemberAccessibility(code, dottedSetStmt, typeChainExpectedLHS);
+        let accessibilityIsOk = this.checkMemberAccessibility(codeSegment, dottedSetStmt, typeChainExpectedLHS);
 
         //Most Component fields can be set with strings
         //TODO: be more precise about which fields can actually accept strings
@@ -974,7 +974,7 @@ export class ScopeValidator {
     /**
      * Detect when declared type does not match rhs type
      */
-    private validateAssignmentStatement(code: BrsCodeSegment, assignStmt: AssignmentStatement) {
+    private validateAssignmentStatement(codeSegment: BrsCodeSegment, assignStmt: AssignmentStatement) {
         if (!assignStmt?.typeExpression) {
             // nothing to check
             return;
@@ -982,8 +982,8 @@ export class ScopeValidator {
 
         const typeChainExpectedLHS = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
-        const expectedLHSType = this.getNodeTypeWrapper(code, assignStmt.typeExpression, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
-        const actualRHSType = this.getNodeTypeWrapper(code, assignStmt.value, getTypeOpts);
+        const expectedLHSType = this.getNodeTypeWrapper(codeSegment, assignStmt.typeExpression, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const actualRHSType = this.getNodeTypeWrapper(codeSegment, assignStmt.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         if (!expectedLHSType || !expectedLHSType.isResolvable()) {
             // LHS is not resolvable... handled elsewhere
@@ -998,7 +998,7 @@ export class ScopeValidator {
     /**
      * Detect invalid use of a binary operator
      */
-    private validateBinaryExpression(code: BrsCodeSegment, binaryExpr: BinaryExpression | AugmentedAssignmentStatement) {
+    private validateBinaryExpression(codeSegment: BrsCodeSegment, binaryExpr: BinaryExpression | AugmentedAssignmentStatement) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
         if (util.isInTypeExpression(binaryExpr)) {
@@ -1006,11 +1006,11 @@ export class ScopeValidator {
         }
 
         let leftType = isBinaryExpression(binaryExpr)
-            ? this.getNodeTypeWrapper(code, binaryExpr.left, getTypeOpts)
-            : this.getNodeTypeWrapper(code, binaryExpr.item, getTypeOpts);
+            ? this.getNodeTypeWrapper(codeSegment, binaryExpr.left, getTypeOpts)
+            : this.getNodeTypeWrapper(codeSegment, binaryExpr.item, getTypeOpts);
         let rightType = isBinaryExpression(binaryExpr)
-            ? this.getNodeTypeWrapper(code, binaryExpr.right, getTypeOpts)
-            : this.getNodeTypeWrapper(code, binaryExpr.value, getTypeOpts);
+            ? this.getNodeTypeWrapper(codeSegment, binaryExpr.right, getTypeOpts)
+            : this.getNodeTypeWrapper(codeSegment, binaryExpr.value, getTypeOpts);
 
         if (!leftType || !rightType || !leftType.isResolvable() || !rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -1071,7 +1071,7 @@ export class ScopeValidator {
      * array-like value and an AA literal needs an AA-like value. Unknown, unresolvable, `dynamic` and `object`
      * values are left alone.
      */
-    private validateSpreadExpression(code: BrsCodeSegment, spreadExpr: SpreadExpression) {
+    private validateSpreadExpression(codeSegment: BrsCodeSegment, spreadExpr: SpreadExpression) {
         const literal = spreadExpr.parent;
         const isArray = isArrayLiteralExpression(literal);
         if (!isArray && !isAALiteralExpression(literal)) {
@@ -1081,7 +1081,7 @@ export class ScopeValidator {
             //the spread is in an unsupported position, which is already reported; don't stack a type error on it
             return;
         }
-        const valueType = this.getNodeTypeWrapper(code, spreadExpr.expression, { flags: SymbolTypeFlag.runtime });
+        const valueType = this.getNodeTypeWrapper(codeSegment, spreadExpr.expression, { flags: SymbolTypeFlag.runtime });
         if (!valueType?.isResolvable()) {
             return;
         }
@@ -1124,10 +1124,10 @@ export class ScopeValidator {
         return isAllowedConcreteType(type);
     }
 
-    private validateUnaryExpression(code: BrsCodeSegment, unaryExpr: UnaryExpression) {
+    private validateUnaryExpression(codeSegment: BrsCodeSegment, unaryExpr: UnaryExpression) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        let rightType = this.getNodeTypeWrapper(code, unaryExpr.right, getTypeOpts);
+        let rightType = this.getNodeTypeWrapper(codeSegment, unaryExpr.right, getTypeOpts);
 
         if (!rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -1162,10 +1162,10 @@ export class ScopeValidator {
         }
     }
 
-    private validateIncrementStatement(code: BrsCodeSegment, incStmt: IncrementStatement) {
+    private validateIncrementStatement(codeSegment: BrsCodeSegment, incStmt: IncrementStatement) {
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        let rightType = this.getNodeTypeWrapper(code, incStmt.value, getTypeOpts);
+        let rightType = this.getNodeTypeWrapper(codeSegment, incStmt.value, getTypeOpts);
 
         if (!rightType.isResolvable()) {
             // Can not find the type. error handled elsewhere
@@ -1189,7 +1189,7 @@ export class ScopeValidator {
     }
 
 
-    validateVariableAndDottedGetExpressions(code: BrsCodeSegment, expression: VariableExpression | DottedGetExpression) {
+    validateVariableAndDottedGetExpressions(codeSegment: BrsCodeSegment, expression: VariableExpression | DottedGetExpression) {
         if (isDottedGetExpression(expression.parent)) {
             // We validate dottedGetExpressions at the top-most level
             return;
@@ -1222,7 +1222,7 @@ export class ScopeValidator {
         // this will create a diagnostic if an invalid member is accessed
         const typeChain: TypeChainEntry[] = [];
         const typeData = {} as ExtraSymbolData;
-        let exprType = this.getNodeTypeWrapper(code, expression, {
+        let exprType = this.getNodeTypeWrapper(codeSegment, expression, {
             flags: symbolType,
             typeChain: typeChain,
             data: typeData
@@ -1240,9 +1240,9 @@ export class ScopeValidator {
         }
 
         if (!this.isTypeKnown(exprType) && !hasValidDeclaration) {
-            if (this.getNodeTypeWrapper(code, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
+            if (this.getNodeTypeWrapper(codeSegment, expression, { flags: oppositeSymbolType, isExistenceTest: true })?.isResolvable()) {
                 const oppoSiteTypeChain: TypeChainEntry[] = [];
-                const invalidlyUsedResolvedType = this.getNodeTypeWrapper(code, expression, { flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
+                const invalidlyUsedResolvedType = this.getNodeTypeWrapper(codeSegment, expression, { flags: oppositeSymbolType, typeChain: oppoSiteTypeChain, isExistenceTest: true });
                 const typeChainScan = util.processTypeChain(oppoSiteTypeChain);
                 if (isUsedAsType) {
                     this.addMultiScopeDiagnostic({
@@ -1320,7 +1320,7 @@ export class ScopeValidator {
         const lastTypeInfo = typeChain[typeChain.length - 1];
         const parentTypeInfo = typeChain[typeChain.length - 2];
 
-        this.checkMemberAccessibility(code, expression, typeChain);
+        this.checkMemberAccessibility(codeSegment, expression, typeChain);
 
         if (isNamespaceType(exprType) && !isAliasStatement(expression.parent)) {
             this.addMultiScopeDiagnostic({
@@ -1384,12 +1384,12 @@ export class ScopeValidator {
     /**
      * Adds diagnostics for accibility mismatches
      *
-     * @param code the code being validated
+     * @param codeSegment the code being validated
      * @param expression containing expression
      * @param typeChain type chain to check
      * @returns true if member accesiibility is okay
      */
-    private checkMemberAccessibility(code: BrsCodeSegment, expression: Expression, typeChain: TypeChainEntry[]) {
+    private checkMemberAccessibility(codeSegment: BrsCodeSegment, expression: Expression, typeChain: TypeChainEntry[]) {
         for (let i = 0; i < typeChain.length - 1; i++) {
             const parentChainItem = typeChain[i];
             const childChainItem = typeChain[i + 1];
@@ -1438,8 +1438,8 @@ export class ScopeValidator {
      * Find all "new" statements in the program,
      * and make sure we can find a class with that name
      */
-    private validateNewExpression(code: BrsCodeSegment, newExpression: NewExpression) {
-        const newExprType = this.getNodeTypeWrapper(code, newExpression, { flags: SymbolTypeFlag.typetime });
+    private validateNewExpression(codeSegment: BrsCodeSegment, newExpression: NewExpression) {
+        const newExprType = this.getNodeTypeWrapper(codeSegment, newExpression, { flags: SymbolTypeFlag.typetime });
         if (isClassType(newExprType)) {
             return;
         }
@@ -1621,10 +1621,10 @@ export class ScopeValidator {
     /**
      * Find various function collisions
      */
-    private diagnosticDetectFunctionCollisions(code: BrsCodeSegment) {
-        const fileUri = util.pathToUri(code.srcPath);
+    private diagnosticDetectFunctionCollisions(codeSegment: BrsCodeSegment) {
+        const fileUri = util.pathToUri(codeSegment.srcPath);
         this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: fileUri, tag: ScopeValidatorDiagnosticTag.FunctionCollisions });
-        for (let func of code.callables) {
+        for (let func of codeSegment.callables) {
             const funcName = func.getName(ParseMode.BrighterScript);
             const lowerFuncName = funcName?.toLowerCase();
             if (lowerFuncName) {
@@ -1641,7 +1641,7 @@ export class ScopeValidator {
         }
     }
 
-    public detectShadowedLocalVar(code: BrsCodeSegment, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
+    public detectShadowedLocalVar(codeSegment: BrsCodeSegment, varDeclaration: { expr: AstNode; name: string; type: BscType; nameRange: Range }) {
         const varName = varDeclaration.name;
         const lowerVarName = varName.toLowerCase();
         const callableContainerMap = this.event.scope.getCallableContainerMap();
@@ -1660,7 +1660,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('stdlib'),
-                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange)
+                    location: util.createLocationFromFileRange(codeSegment, varDeclaration.nameRange)
                 });
             }
         } else if (callableContainerMap.has(lowerVarName) && !localVarIsInNamespace) {
@@ -1669,7 +1669,7 @@ export class ScopeValidator {
             if (varIsFunction()) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarFunctionShadowsParentFunction('scope'),
-                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(codeSegment, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromFileRange(
@@ -1681,7 +1681,7 @@ export class ScopeValidator {
             } else {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(codeSegment, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Function declared here',
                         location: util.createLocationFromRange(
@@ -1698,7 +1698,7 @@ export class ScopeValidator {
             if (classStmtLink && classStmtLink.item.isActive !== false) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.localVarShadowedByScopedFunction(),
-                    location: util.createLocationFromFileRange(code, varDeclaration.nameRange),
+                    location: util.createLocationFromFileRange(codeSegment, varDeclaration.nameRange),
                     relatedInformation: [{
                         message: 'Class declared here',
                         location: util.createLocationFromRange(
@@ -1711,9 +1711,9 @@ export class ScopeValidator {
         }
     }
 
-    private validateForStatement(code: BrsCodeSegment, forStmt: ForStatement) {
+    private validateForStatement(codeSegment: BrsCodeSegment, forStmt: ForStatement) {
         const assignStmt = forStmt.counterDeclaration;
-        const assignValueType = this.getNodeTypeWrapper(code, assignStmt.value, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+        const assignValueType = this.getNodeTypeWrapper(codeSegment, assignStmt.value, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
         if (!IntegerType.instance.isTypeCompatible(assignValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(assignValueType.toString(), 'integer'),
@@ -1721,7 +1721,7 @@ export class ScopeValidator {
             });
         }
         if (forStmt.increment) {
-            const incrementValueType = this.getNodeTypeWrapper(code, forStmt.increment, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+            const incrementValueType = this.getNodeTypeWrapper(codeSegment, forStmt.increment, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
             if (!IntegerType.instance.isTypeCompatible(incrementValueType)) {
                 this.addMultiScopeDiagnostic({
                     ...DiagnosticMessages.assignmentTypeMismatch(incrementValueType.toString(), 'integer'),
@@ -1729,7 +1729,7 @@ export class ScopeValidator {
                 });
             }
         }
-        const finalValueType = this.getNodeTypeWrapper(code, forStmt.finalValue, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
+        const finalValueType = this.getNodeTypeWrapper(codeSegment, forStmt.finalValue, { flags: SymbolTypeFlag.runtime, statementIndex: forStmt.statementIndex });
         if (!IntegerType.instance.isTypeCompatible(finalValueType)) {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.assignmentTypeMismatch(finalValueType.toString(), 'integer'),
@@ -1738,8 +1738,8 @@ export class ScopeValidator {
         }
     }
 
-    private validateForEachStatement(code: BrsCodeSegment, forEachStmt: ForEachStatement) {
-        const targetType = this.getNodeTypeWrapper(code, forEachStmt.target, { flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex });
+    private validateForEachStatement(codeSegment: BrsCodeSegment, forEachStmt: ForEachStatement) {
+        const targetType = this.getNodeTypeWrapper(codeSegment, forEachStmt.target, { flags: SymbolTypeFlag.runtime, statementIndex: forEachStmt.statementIndex });
         if (isDynamicType(targetType) || isObjectType(targetType)) {
             // unable to determine type, skip further validation
             return;
@@ -1780,20 +1780,20 @@ export class ScopeValidator {
      * Check that a `select case` handles every value it can receive. When the subject is an enum, covering every
      * member is enough. Otherwise, there must be a `case else`
      */
-    private validateSelectCaseStatement(code: BrsCodeSegment, selectCaseStmt: SelectCaseStatement) {
+    private validateSelectCaseStatement(codeSegment: BrsCodeSegment, selectCaseStmt: SelectCaseStatement) {
         //an empty `select case` is flagged separately by the BrsFileValidator
         if (selectCaseStmt.cases.length === 0) {
             return;
         }
         const typeOptions = { flags: SymbolTypeFlag.runtime, statementIndex: selectCaseStmt.statementIndex };
-        const subjectType = selectCaseStmt.subject ? this.getNodeTypeWrapper(code, selectCaseStmt.subject, typeOptions) : undefined;
+        const subjectType = selectCaseStmt.subject ? this.getNodeTypeWrapper(codeSegment, selectCaseStmt.subject, typeOptions) : undefined;
         const { enumType, members: enumMembers } = this.getPossibleEnumMembers(subjectType) ?? {};
 
         //values from a different enum than the subject are almost always a mistake
         if (enumMembers) {
             for (const caseStatement of selectCaseStmt.cases) {
                 for (const value of caseStatement.values) {
-                    const valueType = this.getNodeTypeWrapper(code, value, typeOptions);
+                    const valueType = this.getNodeTypeWrapper(codeSegment, value, typeOptions);
                     if (isEnumMemberType(valueType) && valueType.enumName?.toLowerCase() !== enumType.name.toLowerCase()) {
                         this.addMultiScopeDiagnostic({
                             ...DiagnosticMessages.caseValueEnumMismatch(valueType.enumName, enumType.name),
@@ -1818,7 +1818,7 @@ export class ScopeValidator {
 
         const missingMembers = enumMembers.filter(member => {
             return !selectCaseStmt.cases.some(caseStatement => caseStatement.values.some(value => {
-                return this.isCaseValueForEnumMember(code, value, member, enumType.name, typeOptions);
+                return this.isCaseValueForEnumMember(codeSegment, value, member, enumType.name, typeOptions);
             }));
         });
         if (missingMembers.length > 0) {
@@ -1867,8 +1867,8 @@ export class ScopeValidator {
     /**
      * Does this case value match the given enum member, either as a reference to it (`Direction.up`) or as its literal value (`"up"`)
      */
-    private isCaseValueForEnumMember(code: BrsCodeSegment, value: Expression, member: EnumMemberStatement, enumName: string, typeOptions: GetTypeOptions) {
-        const valueType = this.getNodeTypeWrapper(code, value, typeOptions);
+    private isCaseValueForEnumMember(codeSegment: BrsCodeSegment, value: Expression, member: EnumMemberStatement, enumName: string, typeOptions: GetTypeOptions) {
+        const valueType = this.getNodeTypeWrapper(codeSegment, value, typeOptions);
         if (isEnumMemberType(valueType)) {
             return valueType.enumName?.toLowerCase() === enumName.toLowerCase() &&
                 valueType.memberName?.toLowerCase() === member.name.toLowerCase();
@@ -1910,12 +1910,12 @@ export class ScopeValidator {
             return functionNames;
         };
 
-        for (const code of scope.getOwnFiles().flatMap(file => file.codeSegments ?? [])) {
-            if (!isBrsCodeSegment(code)) {
+        for (const codeSegment of scope.getOwnFiles().flatMap(file => file.codeSegments ?? [])) {
+            if (!isBrsCodeSegment(codeSegment)) {
                 continue;
             }
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            for (const expression of code['_cachedLookups'].expressions) {
+            for (const expression of codeSegment['_cachedLookups'].expressions) {
                 if (!isCallExpression(expression) || !this.isObserverCallWithStringCallback(expression)) {
                     continue;
                 }
@@ -2070,17 +2070,17 @@ export class ScopeValidator {
      *
      * In most cases, this returns the result of node.getType()
      *
-     * @param code the current code being processed
+     * @param codeSegment the current code being processed
      * @param node the node to get the type of
      * @param getTypeOpts any options to pass to node.getType()
      * @returns the processed result type
      */
-    private getNodeTypeWrapper(code: BrsCodeSegment, node: AstNode, getTypeOpts: GetTypeOptions) {
-        const isBrightScriptMode = code.parseMode === ParseMode.BrightScript;
+    private getNodeTypeWrapper(codeSegment: BrsCodeSegment, node: AstNode, getTypeOpts: GetTypeOptions) {
+        const isBrightScriptMode = codeSegment.parseMode === ParseMode.BrightScript;
 
         const type = node?.getType({ ...getTypeOpts, changeUnknownNodeMemberToDynamic: isBrightScriptMode || !this.event.program.options.strictNodeMembers });
 
-        if (code.parseMode === ParseMode.BrightScript) {
+        if (codeSegment.parseMode === ParseMode.BrightScript) {
             // this is a brightscript file
             const typeChain = getTypeOpts.typeChain;
             if (typeChain) {

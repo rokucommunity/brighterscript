@@ -2022,13 +2022,13 @@ end sub`);
 
         it('locates the code in the xml file', () => {
             const xmlFile = program.setFile<XmlFile>('components/Widget.xml', widgetXml);
-            const code = getBrsCodeSegments(xmlFile)[0];
-            expect(code.range).to.eql(util.createRange(2, 46, 6, 4));
-            expect(code.srcPath).to.equal(xmlFile.srcPath);
-            const subToken = code.parser.tokens.find(x => x.text === 'sub');
+            const codeSegment = getBrsCodeSegments(xmlFile)[0];
+            expect(codeSegment.range).to.eql(util.createRange(2, 46, 6, 4));
+            expect(codeSegment.srcPath).to.equal(xmlFile.srcPath);
+            const subToken = codeSegment.parser.tokens.find(x => x.text === 'sub');
             expect(subToken.location).to.eql(util.createLocation(3, 8, 3, 11, util.pathToUri(xmlFile.srcPath)));
-            expect(code.getText(subToken.location.range)).to.equal('sub');
-            expect(program.getCodeSegmentAt(xmlFile, util.createPosition(3, 9))).to.equal(code);
+            expect(codeSegment.getText(subToken.location.range)).to.equal('sub');
+            expect(program.getCodeSegmentAt(xmlFile, util.createPosition(3, 9))).to.equal(codeSegment);
             expect(program.getCodeSegmentAt(xmlFile, util.createPosition(1, 5))).to.be.undefined;
         });
 
@@ -2353,8 +2353,8 @@ end sub`);
                     </component>
                 `, 'none', 'components/Widget.xml');
                 //the change is undone after the build
-                const code = getBrsCodeSegments(program.getFile<XmlFile>('components/Widget.xml'))[0];
-                expect((code.ast.findChild<PrintStatement>(isPrintStatement).expressions[0] as LiteralExpression).tokens.value.text).to.equal('"original"');
+                const codeSegment = getBrsCodeSegments(program.getFile<XmlFile>('components/Widget.xml'))[0];
+                expect((codeSegment.ast.findChild<PrintStatement>(isPrintStatement).expressions[0] as LiteralExpression).tokens.value.text).to.equal('"original"');
             });
 
             it('maps transpiled code back to its place in the xml file', async () => {

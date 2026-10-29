@@ -284,10 +284,10 @@ export class BsClassValidator {
 
     private findClasses() {
         this.classes = new Map();
-        this.scope.enumerateBrsCodeSegments((code) => {
+        this.scope.enumerateBrsCodeSegments((codeSegment) => {
 
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            for (let x of code['_cachedLookups'].classStatements ?? []) {
+            for (let x of codeSegment['_cachedLookups'].classStatements ?? []) {
                 //inactive classes are not compiled, so they are neither validated nor registered as duplicates of an active class
                 if (x.isActive === false) {
                     continue;
@@ -305,7 +305,7 @@ export class BsClassValidator {
                 //if we don't already have this class, register it
                 if (!alreadyDefinedClass) {
                     this.classes.set(lowerName, classStatement);
-                    classStatement.file = code.document;
+                    classStatement.file = codeSegment.document;
                 }
             }
         });

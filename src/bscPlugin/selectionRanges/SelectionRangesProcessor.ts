@@ -23,13 +23,13 @@ export class SelectionRangesProcessor {
     }
 
     private buildSelectionRange(position: Position): SelectionRange | undefined {
-        const code = this.event.codeSegment;
-        if (!isBrsCodeSegment(code)) {
+        const codeSegment = this.event.codeSegment;
+        if (!isBrsCodeSegment(codeSegment)) {
             return undefined;
         }
 
         // Find the deepest AST node containing this position
-        const innerNode = code.ast.findChildAtPosition(position);
+        const innerNode = codeSegment.ast.findChildAtPosition(position);
         const innerNodeRange = innerNode?.location?.range;
         if (!innerNodeRange) {
             return undefined;
@@ -42,7 +42,7 @@ export class SelectionRangesProcessor {
         // To give the first expansion step a tight "identifier only" range — matching
         // the JS/TS smart-select behaviour — we look up the exact lexer token at the
         // cursor position and use its range as the initial step.
-        const token = code.getTokenAt(position);
+        const token = codeSegment.getTokenAt(position);
         const tokenRange = token?.location?.range;
         if (tokenRange && !rangesEqual(tokenRange, innerNodeRange)) {
             ranges.push(tokenRange);

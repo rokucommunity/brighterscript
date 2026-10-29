@@ -23,7 +23,7 @@ export class DefinitionProvider {
     public process(): Array<Location | LocationLink> {
         try {
             if (isBrsCodeSegment(this.event.codeSegment)) {
-                this.brsCodeGetDefinition(this.event.codeSegment);
+                this.brsCodeSegmentGetDefinition(this.event.codeSegment);
             } else if (isXmlFile(this.event.file)) {
                 this.xmlFileGetDefinition(this.event.file);
             }
@@ -199,9 +199,9 @@ export class DefinitionProvider {
     /**
      * For a position in a BrsFile, get the location where the token at that position was defined
      */
-    private brsCodeGetDefinition(code: BrsCodeSegment): void {
+    private brsCodeSegmentGetDefinition(codeSegment: BrsCodeSegment): void {
         //get the token at the position
-        const token = code.getTokenAt(this.event.position);
+        const token = codeSegment.getTokenAt(this.event.position);
 
         // While certain other tokens are allowed as local variables (AllowedLocalIdentifiers: https://github.com/rokucommunity/brighterscript/blob/master/src/lexer/TokenKind.ts#L418), these are converted by the parser to TokenKind.Identifier by the time we retrieve the token using getTokenAt
         let definitionTokenTypes = [
@@ -214,10 +214,10 @@ export class DefinitionProvider {
             return;
         }
 
-        const scopesForFile = this.event.program.getScopesForCodeSegment(code);
+        const scopesForFile = this.event.program.getScopesForCodeSegment(codeSegment);
         const [scope] = scopesForFile;
 
-        const expression = code.getClosestExpression(this.event.position);
+        const expression = codeSegment.getClosestExpression(this.event.position);
         if (scope && expression) {
             scope.linkSymbolTable();
             let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
@@ -268,7 +268,7 @@ export class DefinitionProvider {
 
         let textToSearchFor = token.text.toLowerCase();
 
-        const previousToken = code.getTokenAt({ line: token.location?.range.start.line, character: token.location?.range.start.character });
+        const previousToken = codeSegment.getTokenAt({ line: token.location?.range.start.line, character: token.location?.range.start.character });
 
         if (previousToken?.kind === TokenKind.Callfunc) {
             for (const scope of this.event.program.getScopes()) {
@@ -292,12 +292,12 @@ export class DefinitionProvider {
         }
 
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        let classToken = code['getTokenBefore'](token, TokenKind.Class);
+        let classToken = codeSegment['getTokenBefore'](token, TokenKind.Class);
         if (classToken) {
-            let cs = code.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class.location?.range === classToken.location?.range);
+            let cs = codeSegment.parser.ast.findChild<ClassStatement>((klass) => isClassStatement(klass) && klass.tokens.class.location?.range === classToken.location?.range);
             if (cs?.parentClassName) {
                 const nameParts = cs.parentClassName.getNameParts();
-                let extendedClass = code.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
+                let extendedClass = codeSegment.getClassFileLink(nameParts[nameParts.length - 1], nameParts.slice(0, -1).join('.'));
                 if (extendedClass) {
                     this.event.definitions.push(util.createLocationFromRange(util.pathToUri(extendedClass.codeSegment.srcPath), extendedClass.item.location?.range));
                 }
@@ -307,7 +307,7 @@ export class DefinitionProvider {
 
         if (token.kind === TokenKind.StringLiteral) {
             if (isImportStatement(expression)) {
-                const pkgPath = util.getPkgPathFromTarget(code.pkgPath, expression.filePath);
+                const pkgPath = util.getPkgPathFromTarget(codeSegment.pkgPath, expression.filePath);
                 const importedFile = this.event.program.getFile(pkgPath);
                 if (importedFile) {
                     this.event.definitions.push(
@@ -325,7 +325,7 @@ export class DefinitionProvider {
             const pathValue = token.text.replace(/^"|"$/g, '');
             const link = this.tryGetFilePathLocationLink(
                 pathValue,
-                code.pkgPath,
+                codeSegment.pkgPath,
                 util.createRange(
                     token.location.range.start.line,
                     token.location.range.start.character + 1,
@@ -349,48 +349,48 @@ export class DefinitionProvider {
         }
 
         //look through local variables first, get the function scope for this position (if it exists)
-        const functionScope = code.getFunctionScopeAtPosition(this.event.position);
+        const functionScope = codeSegment.getFunctionScopeAtPosition(this.event.position);
         if (functionScope) {
             //find any variable or label with this name
             for (const varDeclaration of functionScope.variableDeclarations) {
                 //we found a variable declaration with this token text!
                 if (varDeclaration.name.toLowerCase() === textToSearchFor) {
-                    const uri = util.pathToUri(code.srcPath);
+                    const uri = util.pathToUri(codeSegment.srcPath);
                     this.event.definitions.push(util.createLocationFromRange(uri, varDeclaration.nameRange));
                 }
             }
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            if (code['tokenFollows'](token, TokenKind.Goto)) {
+            if (codeSegment['tokenFollows'](token, TokenKind.Goto)) {
                 for (const label of functionScope.labelStatements) {
                     if (label.name.toLocaleLowerCase() === textToSearchFor) {
-                        const uri = util.pathToUri(code.srcPath);
+                        const uri = util.pathToUri(codeSegment.srcPath);
                         this.event.definitions.push(util.createLocationFromRange(uri, label.nameRange));
                     }
                 }
             }
         }
 
-        const codesSearched = new Set<BrsCodeSegment>();
+        const codeSegmentsSearched = new Set<BrsCodeSegment>();
         //look through all files in scope for matches
         for (const scope of scopesForFile) {
-            for (const scopeCode of scope.getAllCodeSegments()) {
-                if (!isBrsCodeSegment(scopeCode) || codesSearched.has(scopeCode)) {
+            for (const scopeCodeSegment of scope.getAllCodeSegments()) {
+                if (!isBrsCodeSegment(scopeCodeSegment) || codeSegmentsSearched.has(scopeCodeSegment)) {
                     continue;
                 }
-                codesSearched.add(scopeCode);
+                codeSegmentsSearched.add(scopeCodeSegment);
 
-                if (previousToken?.kind === TokenKind.Dot && scopeCode.parseMode === ParseMode.BrighterScript) {
-                    this.event.definitions.push(...scopeCode.getClassMemberDefinitions(textToSearchFor));
-                    const namespaceDefinition = this.brsCodeGetDefinitionsForNamespace(token, scopeCode);
+                if (previousToken?.kind === TokenKind.Dot && scopeCodeSegment.parseMode === ParseMode.BrighterScript) {
+                    this.event.definitions.push(...scopeCodeSegment.getClassMemberDefinitions(textToSearchFor));
+                    const namespaceDefinition = this.brsCodeSegmentGetDefinitionsForNamespace(token, scopeCodeSegment);
                     if (namespaceDefinition) {
                         this.event.definitions.push(namespaceDefinition);
                     }
                 }
 
-                scopeCode.parser.ast.walk(createVisitor({
+                scopeCodeSegment.parser.ast.walk(createVisitor({
                     FunctionStatement: (statement: FunctionStatement) => {
-                        if (statement.getName(scopeCode.parseMode).toLowerCase() === textToSearchFor) {
-                            const uri = util.pathToUri(scopeCode.srcPath);
+                        if (statement.getName(scopeCodeSegment.parseMode).toLowerCase() === textToSearchFor) {
+                            const uri = util.pathToUri(scopeCodeSegment.srcPath);
                             this.event.definitions.push(util.createLocationFromRange(uri, statement.location?.range));
                         }
                     }
@@ -402,7 +402,7 @@ export class DefinitionProvider {
     }
 
 
-    private brsCodeGetDefinitionsForNamespace(token: Token, code: BrsCodeSegment): Location {
+    private brsCodeSegmentGetDefinitionsForNamespace(token: Token, codeSegment: BrsCodeSegment): Location {
         //BrightScript does not support namespaces, so return an empty list in that case
         if (!token) {
             return undefined;
@@ -417,12 +417,12 @@ export class DefinitionProvider {
             if (!location && statement.getName(ParseMode.BrighterScript).toLowerCase() === namespaceName) {
                 const namespaceItemStatementHandler = (statement: ClassStatement | FunctionStatement) => {
                     if (!location && statement.tokens.name.text.toLowerCase() === endName) {
-                        const uri = util.pathToUri(code.srcPath);
+                        const uri = util.pathToUri(codeSegment.srcPath);
                         location = util.createLocationFromRange(uri, statement.location?.range);
                     }
                 };
 
-                code.parser.ast.walk(createVisitor({
+                codeSegment.parser.ast.walk(createVisitor({
                     ClassStatement: namespaceItemStatementHandler,
                     FunctionStatement: namespaceItemStatementHandler
                 }), {
@@ -432,7 +432,7 @@ export class DefinitionProvider {
             }
         };
 
-        code.parser.ast.walk(createVisitor({
+        codeSegment.parser.ast.walk(createVisitor({
             NamespaceStatement: statementHandler
         }), {
             walkMode: WalkMode.visitStatements

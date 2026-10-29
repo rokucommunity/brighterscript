@@ -32,33 +32,33 @@ export class InlayHintProcessor {
         this.collectParameterNameHints(this.event.codeSegment);
     }
 
-    private collectParameterNameHints(code: BrsCodeSegment) {
+    private collectParameterNameHints(codeSegment: BrsCodeSegment) {
         const range = this.event.range;
 
-        code.ast.walk(createVisitor({
+        codeSegment.ast.walk(createVisitor({
             CallExpression: (call) => {
                 if (!call.location?.range || !util.rangesIntersectOrTouch(call.location.range, range)) {
                     return;
                 }
-                this.emitParameterNameHints(code, call);
+                this.emitParameterNameHints(codeSegment, call);
             },
             CallfuncExpression: (call) => {
                 if (!call.location?.range || !util.rangesIntersectOrTouch(call.location.range, range)) {
                     return;
                 }
-                this.emitParameterNameHintsForCallfunc(code, call);
+                this.emitParameterNameHintsForCallfunc(codeSegment, call);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
         });
     }
 
-    private emitParameterNameHints(code: BrsCodeSegment, call: CallExpression) {
+    private emitParameterNameHints(codeSegment: BrsCodeSegment, call: CallExpression) {
         if (!call.args || call.args.length === 0) {
             return;
         }
 
-        const params = this.resolveCallParameters(code, call);
+        const params = this.resolveCallParameters(codeSegment, call);
         if (!params) {
             return;
         }
@@ -66,7 +66,7 @@ export class InlayHintProcessor {
         this.pushHintsForArgs(call.args, params);
     }
 
-    private emitParameterNameHintsForCallfunc(code: BrsCodeSegment, call: CallfuncExpression) {
+    private emitParameterNameHintsForCallfunc(codeSegment: BrsCodeSegment, call: CallfuncExpression) {
         if (!call.args || call.args.length === 0) {
             return;
         }
@@ -74,7 +74,7 @@ export class InlayHintProcessor {
         if (!name) {
             return;
         }
-        const params = this.resolveCallfuncParameters(code, name);
+        const params = this.resolveCallfuncParameters(codeSegment, name);
         if (!params) {
             return;
         }
@@ -85,15 +85,15 @@ export class InlayHintProcessor {
      * For a CallExpression, find the function/method being called and return its parameter list,
      * or undefined if the target cannot be uniquely resolved.
      */
-    private resolveCallParameters(code: BrsCodeSegment, call: CallExpression): FunctionParameterExpression[] | undefined {
+    private resolveCallParameters(codeSegment: BrsCodeSegment, call: CallExpression): FunctionParameterExpression[] | undefined {
         //constructor: `new Foo(...)`
         if (isNewExpression(call.parent)) {
             const className = call.parent.className.getName(ParseMode.BrighterScript);
-            const classLink = code.getClassFileLink(className);
+            const classLink = codeSegment.getClassFileLink(className);
             if (!classLink) {
                 return undefined;
             }
-            const ctor = code.getClassMethod(classLink.item, 'new');
+            const ctor = codeSegment.getClassMethod(classLink.item, 'new');
             return ctor?.func?.parameters;
         }
 
@@ -103,7 +103,7 @@ export class InlayHintProcessor {
         if (isVariableExpression(callee)) {
             const name = callee.tokens.name.text;
             const containingNamespace = callee.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-            return this.lookupFunctionParameters(code, name, containingNamespace);
+            return this.lookupFunctionParameters(codeSegment, name, containingNamespace);
         }
 
         //namespace call or method call: `ns.foo(...)` / `m.foo(...)` / `instance.foo(...)`
@@ -117,21 +117,21 @@ export class InlayHintProcessor {
             const dotPart = parts.slice(0, parts.length - 1).map(x => x.text).join('.');
 
             //prefer namespace lookup when the dotPart is a known namespace
-            const scope = code.program.getFirstScopeForCodeSegment(code);
+            const scope = codeSegment.program.getFirstScopeForCodeSegment(codeSegment);
             const namespace = scope?.namespaceLookup?.get(dotPart.toLowerCase());
             if (namespace) {
-                return this.lookupFunctionParameters(code, name, dotPart);
+                return this.lookupFunctionParameters(codeSegment, name, dotPart);
             }
 
             //otherwise, treat as method call on m or another receiver - look across class methods
-            return this.lookupClassMethodParameters(code, callee, name);
+            return this.lookupClassMethodParameters(codeSegment, callee, name);
         }
 
         return undefined;
     }
 
-    private lookupFunctionParameters(code: BrsCodeSegment, name: string, namespaceName?: string): FunctionParameterExpression[] | undefined {
-        const matches = code.program.getStatementsByName(name, code, namespaceName);
+    private lookupFunctionParameters(codeSegment: BrsCodeSegment, name: string, namespaceName?: string): FunctionParameterExpression[] | undefined {
+        const matches = codeSegment.program.getStatementsByName(name, codeSegment, namespaceName);
         if (matches.length !== 1) {
             return undefined;
         }
@@ -147,11 +147,11 @@ export class InlayHintProcessor {
      * If the receiver is `m`, prefer the enclosing class. Otherwise fall back to a name search
      * across all classes (only used when there's exactly one match).
      */
-    private lookupClassMethodParameters(code: BrsCodeSegment, callee: DottedGetExpression, name: string): FunctionParameterExpression[] | undefined {
+    private lookupClassMethodParameters(codeSegment: BrsCodeSegment, callee: DottedGetExpression, name: string): FunctionParameterExpression[] | undefined {
         if (isVariableExpression(callee.obj) && callee.obj.tokens.name.text === 'm') {
             const enclosingClass = callee.obj.findAncestor<ClassStatement>(isClassStatement);
             if (enclosingClass) {
-                const method = code.getClassMethod(enclosingClass, name, true);
+                const method = codeSegment.getClassMethod(enclosingClass, name, true);
                 if (method) {
                     return method.func?.parameters;
                 }
@@ -159,7 +159,7 @@ export class InlayHintProcessor {
         }
 
         //fallback: search all classes for a single matching method name
-        const matches = code.program.getStatementsByName(name, code).filter(link => isClassStatement(link.item.parent));
+        const matches = codeSegment.program.getStatementsByName(name, codeSegment).filter(link => isClassStatement(link.item.parent));
         if (matches.length !== 1) {
             return undefined;
         }
@@ -170,11 +170,11 @@ export class InlayHintProcessor {
         return undefined;
     }
 
-    private resolveCallfuncParameters(code: BrsCodeSegment, name: string): FunctionParameterExpression[] | undefined {
+    private resolveCallfuncParameters(codeSegment: BrsCodeSegment, name: string): FunctionParameterExpression[] | undefined {
         //callfunc invocations are dispatched through XML components - look across xml scopes for a function with this name
-        const matches = code.program.getScopes()
+        const matches = codeSegment.program.getScopes()
             .filter(scope => isXmlScope(scope))
-            .flatMap(scope => code.program.getStatementsForXmlFile(scope as XmlScope, name));
+            .flatMap(scope => codeSegment.program.getStatementsForXmlFile(scope as XmlScope, name));
 
         if (matches.length !== 1) {
             return undefined;

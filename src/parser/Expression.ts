@@ -2628,10 +2628,10 @@ export class NullCoalescingExpression extends Expression {
      * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
      * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
      */
-    public hasMutatingExpression(code: BrsCodeSegment) {
+    public hasMutatingExpression(codeSegment: BrsCodeSegment) {
         return [
-            ...util.getExpressionInfo(this.consequent, code).expressions,
-            ...util.getExpressionInfo(this.alternate, code).expressions
+            ...util.getExpressionInfo(this.consequent, codeSegment).expressions,
+            ...util.getExpressionInfo(this.alternate, codeSegment).expressions
         ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
     }
 

@@ -395,14 +395,14 @@ export class SGScript extends SGElement {
      * Transpile the CDATA block. Its code is written as-is unless it needs to be transpiled (i.e. it is BrighterScript)
      */
     private transpileCdata(state: TranspileState) {
-        const code = (state as XmlTranspileState).file?.getCodeSegmentForScript?.(this);
-        if (!code?.needsTranspiled) {
+        const codeSegment = (state as XmlTranspileState).file?.getCodeSegmentForScript?.(this);
+        if (!codeSegment?.needsTranspiled) {
             return state.transpileToken(this.cdata);
         }
         return util.sourceNodeFromTranspileResult(null, null, state.srcPath, [
             '<![CDATA[',
             state.newline,
-            code.transpile(),
+            codeSegment.transpile(),
             state.newline,
             ']]>'
         ]);

@@ -41,8 +41,8 @@ export class BrsFilePreTranspileProcessor {
         }
     }
 
-    public applyBslibPrefixesIfMissing(code: BrsCodeSegment, editor: Editor) {
-        code.ast.walk(createVisitor({
+    public applyBslibPrefixesIfMissing(codeSegment: BrsCodeSegment, editor: Editor) {
+        codeSegment.ast.walk(createVisitor({
             FunctionStatement: (statement) => {
                 BslibManager.applyPrefixIfMissing(statement, editor, this.event.program.bslibPrefix);
             }

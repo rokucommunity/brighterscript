@@ -245,12 +245,12 @@ export class DiagnosticManager {
                 const file = this.program?.getFile(uri);
                 inactiveRanges = [];
                 //every piece of BrightScript in the file (a file can provide several, i.e. the `<script>` blocks of an xml file)
-                for (const code of file?.codeSegments ?? []) {
-                    if (!isBrsCodeSegment(code)) {
+                for (const codeSegment of file?.codeSegments ?? []) {
+                    if (!isBrsCodeSegment(codeSegment)) {
                         continue;
                     }
                     // eslint-disable-next-line @typescript-eslint/dot-notation
-                    for (const statement of code['_cachedLookups'].conditionalCompileStatements) {
+                    for (const statement of codeSegment['_cachedLookups'].conditionalCompileStatements) {
                         for (const branch of [statement.thenBranch, statement.elseBranch]) {
                             if (isBlock(branch) && branch.isActive === false && branch.location) {
                                 inactiveRanges.push(branch.location.range);

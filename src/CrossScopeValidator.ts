@@ -80,14 +80,14 @@ export class ProvidedSymbolIndex {
     /**
      * (re)index a code segment, if its provided symbols changed since last time
      */
-    public update(code: BrsCodeSegment) {
-        const providedSymbols = code.providedSymbols;
-        const existing = this.codeSegments.get(code);
+    public update(codeSegment: BrsCodeSegment) {
+        const providedSymbols = codeSegment.providedSymbols;
+        const existing = this.codeSegments.get(codeSegment);
         if (existing?.providedSymbols === providedSymbols) {
             return;
         }
         if (existing) {
-            this.remove(code);
+            this.remove(codeSegment);
         }
         const indexed: IndexedCode = { providedSymbols: providedSymbols, symbolNames: [], namespaceNames: [] };
         let order = 0;
@@ -101,7 +101,7 @@ export class ProvidedSymbolIndex {
                     events = [];
                     this.symbolEvents.set(symbolName, events);
                 }
-                events.push({ codeSegment: code, order: order, symbolName: symbolName, symbolObj: symbolObj });
+                events.push({ codeSegment: codeSegment, order: order, symbolName: symbolName, symbolObj: symbolObj });
                 indexed.symbolNames.push(symbolName);
 
                 //adding `a.b.c` creates the `a` and `a.b` namespaces
@@ -113,8 +113,8 @@ export class ProvidedSymbolIndex {
                         namespaceCodeSegments = new Map();
                         this.namespaceEvents.set(namespaceName, namespaceCodeSegments);
                     }
-                    if (!namespaceCodeSegments.has(code)) {
-                        namespaceCodeSegments.set(code, order);
+                    if (!namespaceCodeSegments.has(codeSegment)) {
+                        namespaceCodeSegments.set(codeSegment, order);
                         indexed.namespaceNames.push(namespaceName);
                     }
                     dotIndex = symbolName.indexOf('.', dotIndex + 1);
@@ -122,16 +122,16 @@ export class ProvidedSymbolIndex {
                 order++;
             }
         }
-        this.codeSegments.set(code, indexed);
+        this.codeSegments.set(codeSegment, indexed);
     }
 
-    public remove(code: BrsCodeSegment) {
-        const indexed = this.codeSegments.get(code);
+    public remove(codeSegment: BrsCodeSegment) {
+        const indexed = this.codeSegments.get(codeSegment);
         if (!indexed) {
             return;
         }
         for (const symbolName of new Set(indexed.symbolNames)) {
-            const events = this.symbolEvents.get(symbolName).filter(x => x.codeSegment !== code);
+            const events = this.symbolEvents.get(symbolName).filter(x => x.codeSegment !== codeSegment);
             if (events.length > 0) {
                 this.symbolEvents.set(symbolName, events);
             } else {
@@ -140,21 +140,21 @@ export class ProvidedSymbolIndex {
         }
         for (const namespaceName of indexed.namespaceNames) {
             const namespaceCodeSegments = this.namespaceEvents.get(namespaceName);
-            namespaceCodeSegments.delete(code);
+            namespaceCodeSegments.delete(codeSegment);
             if (namespaceCodeSegments.size === 0) {
                 this.namespaceEvents.delete(namespaceName);
             }
         }
-        this.codeSegments.delete(code);
+        this.codeSegments.delete(codeSegment);
     }
 
     /**
      * Drop code that isn't in the program anymore
      */
     public prune(program: Program) {
-        for (const code of [...this.codeSegments.keys()]) {
-            if (!program.getFile(code.srcPath)?.codeSegments?.includes(code)) {
-                this.remove(code);
+        for (const codeSegment of [...this.codeSegments.keys()]) {
+            if (!program.getFile(codeSegment.srcPath)?.codeSegments?.includes(codeSegment)) {
+                this.remove(codeSegment);
             }
         }
     }
@@ -170,8 +170,8 @@ export class ProvidedSymbolIndex {
             isGlobal(symbolName);
     }
 
-    public getSymbolNames(code: BrsCodeSegment) {
-        return this.codeSegments.get(code)?.symbolNames ?? [];
+    public getSymbolNames(codeSegment: BrsCodeSegment) {
+        return this.codeSegments.get(codeSegment)?.symbolNames ?? [];
     }
 }
 
@@ -222,8 +222,8 @@ export class ScopeProvidedSymbols {
         let position = this.namespacePositionCache.get(namespaceName);
         if (position === undefined) {
             position = Infinity;
-            for (const [code, order] of this.index.namespaceEvents.get(namespaceName) ?? []) {
-                const codeIndex = this.codeIndex.get(code);
+            for (const [codeSegment, order] of this.index.namespaceEvents.get(namespaceName) ?? []) {
+                const codeIndex = this.codeIndex.get(codeSegment);
                 if (codeIndex !== undefined) {
                     position = Math.min(position, (codeIndex * positionsPerCode) + order);
                 }
@@ -495,11 +495,11 @@ export class CrossScopeValidator {
     /**
      * Names from this code that could be a duplicate in some scope. Every other name can't be, so it isn't looked at per scope
      */
-    private getPossibleDuplicateNames(code: BrsCodeSegment) {
-        let names = this.possibleDuplicateNamesCache?.get(code);
+    private getPossibleDuplicateNames(codeSegment: BrsCodeSegment) {
+        let names = this.possibleDuplicateNamesCache?.get(codeSegment);
         if (!names) {
-            names = this.providedSymbolIndex.getSymbolNames(code).filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
-            this.possibleDuplicateNamesCache?.set(code, names);
+            names = this.providedSymbolIndex.getSymbolNames(codeSegment).filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
+            this.possibleDuplicateNamesCache?.set(codeSegment, names);
         }
         return names;
     }
@@ -509,13 +509,13 @@ export class CrossScopeValidator {
 
     getRequiredMap(scope: Scope) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
-        scope.enumerateBrsCodeSegments((code) => {
+        scope.enumerateBrsCodeSegments((codeSegment) => {
             //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics,
             //so don't flag their own unresolved type references as missing symbols
-            if (isBrsFile(code.document) && code.document.isTypedef) {
+            if (isBrsFile(codeSegment.document) && codeSegment.document.isTypedef) {
                 return;
             }
-            for (const symbol of code.requiredSymbols) {
+            for (const symbol of codeSegment.requiredSymbols) {
                 const symbolKeysArray = this.symbolMapKeys(symbol);
                 for (const symbolKeys of symbolKeysArray) {
                     map.set(symbolKeys, symbol);
@@ -536,7 +536,7 @@ export class CrossScopeValidator {
         const referenceTypesMap = new Map<{ symbolName: string; codeSegment: BrsCodeSegment; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
 
         //does the same as adding the symbol to a per-scope tree at `position`, and collects any duplicates
-        const addSymbolWithDuplicates = (symbolName: string, code: BrsCodeSegment, symbolObj: ProvidedSymbol, position: number) => {
+        const addSymbolWithDuplicates = (symbolName: string, codeSegment: BrsCodeSegment, symbolObj: ProvidedSymbol, position: number) => {
             const globalSymbol = this.getGlobalSymbol(symbolName);
             const symbolIsNamespace = scopeSymbols.hasNamespaceAt(symbolName, position);
             let isDupe = symbolIsNamespace;
@@ -555,12 +555,12 @@ export class CrossScopeValidator {
                         dupesSet.add(existing);
                     }
                 }
-                dupesSet.add({ codeSegment: code, file: code.document, symbol: symbolObj.symbol });
+                dupesSet.add({ codeSegment: codeSegment, file: codeSegment.document, symbol: symbolObj.symbol });
                 if (symbolIsNamespace) {
                     const namespaceContainer = scope.getNamespace(symbolName);
                     const nsNode = namespaceContainer?.namespaceStatements?.[0];
                     if (nsNode) {
-                        const nsCode = namespaceContainer.codeSegment;
+                        const nsCodeSegment = namespaceContainer.codeSegment;
                         const nsType = nsNode.getType({ flags: SymbolTypeFlag.typetime });
                         let nsSymbol: BscSymbol = {
                             name: nsNode.getName(ParseMode.BrighterScript),
@@ -568,11 +568,11 @@ export class CrossScopeValidator {
                             data: { definingNode: nsNode },
                             flags: SymbolTypeFlag.typetime
                         };
-                        dupesSet.add({ codeSegment: nsCode, file: nsCode.document, symbol: nsSymbol });
+                        dupesSet.add({ codeSegment: nsCodeSegment, file: nsCodeSegment.document, symbol: nsSymbol });
                     }
                 }
                 for (const providedDupeSymbol of symbolObj.duplicates) {
-                    dupesSet.add({ codeSegment: code, file: code.document, symbol: providedDupeSymbol });
+                    dupesSet.add({ codeSegment: codeSegment, file: codeSegment.document, symbol: providedDupeSymbol });
                 }
                 if (globalSymbol) {
                     dupesSet.add({ codeSegment: globalCodeSegment, file: globalCodeSegment.document, symbol: globalSymbol[0] });
@@ -582,20 +582,20 @@ export class CrossScopeValidator {
 
         const possibleDuplicateNames = new Set<string>();
         let codeIndex = 0;
-        scope.enumerateBrsCodeSegments((code) => {
-            scopeSymbols.codeIndex.set(code, codeIndex++);
-            for (const symbolName of this.getPossibleDuplicateNames(code)) {
+        scope.enumerateBrsCodeSegments((codeSegment) => {
+            scopeSymbols.codeIndex.set(codeSegment, codeIndex++);
+            for (const symbolName of this.getPossibleDuplicateNames(codeSegment)) {
                 possibleDuplicateNames.add(symbolName);
             }
 
             // find all "provided symbols" that are reference types
-            for (const [_, nameMap] of code.providedSymbols.referenceSymbolMap.entries()) {
+            for (const [_, nameMap] of codeSegment.providedSymbols.referenceSymbolMap.entries()) {
                 for (const [symbolName, symbolObj] of nameMap.entries()) {
                     const symbolType = symbolObj.symbol.type;
                     const namespaceLower = symbolObj.symbol.data?.definingNode?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
                     const allNames = getAllRequiredSymbolNames(symbolType, namespaceLower);
 
-                    referenceTypesMap.set({ symbolName: symbolName, codeSegment: code, symbolObj: symbolObj }, allNames);
+                    referenceTypesMap.set({ symbolName: symbolName, codeSegment: codeSegment, symbolObj: symbolObj }, allNames);
                 }
             }
         });
@@ -716,9 +716,9 @@ export class CrossScopeValidator {
         return { missingSymbols: missingSymbols, duplicatesMap: duplicatesMap };
     }
 
-    clearResolutionsForCodeSegment(code: BrsCodeSegment) {
+    clearResolutionsForCodeSegment(codeSegment: BrsCodeSegment) {
         for (const symbol of this.resolutionsMap.keys()) {
-            if (symbol.codeSegment === code) {
+            if (symbol.codeSegment === codeSegment) {
                 this.resolutionsMap.delete(symbol);
             }
         }
@@ -747,13 +747,13 @@ export class CrossScopeValidator {
         const codeSegmentsAlreadyChecked = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
-            scope.enumerateBrsCodeSegments((code) => {
-                if (codeSegmentsAlreadyChecked.has(code)) {
+            scope.enumerateBrsCodeSegments((codeSegment) => {
+                if (codeSegmentsAlreadyChecked.has(codeSegment)) {
                     return;
                 }
-                codeSegmentsAlreadyChecked.add(code);
-                if (util.hasAnyRequiredSymbolChanged(code.requiredSymbols, changedSymbols)) {
-                    filesThatNeedRevalidation.add(code.document);
+                codeSegmentsAlreadyChecked.add(codeSegment);
+                if (util.hasAnyRequiredSymbolChanged(codeSegment.requiredSymbols, changedSymbols)) {
+                    filesThatNeedRevalidation.add(codeSegment.document);
                 }
             });
         }
@@ -765,13 +765,13 @@ export class CrossScopeValidator {
         const codeSegmentsAlreadyChecked = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
-            scope.enumerateBrsCodeSegments((code) => {
-                if (codeSegmentsAlreadyChecked.has(code) || scopesThatNeedRevalidation.has(scope)) {
+            scope.enumerateBrsCodeSegments((codeSegment) => {
+                if (codeSegmentsAlreadyChecked.has(codeSegment) || scopesThatNeedRevalidation.has(scope)) {
                     return;
                 }
-                codeSegmentsAlreadyChecked.add(code);
+                codeSegmentsAlreadyChecked.add(codeSegment);
 
-                if (util.hasAnyRequiredSymbolChanged(code.requiredSymbols, changedSymbols)) {
+                if (util.hasAnyRequiredSymbolChanged(codeSegment.requiredSymbols, changedSymbols)) {
                     scopesThatNeedRevalidation.add(scope);
                 }
             });
@@ -802,8 +802,8 @@ export class CrossScopeValidator {
         this.possibleDuplicateNamesCache = new Map();
         this.providedSymbolIndex.prune(this.program);
         for (const scope of scopes) {
-            scope.enumerateBrsCodeSegments((code) => {
-                this.providedSymbolIndex.update(code);
+            scope.enumerateBrsCodeSegments((codeSegment) => {
+                this.providedSymbolIndex.update(codeSegment);
             });
         }
 

@@ -27,7 +27,7 @@ export class HoverProcessor {
     public process() {
         let hover: Hover | undefined;
         if (isBrsCodeSegment(this.event.codeSegment)) {
-            hover = this.getBrsCodeHover(this.event.codeSegment);
+            hover = this.getBrsCodeSegmentHover(this.event.codeSegment);
         } else if (isXmlFile(this.event.file)) {
             hover = this.getXmlFileHover(this.event.file);
         }
@@ -69,14 +69,14 @@ export class HoverProcessor {
         return (token && hoverTokenTypes.includes(token.kind));
     }
 
-    private getConstHover(token: Token, code: BrsCodeSegment, scope: Scope, expression: Expression) {
-        let containingNamespace = code.getNamespaceStatementForPosition(expression?.location?.range?.start)?.getName(ParseMode.BrighterScript);
+    private getConstHover(token: Token, codeSegment: BrsCodeSegment, scope: Scope, expression: Expression) {
+        let containingNamespace = codeSegment.getNamespaceStatementForPosition(expression?.location?.range?.start)?.getName(ParseMode.BrighterScript);
         const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
         //find a constant with this name
         const constant = scope?.getConstFileLink(fullName, containingNamespace);
         if (constant) {
-            const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(code))).toString();
+            const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(codeSegment))).toString();
             const constantType = constant.item.getType({ flags: SymbolTypeFlag.runtime });
             return this.buildContentsWithDocsFromExpression(fence(`const ${constant.item.fullName} = ${constantValue} as ${constantType.toString()}`), constant.item);
         }
@@ -129,14 +129,14 @@ export class HoverProcessor {
         return result;
     }
 
-    private getBrsCodeHover(code: BrsCodeSegment): Hover {
+    private getBrsCodeSegmentHover(codeSegment: BrsCodeSegment): Hover {
         //get the token at the position
-        let token = code.getTokenAt(this.event.position);
+        let token = codeSegment.getTokenAt(this.event.position);
 
         if (!this.isValidTokenForHover(token)) {
             return null;
         }
-        const expression = code.getClosestExpression(this.event.position);
+        const expression = codeSegment.getClosestExpression(this.event.position);
         if (!expression) {
             return null;
         }
@@ -144,13 +144,13 @@ export class HoverProcessor {
         for (let scope of this.event.scopes) {
             try {
                 scope.linkSymbolTable();
-                const constHover = this.getConstHover(token, code, scope, expression);
+                const constHover = this.getConstHover(token, codeSegment, scope, expression);
                 if (constHover) {
                     hoverContents.push(constHover);
                     continue;
                 }
                 //get the function scope for this position (if exists)
-                let functionScope = code.getFunctionScopeAtPosition(this.event.position);
+                let functionScope = codeSegment.getFunctionScopeAtPosition(this.event.position);
                 if (functionScope) {
                     const labelHover = this.getLabelHover(token, functionScope);
                     if (labelHover) {

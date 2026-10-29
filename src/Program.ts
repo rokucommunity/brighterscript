@@ -320,15 +320,15 @@ export class Program {
      */
     private componentsTable = new SymbolTable('Custom Components');
 
-    public addCodeSegmentSymbolInfo(code: BrsCodeSegment) {
-        this.codeSegmentSymbolInformation.set(code.key, {
-            provides: code.providedSymbols,
-            requires: code.requiredSymbols
+    public addCodeSegmentSymbolInfo(codeSegment: BrsCodeSegment) {
+        this.codeSegmentSymbolInformation.set(codeSegment.key, {
+            provides: codeSegment.providedSymbols,
+            requires: codeSegment.requiredSymbols
         });
     }
 
-    public getCodeSegmentSymbolInfo(code: BrsCodeSegment) {
-        return this.codeSegmentSymbolInformation.get(code.key);
+    public getCodeSegmentSymbolInfo(codeSegment: BrsCodeSegment) {
+        return this.codeSegmentSymbolInformation.get(codeSegment.key);
     }
 
     /**
@@ -397,16 +397,16 @@ export class Program {
 
     private buildNamespaceContributors(): Map<string, Set<BrsCodeSegment>> {
         const contributors = new Map<string, Set<BrsCodeSegment>>();
-        for (const code of Object.values(this.files).flatMap(file => file.codeSegments ?? [])) {
-            if (isBrsCodeSegment(code)) {
+        for (const codeSegment of Object.values(this.files).flatMap(file => file.codeSegments ?? [])) {
+            if (isBrsCodeSegment(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (const nameLower of code['getNamespaceContributions']().keys()) {
+                for (const nameLower of codeSegment['getNamespaceContributions']().keys()) {
                     let set = contributors.get(nameLower);
                     if (!set) {
                         set = new Set<BrsCodeSegment>();
                         contributors.set(nameLower, set);
                     }
-                    set.add(code);
+                    set.add(codeSegment);
                 }
             }
         }
@@ -1202,17 +1202,17 @@ export class Program {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
             if (!keepSymbolInformation) {
-                for (const code of file.codeSegments ?? []) {
-                    if (isBrsCodeSegment(code)) {
-                        this.logger.debug('Removing code symbol info', code.key);
+                for (const codeSegment of file.codeSegments ?? []) {
+                    if (isBrsCodeSegment(codeSegment)) {
+                        this.logger.debug('Removing code symbol info', codeSegment.key);
                         //the symbols this code provided are gone, so anything that required them needs to be revalidated
-                        this.addRemovedCodeSegmentSymbolsToChangedSymbols(code);
-                        this.codeSegmentSymbolInformation.delete(code.key);
+                        this.addRemovedCodeSegmentSymbolsToChangedSymbols(codeSegment);
+                        this.codeSegmentSymbolInformation.delete(codeSegment.key);
                     }
                 }
             }
-            for (const code of file.codeSegments ?? []) {
-                this.crossScopeValidation.clearResolutionsForCodeSegment(code);
+            for (const codeSegment of file.codeSegments ?? []) {
+                this.crossScopeValidation.clearResolutionsForCodeSegment(codeSegment);
             }
 
             this.diagnostics.clearForFile(file.srcPath);
@@ -1240,8 +1240,8 @@ export class Program {
      * Record every symbol removed code previously provided as changed, so the next validation
      * revalidates the code and scopes that depended on them
      */
-    private addRemovedCodeSegmentSymbolsToChangedSymbols(code: BrsCodeSegment) {
-        const previouslyProvidedSymbols = this.codeSegmentSymbolInformation.get(code.key)?.provides.symbolMap;
+    private addRemovedCodeSegmentSymbolsToChangedSymbols(codeSegment: BrsCodeSegment) {
+        const previouslyProvidedSymbols = this.codeSegmentSymbolInformation.get(codeSegment.key)?.provides.symbolMap;
         if (!previouslyProvidedSymbols) {
             return;
         }
@@ -1406,10 +1406,10 @@ export class Program {
                     program: this,
                     file: file
                 };
-                const codeEvents = codeSegments.map(code => ({
+                const codeEvents = codeSegments.map(codeSegment => ({
                     program: this,
                     file: file,
-                    codeSegment: code
+                    codeSegment: codeSegment
                 }));
                 this.plugins.emit('beforeValidateFile', fileEvent);
                 for (const codeEvent of codeEvents) {
@@ -1430,21 +1430,21 @@ export class Program {
                 } else if (isXmlFile(file)) {
                     xmlFilesValidated.push(file);
                 }
-                for (const code of codeSegments) {
-                    if (isBrsCodeSegment(code)) {
-                        brsCodeSegmentsValidated.push(code);
+                for (const codeSegment of codeSegments) {
+                    if (isBrsCodeSegment(codeSegment)) {
+                        brsCodeSegmentsValidated.push(codeSegment);
                     }
                 }
             })
-            .forEach('do deferred component creation', () => [...brsCodeSegmentsValidated, ...xmlFilesValidated], (fileOrCode) => {
-                if (isXmlFile(fileOrCode)) {
-                    this.addDeferredComponentTypeSymbolCreation(fileOrCode);
-                } else if (isBrsCodeSegment(fileOrCode) && !this.isFirstValidation) {
-                    const code = fileOrCode;
-                    const codeHasChanges = code.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || code.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
+            .forEach('do deferred component creation', () => [...brsCodeSegmentsValidated, ...xmlFilesValidated], (fileOrCodeSegment) => {
+                if (isXmlFile(fileOrCodeSegment)) {
+                    this.addDeferredComponentTypeSymbolCreation(fileOrCodeSegment);
+                } else if (isBrsCodeSegment(fileOrCodeSegment) && !this.isFirstValidation) {
+                    const codeSegment = fileOrCodeSegment;
+                    const codeHasChanges = codeSegment.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || codeSegment.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
                     if (codeHasChanges) {
-                        for (const scope of this.getScopesForCodeSegment(code)) {
-                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, code.providedSymbols.changes)) {
+                        for (const scope of this.getScopesForCodeSegment(codeSegment)) {
+                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, codeSegment.providedSymbols.changes)) {
                                 this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
                             }
                         }
@@ -1465,11 +1465,11 @@ export class Program {
                 });
             })
             .once('track and update type-time and runtime symbol dependencies and changes', () => {
-                const changedSymbolsMapArr = brsCodeSegmentsValidated.map(code => code.providedSymbols.changes);
+                const changedSymbolsMapArr = brsCodeSegmentsValidated.map(codeSegment => codeSegment.providedSymbols.changes);
 
                 // update the map of typetime dependencies
-                for (const code of brsCodeSegmentsValidated) {
-                    for (const [symbolName, provided] of code.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
+                for (const codeSegment of brsCodeSegmentsValidated) {
+                    for (const [symbolName, provided] of codeSegment.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
                         // clear existing dependencies
                         for (const values of this.symbolDependencies.values()) {
                             values.delete(symbolName);
@@ -1571,9 +1571,9 @@ export class Program {
                 this.validationDetails.changedComponentTypes = [];
             })
             .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
-                const brsCodeSegments = (file.codeSegments ?? []).filter(code => isBrsCodeSegment(code)) as BrsCodeSegment[];
-                for (const code of brsCodeSegments) {
-                    code.validationSegmenter.unValidateAllSegments();
+                const brsCodeSegments = (file.codeSegments ?? []).filter(codeSegment => isBrsCodeSegment(codeSegment)) as BrsCodeSegment[];
+                for (const codeSegment of brsCodeSegments) {
+                    codeSegment.validationSegmenter.unValidateAllSegments();
                 }
                 if (brsCodeSegments.length > 0 && !this.isFirstValidation) {
                     scopesToInvalidate.push(...this.getScopesForFile(file));
@@ -1875,13 +1875,13 @@ export class Program {
      */
     public getCodeSegmentAt(file: BscFile, position: Position): BrsCodeSegment | undefined {
         let result: BrsCodeSegment;
-        for (const code of file?.codeSegments ?? []) {
-            if (!code.range) {
+        for (const codeSegment of file?.codeSegments ?? []) {
+            if (!codeSegment.range) {
                 //code that covers the whole document is the fallback when no more specific code contains the position
-                result ??= code;
-            } else if (util.rangeContains(code.range, position)) {
-                if (!result?.range || util.isRangeInRange(code.range, result.range)) {
-                    result = code;
+                result ??= codeSegment;
+            } else if (util.rangeContains(codeSegment.range, position)) {
+                if (!result?.range || util.isRangeInRange(codeSegment.range, result.range)) {
+                    result = codeSegment;
                 }
             }
         }
@@ -1899,22 +1899,22 @@ export class Program {
      * Does the location belong to the given code segment (i.e. is it the innermost segment at that location)?
      * With no code segment, does the location belong to the file outside of all of its code segments?
      */
-    private isLocationInCodeSegment(file: BscFile, location: Location, code: BrsCodeSegment) {
-        return this.getCodeSegmentAt(file, location?.range?.start) === code;
+    private isLocationInCodeSegment(file: BscFile, location: Location, codeSegment: BrsCodeSegment) {
+        return this.getCodeSegmentAt(file, location?.range?.start) === codeSegment;
     }
 
     /**
      * Get the scopes that contain the given code. Code belongs to the same scopes as the file it lives in.
      */
-    public getScopesForCodeSegment(code: BrsCodeSegment) {
-        return this.getScopesForFile(code.document);
+    public getScopesForCodeSegment(codeSegment: BrsCodeSegment) {
+        return this.getScopesForFile(codeSegment.document);
     }
 
     /**
      * Get the first scope that contains the given code. Code belongs to the same scopes as the file it lives in.
      */
-    public getFirstScopeForCodeSegment(code: BrsCodeSegment): Scope | undefined {
-        return this.getFirstScopeForFile(code.document);
+    public getFirstScopeForCodeSegment(codeSegment: BrsCodeSegment): Scope | undefined {
+        return this.getFirstScopeForFile(codeSegment.document);
     }
 
     public getFirstScopeForFile(file: BscFile): Scope | undefined {
@@ -1934,30 +1934,30 @@ export class Program {
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
 
-        function addToResults(statement: FunctionStatement | MethodStatement, code: BrsCodeSegment) {
+        function addToResults(statement: FunctionStatement | MethodStatement, codeSegment: BrsCodeSegment) {
             let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(origin.parseMode)?.toLowerCase();
             if (statement.tokens.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                 if (!results.has(statement)) {
-                    results.set(statement, { item: statement, codeSegment: code });
+                    results.set(statement, { item: statement, codeSegment: codeSegment });
                 }
             }
         }
 
         //look through all files in scope for matches
         for (const scope of this.getScopesForCodeSegment(origin)) {
-            for (const code of scope.getAllCodeSegments()) {
+            for (const codeSegment of scope.getAllCodeSegments()) {
                 //skip non-brs code, or code we've already processed
-                if (!isBrsCodeSegment(code) || codeSegmentsSearched.has(code)) {
+                if (!isBrsCodeSegment(codeSegment) || codeSegmentsSearched.has(codeSegment)) {
                     continue;
                 }
-                codeSegmentsSearched.add(code);
+                codeSegmentsSearched.add(codeSegment);
 
-                code.ast.walk(createVisitor({
+                codeSegment.ast.walk(createVisitor({
                     FunctionStatement: (statement: FunctionStatement) => {
-                        addToResults(statement, code);
+                        addToResults(statement, codeSegment);
                     },
                     MethodStatement: (statement: MethodStatement) => {
-                        addToResults(statement, code);
+                        addToResults(statement, codeSegment);
                     }
                 }), {
                     walkMode: WalkMode.visitStatements
@@ -1984,18 +1984,18 @@ export class Program {
         }
 
         //look through all files in scope for matches
-        for (const code of scope.getOwnFiles().flatMap(file => file.codeSegments ?? [])) {
+        for (const codeSegment of scope.getOwnFiles().flatMap(file => file.codeSegments ?? [])) {
             //skip non-brs code, or code we've already processed
-            if (!isBrsCodeSegment(code) || codeSegmentsSearched.has(code)) {
+            if (!isBrsCodeSegment(codeSegment) || codeSegmentsSearched.has(codeSegment)) {
                 continue;
             }
-            codeSegmentsSearched.add(code);
+            codeSegmentsSearched.add(codeSegment);
 
-            code.ast.walk(createVisitor({
+            codeSegment.ast.walk(createVisitor({
                 FunctionStatement: (statement: FunctionStatement) => {
                     if (funcNames.has(statement.tokens.name.text)) {
                         if (!results.has(statement)) {
-                            results.set(statement, { item: statement, codeSegment: code });
+                            results.set(statement, { item: statement, codeSegment: codeSegment });
                         }
                     }
                 }
@@ -2105,10 +2105,10 @@ export class Program {
             const documentSymbols = [] as DocumentSymbol[];
             //one event for the file, then one for each of its code segments, collecting all of their symbols.
             //Each phase runs for every event before the next phase starts
-            const events = this.getCodeSegmentsForRequest(file).map((code): ProvideDocumentSymbolsEvent => ({
+            const events = this.getCodeSegmentsForRequest(file).map((codeSegment): ProvideDocumentSymbolsEvent => ({
                 program: this,
                 file: file,
-                codeSegment: code,
+                codeSegment: codeSegment,
                 documentSymbols: documentSymbols
             }));
             for (const event of events) {
@@ -2138,18 +2138,18 @@ export class Program {
             //emit once per code segment, then put each result back in its position's place
             const indexesByCode = new Map<BrsCodeSegment | undefined, number[]>();
             for (let i = 0; i < positions.length; i++) {
-                const code = this.getCodeSegmentAt(file, positions[i]);
-                if (!indexesByCode.has(code)) {
-                    indexesByCode.set(code, []);
+                const codeSegment = this.getCodeSegmentAt(file, positions[i]);
+                if (!indexesByCode.has(codeSegment)) {
+                    indexesByCode.set(codeSegment, []);
                 }
-                indexesByCode.get(code).push(i);
+                indexesByCode.get(codeSegment).push(i);
             }
-            const groups = [...indexesByCode].map(([code, indexes]) => ({
+            const groups = [...indexesByCode].map(([codeSegment, indexes]) => ({
                 indexes: indexes,
                 event: {
                     program: this,
                     file: file,
-                    codeSegment: code,
+                    codeSegment: codeSegment,
                     positions: indexes.map(i => positions[i]),
                     selectionRanges: []
                 } as ProvideSelectionRangesEvent
@@ -2192,10 +2192,10 @@ export class Program {
             const scopes = this.getScopesForFile(file);
             //one event for the file, then one for each of its code segments, collecting all of their hints.
             //Each phase runs for every event before the next phase starts
-            const events = this.getCodeSegmentsForRequest(file).map((code): ProvideInlayHintsEvent => ({
+            const events = this.getCodeSegmentsForRequest(file).map((codeSegment): ProvideInlayHintsEvent => ({
                 program: this,
                 file: file,
-                codeSegment: code,
+                codeSegment: codeSegment,
                 range: range,
                 scopes: scopes,
                 inlayHints: inlayHints
@@ -2235,19 +2235,19 @@ export class Program {
             //outside of its code segments (i.e. in the xml of a component). Each event only gets the diagnostics that
             //belong to it, the same as source fix-all. A range inside a single code segment (like a cursor) gets one event
             const codeSegments = file.codeSegments ?? [];
-            const isRangeInOneCodeSegment = codeSegments.some(code => {
-                return !code.range || (util.rangeContains(code.range, range.start) && util.rangeContains(code.range, range.end));
+            const isRangeInOneCodeSegment = codeSegments.some(codeSegment => {
+                return !codeSegment.range || (util.rangeContains(codeSegment.range, range.start) && util.rangeContains(codeSegment.range, range.end));
             });
             const targets = [
                 ...(isRangeInOneCodeSegment ? [] : [undefined]),
-                ...codeSegments.filter(code => !code.range || util.rangesIntersectOrTouch(code.range, range))
+                ...codeSegments.filter(codeSegment => !codeSegment.range || util.rangesIntersectOrTouch(codeSegment.range, range))
             ];
-            const events = targets.map((code): ProvideCodeActionsEvent => ({
+            const events = targets.map((codeSegment): ProvideCodeActionsEvent => ({
                 program: this,
                 file: file,
-                codeSegment: code,
+                codeSegment: codeSegment,
                 range: range,
-                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, code)),
+                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, codeSegment)),
                 scopes: scopes,
                 codeActions: codeActions
             }));
@@ -2282,11 +2282,11 @@ export class Program {
             const scopes = this.getScopesForFile(file);
             //one event for the file, then one for each of its code segments, each with only the diagnostics that belong
             //to it. Each phase runs for every event before the next phase starts
-            const events = this.getCodeSegmentsForRequest(file).map((code): ProvideSourceFixAllCodeActionsEvent => ({
+            const events = this.getCodeSegmentsForRequest(file).map((codeSegment): ProvideSourceFixAllCodeActionsEvent => ({
                 program: this,
                 file: file,
-                codeSegment: code,
-                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, code)),
+                codeSegment: codeSegment,
+                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, codeSegment)),
                 scopes: scopes,
                 actions: actions
             }));
@@ -2317,29 +2317,29 @@ export class Program {
             //one event for the file, then one for each of its code segments, collecting all of their tokens.
             //Each phase runs for every one of them before the next phase starts
             const codeSegments = this.getCodeSegmentsForRequest(file);
-            for (const code of codeSegments) {
+            for (const codeSegment of codeSegments) {
                 this.plugins.emit('beforeProvideSemanticTokens', {
                     program: this,
                     file: file,
-                    codeSegment: code,
+                    codeSegment: codeSegment,
                     scopes: scopes,
                     semanticTokens: undefined
                 });
             }
-            for (const code of codeSegments) {
+            for (const codeSegment of codeSegments) {
                 this.plugins.emit('provideSemanticTokens', {
                     program: this,
                     file: file,
-                    codeSegment: code,
+                    codeSegment: codeSegment,
                     scopes: scopes,
                     semanticTokens: result
                 });
             }
-            for (const code of codeSegments) {
+            for (const codeSegment of codeSegments) {
                 this.plugins.emit('afterProvideSemanticTokens', {
                     program: this,
                     file: file,
-                    codeSegment: code,
+                    codeSegment: codeSegment,
                     scopes: scopes,
                     semanticTokens: result
                 });
@@ -2350,11 +2350,11 @@ export class Program {
 
     public getSignatureHelp(filePath: string, position: Position): SignatureInfoObj[] {
         const file = this.getFile(filePath);
-        const code = file ? this.getCodeSegmentAt(file, position) : undefined;
-        if (!isBrsCodeSegment(code)) {
+        const codeSegment = file ? this.getCodeSegmentAt(file, position) : undefined;
+        if (!isBrsCodeSegment(codeSegment)) {
             return [];
         }
-        let callExpressionInfo = new CallExpressionInfo(code, position);
+        let callExpressionInfo = new CallExpressionInfo(codeSegment, position);
         let signatureHelpUtil = new SignatureHelpUtil();
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
@@ -2527,11 +2527,11 @@ export class Program {
                 scope: scope,
                 outputPath: this.getOutputPath(file, outDir)
             } as PrepareFileEvent & { outputPath: string };
-            const codeEvents = (file.codeSegments ?? []).map((code): PrepareBrsCodeSegmentEvent => ({
+            const codeEvents = (file.codeSegments ?? []).map((codeSegment): PrepareBrsCodeSegmentEvent => ({
                 program: this,
                 file: file,
-                codeSegment: code,
-                editor: code.editor ?? file.editor,
+                codeSegment: codeSegment,
+                editor: codeSegment.editor ?? file.editor,
                 scope: scope
             }));
             return { scope: scope, event: event, codeEvents: codeEvents };
@@ -2710,9 +2710,9 @@ export class Program {
                 //a file added by a plugin very late in the flow might not have an editor at all
                 file.editor?.undoAll();
                 //code can have an editor of its own (i.e. code embedded in an xml file)
-                for (const code of file.codeSegments ?? []) {
-                    if (code.editor && code.editor !== file.editor) {
-                        code.editor.undoAll();
+                for (const codeSegment of file.codeSegments ?? []) {
+                    if (codeSegment.editor && codeSegment.editor !== file.editor) {
+                        codeSegment.editor.undoAll();
                     }
                 }
             }
@@ -2734,11 +2734,11 @@ export class Program {
      * Find the brs files that provide code matching the given check. Used to suggest imports, so xml files
      * (which can't be imported) are not included, even when their `<script>` blocks match.
      */
-    private findBrsFilesWithCode(matches: (lookups: CachedLookups) => boolean) {
+    private findBrsFilesWithMatchingCodeSegment(matches: (lookups: CachedLookups) => boolean) {
         const files = [] as BscFile[];
         for (const file of Object.values(this.files)) {
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            if (isBrsFile(file) && file.codeSegments.some(code => isBrsCodeSegment(code) && matches(code['_cachedLookups']))) {
+            if (isBrsFile(file) && file.codeSegments.some(codeSegment => isBrsCodeSegment(codeSegment) && matches(codeSegment['_cachedLookups']))) {
                 files.push(file);
             }
         }
@@ -2751,7 +2751,7 @@ export class Program {
     public findFilesForFunction(functionName: string) {
         const lowerFunctionName = functionName.toLowerCase();
         //TODO handle namespace-relative function calls
-        return this.findBrsFilesWithCode(lookups => !!lookups.functionStatementMap.get(lowerFunctionName));
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => !!lookups.functionStatementMap.get(lowerFunctionName));
     }
 
     /**
@@ -2760,12 +2760,12 @@ export class Program {
     public findFilesForClass(className: string) {
         const lowerClassName = className.toLowerCase();
         //TODO handle namespace-relative classes
-        return this.findBrsFilesWithCode(lookups => lookups.classStatementMap.get(lowerClassName) !== undefined);
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => lookups.classStatementMap.get(lowerClassName) !== undefined);
     }
 
     public findFilesForNamespace(name: string) {
         const lowerName = name.toLowerCase();
-        return this.findBrsFilesWithCode(lookups => lookups.namespaceStatements.some((x) => {
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => lookups.namespaceStatements.some((x) => {
             const namespaceName = x.name.toLowerCase();
             return (
                 //the namespace name matches exactly
@@ -2778,7 +2778,7 @@ export class Program {
 
     public findFilesForEnum(name: string) {
         const lowerName = name.toLowerCase();
-        return this.findBrsFilesWithCode(lookups => !!lookups.enumStatementMap.get(lowerName));
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => !!lookups.enumStatementMap.get(lowerName));
     }
 
     private _manifest: Map<string, string>;

@@ -368,16 +368,16 @@ describe('Program', () => {
                     <component name="Widget" extends="Group">
                     </component>
                 `);
-                const validatedCode = [];
+                const validatedCodeSegments = [];
                 program.plugins.add({
                     name: 'test',
                     validateBrsCodeSegment: (event) => {
-                        validatedCode.push(event.codeSegment);
+                        validatedCodeSegments.push(event.codeSegment);
                     }
                 });
                 program.validate();
                 //only BrightScript gets code segment events; the xml file is validated in the file events
-                expect(validatedCode).to.have.members([getBrsCodeSegment(brsFile)]);
+                expect(validatedCodeSegments).to.have.members([getBrsCodeSegment(brsFile)]);
                 expect(getBrsCodeSegment(brsFile).isValidated).to.be.true;
                 expect(xmlFile.isValidated).to.be.true;
             });
@@ -1635,7 +1635,7 @@ describe('Program', () => {
 
     describe('routing requests to code', () => {
         let xmlFile: XmlFile;
-        let scriptCode: BrsCodeSegment;
+        let scriptCodeSegment: BrsCodeSegment;
 
         /**
          * Give the xml file a second piece of code covering lines 3-5, the way an embedded `<script>` block would
@@ -1650,14 +1650,14 @@ describe('Program', () => {
                     </script>
                 </component>
             `);
-            scriptCode = new BrsCodeSegment({ document: xmlFile, program: program });
-            scriptCode.range = util.createRange(3, 0, 5, 0);
-            Object.defineProperty(xmlFile, 'codeSegments', { value: [scriptCode] });
+            scriptCodeSegment = new BrsCodeSegment({ document: xmlFile, program: program });
+            scriptCodeSegment.range = util.createRange(3, 0, 5, 0);
+            Object.defineProperty(xmlFile, 'codeSegments', { value: [scriptCodeSegment] });
         });
 
         it('finds the code segment at a position', () => {
             expect(program.getCodeSegmentAt(xmlFile, util.createPosition(1, 5))).to.be.undefined;
-            expect(program.getCodeSegmentAt(xmlFile, util.createPosition(4, 5))).to.equal(scriptCode);
+            expect(program.getCodeSegmentAt(xmlFile, util.createPosition(4, 5))).to.equal(scriptCodeSegment);
             expect(program.getCodeSegmentAt(xmlFile, util.createPosition(6, 5))).to.be.undefined;
         });
 
@@ -1673,16 +1673,16 @@ describe('Program', () => {
         });
 
         it('sends position requests to the code segment at that position, if there is one', () => {
-            const hoveredCode = [] as BrsCodeSegment[];
+            const hoveredCodeSegments = [] as BrsCodeSegment[];
             program.plugins.add({
                 name: 'test',
                 provideHover: (event) => {
-                    hoveredCode.push(event.codeSegment);
+                    hoveredCodeSegments.push(event.codeSegment);
                 }
             });
             program.getHover(xmlFile.srcPath, util.createPosition(1, 5));
             program.getHover(xmlFile.srcPath, util.createPosition(4, 5));
-            expect(hoveredCode).to.eql([undefined, scriptCode]);
+            expect(hoveredCodeSegments).to.eql([undefined, scriptCodeSegment]);
         });
 
         it('emits file-wide requests for the file and then each code segment, and collects every result', () => {
@@ -1692,19 +1692,19 @@ describe('Program', () => {
                 provideSemanticTokens: (event) => {
                     requested.push(event.codeSegment);
                     event.semanticTokens.push({
-                        range: event.codeSegment === scriptCode ? util.createRange(4, 0, 4, 3) : util.createRange(1, 0, 1, 3),
+                        range: event.codeSegment === scriptCodeSegment ? util.createRange(4, 0, 4, 3) : util.createRange(1, 0, 1, 3),
                         tokenType: SemanticTokenTypes.function
                     });
                 }
             });
             expect(program.getSemanticTokens(xmlFile.srcPath).map(x => x.range.start.line)).to.eql([1, 4]);
-            expect(requested).to.eql([undefined, scriptCode]);
+            expect(requested).to.eql([undefined, scriptCodeSegment]);
         });
 
         it('runs each phase of a file-wide request for the file and every code segment before the next phase', () => {
             const calls = [] as string[];
             const record = (name: string) => (event: { codeSegment?: BrsCodeSegment }) => {
-                calls.push(`${name} ${event.codeSegment === scriptCode ? 'segment' : 'file'}`);
+                calls.push(`${name} ${event.codeSegment === scriptCodeSegment ? 'segment' : 'file'}`);
             };
             program.plugins.add({
                 name: 'test',
@@ -1730,7 +1730,7 @@ describe('Program', () => {
                     for (const position of event.positions) {
                         //tag each result with the code it came from
                         event.selectionRanges.push({
-                            range: util.createRange(position.line, event.codeSegment === scriptCode ? 1 : 0, position.line, 9)
+                            range: util.createRange(position.line, event.codeSegment === scriptCodeSegment ? 1 : 0, position.line, 9)
                         });
                     }
                 }
@@ -1766,7 +1766,7 @@ describe('Program', () => {
             });
             program.getSourceFixAllCodeActions(xmlFile.srcPath);
             expect(messagesByCode.get(undefined)).to.include('in the component').and.not.include('in the script');
-            expect(messagesByCode.get(scriptCode)).to.eql(['in the script']);
+            expect(messagesByCode.get(scriptCodeSegment)).to.eql(['in the script']);
         });
     });
 

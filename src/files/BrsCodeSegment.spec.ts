@@ -55,15 +55,15 @@ describe('BrsCodeSegment', () => {
             sub main()
             end sub
         `);
-        const code = getBrsCodeSegment(file);
+        const codeSegment = getBrsCodeSegment(file);
         file.parse(`
             sub a()
             end sub
             sub b()
             end sub
         `);
-        expect(getBrsCodeSegment(file)).to.equal(code);
-        expect(code.callables.map(x => x.name)).to.eql(['a', 'b']);
+        expect(getBrsCodeSegment(file)).to.equal(codeSegment);
+        expect(codeSegment.callables.map(x => x.name)).to.eql(['a', 'b']);
     });
 
     describe('getText', () => {

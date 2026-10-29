@@ -47,10 +47,10 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         }
         const nameSet = new Set<string>();
         const childrenByParent = new Map<string, string[]>();
-        for (const code of this.scope.getAllCodeSegments()) {
-            if (isBrsCodeSegment(code)) {
+        for (const codeSegment of this.scope.getAllCodeSegments()) {
+            if (isBrsCodeSegment(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (const nameLower of code['getNamespaceContributions']().keys()) {
+                for (const nameLower of codeSegment['getNamespaceContributions']().keys()) {
                     nameSet.add(nameLower);
                 }
             }
@@ -74,9 +74,9 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
     private getInScopeBrsCodeSegments(): Set<BrsCodeSegment> {
         if (!this.inScopeBrsCodeSegments) {
             const set = new Set<BrsCodeSegment>();
-            for (const code of this.scope.getAllCodeSegments()) {
-                if (isBrsCodeSegment(code)) {
-                    set.add(code);
+            for (const codeSegment of this.scope.getAllCodeSegments()) {
+                if (isBrsCodeSegment(codeSegment)) {
+                    set.add(codeSegment);
                 }
             }
             this.inScopeBrsCodeSegments = set;
@@ -172,10 +172,10 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         }
         const inScopeCodeSegments = this.getInScopeBrsCodeSegments();
         const inScopeContributions: NamespaceFileContribution[] = [];
-        for (const code of candidateCodeSegments) {
-            if (inScopeCodeSegments.has(code)) {
+        for (const codeSegment of candidateCodeSegments) {
+            if (inScopeCodeSegments.has(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                const contribution = code['getNamespaceContributions']().get(nameLower);
+                const contribution = codeSegment['getNamespaceContributions']().get(nameLower);
                 if (contribution) {
                     inScopeContributions.push(contribution);
                 }

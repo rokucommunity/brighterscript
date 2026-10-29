@@ -958,10 +958,10 @@ export class BrsFileValidator {
      * Returns an empty array for source literals that stay native identifiers (like `LINE_NUM`).
      * `PKG_LOCATION` additionally emits a native `str(LINE_NUM)` that is not part of the returned parts.
      */
-    private getSourceLiteralReplacements(sourceLiteral: SourceLiteralExpression, code: BrsCodeSegment): Array<{ type: LiteralPoolName; value: string | number }> {
+    private getSourceLiteralReplacements(sourceLiteral: SourceLiteralExpression, codeSegment: BrsCodeSegment): Array<{ type: LiteralPoolName; value: string | number }> {
         switch (sourceLiteral.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
-                const pathUrl = util.fileUrl(code.srcPath);
+                const pathUrl = util.fileUrl(codeSegment.srcPath);
                 return [
                     { type: 'string', value: pathUrl.substring(0, 4) },
                     { type: 'string', value: pathUrl.substring(4) }
@@ -981,15 +981,15 @@ export class BrsFileValidator {
                 namespaceRootParts.pop(); // remove the function name
                 return [{ type: 'string', value: namespaceRootParts.shift() ?? '' }];
             case TokenKind.SourceLocationLiteral:
-                const locationUrl = util.fileUrl(code.srcPath);
+                const locationUrl = util.fileUrl(codeSegment.srcPath);
                 return [
                     { type: 'string', value: locationUrl.substring(0, 4) },
                     { type: 'string', value: `${locationUrl.substring(4)}:${this.getClosestLineNumber(sourceLiteral)}` }
                 ];
             case TokenKind.PkgPathLiteral:
-                return [{ type: 'string', value: util.sanitizePkgPath(code.pkgPath) }];
+                return [{ type: 'string', value: util.sanitizePkgPath(codeSegment.pkgPath) }];
             case TokenKind.PkgLocationLiteral:
-                return [{ type: 'string', value: `${util.sanitizePkgPath(code.pkgPath)}:` }];
+                return [{ type: 'string', value: `${util.sanitizePkgPath(codeSegment.pkgPath)}:` }];
             default:
                 return [];
         }

@@ -722,7 +722,7 @@ describe('CompletionsProcessor', () => {
             ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
         });
 
-        describe('getBrsCodeCompletions', () => {
+        describe('getBrsCodeSegmentCompletions', () => {
             it('does not crash on expression with missing range', () => {
                 const file = program.setFile<BrsFile>('source/main.brs', `
                     sub main()
@@ -736,7 +736,7 @@ describe('CompletionsProcessor', () => {
                 const processor = new CompletionsProcessor({ scopes: [] } as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsCodeCompletions'](util.createPosition(2, 39), getBrsCodeSegment(file), [])
+                    processor['getBrsCodeSegmentCompletions'](util.createPosition(2, 39), getBrsCodeSegment(file), [])
                 ).to.eql({ global: [], scoped: [] });
             });
 
@@ -753,7 +753,7 @@ describe('CompletionsProcessor', () => {
                 const processor = new CompletionsProcessor({} as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsCodeCompletions'](util.createPosition(2, 39), getBrsCodeSegment(file), program.getScopesForFile(file))
+                    processor['getBrsCodeSegmentCompletions'](util.createPosition(2, 39), getBrsCodeSegment(file), program.getScopesForFile(file))
                 ).to.eql({ global: [], scoped: [] });
             });
         });
@@ -829,7 +829,7 @@ describe('CompletionsProcessor', () => {
                 program.validate();
                 //get the name of all global completions
                 const globalCompletions = program.globalScope.getAllFiles().flatMap((x) => {
-                    return completionProcessor['getBrsCodeCompletions'](position, getBrsCodeSegment(x), program.getScopesForFile(x)).global;
+                    return completionProcessor['getBrsCodeSegmentCompletions'](position, getBrsCodeSegment(x), program.getScopesForFile(x)).global;
                 }).map(x => x.label);
                 //filter out completions from global scope
                 completions = completions.filter(x => !globalCompletions.includes(x.label));

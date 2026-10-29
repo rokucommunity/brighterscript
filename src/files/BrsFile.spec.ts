@@ -5875,12 +5875,12 @@ describe('BrsFile', () => {
                     return 1
                 end function
             `);
-            const validateCodeEvent = {
+            const validateCodeSegmentEvent = {
                 program: program,
                 file: mainFile,
                 codeSegment: getBrsCodeSegment(mainFile)
             };
-            program.plugins.emit('validateBrsCodeSegment', validateCodeEvent);
+            program.plugins.emit('validateBrsCodeSegment', validateCodeSegmentEvent);
 
             expect(getBrsCodeSegment(mainFile).requiredSymbols.length).to.eq(0);
         });
@@ -5902,12 +5902,12 @@ describe('BrsFile', () => {
                     end sub
                 end class
             `);
-            const validateCodeEvent = {
+            const validateCodeSegmentEvent = {
                 program: program,
                 file: mainFile,
                 codeSegment: getBrsCodeSegment(mainFile)
             };
-            program.plugins.emit('validateBrsCodeSegment', validateCodeEvent);
+            program.plugins.emit('validateBrsCodeSegment', validateCodeSegmentEvent);
 
             expect(getBrsCodeSegment(mainFile).requiredSymbols.length).to.eq(0);
         });
@@ -5922,12 +5922,12 @@ describe('BrsFile', () => {
                 label.text = text
                 end sub
             `);
-            const validateCodeEvent = {
+            const validateCodeSegmentEvent = {
                 program: program,
                 file: mainFile,
                 codeSegment: getBrsCodeSegment(mainFile)
             };
-            program.plugins.emit('validateBrsCodeSegment', validateCodeEvent);
+            program.plugins.emit('validateBrsCodeSegment', validateCodeSegmentEvent);
 
             expect(getBrsCodeSegment(mainFile).requiredSymbols.length).to.eq(0);
         });
@@ -6186,12 +6186,12 @@ describe('BrsFile', () => {
                 end function
             `);
             const mainFile = program.getFile<BrsFile>('source/main.bs');
-            const validateCodeEvent = {
+            const validateCodeSegmentEvent = {
                 program: program,
                 file: mainFile,
                 codeSegment: getBrsCodeSegment(mainFile)
             };
-            program.plugins.emit('validateBrsCodeSegment', validateCodeEvent);
+            program.plugins.emit('validateBrsCodeSegment', validateCodeSegmentEvent);
 
             expect(getBrsCodeSegment(mainFile).requiredSymbols.length).to.eq(0);
         });

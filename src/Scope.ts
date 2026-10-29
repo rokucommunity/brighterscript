@@ -66,8 +66,8 @@ export class Scope {
      */
     public get namespaceLookup() {
         let allFilesValidated = true;
-        this.enumerateBrsCodeSegmentsWithBreak((code) => {
-            allFilesValidated = allFilesValidated && code.isValidated;
+        this.enumerateBrsCodeSegmentsWithBreak((codeSegment) => {
+            allFilesValidated = allFilesValidated && codeSegment.isValidated;
             return !allFilesValidated;
         });
         if (!allFilesValidated) {
@@ -87,8 +87,8 @@ export class Scope {
         return this.cache.getOrAdd('namespaceNameSet', () => {
             const lowerNamespaceNames = new Set<string>();
 
-            this.enumerateBrsCodeSegments((code) => {
-                const fileNamespaceLookup = code.getNamespaceLookupObject();
+            this.enumerateBrsCodeSegments((codeSegment) => {
+                const fileNamespaceLookup = codeSegment.getNamespaceLookupObject();
                 for (const [lowerNamespaceName, _] of fileNamespaceLookup) {
                     lowerNamespaceNames.add(lowerNamespaceName);
                 }
@@ -193,14 +193,14 @@ export class Scope {
     private findTopCandidateFileLink<T extends Statement>(cachedMapName: string, nameLower: string): FileLink<T> {
         let activeLink: FileLink<T>;
         let inactiveLink: FileLink<T>;
-        this.enumerateBrsCodeSegmentsWithBreak((code) => {
-            const stmt: T = code['_cachedLookups'][cachedMapName].get(nameLower);
+        this.enumerateBrsCodeSegmentsWithBreak((codeSegment) => {
+            const stmt: T = codeSegment['_cachedLookups'][cachedMapName].get(nameLower);
             if (stmt) {
                 if (stmt.isActive !== false) {
-                    activeLink = { item: stmt, codeSegment: code };
+                    activeLink = { item: stmt, codeSegment: codeSegment };
                     return true;
                 }
-                inactiveLink ??= { item: stmt, codeSegment: code };
+                inactiveLink ??= { item: stmt, codeSegment: codeSegment };
             }
             return false;
         });
@@ -440,13 +440,13 @@ export class Scope {
         return this.cache.getOrAdd('classMap', () => {
             const map = new Map<string, FileLink<ClassStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsCodeSegments((code) => {
-                if (isBrsCodeSegment(code)) {
-                    for (let cls of code['_cachedLookups'].classStatements) {
+            this.enumerateBrsCodeSegments((codeSegment) => {
+                if (isBrsCodeSegment(codeSegment)) {
+                    for (let cls of codeSegment['_cachedLookups'].classStatements) {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
-                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, codeSegment: code }, cls.isActive !== false);
+                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, codeSegment: codeSegment }, cls.isActive !== false);
                         }
                     }
                 }
@@ -463,13 +463,13 @@ export class Scope {
         return this.cache.getOrAdd('interfaceMap', () => {
             const map = new Map<string, FileLink<InterfaceStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsCodeSegments((code) => {
-                if (isBrsCodeSegment(code)) {
-                    for (let iface of code['_cachedLookups'].interfaceStatements) {
+            this.enumerateBrsCodeSegments((codeSegment) => {
+                if (isBrsCodeSegment(codeSegment)) {
+                    for (let iface of codeSegment['_cachedLookups'].interfaceStatements) {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
-                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, codeSegment: code }, iface.isActive !== false);
+                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, codeSegment: codeSegment }, iface.isActive !== false);
                         }
                     }
                 }
@@ -486,11 +486,11 @@ export class Scope {
         return this.cache.getOrAdd('enumMap', () => {
             const map = new Map<string, FileLink<EnumStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsCodeSegments((code) => {
-                for (let enumStmt of code['_cachedLookups'].enumStatements) {
+            this.enumerateBrsCodeSegments((codeSegment) => {
+                for (let enumStmt of codeSegment['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, codeSegment: code }, enumStmt.isActive !== false);
+                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, codeSegment: codeSegment }, enumStmt.isActive !== false);
                     }
                 }
             });
@@ -506,11 +506,11 @@ export class Scope {
         return this.cache.getOrAdd('constMap', () => {
             const map = new Map<string, FileLink<ConstStatement>>();
             const activeKeys = new Set<string>();
-            this.enumerateBrsCodeSegments((code) => {
-                for (let stmt of code['_cachedLookups'].constStatements) {
+            this.enumerateBrsCodeSegments((codeSegment) => {
+                for (let stmt of codeSegment['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
-                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, codeSegment: code }, stmt.isActive !== false);
+                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, codeSegment: codeSegment }, stmt.isActive !== false);
                     }
                 }
             });
@@ -525,14 +525,14 @@ export class Scope {
     public getTypeStatementMap(): Map<string, FileLink<TypeStatement>> {
         return this.cache.getOrAdd('typeStatementMap', () => {
             const map = new Map<string, FileLink<TypeStatement>>();
-            this.enumerateBrsCodeSegments((code) => {
-                code.ast.walk((node) => {
+            this.enumerateBrsCodeSegments((codeSegment) => {
+                codeSegment.ast.walk((node) => {
                     if (isTypeStatement(node)) {
                         const namespaceName = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
                         const typeName = node.tokens.name?.text;
                         if (typeName) {
                             const fullName = (namespaceName ? `${namespaceName}.${typeName}` : typeName).toLowerCase();
-                            map.set(fullName, { item: node, codeSegment: code });
+                            map.set(fullName, { item: node, codeSegment: codeSegment });
                         }
                     }
                 }, { walkMode: WalkMode.visitAllRecursive });
@@ -561,8 +561,8 @@ export class Scope {
      */
     public isKnownNamespace(namespaceName: string) {
         let namespaceNameLower = namespaceName.toLowerCase();
-        this.enumerateBrsCodeSegments((code) => {
-            for (let namespace of code['_cachedLookups'].namespaceStatements) {
+        this.enumerateBrsCodeSegments((codeSegment) => {
+            for (let namespace of codeSegment['_cachedLookups'].namespaceStatements) {
                 let loopNamespaceNameLower = namespace.name.toLowerCase();
                 if (loopNamespaceNameLower === namespaceNameLower || loopNamespaceNameLower.startsWith(namespaceNameLower + '.')) {
                     return true;
@@ -776,11 +776,11 @@ export class Scope {
     /**
      * Iterate over the BrightScript code in this scope (including ancestor scopes), skipping code shadowed by typedefs
      */
-    public enumerateBrsCodeSegments(callback: (code: BrsCodeSegment) => void) {
+    public enumerateBrsCodeSegments(callback: (codeSegment: BrsCodeSegment) => void) {
         for (const file of this.getSymbolFiles()) {
-            for (const code of file.codeSegments ?? []) {
-                if (isBrsCodeSegment(code)) {
-                    callback(code);
+            for (const codeSegment of file.codeSegments ?? []) {
+                if (isBrsCodeSegment(codeSegment)) {
+                    callback(codeSegment);
                 }
             }
         }
@@ -790,10 +790,10 @@ export class Scope {
      * Iterate over the BrightScript code in this scope (including ancestor scopes), skipping code shadowed by typedefs.
      * Stops as soon as the callback returns true.
      */
-    public enumerateBrsCodeSegmentsWithBreak(callback: (code: BrsCodeSegment) => boolean) {
+    public enumerateBrsCodeSegmentsWithBreak(callback: (codeSegment: BrsCodeSegment) => boolean) {
         for (const file of this.getSymbolFiles()) {
-            for (const code of file.codeSegments ?? []) {
-                if (isBrsCodeSegment(code) && callback(code)) {
+            for (const codeSegment of file.codeSegments ?? []) {
+                if (isBrsCodeSegment(codeSegment) && callback(codeSegment)) {
                     return;
                 }
             }
@@ -803,10 +803,10 @@ export class Scope {
     /**
      * Iterate over the code directly in this scope (excluding code found only in parent scopes), skipping code shadowed by typedefs
      */
-    public enumerateOwnBrsCodeSegments(callback: (code: BrsCodeSegment) => void) {
+    public enumerateOwnBrsCodeSegments(callback: (codeSegment: BrsCodeSegment) => void) {
         for (const file of this.getOwnSymbolFiles()) {
-            for (const code of file.codeSegments ?? []) {
-                callback(code);
+            for (const codeSegment of file.codeSegments ?? []) {
+                callback(codeSegment);
             }
         }
     }
@@ -818,9 +818,9 @@ export class Scope {
     public getOwnCallables(): CallableContainer[] {
         let result = [] as CallableContainer[];
         //get callables from own code
-        this.enumerateOwnBrsCodeSegments((code) => {
-            if (isBrsCodeSegment(code)) {
-                for (let callable of code?.callables ?? []) {
+        this.enumerateOwnBrsCodeSegments((codeSegment) => {
+            if (isBrsCodeSegment(codeSegment)) {
+                for (let callable of codeSegment?.callables ?? []) {
                     result.push({
                         callable: callable,
                         scope: this
@@ -851,8 +851,8 @@ export class Scope {
 
     public getAllNamespaceStatements() {
         let result = [] as NamespaceStatement[];
-        this.enumerateBrsCodeSegments((code) => {
-            result.push(...code['_cachedLookups'].namespaceStatements);
+        this.enumerateBrsCodeSegments((codeSegment) => {
+            result.push(...codeSegment['_cachedLookups'].namespaceStatements);
         });
         return result;
     }
@@ -950,9 +950,9 @@ export class Scope {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
             for (let file of this.getOwnFiles()) {
-                for (const code of file.codeSegments ?? []) {
-                    if (isBrsCodeSegment(code)) {
-                        result.mergeSymbolTable(code.parser?.symbolTable);
+                for (const codeSegment of file.codeSegments ?? []) {
+                    if (isBrsCodeSegment(codeSegment)) {
+                        result.mergeSymbolTable(codeSegment.parser?.symbolTable);
                     }
                 }
             }
@@ -999,16 +999,16 @@ export class Scope {
         // (e.g. files added by plugins during build). Linking doesn't change files or namespaces,
         // so get it once per link instead of once per namespace statement.
         const namespaceLookup = this.namespaceLookup;
-        for (const code of this.getAllCodeSegments()) {
-            if (isBrsCodeSegment(code)) {
+        for (const codeSegment of this.getAllCodeSegments()) {
+            if (isBrsCodeSegment(codeSegment)) {
                 this.linkSymbolTableDisposables.push(
-                    code.parser.symbolTable.pushParentProvider(() => this.symbolTable)
+                    codeSegment.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
 
                 //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable.
                 //Leaf containers always have symbolTable populated, so the lookup below is safe; the null
                 //guard tolerates edge cases like a namespace that failed to register.
-                for (const namespace of code['_cachedLookups'].namespaceStatements) {
+                for (const namespace of codeSegment['_cachedLookups'].namespaceStatements) {
                     const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
                     const aggregate = namespaceLookup.get(namespaceNameLower)?.symbolTable;
                     if (aggregate) {
@@ -1019,8 +1019,8 @@ export class Scope {
                 }
             }
         }
-        this.enumerateBrsCodeSegments((code) => {
-            const namespaceTypes = code.getNamespaceSymbolTable();
+        this.enumerateBrsCodeSegments((codeSegment) => {
+            const namespaceTypes = codeSegment.getNamespaceSymbolTable();
 
             this.linkSymbolTableDisposables.push(
                 ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
@@ -1055,8 +1055,8 @@ export class Scope {
                 result.push(...file.scriptTagImports);
             }
         }
-        this.enumerateOwnBrsCodeSegments((code) => {
-            result.push(...code.ownScriptImports);
+        this.enumerateOwnBrsCodeSegments((codeSegment) => {
+            result.push(...codeSegment.ownScriptImports);
         });
         return result;
     }
