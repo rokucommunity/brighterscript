@@ -38,6 +38,7 @@ export * from './SymbolTypeFlag';
 export * from './CodeActionUtil';
 export * from './DependencyGraph';
 export * from './PluginInterface';
+export * from './rokuSdk/withBrighterScript';
 
 // convenience exports from related libraries
 export {

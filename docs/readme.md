@@ -143,6 +143,10 @@ userSettings = getSettingsFromRegistry() ?? {}
 
 Plugins can be used to manipulate code at any point during the program lifecycle.
 
+## [Roku RSG SDK (`rk`) integration](roku-sdk.md)
+
+Write the static `pkg/` code of a Roku RSG SDK app in BrighterScript, compiled by `rk build` and `rk dev`.
+
 ## [Regular Expression Literals](regex-literals.md)
 
 ```brighterscript
