@@ -191,13 +191,13 @@ export class DiagnosticManager {
     public getDiagnostics(): BsDiagnostic[] {
         const doDiagnosticsGathering = () => {
             const diagnostics = this.getNonSuppressedDiagnostics();
+            this.logger?.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                this.diagnosticAdjuster?.adjust(this.options ?? {}, diagnostics);
+            });
+
             const filteredDiagnostics = this.logger?.time(LogLevel.debug, ['filter diagnostics'], () => {
                 return this.filterDiagnostics(diagnostics);
             }) ?? this.filterDiagnostics(diagnostics);
-
-            this.logger?.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
-                this.diagnosticAdjuster?.adjust(this.options ?? {}, filteredDiagnostics);
-            });
 
             this.logger?.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
 

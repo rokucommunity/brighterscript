@@ -9,6 +9,7 @@ import { createSandbox } from 'sinon';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { DiagnosticMessages } from './DiagnosticMessages';
+import { DiagnosticSeverity } from 'vscode-languageserver-protocol';
 
 
 describe('DiagnosticManager', () => {
@@ -633,6 +634,42 @@ describe('DiagnosticManager', () => {
             const file = program.setFile('source/main.brs', '') as BrsFile;
             program.diagnostics['diagnosticFilterer'].isFileCompletelyFiltered = () => false;
             expect(program.diagnostics.canSkipScopeValidationForFile(file)).to.be.false;
+        });
+    });
+
+    describe('getDiagnostics with diagnosticSeverityOverrides and minSeverity', () => {
+        it('applies diagnosticSeverityOverrides before filtering by minSeverity', () => {
+            program = new Program({
+                diagnosticSeverityOverrides: {
+                    1001: 'hint',
+                    1002: 'warn'
+                },
+                diagnosticFilters: [
+                    { minSeverity: 'warn' }
+                ]
+            });
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            program.diagnostics.register([
+                {
+                    message: 'warn overridden to hint should be hidden',
+                    location: location,
+                    code: 1001,
+                    severity: DiagnosticSeverity.Warning
+                },
+                {
+                    message: 'info overridden to warn should be kept',
+                    location: location,
+                    code: 1002,
+                    severity: DiagnosticSeverity.Information
+                }
+            ]);
+
+            expectDiagnostics(program.getDiagnostics(), [
+                {
+                    code: 1002,
+                    severity: DiagnosticSeverity.Warning
+                }
+            ]);
         });
     });
 });
