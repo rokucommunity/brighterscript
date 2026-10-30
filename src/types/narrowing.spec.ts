@@ -624,4 +624,264 @@ describe('type narrowing', () => {
             expect(getPrintedTypes(file)).to.eql(['string or Foo']);
         });
     });
+
+    describe('early exits', () => {
+        /**
+         * Validate a `main` sub (with the test classes and guards), and get the printed types
+         */
+        function getTypes(params: string, body: string) {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                ${classes}
+                sub main(${params})
+                    ${body}
+                end sub
+            `);
+            program.validate();
+            return getPrintedTypes(file);
+        }
+
+        it('narrows after a guard that returns', () => {
+            expect(getTypes('value as string or Foo', `
+                if not isFoo(value) then return
+                print value
+            `)).to.eql(['Foo']);
+            expect(getTypes('value as string or Foo', `
+                if isFoo(value)
+                    return
+                end if
+                print value
+            `)).to.eql(['string']);
+        });
+
+        it('allows member access after the guard', () => {
+            program.setFile('source/main.bs', `
+                ${classes}
+                sub main(value as string or Foo)
+                    if not isFoo(value) then return
+                    print value.name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('narrows after throw, end, exit sub and exit function', () => {
+            expect(getTypes('value as string or Foo', `
+                if not isFoo(value) then throw "not a Foo"
+                print value
+                if isBar(value) then end
+                print value
+            `)).to.eql(['Foo', 'Foo']);
+            expect(getTypes('value as string or Foo', `
+                if not isFoo(value) then exit sub
+                print value
+            `)).to.eql(['Foo']);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                ${classes}
+                function main(value as string or Foo) as string
+                    if not isFoo(value)
+                        exit function
+                    end if
+                    print value
+                    return value.name
+                end function
+            `);
+            program.validate();
+            expect(getPrintedTypes(file)).to.eql(['Foo']);
+        });
+
+        it('narrows the rest of a loop body after continue or exit', () => {
+            expect(getTypes('value as string or Foo, flag as boolean', `
+                while flag
+                    if not isFoo(value) then exit while
+                    print value
+                end while
+                for i = 0 to 10
+                    if not isFoo(value) then continue for
+                    print value
+                end for
+                print value
+            `)).to.eql(['Foo', 'Foo', 'string or Foo']);
+        });
+
+        it('narrows when every way past the if statement passed the condition', () => {
+            expect(getTypes('value as string or Foo or Bar', `
+                if isFoo(value)
+                    return
+                else if isBar(value)
+                    return
+                end if
+                print value
+            `)).to.eql(['string']);
+        });
+
+        it('narrows when the else branch exits', () => {
+            expect(getTypes('value as string or Foo', `
+                if isFoo(value)
+                    print value
+                else
+                    return
+                end if
+                print value
+            `)).to.eql(['Foo', 'Foo']);
+        });
+
+        it('combines the types from every way past the if statement', () => {
+            const types = getTypes('value as string or Foo or Bar', `
+                if isFoo(value)
+                    print value
+                else if isBar(value)
+                    return
+                else
+                    print value
+                end if
+                print value
+            `);
+            expect(types.slice(0, 2)).to.eql(['Foo', 'string']);
+            expect(types[2].split(' or ').sort()).to.eql(['Foo', 'string']);
+        });
+
+        it('narrows when every nested branch exits', () => {
+            expect(getTypes('value as string or Foo, flag as boolean', `
+                if not isFoo(value)
+                    if flag
+                        return
+                    else
+                        throw "not a Foo"
+                    end if
+                end if
+                print value
+            `)).to.eql(['Foo']);
+            expect(getTypes('value as string or Foo', `
+                if not isFoo(value)
+                    try
+                        return
+                    catch e
+                        throw e
+                    end try
+                end if
+                print value
+            `)).to.eql(['Foo']);
+        });
+
+        it('does not narrow when a branch might not exit', () => {
+            expect(getTypes('value as string or Foo, flag as boolean', `
+                if not isFoo(value)
+                    if flag
+                        return
+                    end if
+                end if
+                print value
+                if not isFoo(value)
+                    flag = not flag
+                end if
+                print value
+                if not isFoo(value)
+                    while flag
+                        exit while
+                    end while
+                end if
+                print value
+            `)).to.eql(['string or Foo', 'string or Foo', 'string or Foo']);
+        });
+
+        it('combines with enclosing if statements', () => {
+            expect(getTypes('value as string or Foo or Bar', `
+                if not isFoo(value)
+                    if isBar(value) then return
+                    print value
+                end if
+            `)).to.eql(['string']);
+        });
+
+        it('does not narrow after the variable is reassigned', () => {
+            expect(getTypes('value as string or Foo', `
+                if not isFoo(value) then return
+                value = "text"
+                print value
+            `)).to.eql(['string']);
+        });
+
+        it('narrows a reassigned variable from guards after the assignment only', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                ${classes}
+                function getValue() as string or Bar
+                    return "text"
+                end function
+                sub main(value as string or Foo)
+                    if not isFoo(value) then return
+                    value = getValue()
+                    if isBar(value) then return
+                    print value
+                end sub
+            `);
+            program.validate();
+            expect(getPrintedTypes(file)).to.eql(['string']);
+        });
+
+        it('does not narrow in a loop that reassigns the variable', () => {
+            expect(getTypes('value as string or Foo, flag as boolean', `
+                if not isFoo(value) then return
+                while flag
+                    print value
+                    value = "text"
+                end while
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('does not narrow when the guard assigns the variable', () => {
+            expect(getTypes('value as string or Foo', `
+                if not isFoo(value)
+                    value = "text"
+                    return
+                end if
+                print value
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('does not narrow in functions with goto', () => {
+            expect(getTypes('value as string or Foo', `
+                goto check
+                check:
+                if not isFoo(value) then return
+                print value
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('updates when a type guard in another file changes', () => {
+            program.setFile('source/guards.bs', `
+                function isFoo(value) as value is Foo
+                    return true
+                end function
+            `);
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                class Foo
+                    name as string
+                end class
+                class Bar
+                    size as integer
+                end class
+                sub main(value as string or Foo or Bar)
+                    if not isFoo(value) then return
+                    print value
+                end sub
+            `);
+            program.validate();
+            expect(getPrintedTypes(file)).to.eql(['Foo']);
+            program.setFile('source/guards.bs', `
+                function isFoo(value) as value is Bar
+                    return true
+                end function
+            `);
+            program.validate();
+            expect(getPrintedTypes(file)).to.eql(['Bar']);
+        });
+
+        it('does not narrow statements before the guard', () => {
+            expect(getTypes('value as string or Foo', `
+                print value
+                if not isFoo(value) then return
+            `)).to.eql(['string or Foo']);
+        });
+    });
 });

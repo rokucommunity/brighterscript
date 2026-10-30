@@ -1287,6 +1287,10 @@ export interface GetTypeOptions {
     isExistenceTest?: boolean;
     preferDocType?: boolean;
     /**
+     * Skip narrowing variable types by the conditions they are known to have passed (i.e. type guards)
+     */
+    skipNarrowing?: boolean;
+    /**
      * For narrowing the type, which statement are we concerned with in the current block?
      */
     statementIndex?: number | 'end';
