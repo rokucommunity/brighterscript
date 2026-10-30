@@ -22,6 +22,8 @@ import { Lexer } from './lexer/Lexer';
 import type { Locatable } from './lexer/Token';
 import { isExitStatement } from './astUtils/reflection';
 import { ComponentType } from './types/ComponentType';
+import { SourceNode } from 'source-map';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 
 const sinon = createSandbox();
 
@@ -231,6 +233,100 @@ describe('util', () => {
             } finally {
                 process.chdir(cwd);
             }
+        });
+    });
+
+    describe('createConfigFile', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(rootDir);
+        });
+
+        it('creates a bsconfig.json file', () => {
+            const configPath = util.createConfigFile(rootDir);
+            expect(configPath).to.equal(s`${rootDir}/bsconfig.json`);
+            expect(fsExtra.pathExistsSync(configPath!)).to.be.true;
+        });
+
+        it('uses cwd when not provided', () => {
+            process.chdir(rootDir);
+            try {
+                util.createConfigFile();
+            } finally {
+                process.chdir(cwd);
+            }
+            expect(fsExtra.pathExistsSync(s`${rootDir}/bsconfig.json`)).to.be.true;
+        });
+
+        it('includes the recommended defaults, and nothing else uncommented', () => {
+            const config = util.loadConfigFile(util.createConfigFile(rootDir))!;
+            delete config._ancestors;
+            expect(config).to.eql({
+                //loadConfigFile resolves paths relative to the config file
+                outDir: s`${rootDir}/dist`,
+                compilerOptions: {
+                    minFirmwareVersion: DEFAULT_MIN_FIRMWARE_VERSION,
+                    autoImportComponentScript: true,
+                    sourceMap: true,
+                    relativeSourceMaps: true
+                },
+                //none of the generated settings are deprecated
+                _deprecationDiagnostics: []
+            });
+        });
+
+        it('includes the other supported options as comments', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            for (const key of [
+                'allowBrighterScriptInBrightScript', 'bslibDestinationDir', 'cwd', 'diagnosticFilters', 'diagnosticLevel',
+                'diagnosticReporters', 'diagnosticSeverityOverrides', 'emitDefinitions', 'emitFullPaths', 'extends', 'files',
+                'legacyCallfuncHandling', 'logLevel', 'manifest', 'noEmit', 'plugins', 'pruneEmptyCodeFiles', 'removeParameterTypes', 'require',
+                'resolveSourceRoot', 'rootDir', 'showDiagnosticsInConsole', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers',
+                'validate', 'watch'
+            ]) {
+                expect(contents).to.include(`// "${key}":`);
+            }
+        });
+
+        it('only includes v1 options, in the right section', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            const topLevelKeys: string[] = [];
+            const compilerOptionKeys: string[] = [];
+            //every setting (commented or not) starts its line. 4 spaces of indent is top-level, 8 is inside `compilerOptions`
+            for (const line of contents.split('\n')) {
+                const match = /^( +)(?:\/\/ )?"(\w+)":/.exec(line);
+                if (match) {
+                    (match[1].length === 4 ? topLevelKeys : compilerOptionKeys).push(match[2]);
+                }
+            }
+            //an exact list, so a deprecated option (`stagingDir`, `deploy`, top-level compiler options, etc.) or a
+            //v0-only option (`host`, `password`, `outFile`, etc.) can't sneak in
+            expect(topLevelKeys.sort()).to.eql([
+                'compilerOptions', 'cwd', 'diagnosticFilters', 'diagnosticLevel', 'diagnosticReporters', 'diagnosticSeverityOverrides',
+                'extends', 'files', 'logLevel', 'noEmit', 'outDir', 'plugins', 'require', 'rootDir', 'showDiagnosticsInConsole',
+                'validate', 'watch'
+            ]);
+            expect(compilerOptionKeys.sort()).to.eql([
+                'allowBrighterScriptInBrightScript', 'autoImportComponentScript', 'bslibDestinationDir', 'emitDefinitions',
+                'emitFullPaths', 'legacyCallfuncHandling', 'manifest', 'minFirmwareVersion', 'pruneEmptyCodeFiles', 'relativeSourceMaps',
+                'removeParameterTypes', 'resolveSourceRoot', 'sourceMap', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers'
+            ]);
+        });
+
+        it('puts each description on the same line as its setting', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            const settingLines = contents.split('\n').filter(line => line.includes('": '));
+            expect(settingLines.length).to.be.greaterThan(0);
+            for (const line of settingLines) {
+                expect(line).to.match(/\/\* .+ \*\/$/);
+            }
+        });
+
+        it('does not overwrite an existing bsconfig.json file', () => {
+            const configPath = s`${rootDir}/bsconfig.json`;
+            fsExtra.outputFileSync(configPath, '{ "rootDir": "custom" }');
+
+            expect(util.createConfigFile(rootDir)).to.be.undefined;
+            expect(fsExtra.readFileSync(configPath).toString()).to.equal('{ "rootDir": "custom" }');
         });
     });
 
@@ -878,6 +974,20 @@ describe('util', () => {
         });
         it('works when source and target are in different subs', () => {
             expect(util.getRelativePath('sub1/file.xml', 'sub2/file.brs')).to.equal(s`../sub2/file.brs`);
+        });
+    });
+
+    describe('pushAll', () => {
+        it('appends items in order and returns the target', () => {
+            const target = [1, 2];
+            expect(util.pushAll(target, [3, 4])).to.equal(target);
+            expect(target).to.eql([1, 2, 3, 4]);
+        });
+
+        it('handles arrays too large to spread into push', () => {
+            const items = new Array<number>(500_000).fill(1);
+            expect(() => [].push(...items)).to.throw(RangeError);
+            expect(util.pushAll([0], items)).to.be.lengthOf(500_001);
         });
     });
 
@@ -2329,6 +2439,49 @@ describe('util', () => {
             const token = createToken(TokenKind.Identifier);
             token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment 2`)] as any[];
             expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 2`)]);
+        });
+    });
+
+    describe('stripTrailingSourceMappingURLComment', () => {
+        it('strips the comment from a simpleMap node whose source ends with a trailing newline', () => {
+            //reproduces https://github.com/rokucommunity/brighterscript/issues/1818: the file's final
+            //line is empty (trailing newline), so the last SourceNode produced by simpleMap has no children
+            const fileContents = 'sub p()\nend sub\n\'//# sourceMappingURL=./p.brs.map\n';
+            const sourceMapNode = util.simpleMap('source/p.brs', fileContents);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(sourceMapNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
+        });
+
+        it('guards against a plugin-produced SourceNode whose rightmost descendant has no children', () => {
+            //a SourceNode can end up with an empty rightmost child from any producer, not just simpleMap
+            const emptyTrailingNode = new SourceNode(1, 0, 'source/plugin-output.brs', []);
+            const rootNode = new SourceNode(null, null, 'source/plugin-output.brs', [
+                'sub p()\nend sub\n\'//# sourceMappingURL=./plugin-output.brs.map\n',
+                emptyTrailingNode
+            ]);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(rootNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
+        });
+
+        it('does not eat real content when the tree contains a SourceNode from a different installed copy of `source-map`', () => {
+            //a plugin bundling its own `source-map` dependency can produce SourceNodes that fail `instanceof` against
+            //this copy of the class, so this stand-in duck-types the same way source-map's own code does internally
+            const foreignSourceNodeStandIn = {
+                //this is the exact marker property name/spelling that source-map itself uses to identify SourceNodes
+                '$$$isSourceNode$$$': true,
+                children: ['\n'],
+                walk: function walk(visitChunk: (chunk: string) => void) {
+                    for (const child of this.children) {
+                        visitChunk(child);
+                    }
+                }
+            };
+            const rootNode = new SourceNode(null, null, 'source/plugin-output.brs', [
+                'sub p()\nend sub\n\'//# sourceMappingURL=./plugin-output.brs.map',
+                foreignSourceNodeStandIn as unknown as SourceNode
+            ]);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(rootNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
         });
     });
 });

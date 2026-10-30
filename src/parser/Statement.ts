@@ -106,7 +106,7 @@ export class Body extends Statement implements TypedefProvider {
                 result.push(state.newline);
             }
 
-            result.push(...statement.transpile(state));
+            util.pushAll(result, statement.transpile(state));
         }
         return result;
     }
@@ -379,9 +379,7 @@ export class Block extends Statement {
 
             //push block onto parent list
             state.lineage.unshift(this);
-            results.push(
-                ...statement.transpile(state)
-            );
+            util.pushAll(results, statement.transpile(state));
             state.lineage.shift();
         }
         //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
@@ -744,7 +742,7 @@ export class IfStatement extends Statement {
                 if (body.length > 0) {
                     //zero or more spaces between the `else` and the `if`
                     results.push(util.getLeadingWhitespace(this.elseBranch.tokens.if));
-                    results.push(...body);
+                    util.pushAll(results, body);
 
                     // stop here because chained if will transpile the rest
                     return results;
@@ -759,7 +757,7 @@ export class IfStatement extends Statement {
                 state.lineage.shift();
 
                 if (body.length > 0) {
-                    results.push(...body);
+                    util.pushAll(results, body);
                 }
             }
         }
@@ -1396,7 +1394,7 @@ export class ForStatement extends Statement {
         //loop body
         state.lineage.unshift(this);
         state.pushLoopLabel?.();
-        result.push(...this.body.transpile(state));
+        util.pushAll(result, this.body.transpile(state));
         state.popLoopLabel?.();
         state.lineage.shift();
 
@@ -1522,7 +1520,7 @@ export class ForEachStatement extends Statement {
         //body
         state.lineage.unshift(this);
         state.pushLoopLabel?.();
-        result.push(...this.body.transpile(state));
+        util.pushAll(result, this.body.transpile(state));
         state.popLoopLabel?.();
         state.lineage.shift();
 
@@ -1635,7 +1633,7 @@ export class WhileStatement extends Statement {
         state.lineage.unshift(this);
         //body
         state.pushLoopLabel?.();
-        result.push(...this.body.transpile(state));
+        util.pushAll(result, this.body.transpile(state));
         state.popLoopLabel?.();
         state.lineage.shift();
 
@@ -2800,12 +2798,12 @@ export class ClassStatement extends Statement implements TypedefProvider {
         const body = this.getTranspiledClassBody(ancestors);
 
         //make the methods
-        result.push(...this.getTranspiledMethods(state, className, body));
+        util.pushAll(result, this.getTranspiledMethods(state, className, body));
         //make the builder
-        result.push(...this.getTranspiledBuilder(state, className, ancestors, body));
+        util.pushAll(result, this.getTranspiledBuilder(state, className, ancestors, body));
         result.push('\n', state.indent());
         //make the class assembler (i.e. the public-facing class creator method)
-        result.push(...this.getTranspiledClassFunction(state, className));
+        util.pushAll(result, this.getTranspiledClassFunction(state, className));
 
         return result;
     }
@@ -3094,9 +3092,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
                     state.skipLeadingComments = false;
                     delete state.classStatement;
                 } else if (isConditionalCompileStatement(statement)) {
-                    memberResults.push(
-                        ...this.getTranspiledConditionalCompileMembers(state, statement, transpileMemberAssignments)
-                    );
+                    util.pushAll(memberResults, this.getTranspiledConditionalCompileMembers(state, statement, transpileMemberAssignments));
                 } else {
                     //other random statements (probably just comments)
                     memberResults.push(
@@ -3108,7 +3104,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             }
             return memberResults;
         };
-        result.push(...transpileMemberAssignments(body));
+        util.pushAll(result, transpileMemberAssignments(body));
         //return the instance
         result.push('return instance\n');
         state.blockDepth--;
@@ -3172,18 +3168,16 @@ export class ClassStatement extends Statement implements TypedefProvider {
         for (let statement of body) {
             if (isMethodStatement(statement)) {
                 state.classStatement = this;
+                util.pushAll(result, statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)));
                 result.push(
-                    ...statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)),
                     state.newline,
                     state.indent()
                 );
                 delete state.classStatement;
             } else if (isConditionalCompileStatement(statement)) {
-                result.push(
-                    ...this.getTranspiledConditionalCompileMembers(state, statement, (branchStatements) => {
-                        return this.getTranspiledMethods(state, transpiledClassName, branchStatements);
-                    })
-                );
+                util.pushAll(result, this.getTranspiledConditionalCompileMembers(state, statement, (branchStatements) => {
+                    return this.getTranspiledMethods(state, transpiledClassName, branchStatements);
+                }));
             }
         }
         return result;
@@ -3223,7 +3217,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             } else {
                 result.push('#else');
             }
-            result.push(...transpileBranchBody(branchStatements));
+            util.pushAll(result, transpileBranchBody(branchStatements));
             isFirstBranch = false;
         });
         result.push(
@@ -4796,7 +4790,7 @@ export class ConditionalCompileStatement extends Statement {
 
                 if (body.length > 0) {
                     //zero or more spaces between the `else` and the `if`
-                    results.push(...body);
+                    util.pushAll(results, body);
 
                     // stop here because chained if will transpile the rest
                     return results;
@@ -4811,7 +4805,7 @@ export class ConditionalCompileStatement extends Statement {
                 state.lineage.shift();
 
                 if (body.length > 0) {
-                    results.push(...body);
+                    util.pushAll(results, body);
                 }
             }
         }
@@ -5227,9 +5221,7 @@ export class SelectCaseStatement extends Statement {
                     ' then'
                 );
             }
-            chain.push(
-                ...caseStatement.transpileBody(state)
-            );
+            util.pushAll(chain, caseStatement.transpileBody(state));
             previousCase = caseStatement;
         }
         if (previousCase) {
@@ -5255,7 +5247,7 @@ export class SelectCaseStatement extends Statement {
             if (i > 0) {
                 result.push(state.newline, state.indent());
             }
-            result.push(...lines[i]);
+            util.pushAll(result, lines[i]);
         }
         return result;
     }
