@@ -884,4 +884,163 @@ describe('type narrowing', () => {
             `)).to.eql(['string or Foo']);
         });
     });
+
+    describe('dotted paths', () => {
+        const wrapper = `
+            class Wrapper
+                value as string or Foo
+                other as string or Foo
+                child as Wrapper
+            end class
+        `;
+
+        /**
+         * Validate a `main` sub (with the test classes, guards and the Wrapper class), and get the printed types
+         */
+        function getTypes(params: string, body: string) {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                ${classes}
+                ${wrapper}
+                sub main(${params})
+                    ${body}
+                end sub
+            `);
+            program.validate();
+            return getPrintedTypes(file);
+        }
+
+        it('narrows a member in if statements', () => {
+            expect(getTypes('data as Wrapper', `
+                if isFoo(data.value)
+                    print data.value
+                else
+                    print data.value
+                end if
+                print data.value
+            `)).to.eql(['Foo', 'string', 'string or Foo']);
+        });
+
+        it('narrows nested members', () => {
+            expect(getTypes('data as Wrapper', `
+                if isFoo(data.child.child.value)
+                    print data.child.child.value
+                    print data.child.value
+                end if
+            `)).to.eql(['Foo', 'string or Foo']);
+        });
+
+        it('narrows members after early exits', () => {
+            expect(getTypes('data as Wrapper', `
+                if not isFoo(data.value) then return
+                print data.value
+                print data.other
+            `)).to.eql(['Foo', 'string or Foo']);
+        });
+
+        it('narrows on the right side of and', () => {
+            program.setFile('source/main.bs', `
+                ${classes}
+                ${wrapper}
+                sub main(data as Wrapper)
+                    print isFoo(data.value) and data.value.name = "test"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows member access on the narrowed member', () => {
+            program.setFile('source/main.bs', `
+                ${classes}
+                ${wrapper}
+                sub main(data as Wrapper)
+                    if isFoo(data.value)
+                        print data.value.name
+                    end if
+                    if not isFoo(data.other) then return
+                    print data.other.name
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('is case insensitive', () => {
+            expect(getTypes('data as Wrapper', `
+                if isFoo(DATA.Value)
+                    print data.VALUE
+                end if
+            `)).to.eql(['Foo']);
+        });
+
+        it('narrows members of m in class methods', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                ${classes}
+                class Holder
+                    value as string or Foo
+                    sub check()
+                        if isFoo(m.value)
+                            print m.value
+                        end if
+                    end sub
+                end class
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            expect(getPrintedTypes(file)).to.eql(['Foo']);
+        });
+
+        it('narrows members of dynamic objects', () => {
+            expect(getTypes('', `
+                if isFoo(m.top.content)
+                    print m.top.content
+                end if
+            `)).to.eql(['Foo']);
+        });
+
+        it('does not narrow after the member is assigned', () => {
+            expect(getTypes('data as Wrapper', `
+                if not isFoo(data.value) then return
+                data.value = "text"
+                print data.value
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('does not narrow after the object is assigned', () => {
+            expect(getTypes('data as Wrapper, other as Wrapper', `
+                if not isFoo(data.child.value) then return
+                data.child = other
+                print data.child.value
+                if not isFoo(data.value) then return
+                data = other
+                print data.value
+            `)).to.eql(['string or Foo', 'string or Foo']);
+        });
+
+        it('does not narrow after an indexed assignment on the object', () => {
+            expect(getTypes('data as Wrapper', `
+                if not isFoo(data.value) then return
+                data["value"] = "text"
+                print data.value
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('keeps narrowing after assigning a member of the narrowed member', () => {
+            expect(getTypes('data as Wrapper', `
+                if not isFoo(data.value) then return
+                data.value.name = "text"
+                print data.value
+            `)).to.eql(['Foo']);
+        });
+
+        it('does not narrow in a loop that assigns the member', () => {
+            expect(getTypes('data as Wrapper, flag as boolean', `
+                if not isFoo(data.value) then return
+                while flag
+                    print data.value
+                    data.value = "text"
+                end while
+            `)).to.eql(['string or Foo']);
+        });
+    });
 });

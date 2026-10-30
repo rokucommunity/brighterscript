@@ -54,6 +54,21 @@ sub example(a as string or roSGNode, b as string or roSGNode)
 end sub
 ```
 
+## Members
+
+Members (including members of members, and members of `m`) are narrowed too:
+
+```brighterscript
+sub render()
+    if isNode(m.top.content)
+        print m.top.content.id ' m.top.content is known to be roSGNode
+    end if
+end sub
+```
+
+- Narrowing of a member stops when it, or an object it belongs to, is assigned. i.e. `m.top = other` or `m.top["content"] = other` stop the narrowing of `m.top.content`. Assigning a member of the narrowed member (`m.top.content.id = "main"`) does not.
+- Like in TypeScript, calling a function does not stop the narrowing, even though the function could change the member.
+
 ## Early exits
 
 When a branch of an `if` statement always leaves the block (with `return`, `exit sub`, `exit function`, `exit for`, `exit while`, `continue`, `throw` or `end`), the statements after the `if` statement are narrowed by the conditions that let control get past it:

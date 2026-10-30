@@ -29,7 +29,7 @@ import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import type { TypePredicate } from '../types/TypedFunctionType';
 import { BooleanType } from '../types/BooleanType';
-import { getNarrowedVariableType } from '../types/narrowing';
+import { getNarrowedType } from '../types/narrowing';
 import { InvalidType } from '../types/InvalidType';
 import { UninitializedType } from '../types/UninitializedType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -761,6 +761,7 @@ export class DottedGetExpression extends Expression {
             // treat this class constructor as a function
             result = FunctionType.instance;
         }
+        result = getNarrowedType(this, result, options);
         options.typeChain?.push(new TypeChainEntry({
             name: this.tokens.name?.text,
             type: result,
@@ -776,7 +777,7 @@ export class DottedGetExpression extends Expression {
         }
         // It is possible at runtime that a value has been added dynamically to an object, or something
         // TODO: maybe have a strict flag on this?
-        return DynamicType.instance;
+        return getNarrowedType(this, DynamicType.instance, options);
     }
 
     getName(parseMode: ParseMode) {
@@ -1790,7 +1791,7 @@ export class VariableExpression extends Expression {
             if (util.isClassUsedAsFunction(resultType, this, options)) {
                 resultType = FunctionType.instance;
             }
-            resultType = getNarrowedVariableType(this, resultType, options);
+            resultType = getNarrowedType(this, resultType, options);
 
         }
         options?.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, astNode: this }));
