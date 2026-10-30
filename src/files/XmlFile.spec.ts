@@ -648,7 +648,7 @@ describe('XmlFile', () => {
             expect(file.parentComponentName).to.not.exist;
         });
 
-        it('adds warning when no "extends" attribute is found', () => {
+        it('does not warn when no "extends" attribute is found', () => {
             program.setFile<XmlFile>(
                 {
                     src: `${rootDir}/components/comp1.xml`,
@@ -661,9 +661,7 @@ describe('XmlFile', () => {
                 `
             );
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
-            ]);
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -1785,12 +1783,12 @@ end sub`);
             program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!--bs:disable-next-line 1006-->
-                <component>
+                <component> <script type="text/brightscript" uri="pkg:/missing.brs" />
                 </component>
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                DiagnosticMessages.referencedFileDoesNotExist()
             ]);
         });
 
@@ -1809,12 +1807,12 @@ end sub`);
             //component without a name attribute
             program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ButtonCustom"> <!--bs:disable-line 1006-->
+                <component> <script type="text/brightscript" uri="pkg:/missing.brs" /> <!--bs:disable-line 1006-->
                 </component>
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                DiagnosticMessages.referencedFileDoesNotExist()
             ]);
         });
 
@@ -1833,8 +1831,9 @@ end sub`);
             it('suppresses only the listed codes', () => {
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <!--bs:disable 1007-->
+                    <!--bs:disable 1004-->
                     <component>
+                        <script type="text/brightscript" uri="pkg:/missing.brs" />
                     </component>
                 `);
                 program.validate();
@@ -1847,12 +1846,13 @@ end sub`);
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <!--bs:disable 1006-->
-                    <component name="Foo">
+                    <component>
+                        <script type="text/brightscript" uri="pkg:/missing.brs" />
                     </component>
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                    DiagnosticMessages.referencedFileDoesNotExist()
                 ]);
             });
 
@@ -1866,8 +1866,7 @@ end sub`);
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                    DiagnosticMessages.xmlComponentMissingNameAttribute()
                 ]);
             });
         });

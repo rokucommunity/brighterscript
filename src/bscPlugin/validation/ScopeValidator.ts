@@ -4,7 +4,7 @@ import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isAr
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnosticInput, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnosticInput, CallableContainer, ExtraSymbolData, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 import { util } from '../../util';
@@ -26,7 +26,6 @@ import { ParseMode } from '../../parser/Parser';
 import { BsClassValidator } from '../../validators/ClassValidator';
 import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
-import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
 import { getAllTypesFromCompoundType } from '../../types/helpers';
@@ -56,7 +55,6 @@ const enum ScopeValidatorDiagnosticTag {
     FunctionCollisions = 'ScopeValidatorFunctionCollisions',
     Classes = 'ScopeValidatorClasses',
     XMLInterface = 'ScopeValidatorXML',
-    XMLImports = 'ScopeValidatorXMLImports',
     ObserverCallbacks = 'ScopeValidatorObserverCallbacks',
     Default = 'ScopeValidator',
     Segment = 'ScopeValidatorSegment'
@@ -111,8 +109,6 @@ export class ScopeValidator {
             }).durationText;
             metrics.xmlValidationTime = validationStopwatch.getDurationTextFor(() => {
                 if (isXmlScope(this.event.scope)) {
-                    //detect when the child imports a script that its ancestor also imports
-                    this.diagnosticDetectDuplicateAncestorScriptImports(this.event.scope);
                     //validate component interface
                     this.validateXmlInterface(this.event.scope);
                     //validate the function names passed to `observeField`/`observeFieldScoped`
@@ -2022,37 +2018,6 @@ export class ScopeValidator {
                     ...DiagnosticMessages.cannotFindName(docTypeTag.typeString),
                     location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
                 });
-            }
-        }
-    }
-
-    /**
-     * Detect when a child has imported a script that an ancestor also imported
-     */
-    private diagnosticDetectDuplicateAncestorScriptImports(scope: XmlScope) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(scope.xmlFile?.srcPath), tag: ScopeValidatorDiagnosticTag.XMLImports });
-        if (scope.xmlFile.parentComponent) {
-            //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
-            let parentScriptImports = scope.xmlFile.getAncestorScriptTagImports();
-            let lookup = {} as Record<string, FileReference>;
-            for (let parentScriptImport of parentScriptImports) {
-                //keep the first occurance of a pkgPath. Parent imports are first in the array
-                if (!lookup[parentScriptImport.destPath]) {
-                    lookup[parentScriptImport.destPath] = parentScriptImport;
-                }
-            }
-
-            //add warning for every script tag that this file shares with an ancestor
-            for (let scriptImport of scope.xmlFile.scriptTagImports) {
-                let ancestorScriptImport = lookup[scriptImport.destPath];
-                if (ancestorScriptImport) {
-                    let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
-                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.destPath;
-                    this.addDiagnostic({
-                        location: util.createLocationFromFileRange(scope.xmlFile, scriptImport.filePathRange),
-                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
-                    }, ScopeValidatorDiagnosticTag.XMLImports);
-                }
             }
         }
     }

@@ -5,7 +5,6 @@ import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap, isDiagnosticOfType } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BscFile } from '../../files/BscFile';
-import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
@@ -15,7 +14,6 @@ import type { MethodStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
 import { TokenKind } from '../../lexer/TokenKind';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import { getMissingExtendsInsertPosition } from './codeActionHelpers';
 import { rangeFromTokenValue } from '../../parser/SGParser';
 import type { Range } from 'vscode-languageserver';
 
@@ -34,15 +32,11 @@ export class CodeActionsProcessor {
         for (const diagnostic of this.event.diagnostics) {
             if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
                 this.suggestCannotFindNameQuickFix(diagnostic as DiagnosticMessageType<'cannotFindName'>);
-            } else if (diagnostic.code === DiagnosticCodeMap.xmlComponentMissingExtendsAttribute) {
-                this.suggestMissingExtendsQuickFix(diagnostic as DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
                 this.suggestNonVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
@@ -72,8 +66,6 @@ export class CodeActionsProcessor {
                 } else if (code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                     this.suggestRemoveOverrideFromConstructorQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                    this.suggestRemoveScriptImportQuickFixes(allInFile);
-                } else if (code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
                     this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
                     this.suggestRemoveScriptImportQuickFixes(allInFile);
@@ -465,55 +457,6 @@ export class CodeActionsProcessor {
     }
 
     /**
-     * Adds code actions to insert a missing `extends` attribute on an XML component tag.
-     * Offers Group, Task, and ContentNode as common choices.
-     */
-    private suggestMissingExtendsQuickFix(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
-        const srcPath = this.event.file.srcPath;
-        const pos = getMissingExtendsInsertPosition(this.event.file as XmlFile);
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Extend "Group"`,
-                diagnostics: [diagnostic],
-                isPreferred: true,
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'insert',
-                    filePath: srcPath,
-                    position: pos,
-                    newText: ' extends="Group"'
-                }]
-            })
-        );
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Extend "Task"`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'insert',
-                    filePath: srcPath,
-                    position: pos,
-                    newText: ' extends="Task"'
-                }]
-            })
-        );
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Extend "ContentNode"`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'insert',
-                    filePath: srcPath,
-                    position: pos,
-                    newText: ' extends="ContentNode"'
-                }]
-            })
-        );
-    }
-
-    /**
      * Adds code actions to resolve a `voidFunctionMayNotReturnValue` diagnostic.
      * Offers removing the return value, converting sub→function, or removing an `as void` return type.
      */
@@ -662,7 +605,6 @@ export class CodeActionsProcessor {
      */
     private suggestRemoveScriptImportQuickFixes(diagnostics: BsDiagnostic[]) {
         const titles: Record<string, [string, string]> = {
-            [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
             [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
         };
         const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];

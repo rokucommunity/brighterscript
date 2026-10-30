@@ -68,7 +68,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'missing-name-attribute'
     }),
-    xmlComponentMissingExtendsAttribute: () => ({
+    __unused45: () => ({
         message: `Component is mising "extends" attribute and will automatically extend "Group" by default`,
         legacyCode: 1007,
         severity: DiagnosticSeverity.Warning,
@@ -81,7 +81,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'syntax-error'
     }),
-    unnecessaryScriptImportInChildFromParent: (parentComponentName: string) => ({
+    __unused46: (parentComponentName: string) => ({
         message: `Unnecessary script import: Script is already imported in ancestor component '${parentComponentName}'.`,
         legacyCode: 1009,
         severity: DiagnosticSeverity.Warning,

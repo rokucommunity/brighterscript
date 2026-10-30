@@ -96,12 +96,6 @@ export class XmlFileValidator {
                 location: componentElement.tokens.startTagName.location
             });
         }
-        if (!componentElement.extends) {
-            this.event.program.diagnostics.register({
-                ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                location: componentElement.tokens.startTagName.location
-            });
-        }
 
         //flag explicit script imports that match the auto-imported codebehind file
         const file = this.event.file;
