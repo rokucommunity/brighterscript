@@ -79,6 +79,7 @@ Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's ow
     - `beforeValidateProgram`
     - For each file:
         - `beforeValidateFile`
+        - **BrighterScript runs** (registers the file's declarations)
         - `validateFile`
         - **BrighterScript runs** (validates the file)
         - `afterValidateFile`
