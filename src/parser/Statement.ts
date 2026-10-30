@@ -925,14 +925,14 @@ export class PrintStatement extends Statement {
         ] as TranspileResult;
 
         //if the first expression has no leading whitespace, add a single space between the `print` and the expression
-        if (this.expressions.length > 0 && !this.expressions[0].leadingTrivia?.find(t => t?.kind === TokenKind.Whitespace)) {
+        if (this.expressions.length > 0 && !util.getLeadingWhitespace(this.expressions[0])) {
             result.push(' ');
         }
 
         // eslint-disable-next-line @typescript-eslint/prefer-for-of
         for (let i = 0; i < this.expressions.length; i++) {
             const expression = this.expressions[i];
-            let leadingWhitespace = expression.leadingTrivia?.find(t => t?.kind === TokenKind.Whitespace)?.text;
+            let leadingWhitespace = util.getLeadingWhitespace(expression);
             if (leadingWhitespace) {
                 result.push(leadingWhitespace);
                 //if the previous expression was NOT a separator, and this one is not also, add a space between them

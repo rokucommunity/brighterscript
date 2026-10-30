@@ -770,7 +770,7 @@ describe('parser', () => {
                 `);
                 let { ast, diagnostics } = Parser.parse(tokens);
                 expect(diagnostics).to.be.lengthOf(0, 'Error count should be 0');
-                expect(ast.statements[0].leadingTrivia[2].text).to.equal(`'comment 1`);
+                expect(ast.statements[0].leadingTrivia.find(x => x.kind === TokenKind.Comment).text).to.equal(`'comment 1`);
             });
 
             it('works in aa literal as its own statement', () => {

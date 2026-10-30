@@ -264,7 +264,7 @@ describe('parser', () => {
 
         // 1st AA has no elements - `rem` denotes comment
         expect(mainStatements[0].value.elements.length).to.eq(0);
-        let commentBeforeClose = mainStatements[0].value.tokens.close.leadingTrivia[2];
+        let commentBeforeClose = mainStatements[0].value.tokens.close.leadingTrivia.find(x => x.kind === TokenKind.Comment);
         expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
         expect(commentBeforeClose.text).to.equal('rem: 1');
 
@@ -273,13 +273,13 @@ describe('parser', () => {
         expect(isAAMemberExpression(mainStatements[1].value.elements[0])).to.true;
         expect(mainStatements[1].value.elements[0].tokens.key.text).to.equal('name');
         expect(mainStatements[1].value.elements[0].value.tokens.value.text).to.equal('"bob"');
-        commentBeforeClose = mainStatements[1].value.tokens.close.leadingTrivia[2];
+        commentBeforeClose = mainStatements[1].value.tokens.close.leadingTrivia.find(x => x.kind === TokenKind.Comment);
         expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
         expect(commentBeforeClose.text).to.equal('rem: 2');
 
         // 3nd AA has no elements - `rem` colons are included in comments
         expect(mainStatements[2].value.elements.length).to.eq(0);
-        commentBeforeClose = mainStatements[2].value.tokens.close.leadingTrivia[2];
+        commentBeforeClose = mainStatements[2].value.tokens.close.leadingTrivia.find(x => x.kind === TokenKind.Comment);
         expect(commentBeforeClose.kind).to.equal(TokenKind.Comment);
         expect(commentBeforeClose.text).to.equal('rem: 3: name: "bob"');
 

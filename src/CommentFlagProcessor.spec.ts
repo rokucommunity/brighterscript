@@ -1,3 +1,4 @@
+import { TokenKind } from './lexer/TokenKind';
 import { expect } from './chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { CommentFlagProcessor } from './CommentFlagProcessor';
@@ -141,7 +142,7 @@ describe('CommentFlagProcessor', () => {
 
         it('works for special case', () => {
             const tokens = Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens;
-            const token = tokens[2].leadingTrivia[1];
+            const token = tokens[2].leadingTrivia.find(x => x.kind === TokenKind.Comment);
             expect(
                 processor['tokenize'](token.text, util.getLocation(token).range)
             ).to.eql({

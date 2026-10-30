@@ -3,6 +3,7 @@ import { expect } from '../chai-config.spec';
 
 import { AllowedTriviaTokens, TokenKind, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES, Keywords, ReservedTokenKinds } from './TokenKind';
 import { Lexer } from './Lexer';
+import { WhitespaceOnlyTrivia } from './TokenObject';
 import type { Token } from './Token';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
@@ -1912,7 +1913,8 @@ describe('lexer', () => {
             return tokens
                 //exclude the explicit triva tokens since they'll be included in the leading/trailing arrays
                 .filter(x => !AllowedTriviaTokens.includes(x.kind))
-                .flatMap(x => [...x.leadingTrivia ?? [], x])
+                //whitespace is recorded as runs rather than tokens, so rebuild it
+                .flatMap(x => [...util.getLeadingTrivia(x, { includeWhitespace: true }), x])
                 .map(x => x.text)
                 .join('');
         }
@@ -1932,7 +1934,7 @@ describe('lexer', () => {
             ).to.eql(input);
         });
 
-        it('tokens only have leadingTrivia array when they have at least one trivia item', () => {
+        it('tokens only have leadingTrivia array when they have at least one trivia item (or share the whitespace-only marker)', () => {
             const input = `
                 function   test(  )
                     'comment
@@ -1943,8 +1945,11 @@ describe('lexer', () => {
                 end function`;
             const tokens = Lexer.scan(input).tokens;
             let numWithTrivia = 0;
+            let numWhitespaceOnly = 0;
             for (const token of tokens) {
-                if (token.leadingTrivia) {
+                if (token.leadingTrivia === WhitespaceOnlyTrivia) {
+                    numWhitespaceOnly++;
+                } else if (token.leadingTrivia) {
                     expect(token.leadingTrivia.length).to.greaterThan(0);
                     numWithTrivia++;
                 } else {
@@ -1953,6 +1958,27 @@ describe('lexer', () => {
 
             }
             expect(numWithTrivia).to.be.lessThan(tokens.length);
+            expect(numWhitespaceOnly).to.be.greaterThan(0);
+        });
+
+        it('keeps whitespace tokens in leadingTrivia when lexing with includeWhitespace', () => {
+            const tokens = Lexer.scan('x = 1', { includeWhitespace: true }).tokens;
+            const equals = tokens.find(x => x.kind === TokenKind.Equal);
+            expect(equals.leadingTrivia.map(x => x.kind)).to.eql([TokenKind.Whitespace]);
+            expect(util.getLeadingWhitespace(equals)).to.eql(' ');
+        });
+
+        it('rebuilds the same trivia as lexing with includeWhitespace', () => {
+            const input = 'sub a()\n\t  x = 1   \' note   \n  \t\'second\n\ty  =  "open string   \n\tz = `hi   ${x}`\nend sub';
+            const describe = (tokens: Token[], rebuild: boolean) => tokens
+                .filter(x => !AllowedTriviaTokens.includes(x.kind))
+                .map(x => (rebuild ? util.getLeadingTrivia(x, { includeWhitespace: true }) : x.leadingTrivia ?? [])
+                    .map(t => `${t.kind}:${JSON.stringify(t.text)}@${t.startPosition}-${t.endPosition}`).join(' '));
+            expect(
+                describe(Lexer.scan(input).tokens, true)
+            ).to.eql(
+                describe(Lexer.scan(input, { includeWhitespace: true }).tokens, false)
+            );
         });
 
 
@@ -1962,7 +1988,7 @@ describe('lexer', () => {
                 tokens.map(x => {
                     return {
                         text: x.text,
-                        leadingTrivia: x.leadingTrivia?.map(x => x.text) ?? []
+                        leadingTrivia: util.getLeadingTrivia(x, { includeWhitespace: true }).map(x => x.text)
                     };
                 })
             ).to.eql(

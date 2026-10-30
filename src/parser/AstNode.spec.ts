@@ -16,6 +16,7 @@ import { WalkMode } from '../astUtils/visitors';
 import { isConditionalCompileStatement, isStatement } from '../astUtils/reflection';
 import { createAssignmentStatement, createBlock, createIfStatement, createToken, createVariableExpression } from '../astUtils/creators';
 import { TokenKind } from '../lexer/TokenKind';
+import { WhitespaceOnlyTrivia } from '../lexer/TokenObject';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
@@ -658,7 +659,9 @@ describe('AstNode', () => {
                         //this is a circular reference property or the `returnType` prop, skip it
                         (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
                         //circular reference property for annotations
-                        (isAnnotationExpression(original) && key === 'call')
+                        (isAnnotationExpression(original) && key === 'call') ||
+                        //shared and frozen by design, so clones keep the same reference
+                        originalValue === WhitespaceOnlyTrivia
                     ) {
                         continue;
                     }

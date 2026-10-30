@@ -66,6 +66,18 @@ export interface SourceInfo {
      * For the source `a = 1\nb = 2`, this is `[0, 6]`. `util.getLocation()` uses it to convert a position into a line/character `Position`
      */
     linePositions: number[];
+    /**
+     * The text that was parsed. Set by the lexer whenever it records `whitespaceRuns`, which are only meaningful alongside it
+     */
+    source?: string;
+    /**
+     * Every run of whitespace (spaces and tabs) in the source, as `[start0, end0, start1, end1, ...]` in source order.
+     *
+     * When lexing without `includeWhitespace`, whitespace is recorded here instead of being kept as `Whitespace` tokens in
+     * `leadingTrivia`, since a token costs ~80 bytes and a run costs 8. Read it with `util.getLeadingWhitespace()` or
+     * `util.getLeadingTrivia(token, { includeWhitespace: true })`
+     */
+    whitespaceRuns?: Int32Array;
 }
 
 /**

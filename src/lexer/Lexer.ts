@@ -4,7 +4,7 @@ import type { Locatable, SourceInfo, Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
-import { TokenObject } from './TokenObject';
+import { TokenObject, WhitespaceOnlyTrivia } from './TokenObject';
 import type { BsDiagnosticInput } from '../interfaces';
 
 /**
@@ -54,6 +54,16 @@ export class Lexer {
     private sourceInfo: SourceInfo | undefined;
 
     /**
+     * Whitespace runs recorded during the current scan (see `SourceInfo.whitespaceRuns`). `undefined` when whitespace is kept as tokens instead
+     */
+    private whitespaceRuns: number[] | undefined;
+
+    /**
+     * Was a whitespace run recorded since the last non-trivia token? (see `WhitespaceOnlyTrivia`)
+     */
+    private hasPendingWhitespace = false;
+
+    /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
      * containing BrightScript code to an array of `Token` objects that will later be used to build
      * an abstract syntax tree.
@@ -84,10 +94,24 @@ export class Lexer {
         this.sourceInfo = this.options.trackLocations
             ? { uri: util.pathToUri(options?.srcPath), linePositions: [0] }
             : undefined;
+        //without a sourceInfo there's nowhere to keep the runs, so fall back to keeping whitespace tokens in the trivia
+        this.whitespaceRuns = this.options.includeWhitespace === false && this.sourceInfo ? [] : undefined;
+        this.hasPendingWhitespace = false;
         while (!this.isAtEnd()) {
             this.scanToken();
         }
+        if (this.whitespaceRuns) {
+            this.sourceInfo.source = toScan;
+            this.sourceInfo.whitespaceRuns = Int32Array.from(this.whitespaceRuns);
+            this.whitespaceRuns = undefined;
+        }
 
+        let eofTrivia: Token[] | undefined;
+        if (this.leadingTrivia.length > 0) {
+            eofTrivia = this.leadingTrivia;
+        } else if (this.hasPendingWhitespace) {
+            eofTrivia = WhitespaceOnlyTrivia;
+        }
         this.tokens.push(new TokenObject(
             TokenKind.Eof,
             '',
@@ -95,7 +119,7 @@ export class Lexer {
             this.current,
             this.current + 1,
             this.sourceInfo,
-            this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
+            eofTrivia
         ));
         return this;
     }
@@ -386,6 +410,14 @@ export class Lexer {
     private whitespace() {
         while (this.peek() === ' ' || this.peek() === '\t') {
             this.advance();
+        }
+        //record where the run is rather than keeping a Token for it. `util.getLeadingWhitespace()` and
+        //`util.getLeadingTrivia()` rebuild it from the source when it's needed
+        if (this.whitespaceRuns) {
+            this.whitespaceRuns.push(this.start, this.current);
+            this.hasPendingWhitespace = true;
+            this.start = this.current;
+            return;
         }
         //NOTE: master's version of this method skipped `addToken` entirely on the
         //`includeWhitespace === false` path to avoid allocating a Token it would immediately
@@ -1177,9 +1209,15 @@ export class Lexer {
 
         if (this.isTrivia(token)) {
             this.pushTrivia(token);
-        } else if (this.leadingTrivia.length > 0) {
-            token.leadingTrivia = [...this.leadingTrivia];
-            this.leadingTrivia = [];
+        } else {
+            if (this.leadingTrivia.length > 0) {
+                //hand over the array rather than copying it, since we start a new one anyway
+                token.leadingTrivia = this.leadingTrivia;
+                this.leadingTrivia = [];
+            } else if (this.hasPendingWhitespace) {
+                token.leadingTrivia = WhitespaceOnlyTrivia;
+            }
+            this.hasPendingWhitespace = false;
         }
         if (kind !== TokenKind.Comment) {
             this.tokens.push(token);

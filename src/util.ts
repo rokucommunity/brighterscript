@@ -54,7 +54,7 @@ import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
 import { TypedFunctionType } from './types';
 import { IntersectionType } from './types/IntersectionType';
-import { TokenObject } from './lexer/TokenObject';
+import { TokenObject, WhitespaceOnlyTrivia } from './lexer/TokenObject';
 import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 
 export class Util {
@@ -1316,12 +1316,85 @@ export class Util {
      * Clone every token
      */
     /**
-     * The whitespace directly before this token (on the same line), from its leading trivia
+     * The whitespace directly before this token or node (on the same line). A `Whitespace` token at the end of its leading trivia
+     * (eg. added by a plugin, or from lexing with `includeWhitespace`) wins, otherwise it's read from the recorded `SourceInfo.whitespaceRuns`
      */
-    public getLeadingWhitespace(token: Token): string {
-        const trivia = token?.leadingTrivia;
+    public getLeadingWhitespace(item: Partial<Locatable> & { leadingTrivia?: Token[] }): string {
+        const trivia = item?.leadingTrivia;
         const last = trivia?.[trivia.length - 1];
-        return last?.kind === TokenKind.Whitespace ? last.text : '';
+        if (last?.kind === TokenKind.Whitespace) {
+            return last.text;
+        }
+        //only lexed tokens own the whitespace in front of their position. Synthetic tokens get a fresh `[]` (or nothing),
+        //and must not pick up whitespace from a position they borrowed
+        if (!this.isLexedTrivia(trivia)) {
+            return '';
+        }
+        const runIndex = this.findWhitespaceRunEndingAt(item?.sourceInfo, item?.startPosition);
+        return runIndex >= 0
+            ? item.sourceInfo.source.slice(item.sourceInfo.whitespaceRuns[runIndex], item.sourceInfo.whitespaceRuns[runIndex + 1])
+            : '';
+    }
+
+    /**
+     * Get a token's leading trivia. With `includeWhitespace`, the `Whitespace` tokens the lexer recorded as runs
+     * (see `SourceInfo.whitespaceRuns`) are rebuilt and put back in place, giving the same list as lexing with `includeWhitespace`.
+     * Rebuilt tokens are new objects on every call, so compare them by position rather than identity
+     */
+    public getLeadingTrivia(token: Token, options?: { includeWhitespace?: boolean }): Token[] {
+        const stored = token?.leadingTrivia ?? [];
+        //whitespace is already there when it was lexed with `includeWhitespace` (or added by hand), so there's nothing to rebuild
+        if (!options?.includeWhitespace || !token || !this.isLexedTrivia(stored) || stored.some(t => t?.kind === TokenKind.Whitespace)) {
+            return stored;
+        }
+        const result: Token[] = [];
+        //whitespace can sit in front of each stored trivia item and in front of the token itself.
+        //Look each one up in its own sourceInfo, since trivia can be moved between tokens (or files)
+        for (const item of [...stored, token]) {
+            const sourceInfo = item?.sourceInfo;
+            const runIndex = this.findWhitespaceRunEndingAt(sourceInfo, item?.startPosition);
+            if (runIndex >= 0) {
+                const start = sourceInfo.whitespaceRuns[runIndex];
+                const end = sourceInfo.whitespaceRuns[runIndex + 1];
+                result.push(new TokenObject(TokenKind.Whitespace, sourceInfo.source.slice(start, end), false, start, end, sourceInfo, undefined));
+            }
+            if (item !== token) {
+                result.push(item);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Did this trivia come from the lexer? (rather than being a synthetic token's fresh `[]` or nothing at all)
+     */
+    private isLexedTrivia(trivia: Token[] | undefined) {
+        return trivia === WhitespaceOnlyTrivia || trivia?.length > 0;
+    }
+
+    /**
+     * Binary search `sourceInfo.whitespaceRuns` for the run that ends exactly at `position`.
+     * @returns the index of that run's start in `whitespaceRuns` (its end is the next entry), or -1 if there isn't one
+     */
+    public findWhitespaceRunEndingAt(sourceInfo: SourceInfo | undefined, position: number | undefined): number {
+        const runs = sourceInfo?.whitespaceRuns;
+        if (!runs || position === undefined) {
+            return -1;
+        }
+        let low = 0;
+        let high = (runs.length / 2) - 1;
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            const end = runs[(mid * 2) + 1];
+            if (end === position) {
+                return mid * 2;
+            } else if (end < position) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return -1;
     }
 
     public cloneToken<T extends Token>(token: T): T {
@@ -1335,7 +1408,8 @@ export class Util {
                 token.startPosition,
                 token.endPosition,
                 token.sourceInfo,
-                token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
+                //keep the shared (frozen) marker as-is, so the clone still owns the whitespace in front of it
+                token.leadingTrivia === WhitespaceOnlyTrivia || !token.leadingTrivia ? token.leadingTrivia : token.leadingTrivia.map(x => this.cloneToken(x))
             ) as Token;
             //handle those tokens that have charCode
             if ('charCode' in token) {
