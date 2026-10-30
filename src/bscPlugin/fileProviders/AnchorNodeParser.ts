@@ -1,18 +1,26 @@
-import { SGFieldTypes } from '../../parser/SGTypes';
-
 /**
- * A SceneGraph node declared from TypeScript through the RSG 2.0 SDK's `registerAnchorNode(declaration, render)` function.
+ * A SceneGraph node declared from TypeScript through the RSG 2.0 SDK (an "anchor node").
+ * The SDK describes these with a descriptor object that is passed to `defineAnchorNode`, `registerAnchorNode` or `declareTsComponent`:
+ * `{ componentName: 'ViewOne', extends: 'Group', inputFields: { ... }, outputFields: { ... } }`
  */
 export interface AnchorNodeDeclaration {
     /**
-     * The name of the SceneGraph component (i.e. `componentName` from the declaration)
+     * The name of the SceneGraph component (i.e. `componentName` from the descriptor)
      */
     componentName: string;
     /**
-     * The name of the node this component extends (i.e. `extends` from the declaration)
+     * The name of the node this component extends (i.e. `extends` from the descriptor)
      */
     extends?: string;
+    /**
+     * The name of the component library this component belongs to (i.e. `libraryName` from the descriptor)
+     */
+    libraryName?: string;
     fields: AnchorNodeField[];
+    /**
+     * The zero-based line and character where the descriptor object starts
+     */
+    position: { line: number; character: number };
 }
 
 export interface AnchorNodeField {
@@ -22,113 +30,75 @@ export interface AnchorNodeField {
      */
     direction: 'input' | 'output';
     /**
-     * The SceneGraph xml field type (i.e. `boolean`, `stringarray`). `undefined` when the type could not be determined
+     * The SceneGraph xml field type (i.e. `boolean`, `integer`). `undefined` when the type could not be determined
      */
     type?: string;
 }
 
 /**
- * The name of the function that registers an anchor node
+ * The SceneGraph field type for each `FieldType.<Name>()` from the SDK. The device picks the field type
+ * from the default value: numbers are integers unless declared with `Float`, and `null` is an object field
  */
-const REGISTER_FUNCTION_NAME = 'registerAnchorNode';
-
-/**
- * Aliases for `FieldType.<Name>()` names that are not themselves SceneGraph field types
- */
-const fieldTypeAliases: Record<string, string> = {
-    number: 'float',
-    double: 'float',
-    long: 'longinteger',
-    aa: 'assocarray',
-    associativearray: 'assocarray',
+const fieldTypes: Record<string, string> = {
+    boolean: 'boolean',
+    number: 'integer',
+    float: 'float',
+    string: 'string',
+    array: 'array',
     object: 'assocarray',
-    list: 'array',
-    rect: 'rect2d',
-    vector2: 'vector2d'
+    null: 'assocarray'
 };
 
 /**
- * The array form of a SceneGraph field type, used for `FieldType.Array(FieldType.String())`
+ * Descriptor keys other than `componentName`. A descriptor must have at least one of these
  */
-const arrayFieldTypes: Record<string, string> = {
-    boolean: 'boolarray',
-    integer: 'intarray',
-    float: 'floatarray',
-    string: 'stringarray',
-    node: 'nodearray',
-    color: 'colorarray',
-    time: 'timearray',
-    vector2d: 'vector2darray',
-    rect2d: 'rect2darray'
-};
+const descriptorKeys = ['extends', 'inputFields', 'outputFields'];
 
 /**
- * Find every `registerAnchorNode(...)` call in a TypeScript/JavaScript file and extract its declaration.
- * This is not a full TypeScript parser. It only understands declarations that are object literals,
- * either inline or in a variable declared in the same file. Anything it can't statically read is skipped.
+ * Find every anchor node descriptor in a TypeScript/JavaScript file.
+ * Descriptors are found by their shape (an object literal with a `componentName` string and at least one of
+ * `extends`, `inputFields` or `outputFields`), wherever they are declared, so it doesn't matter which function
+ * they are eventually passed to, or whether that happens in another file.
+ * This is not a full TypeScript parser. Anything it can't statically read is skipped.
  */
 export function findAnchorNodeDeclarations(text: string): AnchorNodeDeclaration[] {
-    //cheap check to skip the vast majority of files
-    if (!text?.includes(REGISTER_FUNCTION_NAME)) {
+    //cheap checks to skip the vast majority of files
+    if (!text?.includes('componentName') || !/@roku-sdk\/|\bFieldType\b|\b(defineAnchorNode|registerAnchorNode|declareTsComponent)\b/.test(text)) {
         return [];
     }
     const tokens = tokenize(text);
     const result: AnchorNodeDeclaration[] = [];
+    //the index of the `{` token of every object (or block) we are currently inside of
+    const openBraces = [] as number[];
+    const visited = new Set<number>();
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
-        if (token.kind !== 'identifier' || token.text !== REGISTER_FUNCTION_NAME) {
-            continue;
-        }
-        //skip the function definition itself (i.e. `function registerAnchorNode(`)
-        const previous = tokens[i - 1];
-        if (previous?.kind === 'identifier' && previous.text === 'function') {
-            continue;
-        }
-        let index = i + 1;
-        //skip type arguments (i.e. `registerAnchorNode<Foo>(`)
-        if (tokens[index]?.text === '<') {
-            index = skipBalanced(tokens, index);
-        }
-        if (tokens[index]?.text !== '(') {
-            continue;
-        }
-        let value = new ValueParser(tokens, index + 1).parse();
-        if (value.kind === 'reference') {
-            value = findVariableValue(tokens, value.name);
-        }
-        const declaration = toDeclaration(value);
-        if (declaration) {
-            result.push(declaration);
+        if (token.text === '{') {
+            openBraces.push(i);
+        } else if (token.text === '}') {
+            openBraces.pop();
+        } else if (token.kind === 'identifier' && token.text === 'componentName' && tokens[i + 1]?.text === ':' && openBraces.length > 0) {
+            const objectStart = openBraces[openBraces.length - 1];
+            if (visited.has(objectStart)) {
+                continue;
+            }
+            visited.add(objectStart);
+            const declaration = toDeclaration(new ValueParser(tokens, objectStart).parse(), getPosition(text, tokens[objectStart].offset));
+            if (declaration) {
+                result.push(declaration);
+            }
         }
     }
     return result;
 }
 
-/**
- * Find the initial value of `const|let|var <name> = <value>` in the file
- */
-function findVariableValue(tokens: Token[], name: string): Value {
-    for (let i = 0; i < tokens.length - 1; i++) {
-        const token = tokens[i];
-        if (token.kind !== 'identifier' || !['const', 'let', 'var'].includes(token.text)) {
-            continue;
-        }
-        if (tokens[i + 1].kind !== 'identifier' || tokens[i + 1].text !== name) {
-            continue;
-        }
-        let index = i + 2;
-        //skip any type annotation
-        if (tokens[index]?.text === ':') {
-            index = skipExpression(tokens, index + 1, ['=']);
-        }
-        if (tokens[index]?.text === '=') {
-            return new ValueParser(tokens, index + 1).parse();
-        }
-    }
-    return { kind: 'unknown' };
+function getPosition(text: string, offset: number) {
+    const before = text.substring(0, offset);
+    const line = before.split('\n').length - 1;
+    return { line: line, character: offset - (before.lastIndexOf('\n') + 1) };
 }
 
-function toDeclaration(value: Value): AnchorNodeDeclaration | undefined {
+function toDeclaration(value: Value, position: AnchorNodeDeclaration['position']): AnchorNodeDeclaration | undefined {
     if (value.kind !== 'object') {
         return undefined;
     }
@@ -137,11 +107,19 @@ function toDeclaration(value: Value): AnchorNodeDeclaration | undefined {
     if (!componentName || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(componentName)) {
         return undefined;
     }
+    if (!descriptorKeys.some(key => value.properties.has(key))) {
+        return undefined;
+    }
     const declaration: AnchorNodeDeclaration = {
         componentName: componentName,
         extends: getString(value.properties.get('extends')),
-        fields: []
+        fields: [],
+        position: position
     };
+    const libraryName = getString(value.properties.get('libraryName'));
+    if (libraryName) {
+        declaration.libraryName = libraryName;
+    }
     for (const [key, direction] of [['inputFields', 'input'], ['outputFields', 'output']] as const) {
         const fields = value.properties.get(key);
         if (fields?.kind !== 'object') {
@@ -163,30 +141,13 @@ function getString(value: Value): string | undefined {
 }
 
 /**
- * Get the SceneGraph field type for a field value such as `FieldType.Boolean()` or `'boolean'`
+ * Get the SceneGraph field type for a field value such as `FieldType.Boolean()`
  */
 function getFieldType(value: Value): string | undefined {
-    let typeName: string;
-    if (value?.kind === 'call') {
-        typeName = value.callee[value.callee.length - 1];
-    } else if (value?.kind === 'string') {
-        typeName = value.value;
-    } else {
+    if (value?.kind !== 'call') {
         return undefined;
     }
-    typeName = typeName.toLowerCase();
-    typeName = fieldTypeAliases[typeName] ?? typeName;
-    if (!SGFieldTypes.includes(typeName)) {
-        return undefined;
-    }
-    //`FieldType.Array(FieldType.String())` becomes `stringarray`
-    if ((typeName === 'array' || typeName === 'roarray') && value.kind === 'call') {
-        const itemType = getFieldType(value.args[0]);
-        if (itemType && arrayFieldTypes[itemType]) {
-            return arrayFieldTypes[itemType];
-        }
-    }
-    return typeName;
+    return fieldTypes[value.callee[value.callee.length - 1].toLowerCase()];
 }
 
 type Value =
@@ -295,6 +256,7 @@ class ValueParser {
     private parseList(closingText: string): Value[] {
         const items: Value[] = [];
         while (this.index < this.tokens.length && this.tokens[this.index].text !== closingText) {
+            const startIndex = this.index;
             if (this.tokens[this.index].text === '...') {
                 this.index = skipExpression(this.tokens, this.index + 1, [',', closingText]);
             } else {
@@ -305,6 +267,10 @@ class ValueParser {
             } else if (this.tokens[this.index]?.text !== closingText) {
                 //something we don't understand. bail out of this list
                 this.index = skipExpression(this.tokens, this.index, [closingText]);
+            }
+            //an unmatched closing bracket (i.e. the scanner got confused by JSX) would otherwise stop all progress
+            if (this.index <= startIndex) {
+                this.index = startIndex + 1;
             }
         }
         //consume the closing token
@@ -321,6 +287,7 @@ class ValueParser {
         this.index++;
         const properties = new Map<string, Value>();
         while (this.index < this.tokens.length && this.tokens[this.index].text !== '}') {
+            const startIndex = this.index;
             const keyToken = this.tokens[this.index];
             const nextToken = this.tokens[this.index + 1];
             if ((keyToken.kind === 'identifier' || keyToken.kind === 'string' || keyToken.kind === 'number') && nextToken?.text === ':') {
@@ -334,6 +301,10 @@ class ValueParser {
                 this.index++;
             } else if (this.tokens[this.index]?.text !== '}') {
                 this.index = skipExpression(this.tokens, this.index, ['}']);
+            }
+            //an unmatched closing bracket (i.e. the scanner got confused by JSX) would otherwise stop all progress
+            if (this.index <= startIndex) {
+                this.index = startIndex + 1;
             }
         }
         //consume the closing brace
@@ -395,6 +366,10 @@ interface Token {
     kind: 'identifier' | 'string' | 'number' | 'punctuation';
     text: string;
     /**
+     * The offset of the start of this token in the text
+     */
+    offset?: number;
+    /**
      * The value of a string token (without quotes, escapes resolved)
      */
     value?: string;
@@ -419,6 +394,8 @@ function tokenize(text: string): Token[] {
     while (i < text.length) {
         const char = text[i];
         const next = text[i + 1];
+        const tokenStart = i;
+        const tokenCount = tokens.length;
 
         //whitespace
         if (/\s/.test(char)) {
@@ -524,6 +501,9 @@ function tokenize(text: string): Token[] {
         } else {
             tokens.push({ kind: 'punctuation', text: char });
             i++;
+        }
+        if (tokens.length > tokenCount) {
+            tokens[tokens.length - 1].offset = tokenStart;
         }
     }
     return tokens;

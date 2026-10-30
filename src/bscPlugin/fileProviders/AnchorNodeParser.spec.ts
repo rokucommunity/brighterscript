@@ -1,33 +1,43 @@
 import { expect } from '../../chai-config.spec';
+import type { AnchorNodeDeclaration } from './AnchorNodeParser';
 import { findAnchorNodeDeclarations } from './AnchorNodeParser';
 
 describe('AnchorNodeParser', () => {
     describe('findAnchorNodeDeclarations', () => {
-        it('returns nothing for files without registerAnchorNode', () => {
-            expect(findAnchorNodeDeclarations(`const x = { componentName: 'Foo' };`)).to.eql([]);
-            expect(findAnchorNodeDeclarations(undefined)).to.eql([]);
+        /**
+         * Find the declarations, without their positions
+         */
+        function find(text: string): Omit<AnchorNodeDeclaration, 'position'>[] {
+            return findAnchorNodeDeclarations(text).map(({ position, ...rest }) => rest);
+        }
+
+        it('returns nothing for files that are not RSG 2.0 sources', () => {
+            expect(find(`const x = { componentName: 'Foo', extends: 'Group' };`)).to.eql([]);
+            expect(find(`import { FieldType } from '@roku-sdk/rsg-ts';`)).to.eql([]);
+            expect(find(undefined)).to.eql([]);
         });
 
-        it('finds a declaration stored in a variable', () => {
-            expect(findAnchorNodeDeclarations(`
-                import { FieldType } from '@roku-sdk/ts-core';
-                import { registerAnchorNode } from './register';
+        it('finds a descriptor passed to defineAnchorNode', () => {
+            expect(find(`
+                import { type AnchorNodeImplementation, defineAnchorNode, FieldType } from "@roku-sdk/rsg-ts";
 
-                const declaration = {
-                    componentName: 'HomeScreen',
-                    extends: 'Group' as const,
+                const HomeScreenDescriptor = {
+                    componentName: "HomeScreen",
+                    extends: "Group" as const,
                     inputFields: {
-                        title: FieldType.String(),
-                        itemCount: FieldType.Integer()
+                        title: FieldType.String(""),
+                        itemCount: FieldType.Number(3)
                     },
                     outputFields: {
                         closed: FieldType.Boolean()
                     }
                 };
 
-                registerAnchorNode(declaration, (input, outputs) => {
-                    return <Label text={input.title} />;
-                });
+                const HomeScreen: AnchorNodeImplementation<typeof HomeScreenDescriptor> = (inputs, outputs) => {
+                    return <label text={inputs.title} />;
+                };
+
+                export default defineAnchorNode(HomeScreenDescriptor, HomeScreen);
             `)).to.eql([{
                 componentName: 'HomeScreen',
                 extends: 'Group',
@@ -39,120 +49,139 @@ describe('AnchorNodeParser', () => {
             }]);
         });
 
-        it('finds an inline declaration', () => {
-            expect(findAnchorNodeDeclarations(`
-                registerAnchorNode({ componentName: "Banner", extends: "Rectangle", inputFields: { color: FieldType.Color() } }, () => <></>);
+        it('finds an exported descriptor that is registered from another file', () => {
+            expect(find(`
+                import { FieldType } from "@roku-sdk/rsg-ts";
+                export const MenuDescription = {
+                    componentName: "Menu",
+                    extends: "Group",
+                    inputFields: {},
+                    outputFields: {}
+                };
+            `).map(x => x.componentName)).to.eql(['Menu']);
+        });
+
+        it('finds an inline descriptor passed to a custom register function', () => {
+            expect(find(`
+                import { registerAnchorNode } from '../registerTsComponents';
+                registerAnchorNode({ componentName: 'Banner', extends: 'Rectangle', inputFields: { color: FieldType.String() } }, () => <></>);
             `)).to.eql([{
                 componentName: 'Banner',
                 extends: 'Rectangle',
                 fields: [
-                    { name: 'color', direction: 'input', type: 'color' }
+                    { name: 'color', direction: 'input', type: 'string' }
                 ]
             }]);
         });
 
-        it('finds multiple declarations in one file', () => {
-            const result = findAnchorNodeDeclarations(`
-                registerAnchorNode({ componentName: 'One' }, () => <></>);
+        it('finds multiple descriptors in one file', () => {
+            expect(find(`
+                declareTsComponent({ componentName: 'One', extends: 'Group' }, OneImpl);
                 const two = { componentName: 'Two', extends: 'Group' };
-                registerAnchorNode(two, () => <></>);
-            `);
-            expect(result.map(x => x.componentName)).to.eql(['One', 'Two']);
+                declareTsComponent(two, TwoImpl);
+            `).map(x => x.componentName)).to.eql(['One', 'Two']);
         });
 
-        it('supports type annotations, satisfies, and type arguments', () => {
-            const result = findAnchorNodeDeclarations(`
-                export const declaration: AnchorDeclaration<Foo> = {
+        it('includes the libraryName and the position of the descriptor', () => {
+            expect(findAnchorNodeDeclarations(`import { FieldType } from "@roku-sdk/rsg-ts";\nconst d = {\n    componentName: "Cowboy",\n    extends: "Group",\n    libraryName: "tsDCL"\n};`)).to.eql([{
+                componentName: 'Cowboy',
+                extends: 'Group',
+                libraryName: 'tsDCL',
+                fields: [],
+                position: { line: 1, character: 10 }
+            }]);
+        });
+
+        it('supports type annotations, satisfies, and quoted keys', () => {
+            expect(find(`
+                export const declaration: AnchorNodeDescriptor = {
                     componentName: \`Typed\`,
                     extends: 'Group',
                     inputFields: {
-                        'quoted-name': FieldType.Node<ContentNode>(),
+                        'quoted-name': FieldType.Float(1.5),
                     },
-                } satisfies AnchorDeclaration;
-                sdk.registerAnchorNode<typeof declaration>(declaration, render);
-            `);
-            expect(result).to.eql([{
+                } satisfies AnchorNodeDescriptor;
+            `)).to.eql([{
                 componentName: 'Typed',
                 extends: 'Group',
                 fields: [
-                    { name: 'quoted-name', direction: 'input', type: 'node' }
+                    { name: 'quoted-name', direction: 'input', type: 'float' }
                 ]
             }]);
         });
 
-        it('maps field type aliases and array item types', () => {
-            const result = findAnchorNodeDeclarations(`
-                registerAnchorNode({
+        it('maps every FieldType to the field type the device creates', () => {
+            const result = find(`
+                const d = {
                     componentName: 'Types',
                     inputFields: {
-                        a: FieldType.Number(),
-                        b: FieldType.AssociativeArray(),
-                        c: FieldType.Array(FieldType.String()),
-                        d: FieldType.Array(),
-                        e: FieldType.Vector2D(),
-                        f: FieldType.SomethingNew(),
-                        g: someHelper,
-                        h: 'boolean'
+                        a: FieldType.Boolean(false),
+                        b: FieldType.Number(),
+                        c: FieldType.Float(),
+                        d: FieldType.String(),
+                        e: FieldType.Array([1, 2]),
+                        f: FieldType.Object({ x: 1 }),
+                        g: FieldType.Null(),
+                        h: FieldType.SomethingNew(),
+                        i: someHelper
                     }
-                }, render);
+                };
             `);
             expect(result[0].fields.map(x => x.type)).to.eql([
+                'boolean',
+                'integer',
                 'float',
-                'assocarray',
-                'stringarray',
+                'string',
                 'array',
-                'vector2d',
+                'assocarray',
+                'assocarray',
                 undefined,
-                undefined,
-                'boolean'
+                undefined
             ]);
         });
 
-        it('ignores comments, strings, and regular expressions that look like declarations', () => {
-            const result = findAnchorNodeDeclarations(`
-                // registerAnchorNode({ componentName: 'Commented' }, render);
-                /* registerAnchorNode({ componentName: 'Blocked' }, render); */
-                const text = "registerAnchorNode({ componentName: 'Quoted' }, render)";
-                const pattern = /registerAnchorNode\\(\\{/g;
-                registerAnchorNode({ componentName: 'Real' }, render);
-            `);
-            expect(result.map(x => x.componentName)).to.eql(['Real']);
+        it('ignores comments and strings that look like descriptors', () => {
+            expect(find(`
+                // const a = { componentName: 'Commented', extends: 'Group' };
+                /* const b = { componentName: 'Blocked', extends: 'Group' }; */
+                const text = "{ componentName: 'Quoted', extends: 'Group' }";
+                const pattern = /{ componentName: 'Regex' }/g;
+                const real = { componentName: 'Real', extends: 'Group' };
+                defineAnchorNode(real, Impl);
+            `).map(x => x.componentName)).to.eql(['Real']);
         });
 
         it('recovers from JSX text containing apostrophes', () => {
-            const result = findAnchorNodeDeclarations(`
+            expect(find(`
                 const Other = () => <Text>Don't break the scanner</Text>;
-                registerAnchorNode({ componentName: 'AfterJsx', outputFields: { done: FieldType.Boolean() } }, render);
-            `);
-            expect(result).to.eql([{
+                const d = { componentName: 'AfterJsx', outputFields: { done: FieldType.Boolean() } };
+            `)).to.eql([{
                 componentName: 'AfterJsx',
                 extends: undefined,
                 fields: [{ name: 'done', direction: 'output', type: 'boolean' }]
             }]);
         });
 
-        it('skips the function definition and declarations it cannot read', () => {
-            const result = findAnchorNodeDeclarations(`
-                export function registerAnchorNode(declaration, render) { }
-                registerAnchorNode(importedDeclaration, render);
-                registerAnchorNode(buildDeclaration(), render);
-                registerAnchorNode({ componentName: \`Name\${suffix}\` }, render);
-                registerAnchorNode({ componentName: 'bad name' }, render);
-            `);
-            expect(result).to.eql([]);
+        it('skips objects that are not descriptors', () => {
+            expect(find(`
+                import { FieldType } from "@roku-sdk/rsg-ts";
+                const onlyName = { componentName: 'OnlyName' };
+                const computed = { componentName: \`Name\${suffix}\`, extends: 'Group' };
+                const badName = { componentName: 'bad name', extends: 'Group' };
+                const notAString = { componentName: getName(), extends: 'Group' };
+            `)).to.eql([]);
         });
 
         it('skips spreads, shorthand properties, and methods', () => {
-            const result = findAnchorNodeDeclarations(`
-                registerAnchorNode({
+            expect(find(`
+                const d = {
                     ...baseDeclaration,
                     componentName: 'Spread',
                     shorthand,
-                    method() { return { componentName: 'Wrong' }; },
+                    method() { return { other: true }; },
                     inputFields: { ...sharedFields, own: FieldType.Float() }
-                }, render);
-            `);
-            expect(result).to.eql([{
+                };
+            `)).to.eql([{
                 componentName: 'Spread',
                 extends: undefined,
                 fields: [{ name: 'own', direction: 'input', type: 'float' }]
