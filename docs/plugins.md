@@ -62,7 +62,7 @@ There are two exceptions, where BrighterScript goes first in the "during" phase:
 - `validateFile`: BrighterScript registers the file's declarations (functions, classes, variables, etc.) first, so your `validateFile` handler can look up the file's symbols and types. BrighterScript's file diagnostics are still added in `afterValidateFile`.
 - `validateScope`: BrighterScript validates scopes first, so your `validateScope` handler runs after BrighterScript's scope validation.
 
-Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's own work happens):
+Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's own work happens):
 
 - `beforeProvideProgram`
 - `afterProvideProgram`
@@ -70,7 +70,7 @@ Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's ow
     - For each physical file:
         - `beforeProvideFile`
         - `onProvideFile`
-        - **BrighterScript runs** (provides the file)
+        - _\<BrighterScript provides the file\>_
         - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
@@ -81,23 +81,23 @@ Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's ow
         - `beforeValidateFile`
         - **BrighterScript runs** (registers the file's declarations)
         - `validateFile`
-        - **BrighterScript runs** (validates the file)
+        - _\<BrighterScript validates the file\>_
         - `afterValidateFile`
     - For each scope:
         - `beforeValidateScope`
-        - **BrighterScript runs** (validates the scope)
+        - _\<BrighterScript validates the scope\>_
         - `validateScope`
         - `afterValidateScope`
-    - **BrighterScript runs** (validates the program)
+    - _\<BrighterScript validates the program\>_
     - `afterValidateProgram`
 - `beforePrepublish`
 - `afterPrepublish`
 - `beforeSerializeProgram`
-    - **BrighterScript runs** (prepares the build)
+    - _\<BrighterScript prepares the build\>_
     - `beforeBuildProgram`
     - For each file:
         - `beforePrepareFile`
-        - **BrighterScript runs** (prepares the file)
+        - _\<BrighterScript prepares the file\>_
         - `afterPrepareFile`
     - `afterBuildProgram`
 - `afterSerializeProgram`
