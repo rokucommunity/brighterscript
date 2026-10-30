@@ -97,6 +97,97 @@ describe('Statement', () => {
         });
     });
 
+    describe('very large transpile output', () => {
+        //spreading a huge array into a function call (i.e. `result.push(...items)`) throws "Maximum call stack size exceeded"
+        //once it holds more than ~120k items, so these tests produce well over that for a single node
+        const statementCount = 50_000;
+        const methodCount = 30_000;
+
+        function makeStatements(count: number) {
+            const lines = [] as string[];
+            for (let i = 0; i < count; i++) {
+                lines.push(`print ${i}`);
+            }
+            return lines.join('\n');
+        }
+
+        async function transpile(source: string) {
+            program.setFile('source/main.bs', source);
+            return (await program.getTranspiledFileContents('source/main.bs')).code;
+        }
+
+        it('transpiles a class with a very large number of methods inside a namespace', async function() {
+            this.timeout(20_000);
+            const methods = [] as string[];
+            for (let i = 0; i < methodCount; i++) {
+                methods.push(`sub method${i}()\nend sub`);
+            }
+            const code = await transpile(`namespace alpha\nclass Big\n${methods.join('\n')}\nend class\nend namespace`);
+            expect(code).to.include(`sub __alpha_Big_method_method${methodCount - 1}()`);
+            expect(code).to.include(`instance.method${methodCount - 1} = __alpha_Big_method_method${methodCount - 1}`);
+            expect(code).to.include('function alpha_Big()');
+        });
+
+        it('transpiles a function with a very large body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`sub main()\n${makeStatements(statementCount)}\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles a for loop with a very large body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`sub main()\nfor i = 0 to 1\n${makeStatements(statementCount)}\nend for\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles a for each loop with a very large body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`sub main()\nfor each item in []\n${makeStatements(statementCount)}\nend for\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles a while loop with a very large body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`sub main()\nwhile true\n${makeStatements(statementCount)}\nend while\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles an else branch with a very large body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`sub main()\nif true then\nprint "then"\nelse\n${makeStatements(statementCount)}\nend if\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles a try/catch with a very large body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`sub main()\ntry\n${makeStatements(statementCount)}\ncatch e\nend try\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles a conditional compile else branch with a very large body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`#const DEBUG = true\nsub main()\n#if DEBUG\nprint "debug"\n#else\n${makeStatements(statementCount)}\n#end if\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles a select case with a very large case body', async function() {
+            this.timeout(20_000);
+            const code = await transpile(`sub main()\nselect case 1\ncase 1\n${makeStatements(statementCount)}\ncase else\nprint "else"\nend select\nend sub`);
+            expect(code).to.include(`print ${statementCount - 1}`);
+        });
+
+        it('transpiles a class with a very large number of methods inside a conditional compile block', async function() {
+            this.timeout(20_000);
+            const methods = [] as string[];
+            for (let i = 0; i < methodCount; i++) {
+                methods.push(`sub method${i}()\nend sub`);
+            }
+            const code = await transpile(`#const DEBUG = true\nclass Big\n#if DEBUG\n${methods.join('\n')}\n#end if\nend class`);
+            expect(code).to.include(`sub __Big_method_method${methodCount - 1}()`);
+            expect(code).to.include(`instance.method${methodCount - 1} = __Big_method_method${methodCount - 1}`);
+        });
+    });
+
     describe('ImportStatement', () => {
         describe('getTypedef', () => {
             it('changes .bs file extensions to .brs', () => {

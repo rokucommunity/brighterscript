@@ -266,7 +266,7 @@ export class CodeActionsProcessor {
             for (const commentToken of commentTokens) {
                 //`tokens` is an `any[]` union of brs/xml token shapes (see declaration above)
                 //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : commentToken.location.range;
+                const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : util.getLocation(commentToken).range;
                 const tokenText: string = isXml ? commentToken.image : commentToken.text;
                 const parsed = parseDisableComment(tokenText);
                 if (!parsed) {
@@ -356,7 +356,7 @@ export class CodeActionsProcessor {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = (this.event.codeSegment as BrsCodeSegment)['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
 
         //find all files that reference this function
         for (const file of files) {
@@ -413,7 +413,7 @@ export class CodeActionsProcessor {
         const file = this.event.codeSegment;
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = file['_cachedLookups'].importStatements;
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
 
         const changes: InsertChange[] = [];
         const addedPaths = new Set<string>();
@@ -545,9 +545,9 @@ export class CodeActionsProcessor {
                         kind: CodeActionKind.QuickFix,
                         changes: [
                             //function
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.functionType.location.range, newText: functionTypeText },
+                            { type: 'replace', filePath: this.event.file.srcPath, range: util.getLocation(func.tokens.functionType).range, newText: functionTypeText },
                             //end function
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.endFunctionType.location.range, newText: endFunctionTypeText }
+                            { type: 'replace', filePath: this.event.file.srcPath, range: util.getLocation(func.tokens.endFunctionType).range, newText: endFunctionTypeText }
                         ]
                     })
                 );
@@ -609,7 +609,7 @@ export class CodeActionsProcessor {
             if (!fn) {
                 continue;
             }
-            const fnKey = `${fn.location.range.start.line}:${fn.location.range.start.character}`;
+            const fnKey = `${util.getLocation(fn).range.start.line}:${util.getLocation(fn).range.start.character}`;
             if (seenFunctions.has(fnKey)) {
                 continue;
             }
@@ -621,7 +621,7 @@ export class CodeActionsProcessor {
                 addVoidChanges.push({
                     type: 'insert',
                     filePath: this.event.file.srcPath,
-                    position: fn.tokens.rightParen.location.range.end,
+                    position: util.getLocation(fn.tokens.rightParen).range.end,
                     newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
                 });
             }
@@ -650,8 +650,8 @@ export class CodeActionsProcessor {
                     diagnostics: [diagnostics[0]],
                     kind: CodeActionKind.QuickFix,
                     changes: [
-                        { type: 'replace', filePath: file.srcPath, range: func.tokens.functionType.location.range, newText: subText ?? 'sub' },
-                        { type: 'replace', filePath: file.srcPath, range: func.tokens.endFunctionType.location.range, newText: endSubText ?? 'end sub' }
+                        { type: 'replace', filePath: file.srcPath, range: util.getLocation(func.tokens.functionType).range, newText: subText ?? 'sub' },
+                        { type: 'replace', filePath: file.srcPath, range: util.getLocation(func.tokens.endFunctionType).range, newText: endSubText ?? 'end sub' }
                     ]
                 })
             );
@@ -726,10 +726,10 @@ export class CodeActionsProcessor {
             file.ast.walk((node) => {
                 if (
                     isMethodStatement(node) &&
-                    node.location?.range?.start?.line === diagnostic.location.range.start.line &&
-                    node.location?.range?.start?.character === diagnostic.location.range.start.character
+                    util.getLocation(node)?.range?.start?.line === diagnostic.location.range.start.line &&
+                    util.getLocation(node)?.range?.start?.character === diagnostic.location.range.start.character
                 ) {
-                    insertPosition = (node as MethodStatement).func.tokens.functionType?.location?.range?.start;
+                    insertPosition = util.getLocation((node as MethodStatement).func.tokens.functionType)?.range?.start;
                 }
             }, { walkMode: WalkMode.visitStatementsRecursive });
 
@@ -827,10 +827,10 @@ export class CodeActionsProcessor {
             filePath: this.event.file.srcPath,
             // )| as <type>|
             range: util.createRange(
-                func.tokens.rightParen.location.range.start.line,
-                func.tokens.rightParen.location.range.start.character + 1,
-                func.returnTypeExpression.location.range.end.line,
-                func.returnTypeExpression.location.range.end.character
+                util.getLocation(func.tokens.rightParen).range.start.line,
+                util.getLocation(func.tokens.rightParen).range.start.character + 1,
+                util.getLocation(func.returnTypeExpression).range.end.line,
+                util.getLocation(func.returnTypeExpression).range.end.character
             )
         };
     }

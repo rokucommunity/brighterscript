@@ -281,7 +281,7 @@ export class BrsFile implements BscFile {
             const astTranspile = this.codeSegment.ast.transpile(state);
             const trailingComments = [];
             if (util.hasLeadingComments(this.codeSegment.parser.eofToken)) {
-                if (util.isLeadingCommentOnSameLine(this.codeSegment.ast.statements[this.codeSegment.ast.statements.length - 1]?.location, this.codeSegment.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(util.getLocation(this.codeSegment.ast.statements[this.codeSegment.ast.statements.length - 1]), this.codeSegment.parser.eofToken)) {
                     trailingComments.push(' ');
                 } else {
                     trailingComments.push('\n');

@@ -1455,7 +1455,7 @@ describe('BrsFileValidator', () => {
                 it('reports the diagnostics of the branch that a plugin activates by editing the condition', () => {
                     const diagnostics = validateAfterEdit((file) => {
                         const statement = getBrsCodeSegment(file).ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
-                        (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition.location);
+                        (statement.tokens as any).condition = createToken(TokenKind.True, 'true', statement.tokens.condition);
                     });
                     expectDiagnostics(diagnostics, [
                         { code: 'unexpected-token', location: { range: util.createRange(3, 28, 3, 29) } },

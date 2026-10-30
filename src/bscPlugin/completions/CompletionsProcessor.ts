@@ -177,7 +177,7 @@ export class CompletionsProcessor {
     private getBrsCodeSegmentCompletions(position: Position, codeSegment: BrsCodeSegment, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
         const currentTokenByFilePosition = codeSegment.getTokenAt(position);
-        const currentToken = currentTokenByFilePosition ?? codeSegment.getTokenAt(codeSegment.getClosestExpression(position)?.location?.range.start);
+        const currentToken = currentTokenByFilePosition ?? codeSegment.getTokenAt(util.getLocation(codeSegment.getClosestExpression(position))?.range.start);
 
         const emptyResult = { global: [], scoped: [] };
 
@@ -205,12 +205,12 @@ export class CompletionsProcessor {
         if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Dot)) {
             const dotToken = this.getAdjacentToken(codeSegment, currentToken, TokenKind.Dot);
             beforeDotToken = codeSegment.getTokenBefore(dotToken);
-            expression = codeSegment.getClosestExpression(beforeDotToken?.location?.range.end);
+            expression = codeSegment.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForMembers = true;
         } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Callfunc)) {
             const dotToken = this.getAdjacentToken(codeSegment, currentToken, TokenKind.Callfunc);
             beforeDotToken = codeSegment.getTokenBefore(dotToken);
-            expression = codeSegment.getClosestExpression(beforeDotToken?.location?.range.end);
+            expression = codeSegment.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForCallFuncMembers = true;
         } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.As)) {
             if (codeSegment.parseMode === ParseMode.BrightScript) {
@@ -238,7 +238,7 @@ export class CompletionsProcessor {
             return emptyResult;
         }
 
-        const tokenBefore = codeSegment.getTokenBefore(codeSegment.getClosestToken(expression.location?.range?.start));
+        const tokenBefore = codeSegment.getTokenBefore(codeSegment.getClosestToken(util.getLocation(expression)?.range?.start));
 
         // helper to check get correct symbol tables for look ups
         function getSymbolTableForLookups() {
@@ -542,12 +542,12 @@ export class CompletionsProcessor {
                     label: pkgPath,
                     textEdit: TextEdit.replace(
                         util.createRange(
-                            currentToken.location?.range.start.line,
+                            util.getLocation(currentToken)?.range.start.line,
                             //+1 to step past the opening quote
-                            currentToken.location?.range.start.character + (openingQuote ? 1 : 0),
-                            currentToken.location?.range.end.line,
+                            util.getLocation(currentToken)?.range.start.character + (openingQuote ? 1 : 0),
+                            util.getLocation(currentToken)?.range.end.line,
                             //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
-                            currentToken.location?.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
+                            util.getLocation(currentToken)?.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
                         ),
                         pkgPath
                     ),
@@ -657,7 +657,7 @@ export class CompletionsProcessor {
 
         const nextNonComment = codeSegment.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
         const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
-        if (firstComment && util.comparePosition(position, firstComment?.location?.range.start) >= 0) {
+        if (firstComment && util.comparePosition(position, util.getLocation(firstComment)?.range.start) >= 0) {
             return true;
         }
         return false;

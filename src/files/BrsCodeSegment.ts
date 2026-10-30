@@ -6,9 +6,9 @@ import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink } from '../interfaces';
+import type { Callable, CallableParam, CommentFlag, BsDiagnosticInput, FileReference, FileLink } from '../interfaces';
 import type { NamespaceContainer } from '../Scope';
-import type { Token } from '../lexer/Token';
+import type { SourceInfo, Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
@@ -145,6 +145,11 @@ export class BrsCodeSegment {
     public startCharacter = 0;
 
     /**
+     * Where each line of the document starts, for code embedded in a larger file. Undefined for code that is the whole document
+     */
+    private fileLinePositions: number[] | undefined;
+
+    /**
      * The position in the document where this code segment starts. Use this instead of `0:0` when inserting at the top of the code.
      */
     public get startPosition(): Position {
@@ -202,11 +207,13 @@ export class BrsCodeSegment {
      * @param options options for parsing
      * @param options.startLine the zero-indexed line in the document where this code segment starts (for code embedded in a larger file)
      * @param options.startCharacter the zero-indexed character on `startLine` where this code segment starts
+     * @param options.fileLinePositions where each line of the document starts (see `SourceInfo.linePositions`), so positions are the real positions in the document
      */
-    public parse(text: string, options?: { startLine?: number; startCharacter?: number }) {
+    public parse(text: string, options?: { startLine?: number; startCharacter?: number; fileLinePositions?: number[] }) {
         this.text = text;
         this.startLine = options?.startLine ?? 0;
         this.startCharacter = options?.startCharacter ?? 0;
+        this.fileLinePositions = options?.fileLinePositions;
 
         //if a typedef describes this code segment, skip parsing it (and skip validation, since the typedef provides the symbols).
         //It gets parsed if anything asks for its parser
@@ -221,7 +228,7 @@ export class BrsCodeSegment {
      * Tokenize and parse this code segment's text
      */
     private parseText() {
-        const diagnostics = [] as Array<BsDiagnostic>;
+        const diagnostics = [] as Array<BsDiagnosticInput>;
         const text = this.text;
         try {
             //tokenize the input file
@@ -230,7 +237,8 @@ export class BrsCodeSegment {
                     includeWhitespace: false,
                     srcPath: this.srcPath,
                     startLine: this.startLine,
-                    startCharacter: this.startCharacter
+                    startCharacter: this.startCharacter,
+                    fileLinePositions: this.fileLinePositions
                 });
             });
 
@@ -250,8 +258,8 @@ export class BrsCodeSegment {
 
             //absorb all lexing/preprocessing/parsing diagnostics
             diagnostics.push(
-                ...lexer.diagnostics as BsDiagnostic[],
-                ...this._parser.diagnostics as BsDiagnostic[]
+                ...lexer.diagnostics,
+                ...this._parser.diagnostics
             );
 
 
@@ -315,7 +323,7 @@ export class BrsCodeSegment {
                                 codeSegment: this,
                                 fullName: loopName,
                                 lastPartName: part,
-                                nameRange: namespaceStatement.nameExpression.location?.range,
+                                nameRange: util.getLocation(namespaceStatement.nameExpression)?.range,
                                 namespaceStatements: undefined,
                                 statements: undefined,
                                 classStatements: undefined,
@@ -367,7 +375,7 @@ export class BrsCodeSegment {
                 //register import statements
                 if (isImportStatement(statement) && statement.tokens.path) {
                     result.push({
-                        filePathRange: statement.tokens.path.location?.range,
+                        filePathRange: util.getLocation(statement.tokens.path)?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this.document,
                         text: statement.tokens.path.text
@@ -387,11 +395,32 @@ export class BrsCodeSegment {
     }
 
     /**
+     * Info about the source of this file's tokens (shared by every token from the same parse).
+     * Pass it to `util.setLocation()` to give a new token or node a position in this file
+     */
+    public get sourceInfo(): SourceInfo | undefined {
+        const tokens = this.parser?.tokens;
+        //every token from the same parse shares the same source, and the last token (`Eof`) always exists
+        return tokens?.[tokens.length - 1]?.sourceInfo;
+    }
+
+    /**
+     * Does the token contain the given offset (inclusive on both ends, excluding any trailing newline)
+     */
+    private tokenContainsOffset(token: Token, offset: number) {
+        return token.startPosition <= offset && offset <= util.getContentEnd(token);
+    }
+
+    /**
      * Get the token at the specified position
      */
     public getTokenAt(position: Position) {
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         for (let token of this.parser.tokens) {
-            if (util.rangeContains(token.location?.range, position)) {
+            if (this.tokenContainsOffset(token, offset)) {
                 return token;
             }
         }
@@ -401,8 +430,12 @@ export class BrsCodeSegment {
      * Get the token at the specified position, or the next token
      */
     public getCurrentOrNextTokenAt(position: Position) {
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         for (let token of this.parser.tokens) {
-            if (util.comparePositionToRange(position, token.location?.range) < 0) {
+            if (offset < token.startPosition) {
                 return token;
             }
         }
@@ -415,12 +448,17 @@ export class BrsCodeSegment {
         if (typeof position?.line !== 'number') {
             return undefined;
         }
+        const source = this.sourceInfo;
+        const offset = util.getOffset(source, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         const handle = new CancellationTokenSource();
         let containingNode: AstNode;
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (node.location?.range && util.rangeContains(node.location?.range, position)) {
+            if (node.sourceInfo === source && node.startPosition <= offset && offset <= node.endPosition) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
@@ -489,7 +527,7 @@ export class BrsCodeSegment {
         for (let lexerToken of tokens) {
             for (let triviaToken of lexerToken.leadingTrivia ?? []) {
                 if (triviaToken.kind === TokenKind.Comment) {
-                    processor.tryAdd(triviaToken.text, triviaToken.location?.range);
+                    processor.tryAdd(triviaToken.text, util.getLocation(triviaToken)?.range, triviaToken);
                 }
             }
         }
@@ -529,9 +567,10 @@ export class BrsCodeSegment {
 
             //add every parameter
             for (let param of func.parameters) {
+                const nameRange = util.getLocation(param.tokens.name)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: param.tokens.name.location?.range,
-                    lineIndex: param.tokens.name.location?.range?.start.line,
+                    nameRange: nameRange,
+                    lineIndex: nameRange?.start.line,
                     name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
@@ -542,18 +581,20 @@ export class BrsCodeSegment {
             //add all of ForEachStatement loop varibales
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
+                    const nameRange = util.getLocation(stmt.tokens.item)?.range;
                     scope.variableDeclarations.push({
-                        nameRange: stmt.tokens.item.location?.range,
-                        lineIndex: stmt.tokens.item.location?.range?.start.line,
+                        nameRange: nameRange,
+                        lineIndex: nameRange?.start.line,
                         name: stmt.tokens.item.text,
                         getType: () => stmt.getType({ flags: SymbolTypeFlag.runtime })
                     });
                 },
                 LabelStatement: (stmt) => {
                     const { name: identifier } = stmt.tokens;
+                    const nameRange = util.getLocation(identifier)?.range;
                     scope.labelStatements.push({
-                        nameRange: identifier.location?.range,
-                        lineIndex: identifier.location?.range?.start.line,
+                        nameRange: nameRange,
+                        lineIndex: nameRange?.start.line,
                         name: identifier.text
                     });
                 }
@@ -580,9 +621,10 @@ export class BrsCodeSegment {
             //skip variable declarations that are outside of any scope
             if (scope) {
                 const variableName = statement.tokens.name;
+                const nameRange = util.getLocation(variableName)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: variableName.location?.range,
-                    lineIndex: variableName.location?.range?.start.line,
+                    nameRange: nameRange,
+                    lineIndex: nameRange?.start.line,
                     name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
@@ -623,10 +665,10 @@ export class BrsCodeSegment {
                 callables.push({
                     isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
                     name: statement.tokens.name?.text,
-                    nameRange: statement.tokens.name?.location?.range,
+                    nameRange: util.getLocation(statement.tokens.name)?.range,
                     codeSegment: this,
                     params: params,
-                    range: statement.func.location?.range,
+                    range: util.getLocation(statement.func)?.range,
                     type: funcType,
                     getName: statement.getName.bind(statement),
                     hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
@@ -675,9 +717,10 @@ export class BrsCodeSegment {
             return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
                 let mostSpecificNamespace: NamespaceStatement;
                 for (const statement of this._cachedLookups.namespaceStatements) {
-                    if (util.rangeContains(statement.location?.range, position)) {
+                    const statementRange = util.getLocation(statement)?.range;
+                    if (util.rangeContains(statementRange, position)) {
                         if (mostSpecificNamespace) {
-                            if (util.isRangeInRange(statement.location?.range, mostSpecificNamespace.location?.range)) {
+                            if (util.isRangeInRange(statementRange, util.getLocation(mostSpecificNamespace)?.range)) {
                                 mostSpecificNamespace = statement;
                             }
                         } else {
@@ -818,13 +861,17 @@ export class BrsCodeSegment {
      */
     public getClosestToken(position: Position) {
         let tokens = this.parser.tokens;
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return tokens[tokens.length - 1];
+        }
         for (let i = 0; i < tokens.length; i++) {
             let token = tokens[i];
-            if (util.rangeContains(token.location?.range, position)) {
+            if (this.tokenContainsOffset(token, offset)) {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
-            if (util.positionIsGreaterThanRange(position, token.location?.range) === false) {
+            if (offset < token.startPosition) {
                 let t = tokens[i - 1];
                 //return the token or the first token
                 return t ? t : tokens[0];
@@ -1178,7 +1225,7 @@ export class BrsCodeSegment {
                         fullNameLower: lowerLoopName,
                         parentNameLower: parentNameLower,
                         nameParts: nameParts.slice(0, i),
-                        nameRange: namespaceStatement.nameExpression.location?.range,
+                        nameRange: util.getLocation(namespaceStatement.nameExpression)?.range,
                         lastPartName: part.text,
                         lastPartNameLower: lowerPartName,
                         namespaceStatements: [],
@@ -1205,7 +1252,7 @@ export class BrsCodeSegment {
         const astTranspile = this.ast.transpile(state);
         const trailingComments = [];
         if (util.hasLeadingComments(this.parser.eofToken)) {
-            if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1]?.location, this.parser.eofToken)) {
+            if (util.isLeadingCommentOnSameLine(util.getLocation(this.ast.statements[this.ast.statements.length - 1]), this.parser.eofToken)) {
                 trailingComments.push(' ');
             } else {
                 trailingComments.push('\n');
@@ -1230,12 +1277,12 @@ export class BrsCodeSegment {
         //get class fields and members
         const statementHandler = (statement: MethodStatement) => {
             if (statement.getName(this.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(uri, statement.location?.range));
+                results.push(util.createLocationFromRange(uri, util.getLocation(statement)?.range));
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
             if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(uri, statement.location?.range));
+                results.push(util.createLocationFromRange(uri, util.getLocation(statement)?.range));
             }
         };
         this.parser.ast.walk(createVisitor({

@@ -484,7 +484,7 @@ export class Project implements LspProject {
                         }
                         result.push({
                             uri: util.pathToUri(file.srcPath),
-                            range: importStatement.tokens.path.location.range,
+                            range: util.getLocation(importStatement.tokens.path).range,
                             newText: newText
                         });
                     }

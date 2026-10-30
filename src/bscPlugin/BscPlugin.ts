@@ -1,5 +1,5 @@
 import { isBrsCodeSegment, isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, ValidateFileEvent, ProvideCodeActionsEvent, ProvideHoverEvent, ProvideSemanticTokensEvent, ValidateScopeEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, ValidateBrsCodeSegmentEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, PrepareFileEvent, PrepareBrsCodeSegmentEvent, WriteFileEvent, ProvideSourceFixAllCodeActionsEvent, ProvideSelectionRangesEvent, ProvideInlayHintsEvent } from '../interfaces';
+import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, ValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterPrepareBrsCodeSegmentEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -25,6 +25,10 @@ import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
 import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
 import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
 
+/**
+ * The built-in plugin. It is registered before every other plugin and does its work in the `after*` hooks,
+ * so from a plugin author's point of view it is the last participant in each event's "during" phase.
+ */
 export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
 
@@ -32,73 +36,78 @@ export class BscPlugin implements Plugin {
         new FileProvider(event).process();
     }
 
-    public provideCodeActions(event: ProvideCodeActionsEvent) {
+    public afterProvideCodeActions(event: AfterProvideCodeActionsEvent) {
         new CodeActionsProcessor(event).process();
     }
 
-    public provideSourceFixAllCodeActions(event: ProvideSourceFixAllCodeActionsEvent) {
+    public afterProvideSourceFixAllCodeActions(event: AfterProvideSourceFixAllCodeActionsEvent) {
         new FixAllCodeActionsProcessor(event).process();
     }
 
-    public provideHover(event: ProvideHoverEvent) {
+    public afterProvideHover(event: AfterProvideHoverEvent) {
         return new HoverProcessor(event).process();
     }
 
-    public provideDocumentSymbols(event: ProvideDocumentSymbolsEvent) {
+    public afterProvideDocumentSymbols(event: AfterProvideDocumentSymbolsEvent) {
         return new DocumentSymbolProcessor(event).process();
     }
 
-    public provideWorkspaceSymbols(event: ProvideWorkspaceSymbolsEvent) {
+    public afterProvideWorkspaceSymbols(event: AfterProvideWorkspaceSymbolsEvent) {
         return new WorkspaceSymbolProcessor(event).process();
     }
 
-    public provideCompletions(event: ProvideCompletionsEvent) {
+    public afterProvideCompletions(event: AfterProvideCompletionsEvent) {
         new CompletionsProcessor(event).process();
     }
 
-    public provideDefinition(event: ProvideDefinitionEvent) {
+    public afterProvideDefinition(event: AfterProvideDefinitionEvent) {
         new DefinitionProvider(event).process();
     }
 
-    public provideReferences(event: ProvideReferencesEvent) {
+    public afterProvideReferences(event: AfterProvideReferencesEvent) {
         new ReferencesProvider(event).process();
     }
 
-    public provideSelectionRanges(event: ProvideSelectionRangesEvent) {
+    public afterProvideSelectionRanges(event: AfterProvideSelectionRangesEvent) {
         new SelectionRangesProcessor(event).process();
     }
 
-    public provideInlayHints(event: ProvideInlayHintsEvent) {
+    public afterProvideInlayHints(event: AfterProvideInlayHintsEvent) {
         new InlayHintProcessor(event).process();
     }
 
-    public provideSemanticTokens(event: ProvideSemanticTokensEvent) {
+    public afterProvideSemanticTokens(event: AfterProvideSemanticTokensEvent) {
         if (isBrsCodeSegment(event.codeSegment)) {
             return new BrsFileSemanticTokensProcessor(event).process();
         }
     }
 
-    public validateFile(event: ValidateFileEvent) {
+    /**
+     * Validates the file and each of its code segments, then finishes processing the symbols of all of the file's code segments together.
+     * This runs after every plugin's `validateFile` and `validateBrsCodeSegment`, and before any `afterValidateBrsCodeSegment`
+     */
+    public afterValidateFile(event: AfterValidateFileEvent) {
         if (isBrsFile(event.file) || isXmlFile(event.file)) {
             util.validateTooDeepFile(event.file);
         }
-        //the BrightScript in a file is validated in `validateBrsCodeSegment`
         if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as ValidateFileEvent<XmlFile>).process();
+            new XmlFileValidator(event as AfterValidateFileEvent<XmlFile>).process();
         }
-    }
-
-    public validateBrsCodeSegment(event: ValidateBrsCodeSegmentEvent) {
-        return new BrsFileValidator(event).process();
-    }
-
-    public afterValidateFile(event: AfterValidateFileEvent) {
-        //finish processing the symbols of all of the file's code segments together
-        return new BrsFileAfterValidator(event).process();
+        const codeSegments = util.getCodeSegments(event.file);
+        if (!codeSegments) {
+            return;
+        }
+        for (const codeSegment of codeSegments) {
+            new BrsFileValidator({ program: event.program, file: event.file, codeSegment: codeSegment }).process();
+        }
+        new BrsFileAfterValidator(event).process();
     }
 
     private scopeValidator = new ScopeValidator();
 
+    /**
+     * Uses `validateScope` instead of `afterValidateScope` because the scope's symbol tables are only linked during `validateScope`
+     */
     public validateScope(event: ValidateScopeEvent) {
         this.scopeValidator.processEvent(event);
     }
@@ -109,22 +118,22 @@ export class BscPlugin implements Plugin {
         this.scopeValidator.reset();
     }
 
+    /**
+     * Uses `beforeBuildProgram` because bslib must be in the file list before files are prepared
+     */
     public beforeBuildProgram(event: BeforeBuildProgramEvent) {
         this.bslibManager.addBslibFileIfMissing(event);
     }
     private bslibManager = new BslibManager();
 
-    /**
-     * Do transpiling-related work after all plugins had a chance to operate on the files
-     */
-    public prepareFile(event: PrepareFileEvent) {
-        //the BrightScript in a file is prepared in `prepareBrsCodeSegment`
+    public afterPrepareFile(event: AfterPrepareFileEvent) {
+        //the BrightScript in a file is prepared in `afterPrepareBrsCodeSegment`
         if (isXmlFile(event.file)) {
-            return new XmlFilePreTranspileProcessor(event as PrepareFileEvent<XmlFile>).process();
+            return new XmlFilePreTranspileProcessor(event as AfterPrepareFileEvent<XmlFile>).process();
         }
     }
 
-    public prepareBrsCodeSegment(event: PrepareBrsCodeSegmentEvent) {
+    public afterPrepareBrsCodeSegment(event: AfterPrepareBrsCodeSegmentEvent) {
         return new BrsFilePreTranspileProcessor(event).process();
     }
 
@@ -132,7 +141,7 @@ export class BscPlugin implements Plugin {
         await new FileSerializer(event).process();
     }
 
-    public async writeFile(event: WriteFileEvent) {
+    public async afterWriteFile(event: AfterWriteFileEvent) {
         await new FileWriter(event).process();
     }
 

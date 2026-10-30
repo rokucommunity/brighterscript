@@ -1,11 +1,11 @@
 /* eslint-disable func-names */
 import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
-import type { Token } from './Token';
+import type { Locatable, SourceInfo, Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Location, Position } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
-import type { BsDiagnostic } from '../interfaces';
+import { TokenObject } from './TokenObject';
+import type { BsDiagnosticInput } from '../interfaces';
 
 /**
  * Numeric type designators can only be one of these characters
@@ -24,26 +24,6 @@ export class Lexer {
     private current: number;
 
     /**
-     * The zero-indexed begin line number being parsed.
-     */
-    private lineBegin: number;
-
-    /**
-     * The zero-indexed end line number being parsed
-     */
-    private lineEnd: number;
-
-    /**
-     * The zero-indexed begin column number being parsed.
-     */
-    private columnBegin: number;
-
-    /**
-     * The zero-indexed end column number being parsed
-     */
-    private columnEnd: number;
-
-    /**
      * The BrightScript code being converted to an array of `Token`s.
      */
     public source: string;
@@ -56,7 +36,7 @@ export class Lexer {
     /**
      * The errors produced from `source.`
      */
-    public diagnostics: BsDiagnostic[];
+    public diagnostics: BsDiagnosticInput[];
 
     /**
      * The options used to scan this file
@@ -69,9 +49,9 @@ export class Lexer {
     private leadingTrivia: Token[] = [];
 
     /**
-     * URI of the file being scanned (if available)
+     * Info about the source being scanned, shared by every token produced by this scan. `undefined` when locations aren't being tracked
      */
-    private uri?: string;
+    private sourceInfo: SourceInfo | undefined;
 
     /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
@@ -99,28 +79,46 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.lineBegin = this.options.startLine;
-        this.lineEnd = this.options.startLine;
-        this.columnBegin = this.options.startCharacter;
-        this.columnEnd = this.options.startCharacter;
         this.tokens = [];
         this.diagnostics = [];
-        this.previousEndPosition = undefined;
-        this.uri = util.pathToUri(options?.srcPath);
+        //code embedded in a larger file starts partway through it, so every position is shifted to be in that file's coordinates
+        const linePositions = this.getStartingLinePositions();
+        this.positionOffset = linePositions[linePositions.length - 1] + this.options.startCharacter;
+        this.sourceInfo = this.options.trackLocations
+            ? { uri: util.pathToUri(options?.srcPath), linePositions: linePositions }
+            : undefined;
         while (!this.isAtEnd()) {
             this.scanToken();
         }
 
-        this.tokens.push({
-            kind: TokenKind.Eof,
-            text: '',
-            isReserved: false,
-            location: this.options.trackLocations
-                ? util.createLocation(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1, this.uri)
-                : undefined,
-            leadingTrivia: this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
-        });
+        this.tokens.push(new TokenObject(
+            TokenKind.Eof,
+            '',
+            false,
+            this.current + this.positionOffset,
+            this.current + this.positionOffset + 1,
+            this.sourceInfo,
+            this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
+        ));
         return this;
+    }
+
+    /**
+     * How far the source being scanned starts into its file (non-zero for code embedded in a larger file). Added to every position
+     */
+    private positionOffset = 0;
+
+    /**
+     * Where each line of the file starts, for the lines up to and including the one this source starts on
+     */
+    private getStartingLinePositions() {
+        const startLine = this.options.startLine;
+        const linePositions = this.options.fileLinePositions?.slice(0, startLine + 1) ?? [];
+        //without the file's line positions, treat every line before the start line as one character long
+        while (linePositions.length <= startLine) {
+            linePositions.push(linePositions.length > 0 ? linePositions[linePositions.length - 1] + 1 : 0);
+        }
+        return linePositions;
     }
 
     /**
@@ -436,12 +434,7 @@ export class Lexer {
 
         this.addToken(TokenKind.Newline);
         this.start = this.current;
-        // advance the line counter
-        this.lineBegin++;
-        this.lineEnd = this.lineBegin;
-        // and always reset the column counter
-        this.columnBegin = 0;
-        this.columnEnd = 0;
+        this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
     }
 
     /**
@@ -449,20 +442,14 @@ export class Lexer {
      */
     private advance(): void {
         this.current++;
-        this.columnEnd++;
     }
 
-    private lookaheadStack = [] as Array<{ current: number; columnEnd: number }>;
+    private lookaheadStack = [] as number[];
     private pushLookahead() {
-        this.lookaheadStack.push({
-            current: this.current,
-            columnEnd: this.columnEnd
-        });
+        this.lookaheadStack.push(this.current);
     }
     private popLookahead() {
-        const { current, columnEnd } = this.lookaheadStack.pop();
-        this.current = current;
-        this.columnEnd = columnEnd;
+        this.current = this.lookaheadStack.pop();
     }
 
     /**
@@ -562,11 +549,8 @@ export class Lexer {
                 //store the char code
                 token.charCode = 10;
 
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
                 continue;
             } else if (this.check('\r') && this.peekNext() === '\n') {
                 this.templateQuasiString();
@@ -579,11 +563,20 @@ export class Lexer {
                 token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 token.charCode = 10;
 
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
+                continue;
+
+                //a lone `\r` is a newline too (the same as everywhere else in the lexer, and in LSP)
+            } else if (this.check('\r')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
+
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
                 continue;
 
                 //escaped chars
@@ -844,7 +837,6 @@ export class Lexer {
             (this.peek() === ' ' || this.peek() === '\t')
         ) {
             let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
 
             // skip past any whitespace
             let whitespace = '';
@@ -867,22 +859,17 @@ export class Lexer {
             } else {
                 // reset if the last word and the current word didn't form a multi-word TokenKind
                 this.current = savedCurrent;
-                this.columnEnd = savedColumnEnd;
             }
         }
 
         // split `elseif` into `else` and `if` tokens
         if (lowerText === 'elseif' && !this.checkPreviousToken(TokenKind.Dot)) {
             let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
             this.current -= 2;
-            this.columnEnd -= 2;
             this.addToken(TokenKind.Else);
 
             this.start = savedCurrent - 2;
             this.current = savedCurrent;
-            this.columnBegin = savedColumnEnd - 2;
-            this.columnEnd = savedColumnEnd;
             this.addToken(TokenKind.If);
             return;
         }
@@ -1201,13 +1188,15 @@ export class Lexer {
         //this is the canonical Token field order. Every other place that synthesizes a
         //Token should use this same order (and set every field) so all tokens share a
         //single V8 hidden class instead of forcing megamorphic property access downstream
-        let token: Token = {
-            kind: kind,
-            text: text,
-            isReserved: ReservedTokenKinds.has(kind),
-            location: this.locationOf(),
-            leadingTrivia: undefined
-        };
+        let token: Token = new TokenObject(
+            kind,
+            text,
+            ReservedTokenKinds.has(kind),
+            this.start + this.positionOffset,
+            this.current + this.positionOffset,
+            this.sourceInfo,
+            undefined
+        );
 
         if (this.isTrivia(token)) {
             this.pushTrivia(token);
@@ -1223,38 +1212,19 @@ export class Lexer {
     }
 
     /**
-     * Move all location and char pointers to current position. Normally called after adding a token.
+     * Move the start pointer to the current position. Normally called after adding a token.
      */
     private sync() {
         this.start = this.current;
-        this.lineBegin = this.lineEnd;
-        this.columnBegin = this.columnEnd;
     }
 
     /**
-     * Creates a `Location` at the lexer's current position
-     * @returns the location of `text`
+     * Creates a `Locatable` at the lexer's current position
+     * @returns the locatable of `text`
      */
-    private locationOf(): Location {
-        if (this.options.trackLocations) {
-            //tokens (including trivia) are almost always back to back, so share the previous token's end position
-            //as this token's start instead of making a new one. Positions are never mutated in place
-            let start = this.previousEndPosition;
-            if (start?.line !== this.lineBegin || start?.character !== this.columnBegin) {
-                start = { line: this.lineBegin, character: this.columnBegin };
-            }
-            const end = { line: this.lineEnd, character: this.columnEnd };
-            this.previousEndPosition = end;
-            return {
-                uri: this.uri,
-                range: { start: start, end: end }
-            };
-        } else {
-            return undefined;
-        }
+    private locationOf(): Locatable {
+        return { startPosition: this.start + this.positionOffset, endPosition: this.current + this.positionOffset, sourceInfo: this.sourceInfo };
     }
-
-    private previousEndPosition: Position;
 }
 
 export interface ScanOptions {
@@ -1285,4 +1255,9 @@ export interface ScanOptions {
      * @default 0
      */
     startCharacter?: number;
+    /**
+     * Where each line of the file containing this source code starts, counted from the start of that file (see `SourceInfo.linePositions`).
+     * Only the lines up to and including `startLine` are used. Pass it with `startLine` so every token's position is its real position in that file
+     */
+    fileLinePositions?: number[];
 }

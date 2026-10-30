@@ -131,6 +131,7 @@ export class XmlFile implements BscFile {
 
         const cdataOpen = '<![CDATA[';
         const cdataClose = ']]>';
+        let fileLinePositions: number[];
         for (const script of this.ast.componentElement?.scriptElements ?? []) {
             const cdata = script.cdata;
             const range = cdata?.location?.range;
@@ -156,11 +157,27 @@ export class XmlFile implements BscFile {
             );
             codeSegment.parse(
                 cdata.text.substring(cdataOpen.length, hasClose ? cdata.text.length - cdataClose.length : cdata.text.length),
-                { startLine: range.start.line, startCharacter: startCharacter }
+                { startLine: range.start.line, startCharacter: startCharacter, fileLinePositions: fileLinePositions ??= this.getLinePositions() }
             );
             (this.scriptCodeSegments ??= []).push(codeSegment);
             (this.scriptElementsWithCode ??= []).push(script);
         }
+    }
+
+    /**
+     * Where each line of this file starts, counted from the start of the file (see `SourceInfo.linePositions`). A line ends at `\n`, `\r\n` or `\r`
+     */
+    private getLinePositions() {
+        const linePositions = [0];
+        const text = this.fileContents ?? '';
+        for (let i = 0; i < text.length; i++) {
+            const charCode = text.charCodeAt(i);
+            //`\n`, or a `\r` that isn't the start of `\r\n`
+            if (charCode === 10 || (charCode === 13 && text.charCodeAt(i + 1) !== 10)) {
+                linePositions.push(i + 1);
+            }
+        }
+        return linePositions;
     }
 
     private disposeScriptCodeSegments() {
@@ -935,7 +952,7 @@ export class XmlFile implements BscFile {
             return new SourceNode(null, null, state.srcPath, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
+                state.newline + `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
             ]).toStringWithSourceMap();
         } else {
             return {

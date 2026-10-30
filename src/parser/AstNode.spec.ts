@@ -1,4 +1,5 @@
 import { util } from '../util';
+import type { Location } from 'vscode-languageserver';
 import * as fsExtra from 'fs-extra';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
@@ -7,12 +8,14 @@ import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression
 import { expectZeroDiagnostics, getBrsCodeSegment } from '../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypecastExpression, isUnaryExpression, isVariableExpression, isLiteralExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
-import type { ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
+import type { ImportStatement, ConditionalCompileStatement, ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
 import { AssignmentStatement, EmptyStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import type { AstNode } from './AstNode';
 import { WalkMode } from '../astUtils/visitors';
-import { isStatement } from '../astUtils/reflection';
+import { isConditionalCompileStatement, isStatement } from '../astUtils/reflection';
+import { createAssignmentStatement, createBlock, createIfStatement, createToken, createVariableExpression } from '../astUtils/creators';
+import { TokenKind } from '../lexer/TokenKind';
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
@@ -217,6 +220,199 @@ describe('AstNode', () => {
             const foxtrot = getBrsCodeSegment(file).ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
             expect(foxtrot.tokens.name.text).to.eql('foxtrot');
         });
+
+        function testPositionBoundaries(newline: string) {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    alpha = 1',
+                '    s = "😀" + alpha',
+                'end sub'
+            ].join(newline));
+            //start of the literal
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 12)).tokens.value.text).to.eql('1');
+            //just after the end of the literal (range end is inclusive)
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 13)).tokens.value.text).to.eql('1');
+            //column 0 of the next line is not inside the previous statement
+            expect(isBlock(getBrsCodeSegment(file).ast.findChildAtPosition(util.createPosition(2, 0)))).to.be.true;
+            //after a surrogate pair on the same line
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 15)).tokens.name.text).to.eql('alpha');
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 20)).tokens.name.text).to.eql('alpha');
+            //past the end of the last line
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition(util.createPosition(9, 0))).to.be.undefined;
+        }
+
+        it('handles position boundaries with LF line endings', () => {
+            testPositionBoundaries('\n');
+        });
+
+        it('handles position boundaries with CRLF line endings', () => {
+            testPositionBoundaries('\r\n');
+        });
+
+        it('does not let a character past the end of a line spill onto the next line', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                '    bb = 2',
+                'end sub'
+            ].join('\n'));
+            //line 1 is only 9 characters long, so this must not land on `bb` in line 2
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition(util.createPosition(1, 12));
+            expect(isVariableExpression(node) && node.tokens.name.text === 'bb').to.be.false;
+        });
+
+        it('finds real code inside a synthetic node', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = b',
+                'end sub'
+            ].join('\n'));
+            //wrap `a = b` in a synthetic `if cond then ... end if`
+            const block = getBrsCodeSegment(file).ast.findChild<Block>(isBlock);
+            const assignment = block.statements[0];
+            block.statements[0] = createIfStatement({
+                condition: createVariableExpression('cond'),
+                thenBranch: createBlock({ statements: [assignment] })
+            });
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition<VariableExpression>(util.createPosition(1, 8));
+            expect(isVariableExpression(node) && node.tokens.name.text).to.eql('b');
+        });
+
+        it('does not match a node without a source on its own', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                'end sub'
+            ].join('\n'));
+            const block = getBrsCodeSegment(file).ast.findChild<Block>(isBlock);
+            //a synthetic statement before the real one would be visited first
+            block.statements.unshift(createAssignmentStatement({ name: 'x', value: createVariableExpression('y') }));
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
+        });
+
+        it('does not match code parsed from a snippet against the positions of the file', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                'end sub'
+            ].join('\n'));
+            const block = getBrsCodeSegment(file).ast.findChild<Block>(isBlock);
+            //the snippet's `zz = 2` is on line 1 too, but of a different source
+            const snippet = Parser.parse('sub snippet()\n    zz = 2\nend sub').ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            block.statements.unshift(snippet);
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
+        });
+    });
+
+    describe('bounds', () => {
+        it('keeps the bounds from construction when the AST is changed afterwards', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const block = ast.findChild<Block>(isBlock);
+            const bodyLocation = util.getLocation(ast);
+            const blockLocation = util.getLocation(block);
+            //a plugin moves a statement with a real position from elsewhere into this AST
+            const other = Parser.parse('\n\n\n\n\nsub other()\n    b = 2\nend sub').ast;
+            ast.statements.push(other.statements[0]);
+            block.statements.push(other.findChild<AssignmentStatement>(isAssignmentStatement));
+            expect(util.getLocation(ast)).to.eql(bodyLocation);
+            expect(util.getLocation(block)).to.eql(blockLocation);
+        });
+
+        it('computes the body bounds from its statements', () => {
+            const { ast } = Parser.parse('\n\nsub main()\nend sub\n\nsub other()\nend sub\n');
+            expect(util.getLocation(ast).range).to.eql(util.createRange(2, 0, 6, 7));
+        });
+
+        it('includes the annotation call in the annotation bounds', () => {
+            const { ast } = Parser.parse('@annotation(1, 2)\nsub main()\nend sub', { mode: ParseMode.BrighterScript });
+            const annotation = (ast.statements[0] as FunctionStatement).annotations[0];
+            expect(util.getLocation(annotation).range).to.eql(util.createRange(0, 0, 0, 17));
+        });
+
+        describe('empty blocks', () => {
+            function getEmptyBlockRanges(code: string) {
+                const { ast } = Parser.parse(code, { mode: ParseMode.BrighterScript });
+                return ast.findChildren<Block>(isBlock, { walkMode: WalkMode.visitAllRecursive }).map(x => util.getLocation(x)?.range);
+            }
+
+            it('function', () => {
+                expect(getEmptyBlockRanges('sub main(a)\nend sub')).to.eql([
+                    util.createRange(0, 11, 1, 0)
+                ]);
+            });
+
+            it('if/else', () => {
+                expect(getEmptyBlockRanges('sub main()\n    if true then\n    else\n    end if\nend sub')).to.eql([
+                    //the function body is not empty, so it's bounded by its statements
+                    util.createRange(1, 4, 3, 10),
+                    //then branch
+                    util.createRange(1, 16, 2, 4),
+                    //else branch
+                    util.createRange(2, 8, 3, 4)
+                ]);
+            });
+
+            it('for', () => {
+                expect(getEmptyBlockRanges('sub main()\n    for i = 0 to 1\n    end for\nend sub')[1]).to.eql(
+                    util.createRange(1, 18, 2, 4)
+                );
+            });
+
+            it('for each', () => {
+                expect(getEmptyBlockRanges('sub main()\n    for each x in y\n    end for\nend sub')[1]).to.eql(
+                    util.createRange(1, 19, 2, 4)
+                );
+            });
+
+            it('while', () => {
+                expect(getEmptyBlockRanges('sub main()\n    while true\n    end while\nend sub')[1]).to.eql(
+                    util.createRange(1, 14, 2, 4)
+                );
+            });
+
+            it('try/catch', () => {
+                expect(getEmptyBlockRanges('sub main()\n    try\n    catch e\n    end try\nend sub').slice(1)).to.eql([
+                    //try branch
+                    util.createRange(1, 7, 2, 4),
+                    //catch branch
+                    util.createRange(2, 11, 3, 4)
+                ]);
+            });
+
+            it('#if/#else', () => {
+                //the walker skips inactive conditional compile branches, so read both branches off the statement directly
+                const { ast } = Parser.parse('#const DEBUG = true\n#if DEBUG\n#else\n#end if', { mode: ParseMode.BrighterScript });
+                const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                expect([statement.thenBranch, statement.elseBranch].map(x => util.getLocation(x)?.range)).to.eql([
+                    //then branch
+                    util.createRange(1, 9, 2, 0),
+                    //else branch
+                    util.createRange(2, 5, 3, 0)
+                ]);
+            });
+
+            it('select case', () => {
+                expect(getEmptyBlockRanges('sub main()\n    select case x\n        case 1\n        case else\n    end select\nend sub').slice(1)).to.eql([
+                    //`case 1` body ends at the next case
+                    util.createRange(2, 14, 3, 8),
+                    //`case else` body ends at `end select`
+                    util.createRange(3, 17, 4, 4)
+                ]);
+            });
+        });
+
+        it('spans the gap between the directives for #if/#else branches that have statements', () => {
+            const { ast } = Parser.parse('#const DEBUG = true\n#if DEBUG\n    print 1\n#else\n    print 2\n#end if', { mode: ParseMode.BrighterScript });
+            const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+            expect([statement.thenBranch, statement.elseBranch].map(x => util.getLocation(x)?.range)).to.eql([
+                //then branch
+                util.createRange(1, 9, 3, 0),
+                //else branch
+                util.createRange(3, 5, 5, 0)
+            ]);
+        });
     });
 
     describe('findChild', () => {
@@ -360,6 +556,73 @@ describe('AstNode', () => {
         });
     });
 
+    describe('deprecated location and range', () => {
+        it('reads a node location on demand', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const assignment = ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            expect((assignment as any).location).to.eql(util.getLocation(assignment));
+            expect((assignment as any).range).to.eql(util.createRange(1, 4, 1, 9));
+        });
+
+        it('reads a token location on demand', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            expect((name as any).location).to.eql(util.getLocation(name));
+            expect((name as any).range).to.eql(util.createRange(1, 4, 1, 5));
+        });
+
+        it('keeps the getters on cloned and created tokens', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            expect((util.cloneToken(name) as any).range).to.eql(util.createRange(1, 4, 1, 5));
+            expect((createToken(TokenKind.Identifier, 'b', name) as any).range).to.eql(util.createRange(1, 4, 1, 5));
+            expect((createToken(TokenKind.Identifier, 'b') as any).location).to.be.undefined;
+        });
+
+        it('moves synthetic nodes and tokens to an assigned location', () => {
+            const location = util.createLocation(2, 3, 2, 7, 'file:///a.brs');
+            const node = createVariableExpression('x');
+            node.location = location;
+            expect(node.location).to.eql(location);
+
+            const token = createToken(TokenKind.Identifier, 'x');
+            token.location = location;
+            expect(token.location).to.eql(location);
+            expect(util.getLocation(token)).to.eql(location);
+        });
+
+        it('keeps an assigned location in the original source when it is in that source', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            const sourceInfo = name.sourceInfo;
+            name.location = util.createLocation(2, 0, 2, 3, sourceInfo.uri);
+            expect(name.sourceInfo).to.equal(sourceInfo);
+            expect(name.location.range).to.eql(util.createRange(2, 0, 2, 3));
+        });
+
+        it('keeps an assigned location that is outside of the original source', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            name.location = util.createLocation(20, 0, 20, 300, 'file:///other.brs');
+            expect(name.location).to.eql(util.createLocation(20, 0, 20, 300, 'file:///other.brs'));
+        });
+
+        it('clears the location when assigned undefined', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const assignment = ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            assignment.location = undefined;
+            expect(assignment.location).to.be.undefined;
+            assignment.tokens.name.location = undefined;
+            expect(assignment.tokens.name.location).to.be.undefined;
+        });
+
+        it('lets tokens be used where a `{ location: Location }` is expected', () => {
+            const getLine = (item: { text: string; location: Location }) => item.location.range.start.line;
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            expect(getLine(ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name)).to.equal(1);
+        });
+    });
+
     describe('clone', () => {
         function testClone(code: string | AstNode) {
             let originalOuter: AstNode;
@@ -387,7 +650,7 @@ describe('AstNode', () => {
 
                     //skip these properties
                     if (
-                        ['parent', 'symbolTable', 'range'].includes(key) ||
+                        ['parent', 'symbolTable', 'startPosition', 'endPosition', 'sourceInfo'].includes(key) ||
                         //conditional compile state is filled in by walks of the tree, and a clone has not been walked yet
                         ['isActive', 'isConditionTrue', 'isConditionDeclared'].includes(key) ||
                         //another index of the class members, which are already compared through `body`, `methods`, `fields` and `memberMap`
@@ -1169,6 +1432,16 @@ describe('AstNode', () => {
             testClone(original);
         });
 
+        it('does not shrink the ImportStatement path range again when cloning', () => {
+            const original = Parser.parse('import "Something.brs"').ast.statements[0] as ImportStatement;
+            //the path range excludes the quotes
+            expect(util.getLocation(original.tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+            const clone = original.clone();
+            expect(util.getLocation(clone.tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+            expect(util.getLocation(clone.clone().tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+        });
+
+
         it('clones BinaryExpression', () => {
             const original = Parser.parse(`
                 sub test()
@@ -1916,7 +2189,7 @@ describe('AstNode', () => {
          */
         function getText(code: string, node: AstNode) {
             const lines = code.split(/\r?\n/);
-            const { start, end } = node.range;
+            const { start, end } = util.getLocation(node).range;
             if (start.line === end.line) {
                 return lines[start.line].slice(start.character, end.character);
             }
