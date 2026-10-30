@@ -384,7 +384,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             let body = this.body.transpile(state);
             hasBody = body.length > 0;
             state.lineage.shift();
-            results.push(...body);
+            util.pushAll(results, body);
         }
 
         const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
@@ -1709,8 +1709,8 @@ export class VariableExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-        //if the callee is the name of a known namespace function
-        if (namespace && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
+        //if the callee is the name of a known namespace function (but not a namespaced const's reference to the outer symbol of the same name)
+        if (namespace && !util.getSelfNamedConstOfInitializer(this) && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
             result.push(
                 //transpile leading comments since the token isn't being transpiled directly
                 ...state.transpileLeadingCommentsForAstNode(this),
@@ -1744,12 +1744,14 @@ export class VariableExpression extends Expression {
         let resultType: BscType = util.tokenToBscType(this.tokens.name);
         const nameKey = this.getName();
         if (!resultType) {
-            const symbolTable = this.getSymbolTable();
+            //a namespaced const can't refer to itself by name (i.e. `namespace promises: const chain = chain`), so look up the outer symbol instead
+            const getTable = util.getSelfNamedConstOfInitializer(this) ? () => this.getRoot().getSymbolTable() : () => this.getSymbolTable();
+            const symbolTable = getTable();
             resultType = symbolTable?.getSymbolType(nameKey, {
                 ...options,
                 statementIndex: this.statementIndex,
                 fullName: nameKey,
-                tableProvider: () => this.getSymbolTable()
+                tableProvider: getTable
             });
 
             if (util.isClassUsedAsFunction(resultType, this, options)) {

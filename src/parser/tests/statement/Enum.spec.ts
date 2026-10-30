@@ -1108,6 +1108,85 @@ describe('EnumStatement', () => {
             ]);
         });
 
+        it('emits diagnostic for three-cycle circular const reference', () => {
+            program.setFile('source/main.bs', `
+                const A = B
+                const B = C
+                const C = A
+                sub main()
+                    myAA = {
+                        [A]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            //v1 also reports the cycle during type resolution (duplicate and partial chains), so only check for the cycles themselves
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'C', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'A', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['C', 'A', 'B', 'C']).message,
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('accepts a namespaced const that references a global string const with the same name', () => {
+            program.setFile('source/main.bs', `
+                const KEY = "myKey"
+                namespace alpha
+                    const KEY = KEY
+                    sub inside()
+                        myAA = {
+                            [KEY]: "value"
+                        }
+                    end sub
+                end namespace
+                sub main()
+                    myAA = {
+                        [alpha.KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('emits diagnostic when a namespaced const references a global non-string const with the same name', () => {
+            program.setFile('source/main.bs', `
+                const KEY = 42
+                namespace alpha
+                    const KEY = KEY
+                end namespace
+                sub main()
+                    myAA = {
+                        [alpha.KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('resolves a namespaced const chain relative to the const namespace, not the usage namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    const BASE = "alphaKey"
+                    const KEY = BASE
+                end namespace
+                namespace beta
+                    const BASE = 42
+                    sub inside()
+                        myAA = {
+                            [alpha.KEY]: "value"
+                        }
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('emits diagnostic for boolean literal used as computed key', () => {
             program.setFile('source/main.bs', `
                 sub main()

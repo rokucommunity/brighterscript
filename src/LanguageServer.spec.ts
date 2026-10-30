@@ -1228,6 +1228,47 @@ describe('LanguageServer', () => {
             ]);
         });
 
+        it('properly handles a .git/info/exclude list', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.git/info/exclude`, undent`
+                .claude/worktrees/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in the .git/info/exclude list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/src/source/file.brs`,
+                    //this file should be excluded
+                    s`${workspacePath}/.claude/worktrees/feature/bsconfig.json`
+                ])
+            ).to.eql([
+                s`${workspacePath}/src/source/file.brs`
+            ]);
+        });
+
+        it('combines .gitignore and .git/info/exclude lists', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+            fsExtra.outputFileSync(s`${workspacePath}/.git/info/exclude`, undent`
+                .claude/worktrees/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/src/source/file.brs`,
+                    //these files should be excluded
+                    s`${workspacePath}/dist/source/file.brs`,
+                    s`${workspacePath}/.claude/worktrees/feature/bsconfig.json`
+                ])
+            ).to.eql([
+                s`${workspacePath}/src/source/file.brs`
+            ]);
+        });
+
         it('does not crash for path outside of workspaceFolder', async () => {
             fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
                 dist/
