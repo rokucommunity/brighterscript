@@ -5,7 +5,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { util } from '../../../util';
 import type { AssignmentStatement } from '../../Statement';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, testLocatable } from '../../../testHelpers.spec';
 
 describe('parser primary expressions', () => {
 
@@ -68,110 +68,110 @@ describe('parser primary expressions', () => {
                 text: 'a',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 0, 0, 1)
+                ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 2, 0, 3)
+                ...testLocatable(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 4, 0, 5)
+                ...testLocatable(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 5, 0, 6)
+                ...testLocatable(0, 5, 0, 6)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(1, 0, 1, 1)
+                ...testLocatable(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(1, 2, 1, 3)
+                ...testLocatable(1, 2, 1, 3)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(1, 4, 1, 9)
+                ...testLocatable(1, 4, 1, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(1, 9, 1, 10)
+                ...testLocatable(1, 9, 1, 10)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'c',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 0, 2, 1)
+                ...testLocatable(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 2, 2, 3)
+                ...testLocatable(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 4, 2, 5)
+                ...testLocatable(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 6, 2, 7)
+                ...testLocatable(2, 6, 2, 7)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 8, 2, 9)
+                ...testLocatable(2, 8, 2, 9)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(1, 9, 1, 10) //TODO are these numbers right?
+                ...testLocatable(1, 9, 1, 10) //TODO are these numbers right?
             }
         ]);
         const assignments = parser.ast.statements as AssignmentStatement[];
 
         expectZeroDiagnostics(parser);
-        expect(assignments[0].value.location.range).to.deep.include(
+        expect(util.getLocation(assignments[0].value).range).to.deep.include(
             Range.create(0, 4, 0, 5)
         );
-        expect(assignments[1].value.location.range).to.deep.include(
+        expect(util.getLocation(assignments[1].value).range).to.deep.include(
             Range.create(1, 4, 1, 9)
         );
-        expect(assignments[2].value.location.range).to.deep.include(
+        expect(util.getLocation(assignments[2].value).range).to.deep.include(
             Range.create(2, 4, 2, 9)
         );
     });

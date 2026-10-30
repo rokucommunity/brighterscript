@@ -7,7 +7,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { ExpressionStatement, FunctionStatement } from '../../Statement';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
-import { expectDiagnostics, expectDiagnosticsIncludes } from '../../../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, getDiagnosticRange, testLocatable } from '../../../testHelpers.spec';
 import { isAssignmentStatement, isCallExpression, isDottedGetExpression, isDottedSetStatement, isExpressionStatement, isIndexedGetExpression, isReturnStatement } from '../../../astUtils/reflection';
 import { util } from '../../../util';
 
@@ -15,7 +15,7 @@ describe('parser call expressions', () => {
     it('parses named function calls', () => {
         const { ast, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
+            token(TokenKind.LeftParen, '('),
             token(TokenKind.RightParen, ')'),
             EOF
         ]);
@@ -37,7 +37,7 @@ describe('parser call expressions', () => {
         expect(ast.statements).to.be.length.greaterThan(0);
 
         //ALL of the diagnostics should be on the `DoThin` line
-        let lineNumbers = diagnostics.map(x => x.location.range.start.line);
+        let lineNumbers = diagnostics.map(x => getDiagnosticRange(x).start.line);
         for (let lineNumber of lineNumbers) {
             expect(lineNumber).to.equal(2);
         }
@@ -60,13 +60,13 @@ describe('parser call expressions', () => {
         ]);
         expect(ast.statements).to.be.length.greaterThan(0);
         //the error should be BEFORE the `name = "bob"` statement
-        expect(diagnostics[0].location.range.end.character).to.be.lessThan(25);
+        expect(getDiagnosticRange(diagnostics[0]).end.character).to.be.lessThan(25);
     });
 
     it('allows closing parentheses on separate line in BrighterScript mode', () => {
         const { ast, diagnostics } = Parser.parse([
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
+            token(TokenKind.LeftParen, '('),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.RightParen, ')'),
@@ -129,9 +129,9 @@ describe('parser call expressions', () => {
     it('accepts arguments', () => {
         const { ast, diagnostics } = Parser.parse([
             identifier('add'),
-            { kind: TokenKind.LeftParen, text: '(', location: null as any, leadingTrivia: [] },
+            token(TokenKind.LeftParen, '('),
             token(TokenKind.IntegerLiteral, '1'),
-            { kind: TokenKind.Comma, text: ',', location: null as any, leadingTrivia: [] },
+            token(TokenKind.Comma, ','),
             token(TokenKind.IntegerLiteral, '2'),
             token(TokenKind.RightParen, ')'),
             EOF
@@ -155,55 +155,55 @@ describe('parser call expressions', () => {
                 text: 'foo',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 0, 0, 3)
+                ...testLocatable(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 3, 0, 4)
+                ...testLocatable(0, 3, 0, 4)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"bar"`,
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 4, 0, 9)
+                ...testLocatable(0, 4, 0, 9)
             },
             {
                 kind: TokenKind.Comma,
                 text: ',',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 9, 0, 10)
+                ...testLocatable(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"baz"`,
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 11, 0, 16)
+                ...testLocatable(0, 11, 0, 16)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 16, 0, 17)
+                ...testLocatable(0, 16, 0, 17)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 17, 0, 18)
+                ...testLocatable(0, 17, 0, 18)
             }
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(ast.statements).to.be.lengthOf(1);
-        expect(ast.statements[0].location?.range).to.deep.include(
+        expect(util.getLocation(ast.statements[0])?.range).to.deep.include(
             Range.create(0, 0, 0, 17)
         );
     });

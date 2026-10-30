@@ -1,3 +1,4 @@
+import { testLocatable } from '../../../testHelpers.spec';
 import { expect } from '../../../chai-config.spec';
 
 import { Parser } from '../../Parser';
@@ -82,21 +83,21 @@ describe('parser while statements', () => {
                 kind: TokenKind.While,
                 text: 'while',
                 isReserved: true,
-                location: util.createLocation(0, 0, 0, 5),
+                ...testLocatable(0, 0, 0, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
                 isReserved: true,
-                location: util.createLocation(0, 6, 0, 10),
+                ...testLocatable(0, 6, 0, 10),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: util.createLocation(0, 10, 0, 11),
+                ...testLocatable(0, 10, 0, 11),
                 leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
@@ -109,7 +110,7 @@ describe('parser while statements', () => {
                 kind: TokenKind.EndWhile,
                 text: 'end while',
                 isReserved: false,
-                location: util.createLocation(2, 0, 2, 9),
+                ...testLocatable(2, 0, 2, 9),
                 leadingTrivia: []
             },
             EOF
@@ -117,7 +118,7 @@ describe('parser while statements', () => {
 
         expect(diagnostics[0]?.message).not.to.exist;
         expect(ast.statements).to.be.lengthOf(1);
-        expect(ast.statements[0].location.range).deep.include(
+        expect(util.getLocation(ast.statements[0]).range).deep.include(
             Range.create(0, 0, 2, 9)
         );
     });

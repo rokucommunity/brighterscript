@@ -48,39 +48,80 @@ While there are no restrictions on plugin names, it helps others to find your pl
 
 ## Compiler events
 
-Full compiler lifecycle:
+### When does BrighterScript run?
+Most events come in three phases: `before<Event>`, `<event>` (the "during" phase), and `after<Event>`. Every plugin's handler for a phase runs before the next phase starts.
+
+BrighterScript's own built-in work (parsing, validation, hovers, completions, transpiling, writing files, etc.) is the **last participant in the "during" phase** of every event. So:
+
+- `before<Event>`: runs before BrighterScript has done anything for this event.
+- `<event>`: runs before BrighterScript. Use this to contribute results alongside BrighterScript or to handle something yourself first. For example, providing a file in `provideFile` keeps BrighterScript from providing that file, and adding a file to `processedFiles` in `writeFile` keeps BrighterScript from writing it.
+- `after<Event>`: runs after BrighterScript. BrighterScript's results are available here, so this is the place to inspect, modify, or remove them.
+
+The one exception is scope validation: BrighterScript validates scopes first in `validateScope`, so your `validateScope` handler runs after BrighterScript's scope validation.
+
+Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's own work happens):
 
 - `beforeProvideProgram`
+- `provideProgram`
 - `afterProvideProgram`
     - `afterProvideScope` ("source" scope)
     - For each physical file:
         - `beforeProvideFile`
-        - `onProvideFile`
+        - `provideFile`
+        - _\<BrighterScript provides the file\>_
         - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
+        - `addFile`
         - `afterAddFile`
+        - `beforeProvideScope` (component scope)
+        - `provideScope` (component scope)
         - `afterProvideScope` (component scope)
     - `beforeValidateProgram`
+    - `validateProgram`
     - For each file:
         - `beforeValidateFile`
         - `validateFile`
+        - _\<BrighterScript validates the file\>_
         - `afterValidateFile`
     - For each scope:
         - `beforeValidateScope`
+        - _\<BrighterScript validates the scope\>_
         - `validateScope`
         - `afterValidateScope`
+    - _\<BrighterScript validates the program\>_
     - `afterValidateProgram`
-- `beforePrepublish`
-- `afterPrepublish`
-- `beforeSerializeProgram`
-    - `beforeBuildProgram`
+- _\<BrighterScript prepares the build\>_
+- `beforeBuildProgram`
+- `buildProgram`
+    - `beforePrepareProgram`
+    - `prepareProgram`
     - For each file:
         - `beforePrepareFile`
+        - `prepareFile`
+        - _\<BrighterScript prepares the file\>_
         - `afterPrepareFile`
-    - `afterBuildProgram`
-- `afterSerializeProgram`
+    - `afterPrepareProgram`
+    - `beforeSerializeProgram`
+    - `serializeProgram`
+    - For each file:
+        - `beforeSerializeFile`
+        - `serializeFile`
+        - _\<BrighterScript serializes the file\>_
+        - `afterSerializeFile`
+    - `afterSerializeProgram`
+    - `beforeWriteProgram`
+    - `writeProgram`
+    - For each serialized file:
+        - `beforeWriteFile`
+        - `writeFile`
+        - _\<BrighterScript writes the file\>_
+        - `afterWriteFile`
+    - `afterWriteProgram`
+- `afterBuildProgram`
 - `beforeRemoveProgram`
+- `removeProgram`
+- `afterRemoveProgram`
 
 ### Language server
 
@@ -582,8 +623,7 @@ export default function () {
                             event.program.diagnostics.register([{
                                 code: 9000,
                                 message: 'Do not use underscores in function names',
-                                range: funcStmt.tokens.name.range,
-                                file
+                                location: util.getLocation(funcStmt.tokens.name)
                             }]);
                         }
                     }
@@ -595,6 +635,30 @@ export default function () {
     } as CompilerPlugin;
 };
 ```
+
+## Locations
+To keep memory down, tokens and AST nodes don't store a `Location`. Instead, each one stores where it starts and ends, counted from the start of the file (`startPosition` and `endPosition`), plus a reference to info about the file it was parsed from (`sourceInfo`), which is shared by everything from the same parse. `sourceInfo.linePositions` holds where each line of the file starts, which is how positions get converted to lines and characters.
+
+Positions are the gaps between characters, like an editor cursor (and like an LSP `Position`). For a file that starts with `print`, the `print` token's `startPosition` is `0` (before the `p`) and its `endPosition` is `5` (after the `t`), so `endPosition - startPosition` is its length.
+
+Build the line/character `Location` on demand with `util.getLocation()`:
+
+```typescript
+const location = util.getLocation(funcStmt.tokens.name); // { uri, range }
+```
+
+A node's bounds are computed once, when it's constructed, from the children and tokens it's given. They describe where the node came from in the original source, so they don't change if a plugin edits the AST afterwards (i.e. adding statements to a block doesn't move the block).
+
+`util.getLocation()` returns `undefined` for synthetic tokens and nodes (ones that were created in code rather than parsed from a file), since they have no position. A synthetic node won't get a source map entry, and diagnostics can't point at it.
+
+A position describes where the code came from in the original source, so it's used as-is for source maps and diagnostics. Don't change the position of a parsed token or node. Only give one to a synthetic token or node you're creating:
+- **Borrow it from a real token or node in the same file** (preferred): `util.setBounds(node, someToken)`. This shares the file's real `sourceInfo`, so the node combines correctly with the rest of that file's AST. The `create*` functions do the same when given a token or node: `createToken(TokenKind.Identifier, 'name', someToken)`.
+- **From a `Location` in a file**: `util.setLocation(node, location, file.sourceInfo)`. This maps the location into that file, so the node combines with the rest of its AST. If the location is in a different file (or its lines aren't in the file), the node is left without a position. To pass one to a `create*` function, convert it first: `createToken(TokenKind.Identifier, 'name', util.setLocation({} as Locatable, location, file.sourceInfo))`.
+- **From a `Location` without the file's source**: the `create*` functions also accept a `Location` directly, and assigning `node.location` or `token.location` moves an item to that location (see `util.assignLocation()`). When the file's source isn't known, the position goes in a placeholder source for the location's uri. `util.getLocation()` gives back the same location, and items placed this way combine with each other, but not with the file's parsed AST, so prefer the options above when you can.
+
+Code parsed from a snippet (i.e. `Parser.parse('...')` without a `srcPath`) has positions, but no uri. Those positions aren't in the file the code is added to, so lookups by position in that file (hover, definition, etc.) skip it, it isn't included in the bounds of nodes that also contain code from a file, and it doesn't get source map entries.
+
+`Location` is only used for language server output (diagnostics, hovers, etc.), so use `util.getLocation()` when you need one. Tokens and nodes still have `location` and `range` properties to help existing plugins migrate, but they're deprecated and will be removed in a future release. They build a new `Location` on every read (so don't compare them with `===`). Tokens created by hand (i.e. `{ kind: ..., text: ... }` or `{ ...token }`) don't have them, so create tokens with `createToken()` or `util.cloneToken()` instead.
 
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).
