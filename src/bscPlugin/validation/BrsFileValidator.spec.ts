@@ -4148,6 +4148,48 @@ describe('BrsFileValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('types the parameter from its type designator when the `as` type conflicts with it', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub test(name$ as integer, count% as dynamic, other! as float, plain as integer)
+                end sub
+            `);
+            program.validate();
+            const params = file.ast.findChild<FunctionExpression>(isFunctionExpression).parameters;
+            expectTypeToBe(params[0].getType({ flags: SymbolTypeFlag.runtime }), StringType);
+            expectTypeToBe(params[1].getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+            expectTypeToBe(params[2].getType({ flags: SymbolTypeFlag.runtime }), FloatType);
+            expectTypeToBe(params[3].getType({ flags: SymbolTypeFlag.runtime }), IntegerType);
+        });
+
+        it('uses the type designator type for downstream validation', () => {
+            program.setFile('source/main.brs', `
+                sub test(name$ as integer)
+                    takesString(name$)
+                    takesInteger(name$)
+                end sub
+                sub takesString(value as string)
+                end sub
+                sub takesInteger(value as integer)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.typeDesignatorMismatch('name$', 'string', 'integer'),
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
+        });
+
+        it('keeps the declared type for parameters of function type annotations', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                sub test(callback as function(name$ as integer) as void)
+                end sub
+            `);
+            program.validate();
+            const callbackType = file.ast.findChild<FunctionExpression>(isFunctionExpression).parameters[0].getType({ flags: SymbolTypeFlag.typetime }) as TypedFunctionType;
+            expectTypeToBe(callbackType, TypedFunctionType);
+            expectTypeToBe(callbackType.params[0].type, IntegerType);
+        });
     });
 
     describe('types', () => {
