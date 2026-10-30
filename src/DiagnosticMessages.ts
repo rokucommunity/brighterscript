@@ -1401,6 +1401,16 @@ export let DiagnosticMessages = {
         message: `Function has ${count} labels used by goto, max is ${max}.`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-goto-label-count'
+    }),
+    typePredicateParameterNotFound: (parameterName: string) => ({
+        message: `Cannot find parameter '${parameterName}' for type predicate`,
+        severity: DiagnosticSeverity.Error,
+        code: 'type-predicate-parameter-not-found'
+    }),
+    typePredicateTypeNotAssignableToParameter: (predicateTypeString: string, parameterName: string, parameterTypeString: string) => ({
+        message: `A type predicate's type must be assignable to its parameter's type. Type '${predicateTypeString}' is not assignable to type '${parameterTypeString}' of parameter '${parameterName}'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'type-predicate-type-mismatch'
     })
 };
 export const defaultMaximumTruncationLength = 160;

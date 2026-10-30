@@ -101,7 +101,8 @@ import {
     PrintSeparatorExpression,
     InlineInterfaceExpression,
     InlineInterfaceMemberExpression,
-    TypedFunctionTypeExpression
+    TypedFunctionTypeExpression,
+    TypePredicateExpression
 } from './Expression';
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
@@ -477,6 +478,49 @@ export class Parser {
     }
 
     /**
+     * Consume the `as` token and the return type of a function.
+     * The return type can be a type predicate (i.e. `as x is SomeType`)
+     */
+    private consumeAsTokenAndReturnTypeExpression(): [Token, TypeExpression] {
+        if (!this.isAtTypePredicate()) {
+            return this.consumeAsTokenAndTypeExpression();
+        }
+        const asToken = this.advance();
+        this.warnIfNotBrighterScriptMode('type predicates');
+        const parameterName = this.advance() as Identifier;
+        // force the name into an identifier so the AST makes some sense
+        parameterName.kind = TokenKind.Identifier;
+        const isToken = this.advance();
+        let typeExpression: TypeExpression;
+        if (this.checkEndOfStatement()) {
+            this.diagnostics.push({
+                ...DiagnosticMessages.expectedIdentifier(isToken.text),
+                location: isToken
+            });
+        } else {
+            typeExpression = this.typeExpression();
+        }
+        const predicate = new TypePredicateExpression({
+            parameterName: parameterName,
+            is: isToken,
+            typeExpression: typeExpression
+        });
+        return [asToken, new TypeExpression({ expression: predicate })];
+    }
+
+    /**
+     * Is the parser at the start of a type predicate (i.e. `as x is SomeType`)?
+     */
+    private isAtTypePredicate() {
+        const nameToken = this.tokens[this.current + 1];
+        const isToken = this.tokens[this.current + 2];
+        return this.check(TokenKind.As) &&
+            (nameToken?.kind === TokenKind.Identifier || this.allowedLocalIdentifiers.includes(nameToken?.kind)) &&
+            isToken?.kind === TokenKind.Identifier &&
+            isToken.text.toLowerCase() === 'is';
+    }
+
+    /**
      * Create a new InterfaceMethodStatement. This should only be called from within `interfaceDeclaration()`
      */
     private interfaceMethodStatement(optionalKeyword?: Token) {
@@ -503,7 +547,7 @@ export class Parser {
         let asToken: Token;
         let returnTypeExpression: TypeExpression;
         if (this.check(TokenKind.As)) {
-            [asToken, returnTypeExpression] = this.consumeAsTokenAndTypeExpression();
+            [asToken, returnTypeExpression] = this.consumeAsTokenAndReturnTypeExpression();
         }
 
         return new InterfaceMethodStatement({
@@ -1002,7 +1046,7 @@ export class Parser {
                 TokenKind.RightParen
             );
             if (this.check(TokenKind.As)) {
-                [asToken, typeExpression] = this.consumeAsTokenAndTypeExpression();
+                [asToken, typeExpression] = this.consumeAsTokenAndReturnTypeExpression();
             }
 
             params.reduce((haveFoundOptional: boolean, param: FunctionParameterExpression) => {
@@ -3621,7 +3665,7 @@ export class Parser {
         let returnType: TypeExpression;
 
         if (this.check(TokenKind.As)) {
-            [asToken, returnType] = this.consumeAsTokenAndTypeExpression();
+            [asToken, returnType] = this.consumeAsTokenAndReturnTypeExpression();
         }
         return new TypedFunctionTypeExpression({
             functionType: funcOrSub,

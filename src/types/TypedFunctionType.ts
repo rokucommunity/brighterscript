@@ -6,6 +6,20 @@ import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
 
+/**
+ * A type predicate on a function's return type, i.e. `function isFoo(x) as x is Foo`
+ */
+export interface TypePredicate {
+    /**
+     * The name of the parameter this predicate is about
+     */
+    parameterName: string;
+    /**
+     * The type the argument is known to be when the function returns true
+     */
+    type: BscType;
+}
+
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
         public returnType: BscType
@@ -31,6 +45,27 @@ export class TypedFunctionType extends BaseFunctionType {
     public isVariadic = false;
 
     public params = [] as Array<{ name: string; type: BscType; isOptional: boolean }>;
+
+    /**
+     * If this function is a type guard (i.e. `as x is Foo`), the parameter it narrows and the type it narrows it to
+     */
+    public typePredicate: TypePredicate;
+
+    public setTypePredicate(typePredicate: TypePredicate) {
+        this.typePredicate = typePredicate;
+        return this;
+    }
+
+    /**
+     * Get the index of the parameter this function's type predicate is about, or -1 if there is none
+     */
+    public getTypePredicateParameterIndex() {
+        const parameterName = this.typePredicate?.parameterName?.toLowerCase();
+        if (!parameterName) {
+            return -1;
+        }
+        return this.params.findIndex(param => param.name?.toLowerCase() === parameterName);
+    }
 
     public setName(name: string) {
         this.name = name;
@@ -88,7 +123,8 @@ export class TypedFunctionType extends BaseFunctionType {
             }
             variadicText += '...';
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
+        const returnTypeText = this.typePredicate ? `${this.typePredicate.parameterName} is ${this.typePredicate.type?.toString()}` : this.returnType.toString();
+        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${returnTypeText}`;
     }
 
     public toTypeString(): string {
@@ -155,6 +191,21 @@ export class TypedFunctionType extends BaseFunctionType {
             data.expectedType = this;
             data.actualType = targetType;
             return false;
+        }
+        //compare type predicates. Any function returning a boolean can be used where a type guard is not expected,
+        //but where a type guard is expected, the target must be a type guard for the same parameter.
+        //when checking equality (no optional param differences allowed), both must have the same predicate
+        if (this.typePredicate || (!allowOptionalParamDifferences && targetType.typePredicate)) {
+            if (!this.typePredicate ||
+                !targetType.typePredicate ||
+                targetType.getTypePredicateParameterIndex() !== this.getTypePredicateParameterIndex() ||
+                !predicate(this.typePredicate.type, targetType.typePredicate.type, {})
+            ) {
+                data = data ?? {};
+                data.expectedType = data.expectedType ?? this;
+                data.actualType = data.actualType ?? targetType;
+                return false;
+            }
         }
         //compare Variadic
         if (this.isVariadic !== targetType.isVariadic) {

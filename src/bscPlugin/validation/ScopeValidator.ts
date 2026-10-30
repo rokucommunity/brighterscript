@@ -14,7 +14,7 @@ import type { Locatable, Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
+import type { TypePredicateExpression, VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -293,6 +293,7 @@ export class ScopeValidator {
                     FunctionExpression: (func) => {
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
+                            this.validateFunctionTypePredicate(file, func);
                         });
                     },
                     ForStatement: (forStmt) => {
@@ -1466,6 +1467,33 @@ export class ScopeValidator {
             this.addMultiScopeDiagnostic({
                 ...DiagnosticMessages.returnTypeCoercionMismatch(returnType.toString()),
                 location: func
+            });
+        }
+    }
+
+    /**
+     * The type in a type predicate (i.e. the `Foo` in `function isFoo(x as Base) as x is Foo`) must be assignable to the parameter's type
+     */
+    private validateFunctionTypePredicate(file: BrsFile, func: FunctionExpression) {
+        const typePredicate = func.returnTypeExpression?.getTypePredicate({ flags: SymbolTypeFlag.typetime });
+        const parameterName = typePredicate?.parameterName?.toLowerCase();
+        if (!parameterName) {
+            return;
+        }
+        const param = func.parameters.find(x => x.tokens.name?.text?.toLowerCase() === parameterName);
+        if (!param) {
+            //an unknown parameter name is flagged by the file validator
+            return;
+        }
+        const paramType = this.getNodeTypeWrapper(file, param, { flags: SymbolTypeFlag.runtime });
+        const predicateType = typePredicate.type;
+        if (!paramType?.isResolvable() || !predicateType?.isResolvable()) {
+            return;
+        }
+        if (!paramType.isTypeCompatible(predicateType)) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.typePredicateTypeNotAssignableToParameter(predicateType.toString(), param.tokens.name.text, paramType.toString()),
+                location: (func.returnTypeExpression.expression as TypePredicateExpression).typeExpression ?? func.returnTypeExpression
             });
         }
     }

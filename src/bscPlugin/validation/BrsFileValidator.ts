@@ -1,11 +1,11 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceMethodStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression, type TypePredicateExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
@@ -531,6 +531,9 @@ export class BrsFileValidator {
             },
             IfStatement: (node) => {
                 this.setUpComplementSymbolTables(node, isIfStatement);
+            },
+            TypePredicateExpression: (node) => {
+                this.validateTypePredicateParameter(node);
             },
             ExitStatement: (node) => {
                 if (isExitSelectStatement(node)) {
@@ -1734,6 +1737,29 @@ export class BrsFileValidator {
             isSelectCaseStatement(node.parent) &&
             node.parent.cases.length === 1 &&
             !node.canExitEarly;
+    }
+
+    /**
+     * The parameter named in a type predicate (i.e. the `x` in `function isFoo(x) as x is Foo`) must be one of the function's parameters
+     */
+    private validateTypePredicateParameter(predicate: TypePredicateExpression) {
+        const owner = predicate.parent?.parent;
+        let params: FunctionParameterExpression[];
+        if (isFunctionExpression(owner)) {
+            params = owner.parameters;
+        } else if (isInterfaceMethodStatement(owner) || isTypedFunctionTypeExpression(owner)) {
+            params = owner.params;
+        }
+        const parameterName = predicate.tokens.parameterName?.text?.toLowerCase();
+        if (!params || !parameterName) {
+            return;
+        }
+        if (!params.some(param => param.tokens.name?.text?.toLowerCase() === parameterName)) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.typePredicateParameterNotFound(predicate.tokens.parameterName.text),
+                location: predicate.tokens.parameterName
+            });
+        }
     }
 
     private setUpComplementSymbolTables(node: IfStatement | ConditionalCompileStatement, predicate: (node: AstNode) => boolean) {

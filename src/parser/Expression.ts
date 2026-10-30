@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypePredicateExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -27,6 +27,9 @@ import { UnionType } from '../types/UnionType';
 import { ArrayType } from '../types/ArrayType';
 import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
+import type { TypePredicate } from '../types/TypedFunctionType';
+import { BooleanType } from '../types/BooleanType';
+import { getNarrowedVariableType } from '../types/narrowing';
 import { InvalidType } from '../types/InvalidType';
 import { UninitializedType } from '../types/UninitializedType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -464,6 +467,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
+        resultType.setTypePredicate(this.returnTypeExpression?.getTypePredicate(innerOptions()));
         for (let param of this.parameters) {
             resultType.addParameter(param.tokens.name.text, param.getType(innerOptions()), !!param.defaultValue);
         }
@@ -1786,6 +1790,7 @@ export class VariableExpression extends Expression {
             if (util.isClassUsedAsFunction(resultType, this, options)) {
                 resultType = FunctionType.instance;
             }
+            resultType = getNarrowedVariableType(this, resultType, options);
 
         }
         options?.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, astNode: this }));
@@ -2975,6 +2980,18 @@ export class TypeExpression extends Expression implements TypedefProvider {
         return util.getAllDottedGetParts(this.expression).map(x => x.text);
     }
 
+    /**
+     * If this is a type predicate (i.e. `as x is SomeType`), get the parameter name and the type it guards
+     */
+    getTypePredicate(options: GetTypeOptions): TypePredicate {
+        if (isTypePredicateExpression(this.expression)) {
+            return {
+                parameterName: this.expression.tokens.parameterName?.text,
+                type: this.expression.typeExpression?.getType({ ...options, typeChain: undefined }) ?? DynamicType.instance
+            };
+        }
+    }
+
     public clone() {
         return this.finalizeClone(
             new TypeExpression({
@@ -2982,6 +2999,75 @@ export class TypeExpression extends Expression implements TypedefProvider {
                 resolvedType: this.resolvedType
             }),
             ['expression']
+        );
+    }
+}
+
+/**
+ * A type predicate in a function's return type position, i.e. the `x is SomeType` in `function isSomeType(x) as x is SomeType`.
+ * The function returns a boolean, and when it returns true, the argument passed for `x` is known to be `SomeType`
+ */
+export class TypePredicateExpression extends Expression {
+    constructor(options: {
+        parameterName: Identifier;
+        is: Token;
+        typeExpression?: TypeExpression;
+    }) {
+        super();
+        this.tokens = {
+            parameterName: options.parameterName,
+            is: options.is
+        };
+        this.typeExpression = options.typeExpression;
+        util.setBounds(this, this.tokens.parameterName, this.tokens.is, this.typeExpression);
+    }
+
+    public readonly kind = AstNodeKind.TypePredicateExpression;
+
+    public readonly tokens: {
+        readonly parameterName: Identifier;
+        readonly is: Token;
+    };
+
+    public readonly typeExpression?: TypeExpression;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //brightscript has no type predicates, so the function just returns a boolean
+        return ['boolean'];
+    }
+
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        return [
+            this.tokens.parameterName?.text ?? '',
+            ' ',
+            this.tokens.is?.text ?? 'is',
+            ' ',
+            ...(this.typeExpression?.getTypedef(state) ?? [])
+        ];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return BooleanType.instance;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypePredicateExpression({
+                parameterName: util.cloneToken(this.tokens.parameterName),
+                is: util.cloneToken(this.tokens.is),
+                typeExpression: this.typeExpression?.clone()
+            }),
+            ['typeExpression']
         );
     }
 }
@@ -3326,6 +3412,7 @@ export class TypedFunctionTypeExpression extends Expression {
     public getType(options: GetTypeOptions): BscType {
         const returnType = this.returnType?.getType({ ...options, typeChain: undefined }) ?? DynamicType.instance;
         const functionType = new TypedFunctionType(returnType);
+        functionType.setTypePredicate(this.returnType?.getTypePredicate({ ...options, typeChain: undefined }));
         for (const param of this.params) {
             functionType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
         }

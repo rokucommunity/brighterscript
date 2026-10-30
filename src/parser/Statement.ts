@@ -2605,6 +2605,7 @@ export class InterfaceMethodStatement extends Statement implements TypedefProvid
         }
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
+        resultType.setTypePredicate(this.returnTypeExpression?.getTypePredicate(options));
         for (let param of this.params) {
             resultType.addParameter(param.tokens.name.text, param.getType(options), !!param.defaultValue);
         }

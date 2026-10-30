@@ -197,6 +197,14 @@ second line text`
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```
 
+## [Type Guards](type-guards.md)
+
+```brighterscript
+function isNode(value) as value is roSGNode
+    return type(value) = "roSGNode"
+end function
+```
+
 ## [Typecasts](typecasts.md)
 
 ```BrighterScript
