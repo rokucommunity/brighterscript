@@ -9,9 +9,9 @@ import { diagnosticCodes, DiagnosticMessages } from '../DiagnosticMessages';
 import type { NamespaceFileContribution } from '../Scope';
 import { SymbolTable } from '../SymbolTable';
 import { FunctionScope } from '../FunctionScope';
-import type { Callable, CallableParam, CommentFlag, BsDiagnostic, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
+import type { Callable, CallableParam, CommentFlag, BsDiagnosticInput, FileReference, FileLink, SerializedCodeFile } from '../interfaces';
 import type { NamespaceContainer } from '../Scope';
-import type { Token } from '../lexer/Token';
+import type { SourceInfo, Token } from '../lexer/Token';
 import { Lexer } from '../lexer/Lexer';
 import { TokenKind, AllowedLocalIdentifiers } from '../lexer/TokenKind';
 import { Parser, ParseMode } from '../parser/Parser';
@@ -212,7 +212,7 @@ export class BrsFile implements BscFile {
                                 file: this,
                                 fullName: loopName,
                                 lastPartName: part,
-                                nameRange: namespaceStatement.nameExpression.location?.range,
+                                nameRange: util.getLocation(namespaceStatement.nameExpression)?.range,
                                 namespaceStatements: undefined,
                                 statements: undefined,
                                 classStatements: undefined,
@@ -264,7 +264,7 @@ export class BrsFile implements BscFile {
                 //register import statements
                 if (isImportStatement(statement) && statement.tokens.path) {
                     result.push({
-                        filePathRange: statement.tokens.path.location?.range,
+                        filePathRange: util.getLocation(statement.tokens.path)?.range,
                         destPath: util.getPkgPathFromTarget(this.destPath, statement.filePath),
                         sourceFile: this,
                         text: statement.tokens.path.text
@@ -299,11 +299,32 @@ export class BrsFile implements BscFile {
     }
 
     /**
+     * Info about the source of this file's tokens (shared by every token from the same parse).
+     * Pass it to `util.setLocation()` to give a new token or node a position in this file
+     */
+    public get sourceInfo(): SourceInfo | undefined {
+        const tokens = this.parser?.tokens;
+        //every token from the same parse shares the same source, and the last token (`Eof`) always exists
+        return tokens?.[tokens.length - 1]?.sourceInfo;
+    }
+
+    /**
+     * Does the token contain the given offset (inclusive on both ends, excluding any trailing newline)
+     */
+    private tokenContainsOffset(token: Token, offset: number) {
+        return token.startPosition <= offset && offset <= util.getContentEnd(token);
+    }
+
+    /**
      * Get the token at the specified position
      */
     public getTokenAt(position: Position) {
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         for (let token of this.parser.tokens) {
-            if (util.rangeContains(token.location?.range, position)) {
+            if (this.tokenContainsOffset(token, offset)) {
                 return token;
             }
         }
@@ -313,8 +334,12 @@ export class BrsFile implements BscFile {
      * Get the token at the specified position, or the next token
      */
     public getCurrentOrNextTokenAt(position: Position) {
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         for (let token of this.parser.tokens) {
-            if (util.comparePositionToRange(position, token.location?.range) < 0) {
+            if (offset < token.startPosition) {
                 return token;
             }
         }
@@ -327,12 +352,17 @@ export class BrsFile implements BscFile {
         if (typeof position?.line !== 'number') {
             return undefined;
         }
+        const source = this.sourceInfo;
+        const offset = util.getOffset(source, position);
+        if (offset === undefined) {
+            return undefined;
+        }
         const handle = new CancellationTokenSource();
         let containingNode: AstNode;
         this.ast.walk((node) => {
             const latestContainer = containingNode;
             //bsc walks depth-first
-            if (node.location?.range && util.rangeContains(node.location?.range, position)) {
+            if (node.sourceInfo === source && node.startPosition <= offset && offset <= node.endPosition) {
                 containingNode = node;
             }
             //we had a match before, and don't now. this means we've finished walking down the whole way, and found our match
@@ -425,7 +455,7 @@ export class BrsFile implements BscFile {
      * @param fileContents the raw source code to parse
      */
     public parse(fileContents: string) {
-        const diagnostics = [] as Array<BsDiagnostic>;
+        const diagnostics = [] as Array<BsDiagnosticInput>;
 
         try {
             this.fileContents = fileContents;
@@ -461,8 +491,8 @@ export class BrsFile implements BscFile {
 
             //absorb all lexing/preprocessing/parsing diagnostics
             diagnostics.push(
-                ...lexer.diagnostics as BsDiagnostic[],
-                ...this._parser.diagnostics as BsDiagnostic[]
+                ...lexer.diagnostics,
+                ...this._parser.diagnostics
             );
 
 
@@ -530,7 +560,7 @@ export class BrsFile implements BscFile {
         for (let lexerToken of tokens) {
             for (let triviaToken of lexerToken.leadingTrivia ?? []) {
                 if (triviaToken.kind === TokenKind.Comment) {
-                    processor.tryAdd(triviaToken.text, triviaToken.location?.range);
+                    processor.tryAdd(triviaToken.text, util.getLocation(triviaToken)?.range, triviaToken);
                 }
             }
         }
@@ -570,9 +600,10 @@ export class BrsFile implements BscFile {
 
             //add every parameter
             for (let param of func.parameters) {
+                const nameRange = util.getLocation(param.tokens.name)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: param.tokens.name.location?.range,
-                    lineIndex: param.tokens.name.location?.range?.start.line,
+                    nameRange: nameRange,
+                    lineIndex: nameRange?.start.line,
                     name: param.tokens.name.text,
                     getType: () => {
                         return param.getType({ flags: SymbolTypeFlag.typetime });
@@ -583,18 +614,20 @@ export class BrsFile implements BscFile {
             //add all of ForEachStatement loop varibales
             func.body?.walk(createVisitor({
                 ForEachStatement: (stmt) => {
+                    const nameRange = util.getLocation(stmt.tokens.item)?.range;
                     scope.variableDeclarations.push({
-                        nameRange: stmt.tokens.item.location?.range,
-                        lineIndex: stmt.tokens.item.location?.range?.start.line,
+                        nameRange: nameRange,
+                        lineIndex: nameRange?.start.line,
                         name: stmt.tokens.item.text,
                         getType: () => stmt.getType({ flags: SymbolTypeFlag.runtime })
                     });
                 },
                 LabelStatement: (stmt) => {
                     const { name: identifier } = stmt.tokens;
+                    const nameRange = util.getLocation(identifier)?.range;
                     scope.labelStatements.push({
-                        nameRange: identifier.location?.range,
-                        lineIndex: identifier.location?.range?.start.line,
+                        nameRange: nameRange,
+                        lineIndex: nameRange?.start.line,
                         name: identifier.text
                     });
                 }
@@ -621,9 +654,10 @@ export class BrsFile implements BscFile {
             //skip variable declarations that are outside of any scope
             if (scope) {
                 const variableName = statement.tokens.name;
+                const nameRange = util.getLocation(variableName)?.range;
                 scope.variableDeclarations.push({
-                    nameRange: variableName.location?.range,
-                    lineIndex: variableName.location?.range?.start.line,
+                    nameRange: nameRange,
+                    lineIndex: nameRange?.start.line,
                     name: variableName.text,
                     getType: () => {
                         return statement.getType({ flags: SymbolTypeFlag.runtime });
@@ -664,10 +698,10 @@ export class BrsFile implements BscFile {
                 callables.push({
                     isSub: statement.func.tokens.functionType?.text.toLowerCase() === 'sub',
                     name: statement.tokens.name?.text,
-                    nameRange: statement.tokens.name?.location?.range,
+                    nameRange: util.getLocation(statement.tokens.name)?.range,
                     file: this,
                     params: params,
-                    range: statement.func.location?.range,
+                    range: util.getLocation(statement.func)?.range,
                     type: funcType,
                     getName: statement.getName.bind(statement),
                     hasNamespace: !!statement.findAncestor<NamespaceStatement>(isNamespaceStatement),
@@ -716,9 +750,10 @@ export class BrsFile implements BscFile {
             return this.cache.getOrAdd(`namespaceStatementForPosition-${position.line}:${position.character}`, () => {
                 let mostSpecificNamespace: NamespaceStatement;
                 for (const statement of this._cachedLookups.namespaceStatements) {
-                    if (util.rangeContains(statement.location?.range, position)) {
+                    const statementRange = util.getLocation(statement)?.range;
+                    if (util.rangeContains(statementRange, position)) {
                         if (mostSpecificNamespace) {
-                            if (util.isRangeInRange(statement.location?.range, mostSpecificNamespace.location?.range)) {
+                            if (util.isRangeInRange(statementRange, util.getLocation(mostSpecificNamespace)?.range)) {
                                 mostSpecificNamespace = statement;
                             }
                         } else {
@@ -859,13 +894,17 @@ export class BrsFile implements BscFile {
      */
     public getClosestToken(position: Position) {
         let tokens = this.parser.tokens;
+        const offset = util.getOffset(this.sourceInfo, position);
+        if (offset === undefined) {
+            return tokens[tokens.length - 1];
+        }
         for (let i = 0; i < tokens.length; i++) {
             let token = tokens[i];
-            if (util.rangeContains(token.location?.range, position)) {
+            if (this.tokenContainsOffset(token, offset)) {
                 return token;
             }
             //if the position less than this token range, then this position touches no token,
-            if (util.positionIsGreaterThanRange(position, token.location?.range) === false) {
+            if (offset < token.startPosition) {
                 let t = tokens[i - 1];
                 //return the token or the first token
                 return t ? t : tokens[0];
@@ -916,12 +955,12 @@ export class BrsFile implements BscFile {
         //get class fields and members
         const statementHandler = (statement: MethodStatement) => {
             if (statement.getName(file.parseMode).toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(statement)?.range));
             }
         };
         const fieldStatementHandler = (statement: FieldStatement) => {
             if (statement.tokens.name.text.toLowerCase() === textToSearchFor) {
-                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), statement.location?.range));
+                results.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(statement)?.range));
             }
         };
         file.parser.ast.walk(createVisitor({
@@ -1008,7 +1047,7 @@ export class BrsFile implements BscFile {
             const astTranspile = this.ast.transpile(state);
             const trailingComments = [];
             if (util.hasLeadingComments(this.parser.eofToken)) {
-                if (util.isLeadingCommentOnSameLine(this.ast.statements[this.ast.statements.length - 1]?.location, this.parser.eofToken)) {
+                if (util.isLeadingCommentOnSameLine(util.getLocation(this.ast.statements[this.ast.statements.length - 1]), this.parser.eofToken)) {
                     trailingComments.push(' ');
                 } else {
                     trailingComments.push('\n');
@@ -1363,7 +1402,7 @@ export class BrsFile implements BscFile {
                         fullNameLower: lowerLoopName,
                         parentNameLower: parentNameLower,
                         nameParts: nameParts.slice(0, i),
-                        nameRange: namespaceStatement.nameExpression.location?.range,
+                        nameRange: util.getLocation(namespaceStatement.nameExpression)?.range,
                         lastPartName: part.text,
                         lastPartNameLower: lowerPartName,
                         namespaceStatements: [],

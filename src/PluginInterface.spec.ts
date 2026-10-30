@@ -61,4 +61,14 @@ describe('PluginInterface', () => {
         pluginInterface.emit('beforeSerializeProgram', {} as any);
         expect(beforeSerializeProgram.callCount).to.equal(1);
     });
+
+    it('converts the old afterProgramValidate event to afterValidateProgram', () => {
+        const afterProgramValidate = sinon.spy();
+        pluginInterface.add({
+            name: 'converts the old afterProgramValidate event',
+            afterProgramValidate: afterProgramValidate
+        } as any);
+        pluginInterface.emit('afterValidateProgram', {} as any);
+        expect(afterProgramValidate.callCount).to.equal(1);
+    });
 });
