@@ -9,7 +9,7 @@ import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement,
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, getDiagnosticRange, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -17,7 +17,7 @@ import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
 import { ArrayType, DynamicType, UnionType } from '../types';
-import { standardizePath as s } from '../util';
+import { standardizePath as s, util } from '../util';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 
 describe('parser', () => {
@@ -169,7 +169,7 @@ describe('parser', () => {
                 sub main()
                     call()a
                 end sub
-            `).diagnostics.map(x => rangeToArray(x.location.range))).to.eql([
+            `).diagnostics.map(x => rangeToArray(getDiagnosticRange(x)))).to.eql([
                 [2, 26, 2, 27],
                 [2, 27, 2, 28]
             ]);
@@ -185,7 +185,7 @@ describe('parser', () => {
                 DiagnosticMessages.expectedStatement().message
             );
 
-            expect(diagnostics[0]?.location.range).to.eql(
+            expect(getDiagnosticRange(diagnostics[0])).to.eql(
                 Range.create(3, 20, 3, 32)
             );
         });
@@ -2527,7 +2527,7 @@ describe('parser', () => {
                 #end if
                 end sub
             `, ParseMode.BrighterScript, { debug: false });
-            expect(diagnostics.map(diagnostic => diagnostic.location.range.start.line)).to.include.members([3, 7]);
+            expect(diagnostics.map(diagnostic => getDiagnosticRange(diagnostic).start.line)).to.include.members([3, 7]);
         });
 
         it('allows a chain with #else if to end at end of file without a trailing newline', () => {
@@ -3654,6 +3654,68 @@ describe('parser', () => {
         });
     });
 
+    /* eslint-disable no-template-curly-in-string */
+    describe('location boundaries', () => {
+        const srcPath = s`${rootDir}/source/main.bs`;
+        const uri = util.pathToUri(srcPath);
+
+        function parseDiagnostics(text: string, mode = ParseMode.BrighterScript) {
+            return Parser.parse(text, {
+                srcPath: srcPath,
+                mode: mode
+            }).diagnostics;
+        }
+
+        it('flags a CRLF newline token at the end of a line', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    print 1 +\r\nend sub', ParseMode.BrightScript), [{
+                ...DiagnosticMessages.unexpectedToken('\r\n'),
+                location: { uri: uri, range: Range.create(1, 13, 1, 15) }
+            }]);
+        });
+
+        it('flags a LF newline token at the end of a line after a surrogate-pair emoji', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    print "😀" +\nend sub', ParseMode.BrightScript), [{
+                ...DiagnosticMessages.unexpectedToken('\n'),
+                location: { uri: uri, range: Range.create(1, 16, 1, 17) }
+            }]);
+        });
+
+        it('flags a token at column 0 after a multi-line template string containing CRLF', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    x = `a\r\n${1}\n` +\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('end sub'),
+                location: { uri: uri, range: Range.create(4, 0, 4, 7) }
+            }]);
+        });
+
+        it('flags a token inside a template string expression', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    x = `a ${1 +}`\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('}'),
+                location: { uri: uri, range: Range.create(1, 16, 1, 17) }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later line of the template', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    x = `😀 ${1}\r\n  and ${1 +}`\r\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('}'),
+                location: { uri: uri, range: Range.create(2, 11, 2, 12) }
+            }]);
+        });
+
+        it('flags the end of a file with no trailing newline', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    print 1\nend sub\nsub'), [{
+                ...DiagnosticMessages.expectedIdentifier('sub'),
+                location: { uri: uri, range: Range.create(3, 3, 3, 4) }
+            }]);
+        });
+
+        it('flags an unmatched token at the end of a file with no trailing newline', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    print 1\r\nend sub\r\nprint (1'), [{
+                ...DiagnosticMessages.unmatchedLeftToken('(', 'expression'),
+                location: { uri: uri, range: Range.create(3, 8, 3, 9) }
+            }]);
+        });
+    });
+    /* eslint-enable no-template-curly-in-string */
 });
 
 export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, boolean> = {}) {
@@ -3688,5 +3750,5 @@ function expectCommentWithText(stat: Statement, text: string) {
 }
 
 export function failStatementType(stat: Statement, type: string) {
-    assert.fail(`Statement ${stat.constructor.name} line ${stat.location?.range.start.line} is not a ${type}`);
+    assert.fail(`Statement ${stat.constructor.name} line ${util.getLocation(stat)?.range.start.line} is not a ${type}`);
 }

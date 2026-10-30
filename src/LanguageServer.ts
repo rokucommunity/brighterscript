@@ -31,7 +31,8 @@ import type {
     WorkspaceEdit,
     TextEdit,
     InlayHint,
-    InlayHintParams
+    InlayHintParams,
+    WorkspaceFolder
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -106,6 +107,11 @@ export class LanguageServer {
      * Indicates whether the client supports workspace folders
      */
     private clientHasWorkspaceFolderCapability = false;
+
+    /**
+     * The workspace folders the client sent in the `initialize` request. Used when the client does not support the `workspace/workspaceFolders` request
+     */
+    private initialWorkspaceFolders: WorkspaceFolder[] = [];
 
     /**
      * Create a simple text document manager.
@@ -234,6 +240,16 @@ export class LanguageServer {
         // If not, we will fall back using global settings
         this.hasConfigurationCapability = !!(clientCapabilities.workspace && !!clientCapabilities.workspace.configuration);
         this.clientHasWorkspaceFolderCapability = !!(clientCapabilities.workspace && !!clientCapabilities.workspace.workspaceFolders);
+
+        //remember the initial workspace folders (falling back to the deprecated `rootUri`) for clients that don't support `workspace/workspaceFolders`
+        if (params.workspaceFolders) {
+            this.initialWorkspaceFolders = params.workspaceFolders;
+        } else if (params.rootUri) {
+            this.initialWorkspaceFolders = [{
+                uri: params.rootUri,
+                name: path.basename(util.uriToPath(params.rootUri))
+            }];
+        }
 
         //return the capabilities of the server
         return {
@@ -492,7 +508,7 @@ export class LanguageServer {
      */
     @AddStackToErrorMessage
     public async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        const workspacePaths = (await this.connection.workspace.getWorkspaceFolders()).map(x => util.uriToPath(x.uri));
+        const workspacePaths = (await this.getWorkspaceFolders()).map(x => util.uriToPath(x.uri));
 
         const changes = params.changes
             .map(x => ({
@@ -549,6 +565,7 @@ export class LanguageServer {
         if (
             micromatch.some(changes.map(x => x.srcPath), [
                 '**/.gitignore',
+                '**/.git/info/exclude',
                 '**/.vscode/settings.json',
                 '**/*bsconfig*.json'
             ], {
@@ -607,13 +624,28 @@ export class LanguageServer {
     }
 
     /**
+     * Get the client's workspace folders. Only sends the `workspace/workspaceFolders` request if the client supports it,
+     * otherwise (or if that request fails) falls back to the folders the client sent during `initialize`
+     */
+    private async getWorkspaceFolders(): Promise<WorkspaceFolder[]> {
+        if (this.clientHasWorkspaceFolderCapability) {
+            try {
+                return await this.connection.workspace.getWorkspaceFolders() ?? [];
+            } catch (e) {
+                this.logger.error('Failed to get workspace folders from the client. Falling back to the initial workspace folders', e);
+            }
+        }
+        return this.initialWorkspaceFolders;
+    }
+
+    /**
      * Get a list of workspaces, and their configurations.
      * Get only the settings for the workspace that are relevant to the language server. We do this so we can cache this object for use in change detection in the future.
      */
     private async getWorkspaceConfigs(): Promise<WorkspaceConfig[]> {
         //get all workspace folders (we'll use these to get settings)
         let workspaces = await Promise.all(
-            (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
+            (await this.getWorkspaceFolders()).map(async (x) => {
                 const workspaceFolder = util.uriToPath(x.uri);
                 const brightscriptConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(x.uri, 'brightscript');
                 return {
@@ -908,12 +940,21 @@ export class LanguageServer {
                 this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns)
             );
 
-            //get any .gitignore patterns from the client from this workspace
-            const gitignorePath = path.resolve(rootDir, '.gitignore');
-            if (await fsExtra.pathExists(gitignorePath)) {
-                const matcher = ignore({ ignoreCase: true }).add(
-                    fsExtra.readFileSync(gitignorePath).toString()
-                );
+            //get any .gitignore and .git/info/exclude patterns from this workspace (both use the same syntax)
+            const ignoreFilePaths = [
+                path.resolve(rootDir, '.gitignore'),
+                path.resolve(rootDir, '.git', 'info', 'exclude')
+            ];
+            const ignoreFileContents: string[] = [];
+            for (const ignoreFilePath of ignoreFilePaths) {
+                if (await fsExtra.pathExists(ignoreFilePath)) {
+                    ignoreFileContents.push(
+                        (await fsExtra.readFile(ignoreFilePath)).toString()
+                    );
+                }
+            }
+            if (ignoreFileContents.length > 0) {
+                const matcher = ignore({ ignoreCase: true }).add(ignoreFileContents);
                 this.pathFiltererDisposables.push(
                     this.pathFilterer.registerExcludeMatcher((p: string) => {
                         const relPath = path.relative(rootDir, p);

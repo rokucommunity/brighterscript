@@ -109,6 +109,7 @@ describe('LanguageServer', () => {
             return connection;
         });
         server['hasConfigurationCapability'] = true;
+        server['clientHasWorkspaceFolderCapability'] = true;
     });
 
     afterEach(() => {
@@ -1026,9 +1027,57 @@ describe('LanguageServer', () => {
             expect(server['hasConfigurationCapability']).to.be.true;
             expect(server['clientHasWorkspaceFolderCapability']).to.be.true;
         });
+
+        it('falls back to rootUri when workspaceFolders are not provided', async () => {
+            await server.onInitialize({
+                capabilities: {},
+                rootUri: getFileProtocolPath(workspacePath)
+            } as any);
+            expect(server['initialWorkspaceFolders']).to.eql([{
+                uri: getFileProtocolPath(workspacePath),
+                name: path.basename(workspacePath)
+            }]);
+        });
+    });
+
+    describe('getWorkspaceFolders', () => {
+        it('does not request workspace folders when the client does not support them', async () => {
+            server.run();
+            const stub = sinon.stub(server['connection'].workspace, 'getWorkspaceFolders');
+            await server.onInitialize({
+                capabilities: {
+                    workspace: {
+                        workspaceFolders: false
+                    }
+                },
+                workspaceFolders: [{ uri: getFileProtocolPath(workspacePath), name: 'workspace' }]
+            } as any);
+
+            expect(await server['getWorkspaceFolders']()).to.eql([{ uri: getFileProtocolPath(workspacePath), name: 'workspace' }]);
+            expect(stub.called).to.be.false;
+        });
+
+        it('falls back to the initial workspace folders when the request fails', async () => {
+            server.run();
+            sinon.stub(server.logger, 'error');
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.reject(new Error('Method not found')));
+            server['initialWorkspaceFolders'] = [{ uri: getFileProtocolPath(workspacePath), name: 'workspace' }];
+
+            expect(await server['getWorkspaceFolders']()).to.eql([{ uri: getFileProtocolPath(workspacePath), name: 'workspace' }]);
+        });
     });
 
     describe('onInitialized', () => {
+        it('does not crash when the client does not support workspace folders', async () => {
+            server['connection'] = connection as any;
+            sinon.stub(server['connection'].workspace, 'getWorkspaceFolders').returns(Promise.reject(new Error('Method not found')));
+            server['hasConfigurationCapability'] = false;
+            server['clientHasWorkspaceFolderCapability'] = false;
+            server['initialWorkspaceFolders'] = [{ uri: getFileProtocolPath(workspacePath), name: 'workspace' }];
+
+            await server.onInitialized();
+        });
+
         it('registers workspaceFolders change listener', async () => {
 
             server['connection'] = connection as any;
@@ -1223,6 +1272,47 @@ describe('LanguageServer', () => {
                     s`${workspacePath}/src/source/file.brs`,
                     //this file should be excluded
                     s`${workspacePath}/dist/source/file.brs`
+                ])
+            ).to.eql([
+                s`${workspacePath}/src/source/file.brs`
+            ]);
+        });
+
+        it('properly handles a .git/info/exclude list', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.git/info/exclude`, undent`
+                .claude/worktrees/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            //filters files that appear in the .git/info/exclude list
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/src/source/file.brs`,
+                    //this file should be excluded
+                    s`${workspacePath}/.claude/worktrees/feature/bsconfig.json`
+                ])
+            ).to.eql([
+                s`${workspacePath}/src/source/file.brs`
+            ]);
+        });
+
+        it('combines .gitignore and .git/info/exclude lists', async () => {
+            fsExtra.outputFileSync(s`${workspacePath}/.gitignore`, undent`
+                dist/
+            `);
+            fsExtra.outputFileSync(s`${workspacePath}/.git/info/exclude`, undent`
+                .claude/worktrees/
+            `);
+
+            const filterer = await server['rebuildPathFilterer']();
+
+            expect(
+                filterer.filter([
+                    s`${workspacePath}/src/source/file.brs`,
+                    //these files should be excluded
+                    s`${workspacePath}/dist/source/file.brs`,
+                    s`${workspacePath}/.claude/worktrees/feature/bsconfig.json`
                 ])
             ).to.eql([
                 s`${workspacePath}/src/source/file.brs`
@@ -2613,7 +2703,7 @@ describe('LanguageServer', () => {
             fsExtra.outputJsonSync(s`${rootDir}/beta/bsconfig.json`, subProjectConfig);
             server.run();
 
-            await server['onInitialize']({ capabilities: {} } as any);
+            await server['onInitialize']({ capabilities: { workspace: { workspaceFolders: true } } } as any);
             await server['onInitialized']();
             await server['syncProjects']();
 
