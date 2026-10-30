@@ -13,7 +13,7 @@ import { isTypePropertyReferenceType, isReferenceType } from '../astUtils/reflec
 import { TypedFunctionType } from './TypedFunctionType';
 import { NamespaceType } from './NamespaceType';
 import { createToken } from '../astUtils/creators';
-import { TokenKind } from '../lexer/TokenKind';
+import { TokenKind } from '../files/brs/lexer/TokenKind';
 import { util } from '../util';
 import { ArrayType } from './ArrayType';
 

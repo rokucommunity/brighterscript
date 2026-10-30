@@ -4,9 +4,9 @@ import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
 import { tempDir, rootDir, trim } from '../../testHelpers.spec';
 import { expect } from 'chai';
-import { Parser } from '../../parser/Parser';
+import { Parser } from '../../files/brs/parser/Parser';
 import { isFunctionStatement } from '../../astUtils/reflection';
-import type { FunctionStatement } from '../../parser/Statement';
+import type { FunctionStatement } from '../../files/brs/parser/Statement';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 const sinon = createSandbox();
 

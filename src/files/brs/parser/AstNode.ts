@@ -1,0 +1,471 @@
+import type { WalkVisitor, WalkOptions } from '../../../astUtils/visitors';
+import { WalkMode } from '../../../astUtils/visitors';
+import type { Location, Position, Range } from 'vscode-languageserver';
+import { CancellationTokenSource } from 'vscode-languageserver';
+import { InternalWalkMode } from '../../../astUtils/visitors';
+import type { SymbolTable } from '../../../SymbolTable';
+import type { BrsTranspileState } from './BrsTranspileState';
+import type { GetTypeOptions, TranspileResult } from '../../../interfaces';
+import type { AnnotationExpression } from './Expression';
+import { DynamicType } from '../../../types/DynamicType';
+import util from '../../../util';
+import type { BscType } from '../../../types/BscType';
+import type { Locatable, SourceInfo, Token } from '../lexer/Token';
+import { isBlock, isBody, isFunctionParameterExpression } from '../../../astUtils/reflection';
+
+/**
+ * A BrightScript AST node
+ */
+export abstract class AstNode implements Locatable {
+    public abstract kind: AstNodeKind;
+    /**
+     * Where this node starts, counted from the start of its source (see `Locatable.startPosition`).
+     * Use `util.getLocation()` to get the line/character `Location`
+     */
+    public abstract startPosition: number;
+    /**
+     * Where this node ends: the gap just after its last character (see `Locatable.endPosition`)
+     */
+    public abstract endPosition: number;
+    /**
+     * Info about the source this node was parsed from. `undefined` for synthetic nodes
+     */
+    public abstract sourceInfo: SourceInfo | undefined;
+
+    /**
+     * The starting and ending location of the node. Assigning it moves the node to that location (see `util.assignLocation()`).
+     * @deprecated use `util.getLocation(node)`. This is computed on every read
+     */
+    public get location(): Location | undefined {
+        return util.getLocation(this);
+    }
+
+    public set location(value: Location | undefined) {
+        util.assignLocation(this, value, this.sourceInfo);
+    }
+
+    /**
+     * @deprecated use `util.getLocation(node)?.range`. This is computed on every read
+     */
+    public get range(): Range | undefined {
+        return util.getLocation(this)?.range;
+    }
+
+    public abstract transpile(state: BrsTranspileState): TranspileResult;
+
+    /**
+     * Optional property, set at the top level with a map of conditional compile consts and their values
+     */
+    public bsConsts?: Map<string, boolean>;
+
+    /**
+     * Get the typedef for this node. (defaults to transpiling the node, should be overridden by subclasses if there's a more specific typedef requirement)
+     */
+    public getTypedef(state: BrsTranspileState) {
+        return this.transpile(state);
+    }
+
+    /**
+     * When being considered by the walk visitor, this describes what type of element the current class is.
+     */
+    public visitMode = InternalWalkMode.visitStatements;
+
+    public abstract walk(visitor: WalkVisitor, options: WalkOptions);
+
+    /**
+     * The parent node for this statement. This is set dynamically during `validateFile`, and should not be set directly.
+     */
+    public parent?: AstNode;
+
+    /**
+     * Certain expressions or statements can have a symbol table (such as blocks, functions, namespace bodies, etc).
+     * If you're interested in getting the closest SymbolTable, use `getSymbolTable` instead.
+     */
+    public symbolTable?: SymbolTable;
+
+    /**
+     * Get the closest symbol table for this node
+     */
+    public getSymbolTable(): SymbolTable {
+        let node: AstNode = this;
+        while (node) {
+            if (node.symbolTable) {
+                return node.symbolTable;
+            }
+            node = node.parent!;
+        }
+
+        //justification: we are following a chain of nodes until we get to one with a SymbolTable,
+        //and the top-level node will always have a SymbolTable. So we'll never hit this undefined,
+        //but it is not so easy to convince the typechecker of this.
+        return undefined as any;
+    }
+
+    /**
+     * Walk upward and return the first node that results in `true` from the matcher.
+     * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
+     *                The function's second parameter is a cancellation token. If you'd like to short-circuit the walk, call `cancellationToken.cancel()`, then this function will return `undefined`
+     */
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => node is TNode): TNode | undefined;
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationToken: CancellationTokenSource) => boolean | AstNode | undefined | void): TNode | undefined;
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationToken: CancellationTokenSource) => boolean | AstNode | undefined | void): TNode | undefined {
+        let node = this.parent;
+
+        const cancel = new CancellationTokenSource();
+        while (node) {
+            let matcherValue = matcher(node, cancel);
+            if (cancel.token.isCancellationRequested) {
+                return;
+            }
+            if (matcherValue) {
+                cancel.cancel();
+                return (matcherValue === true ? node : matcherValue) as TNode;
+
+            }
+            node = node.parent;
+        }
+    }
+
+    /**
+     * Find the first child where the matcher evaluates to true.
+     * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
+     */
+    public findChild<TNode = AstNode>(matcher: (node: AstNode, cancellationSource) => boolean | AstNode | undefined | void, options?: WalkOptions): TNode | undefined {
+        const cancel = new CancellationTokenSource();
+        let result: AstNode | undefined;
+        this.walk((node) => {
+            const matcherValue = matcher(node, cancel);
+            if (matcherValue) {
+                cancel.cancel();
+                result = matcherValue === true ? node : matcherValue;
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            ...options ?? {},
+            cancel: cancel.token
+        });
+        return result as unknown as TNode;
+    }
+
+    /**
+     * Find a list of all children first child where the matcher evaluates to true.
+     * @param matcher a function called for each node. If you return true, the specified node is included in the results. If you return a node,
+     * that node is returned. all other return values exclude that value and continue the loop
+     */
+    public findChildren<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationSource: CancellationTokenSource) => boolean | AstNode | undefined | void, options?: WalkOptions): Array<TNode> {
+        const cancel = new CancellationTokenSource();
+        let result: Array<AstNode> = [];
+        this.walk((node) => {
+            const matcherValue = matcher(node, cancel);
+            if (matcherValue) {
+                result.push(matcherValue === true ? node : matcherValue);
+            }
+        }, {
+            walkMode: WalkMode.visitAllRecursive,
+            ...options ?? {},
+            cancel: cancel.token
+        });
+        return result as TNode[];
+    }
+
+    /**
+     * FInd the deepest child that includes the given position
+     */
+    public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
+        //a position only means something within one source (the one this search starts from), so only nodes from that source can match.
+        //Nodes without a source (i.e. a synthetic `if` wrapping real code) or from another source (i.e. code parsed from a snippet) never match
+        //on their own, but the walk still steps into them, so the real code inside them can still be found
+        const searchSource = this.sourceInfo;
+        return this.findChild<TNodeType>((node) => {
+            if (!node?.sourceInfo || (searchSource && node.sourceInfo !== searchSource)) {
+                return;
+            }
+            const offset = util.getOffset(node.sourceInfo, position);
+            if (offset !== undefined && node.startPosition <= offset && offset <= node.endPosition) {
+                return node.findChildAtPosition(position, options) ?? node;
+            }
+        }, options);
+    }
+
+    /**
+     * Get the BscType of this node.
+     */
+    public getType(options: GetTypeOptions): BscType {
+        return DynamicType.instance;
+    }
+
+    /**
+     * Links all child nodes to their parent AstNode, and the same with symbol tables. This performs a full AST walk, so you should use this sparingly
+     */
+    public link() {
+        //the act of walking causes the nodes to be linked
+        this.walk(() => { }, {
+            // eslint-disable-next-line no-bitwise
+            walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
+        });
+    }
+
+    /**
+     * Walk upward and return the root node
+     */
+    public getRoot() {
+        let node = this as AstNode;
+
+        while (node) {
+            if (!node.parent) {
+                return node;
+            }
+            node = node.parent;
+        }
+    }
+
+
+    /**
+     * Gets all the trivia (comments, whitespace) that is directly before the start of this node
+     * Note: this includes all trivia that might start on the line of the previous node
+     */
+    public get leadingTrivia(): Token[] {
+        return [];
+    }
+
+    /**
+     * Gets any trivia that is directly before the end of the node
+     * For example, this would return all trivia before a `end function` token of a FunctionExpression
+     */
+    public get endTrivia(): Token[] {
+        return [];
+    }
+
+    /**
+     * False when this node is inside an `#if` / `#else if` / `#else` branch that was not selected. The device discards that code before compiling.
+     * Undefined until a walk reaches the node, such as a node a plugin just created. The compiler treats undefined as active,
+     * so only code known to be in an inactive branch is left out. Check `isActive === false` to find inactive code.
+     *
+     * Every walk sets this from the parent, but only a full walk from the root re-evaluates the `#if` conditions.
+     */
+    public isActive?: boolean;
+
+    public getBsConsts(): Map<string, boolean> | undefined {
+        return this.bsConsts ?? this.parent?.getBsConsts?.();
+    }
+
+    /**
+     * The previous step in this expression, or undefined if this node doesn't build on another
+     * expression. Overridden by dotted/indexed gets, calls, and other chaining nodes.
+     *
+     * Each node in a chain spans a whole prefix of the source, so this walks to the next-shorter
+     * prefix. Given `a.b.c`, there are only three nodes:
+     * ```
+     * a.b.c   .previousInChain -> a.b
+     * a.b     .previousInChain -> a
+     * a       .previousInChain -> undefined
+     * ```
+     *
+     * This walks toward the AST *child*, since chains are stored inverted: the full expression is
+     * the top node and its base is the deepest descendant. It is not `parent` reversed though -
+     * arguments and index values have a `parent`, but are never anything's `previousInChain`,
+     * because they're separate expressions that merely sit inside this one:
+     * ```
+     * a.b(arg)   //CallExpression.previousInChain is `a.b`, NOT `arg`
+     * a[i]       //IndexedGetExpression.previousInChain is `a`, NOT `i`
+     * ```
+     */
+    public get previousInChain(): AstNode | undefined {
+        return undefined;
+    }
+
+    /**
+     * Is this node a complete expression, rather than one step inside a longer one?
+     *
+     * True when nothing chains onto this node. Statements are always terminal. Use this to find
+     * whole expressions while walking, instead of also matching every prefix inside them.
+     *
+     * ```
+     * print a.b.c(arg)
+     *
+     * //a.b.c(arg)   yes - the whole expression
+     * //a.b.c        no  - a.b.c(arg) chains onto it
+     * //a.b          no  - a.b.c chains onto it
+     * //a            no  - a.b chains onto it
+     * //arg          yes - an argument, so an expression of its own
+     * ```
+     *
+     * An argument is terminal no matter how long it is, because nothing chains onto it. Both of
+     * these are terminal, even though they sit inside the call:
+     * ```
+     * print doSomething(x.y, 1 + 2)
+     *
+     * //x.y          yes
+     * //1 + 2        yes
+     * ```
+     *
+     * Requires `parent` to be set, so the node must already be linked (see `link()`). An
+     * unlinked node has no parent, so it reports `true`.
+     */
+    public isTerminal(): boolean {
+        //walk up, then back down: if we don't land on ourselves, nothing chains onto us
+        return this.parent === undefined || this.parent.previousInChain !== this;
+    }
+
+    /**
+     * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
+     * All tokens, statements, expressions, range, and location are cloned.
+     */
+    public abstract clone(): AstNode;
+
+    /**
+     * Helper function for creating a clone. This will clone any attached annotations, as well as reparent the cloned node's children to the clone
+     */
+    protected finalizeClone<T extends AstNode>(
+        clone: T,
+        propsToReparent?: Array<{ [K in keyof T]: T[K] extends AstNode | AstNode[] ? K : never }[keyof T]>
+    ) {
+        //clone the annotations if they exist
+        if (Array.isArray((this as unknown as Statement).annotations)) {
+            (clone as unknown as Statement).annotations = (this as unknown as Statement).annotations?.map(x => x.clone());
+        }
+        //reparent all of the supplied props
+        for (let key of propsToReparent ?? []) {
+            const children = (Array.isArray(clone?.[key]) ? clone[key] : [clone?.[key]]) as any[];
+            for (let child of children ?? []) {
+                if (child) {
+                    (child as AstNode).parent = clone;
+                }
+            }
+        }
+        return clone;
+    }
+
+    /**
+     * The index of the statement containing this node (or in the case of a statement, itself) within the containing block.
+     */
+    public get statementIndex(): number {
+        if (isBody(this)) {
+            return 0;
+        }
+        if (!this.parent) {
+            return -1;
+        }
+        let currentNode: AstNode = this;
+        if (isFunctionParameterExpression(currentNode)) {
+            // function parameters are not part of statement lists
+            return -1;
+        }
+        while (currentNode && !(isBlock(currentNode?.parent) || isBody(currentNode?.parent))) {
+            currentNode = currentNode.parent;
+
+        }
+        if (isBlock(currentNode?.parent) || isBody(currentNode?.parent)) {
+            return currentNode.parent.statements.indexOf(currentNode);
+        }
+        return -1;
+    }
+}
+
+export abstract class Statement extends AstNode {
+    /**
+     * When being considered by the walk visitor, this describes what type of element the current class is.
+     */
+    public visitMode = InternalWalkMode.visitStatements;
+    /**
+     * Annotations for this statement
+     */
+    public annotations?: AnnotationExpression[] | undefined;
+}
+
+
+/** A BrightScript expression */
+export abstract class Expression extends AstNode {
+    /**
+     * When being considered by the walk visitor, this describes what type of element the current class is.
+     */
+    public visitMode = InternalWalkMode.visitExpressions;
+
+    public abstract clone(): Expression;
+}
+
+export enum AstNodeKind {
+    Body = 'Body',
+    BinaryExpression = 'BinaryExpression',
+    CallExpression = 'CallExpression',
+    FunctionExpression = 'FunctionExpression',
+    FunctionParameterExpression = 'FunctionParameterExpression',
+    NamespacedVariableNameExpression = 'NamespacedVariableNameExpression',
+    DottedGetExpression = 'DottedGetExpression',
+    XmlAttributeGetExpression = 'XmlAttributeGetExpression',
+    IndexedGetExpression = 'IndexedGetExpression',
+    GroupingExpression = 'GroupingExpression',
+    LiteralExpression = 'LiteralExpression',
+    EscapedCharCodeLiteralExpression = 'EscapedCharCodeLiteralExpression',
+    ArrayLiteralExpression = 'ArrayLiteralExpression',
+    AAMemberExpression = 'AAMemberExpression',
+    AALiteralExpression = 'AALiteralExpression',
+    AAIndexedMemberExpression = 'AAIndexedMemberExpression',
+    UnaryExpression = 'UnaryExpression',
+    SpreadExpression = 'SpreadExpression',
+    VariableExpression = 'VariableExpression',
+    SourceLiteralExpression = 'SourceLiteralExpression',
+    NewExpression = 'NewExpression',
+    CallfuncExpression = 'CallfuncExpression',
+    TemplateStringQuasiExpression = 'TemplateStringQuasiExpression',
+    TemplateStringExpression = 'TemplateStringExpression',
+    TaggedTemplateStringExpression = 'TaggedTemplateStringExpression',
+    AnnotationExpression = 'AnnotationExpression',
+    TernaryExpression = 'TernaryExpression',
+    NullCoalescingExpression = 'NullCoalescingExpression',
+    RegexLiteralExpression = 'RegexLiteralExpression',
+    EmptyStatement = 'EmptyStatement',
+    AssignmentStatement = 'AssignmentStatement',
+    ExpressionStatement = 'ExpressionStatement',
+    ExitStatement = 'ExitStatement',
+    FunctionStatement = 'FunctionStatement',
+    IfStatement = 'IfStatement',
+    IncrementStatement = 'IncrementStatement',
+    PrintStatement = 'PrintStatement',
+    DimStatement = 'DimStatement',
+    GotoStatement = 'GotoStatement',
+    LabelStatement = 'LabelStatement',
+    ReturnStatement = 'ReturnStatement',
+    EndStatement = 'EndStatement',
+    StopStatement = 'StopStatement',
+    ForStatement = 'ForStatement',
+    ForEachStatement = 'ForEachStatement',
+    WhileStatement = 'WhileStatement',
+    DottedSetStatement = 'DottedSetStatement',
+    IndexedSetStatement = 'IndexedSetStatement',
+    LibraryStatement = 'LibraryStatement',
+    NamespaceStatement = 'NamespaceStatement',
+    ImportStatement = 'ImportStatement',
+    InterfaceStatement = 'InterfaceStatement',
+    InterfaceFieldStatement = 'InterfaceFieldStatement',
+    InterfaceMethodStatement = 'InterfaceMethodStatement',
+    ClassStatement = 'ClassStatement',
+    MethodStatement = 'MethodStatement',
+    ClassMethodStatement = 'ClassMethodStatement',
+    FieldStatement = 'FieldStatement',
+    ClassFieldStatement = 'ClassFieldStatement',
+    TryCatchStatement = 'TryCatchStatement',
+    CatchStatement = 'CatchStatement',
+    SelectCaseStatement = 'SelectCaseStatement',
+    CaseStatement = 'CaseStatement',
+    ThrowStatement = 'ThrowStatement',
+    EnumStatement = 'EnumStatement',
+    EnumMemberStatement = 'EnumMemberStatement',
+    ConstStatement = 'ConstStatement',
+    ContinueStatement = 'ContinueStatement',
+    Block = 'Block',
+    TypeExpression = 'TypeExpression',
+    TypecastExpression = 'TypecastExpression',
+    TypedArrayExpression = 'TypedArrayExpression',
+    TypecastStatement = 'TypecastStatement',
+    AliasStatement = 'AliasStatement',
+    ConditionalCompileStatement = 'ConditionalCompileStatement',
+    ConditionalCompileConstStatement = 'ConditionalCompileConstStatement',
+    ConditionalCompileErrorStatement = 'ConditionalCompileErrorStatement',
+    AugmentedAssignmentStatement = 'AugmentedAssignmentStatement',
+    PrintSeparatorExpression = 'PrintSeparatorExpression',
+    InlineInterfaceExpression = 'InlineInterfaceExpression',
+    InlineInterfaceMemberExpression = 'InlineInterfaceMemberExpression',
+    TypeStatement = 'TypeStatement',
+    TypedFunctionTypeExpression = 'TypedFunctionTypeExpression'
+}

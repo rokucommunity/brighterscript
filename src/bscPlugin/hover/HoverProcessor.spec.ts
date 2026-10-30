@@ -6,7 +6,7 @@ import { expectDiagnostics, expectZeroDiagnostics, rootDir, trim } from '../../t
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { HoverProcessor } from './HoverProcessor';
 import { createIdentifier, createIntegerLiteral } from '../../astUtils/creators';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 let sinon = createSandbox();
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');

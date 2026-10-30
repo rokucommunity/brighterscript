@@ -1,9 +1,9 @@
 import type { Range } from 'vscode-languageserver-protocol';
 import { WorkspaceSymbol } from 'vscode-languageserver-protocol';
 import { DocumentSymbol, SymbolKind } from 'vscode-languageserver-protocol';
-import type { AstNode } from '../../parser/AstNode';
+import type { AstNode } from '../../files/brs/parser/AstNode';
 import util from '../../util';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 
 export function getDocumentSymbolsFromBrsFile(file: BrsFile) {

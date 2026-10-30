@@ -11,12 +11,12 @@ import {
     isXmlScope
 } from '../../astUtils/reflection';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import type { ProvideInlayHintsEvent } from '../../interfaces';
-import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression } from '../../parser/Expression';
-import type { Expression } from '../../parser/AstNode';
-import type { ClassStatement, FunctionStatement, MethodStatement, NamespaceStatement } from '../../parser/Statement';
-import { ParseMode } from '../../parser/Parser';
+import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression } from '../../files/brs/parser/Expression';
+import type { Expression } from '../../files/brs/parser/AstNode';
+import type { ClassStatement, FunctionStatement, MethodStatement, NamespaceStatement } from '../../files/brs/parser/Statement';
+import { ParseMode } from '../../files/brs/parser/Parser';
 import { util } from '../../util';
 import type { XmlScope } from '../../XmlScope';
 

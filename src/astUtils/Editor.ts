@@ -1,4 +1,4 @@
-import type { AstNode } from '../parser/AstNode';
+import type { AstNode } from '../files/brs/parser/AstNode';
 
 export class Editor {
     private changes: Change[] = [];

@@ -1,6 +1,6 @@
 import { expect } from '../../chai-config.spec';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import type { BscFile } from '../../files/BscFile';
 import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';

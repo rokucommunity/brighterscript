@@ -1,7 +1,7 @@
 import { expect } from './chai-config.spec';
 import { Range } from 'vscode-languageserver';
 import { CommentFlagProcessor } from './CommentFlagProcessor';
-import { Lexer } from './lexer/Lexer';
+import { Lexer } from './files/brs/lexer/Lexer';
 import type { BscFile } from './files/BscFile';
 import util from './util';
 

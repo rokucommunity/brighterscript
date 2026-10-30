@@ -1,9 +1,9 @@
 import { ParameterInformation, SignatureInformation } from 'vscode-languageserver-protocol';
 import { isClassStatement, isXmlScope, isFunctionStatement, isMethodStatement } from '../astUtils/reflection';
-import { TokenKind } from '../lexer/TokenKind';
-import type { Statement } from '../parser/AstNode';
-import { ParseMode } from '../parser/Parser';
-import type { ClassStatement } from '../parser/Statement';
+import { TokenKind } from '../files/brs/lexer/TokenKind';
+import type { Statement } from '../files/brs/parser/AstNode';
+import { ParseMode } from '../files/brs/parser/Parser';
+import type { ClassStatement } from '../files/brs/parser/Statement';
 import type { SignatureInfoObj } from '../Program';
 import type { XmlScope } from '../XmlScope';
 import type { CallExpressionInfo } from './CallExpressionInfo';

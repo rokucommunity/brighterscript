@@ -2,7 +2,7 @@ import { SelectionRange } from 'vscode-languageserver-types';
 import type { Range, Position } from 'vscode-languageserver-protocol';
 import { isBrsFile } from '../../astUtils/reflection';
 import type { ProvideSelectionRangesEvent } from '../../interfaces';
-import type { AstNode } from '../../parser/AstNode';
+import type { AstNode } from '../../files/brs/parser/AstNode';
 import { util } from '../../util';
 
 export class SelectionRangesProcessor {

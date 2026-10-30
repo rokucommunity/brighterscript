@@ -1,9 +1,9 @@
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import type { ProvideReferencesEvent } from '../../interfaces';
 import type { Location } from 'vscode-languageserver-protocol';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { XmlFile } from '../../files/XmlFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import { isBrsFile, isXmlFile } from '../../astUtils/reflection';
 
 export class ReferencesProvider {

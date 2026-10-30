@@ -46,7 +46,7 @@ Never run a single test file. Always run the full suite.
 ## Project Structure
 
 
-Key entry points: `src/Program.ts` (core compiler), `src/ProgramBuilder.ts` (orchestration), `src/LanguageServer.ts` (LSP), `src/cli.ts` (CLI). Files are in `src/files/`, parsing in `src/parser/`, and the built-in plugin in `src/bscPlugin/` (with subdirs for validation, completions, hover, code actions, references, semantic tokens, symbols, and transpile).
+Key entry points: `src/Program.ts` (core compiler), `src/ProgramBuilder.ts` (orchestration), `src/LanguageServer.ts` (LSP), `src/cli.ts` (CLI). Files are in `src/files/`, with each file type's lexer/parser alongside it (`src/files/brs/{lexer,parser}/`, `src/files/xml/parser/`, shared pieces in `src/files/common/`), and the built-in plugin in `src/bscPlugin/` (with subdirs for validation, completions, hover, code actions, references, semantic tokens, symbols, and transpile).
 
 ## Compilation Pipeline
 

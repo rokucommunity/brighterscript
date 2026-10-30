@@ -1,5 +1,5 @@
 import { expect } from '../chai-config.spec';
-import type { BrsFile } from '../files/BrsFile';
+import type { BrsFile } from '../files/brs/BrsFile';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import { expectZeroDiagnostics } from '../testHelpers.spec';

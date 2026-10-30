@@ -1,7 +1,7 @@
 import type { BsDiagnostic } from '../../interfaces';
 import { DiagnosticCodeMap } from '../../DiagnosticMessages';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
-import type { XmlFile } from '../../files/XmlFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import type { ProvideSourceFixAllCodeActionsEvent } from '../../interfaces';
 import { isXmlFile } from '../../astUtils/reflection';
 import { getMissingExtendsInsertPosition, getRemoveReturnValueChange } from './codeActionHelpers';

@@ -1,0 +1,2454 @@
+import { util } from '../../../util';
+import type { Location } from 'vscode-languageserver';
+import * as fsExtra from 'fs-extra';
+import { Program } from '../../../Program';
+import type { BrsFile } from '../BrsFile';
+import { expect } from '../../../chai-config.spec';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypecastExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from './Expression';
+import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { tempDir, rootDir, outDir } from '../../../testHelpers.spec';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypecastExpression, isUnaryExpression, isVariableExpression, isLiteralExpression, isWhileStatement, isXmlAttributeGetExpression } from '../../../astUtils/reflection';
+import type { ImportStatement, ConditionalCompileStatement, ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
+import { AssignmentStatement, EmptyStatement } from './Statement';
+import { ParseMode, Parser } from './Parser';
+import type { AstNode } from './AstNode';
+import { WalkMode } from '../../../astUtils/visitors';
+import { isConditionalCompileStatement, isStatement } from '../../../astUtils/reflection';
+import { createAssignmentStatement, createBlock, createIfStatement, createToken, createVariableExpression } from '../../../astUtils/creators';
+import { TokenKind } from '../lexer/TokenKind';
+
+type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
+
+/**
+ * Compile-time assertion that `T` is exactly `TExpected` (not merely assignable to it).
+ * These specs are typechecked by ts-node at runtime, so a broken inference fails the suite.
+ */
+function expectTypeToBe<TExpected>() {
+    return <TActual>(_value: TActual & IfEquals<TActual, TExpected, unknown, never>) => { };
+}
+type IfEquals<X, Y, TIfEqual, TIfNot> =
+    (<G>() => G extends X ? 1 : 2) extends (<G>() => G extends Y ? 1 : 2) ? TIfEqual : TIfNot;
+
+describe('AstNode', () => {
+    let program: Program;
+
+    beforeEach(() => {
+        fsExtra.emptyDirSync(tempDir);
+        program = new Program({
+            rootDir: rootDir,
+            outDir: outDir
+        });
+        program.createSourceScope(); //ensure source scope is created
+    });
+    afterEach(() => {
+        fsExtra.emptyDirSync(tempDir);
+        program.dispose();
+    });
+
+    describe('findAncestor', () => {
+        /**
+         * Grab a deeply-nested node to walk upward from. `delta` is a variable
+         * expression inside a method, inside a class, inside a namespace.
+         */
+        function getDeepNode() {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                namespace Alpha
+                    class Bravo
+                        sub charlie()
+                            delta = 1
+                            print delta
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //NOTE: must match by name; a bare isVariableExpression matches the
+            //namespace's own name expression, which has no class in its chain
+            const node = file.ast.findChild<VariableExpression>(
+                (x) => isVariableExpression(x) && x.name.text.toLowerCase() === 'delta'
+            );
+            expect(node).to.exist;
+            return node!;
+        }
+
+        it('infers the node type from a single type-guard matcher', () => {
+            const node = getDeepNode();
+
+            const namespaceStatement = node.findAncestor(isNamespaceStatement);
+
+            //runtime
+            expect(namespaceStatement!.getName(ParseMode.BrighterScript)).to.eql('Alpha');
+            //compile-time: no explicit type arg was supplied, yet this is a NamespaceStatement
+            expectTypeToBe<NamespaceStatement | undefined>()(namespaceStatement);
+        });
+
+        it('returns a union for a custom matcher with an explicit type argument', () => {
+            const node = getDeepNode();
+
+            //the terse way to get a union out of custom logic: name the union once
+            //as the type argument and write plain boolean logic
+            const found = node.findAncestor<ClassStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            //the class is nearer than the namespace, so it wins the upward walk
+            expect(isClassStatement(found)).to.be.true;
+            expect((found as ClassStatement).tokens.name.text).to.eql('Bravo');
+            expectTypeToBe<ClassStatement | NamespaceStatement | undefined>()(found);
+        });
+
+        it('narrows a union result down to a single member when guarded', () => {
+            const node = getDeepNode();
+
+            const found = node.findAncestor<ClassStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            //standard narrowing still applies to the union we got back
+            if (isClassStatement(found)) {
+                expectTypeToBe<ClassStatement>()(found);
+                expect(found.tokens.name.text).to.eql('Bravo');
+            } else {
+                throw new Error('should have found the class');
+            }
+        });
+
+        it('also returns a union for a matcher annotated as a type predicate', () => {
+            const node = getDeepNode();
+
+            //more verbose than the explicit type argument above, but the compiler
+            //actually *verifies* this predicate against the matcher body rather
+            //than taking the caller's word for it
+            const found = node.findAncestor(
+                (x): x is ClassStatement | NamespaceStatement => isClassStatement(x) || isNamespaceStatement(x)
+            );
+
+            expect(isClassStatement(found)).to.be.true;
+            expectTypeToBe<ClassStatement | NamespaceStatement | undefined>()(found);
+        });
+
+        it('honors the order of the upward walk, returning the nearest match', () => {
+            const node = getDeepNode();
+
+            //the method is nearest, then the class, then the namespace
+            const nearest = node.findAncestor<ClassStatement | MethodStatement | NamespaceStatement>(
+                (x) => isClassStatement(x) || isMethodStatement(x) || isNamespaceStatement(x)
+            );
+            expect(isMethodStatement(nearest)).to.be.true;
+            expectTypeToBe<ClassStatement | MethodStatement | NamespaceStatement | undefined>()(nearest);
+        });
+
+        it('supports a multi-statement boolean matcher with an explicit type argument', () => {
+            const node = getDeepNode();
+
+            //matcher returns boolean|undefined (no explicit return on the fall-through path)
+            const found = node.findAncestor<ClassStatement>((x) => {
+                if (isClassStatement(x)) {
+                    return true;
+                }
+            });
+
+            expect(found!.tokens.name.text).to.eql('Bravo');
+            expectTypeToBe<ClassStatement | undefined>()(found);
+        });
+
+        it('does not verify an explicit type argument against the matcher logic', () => {
+            const node = getDeepNode();
+
+            //CAVEAT of the terse form: the type argument is asserted, not proven. The
+            //logic below matches a class, but we claim MethodStatement and the compiler
+            //accepts it. Annotate the matcher as a type predicate if you want this checked.
+            const found = node.findAncestor<MethodStatement>((x) => isClassStatement(x));
+
+            expectTypeToBe<MethodStatement | undefined>()(found);
+            //the static type is a lie; at runtime it really is the ClassStatement
+            expect(isClassStatement(found)).to.be.true;
+        });
+
+        it('falls back to AstNode when a boolean matcher gives no type information', () => {
+            const node = getDeepNode();
+
+            //an un-annotated `||` of guards is NOT a type predicate, so TypeScript
+            //cannot infer the union here; the result widens to the AstNode default.
+            const found = node.findAncestor((x) => isClassStatement(x) || isNamespaceStatement(x));
+
+            expect(isClassStatement(found)).to.be.true;
+            expectTypeToBe<AstNode | undefined>()(found);
+        });
+
+        it('returns undefined when no ancestor matches', () => {
+            const node = getDeepNode();
+
+            //there is no literal expression anywhere up the parent chain
+            const found = node.findAncestor(isLiteralExpression);
+
+            expect(found).to.be.undefined;
+            expectTypeToBe<LiteralExpression | undefined>()(found);
+        });
+
+        it('stops the walk and returns undefined when the matcher cancels', () => {
+            const node = getDeepNode();
+
+            //the namespace is a real ancestor, but cancelling before we reach it
+            //short-circuits the walk
+            const found = node.findAncestor((x, cancellationToken) => {
+                if (isClassStatement(x)) {
+                    cancellationToken.cancel();
+                    return;
+                }
+                return isNamespaceStatement(x);
+            });
+
+            expect(found).to.be.undefined;
+        });
+    });
+
+    describe('findChildAtPosition', () => {
+        it('finds deepest AstNode that matches the position', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                    sub main()
+                        alpha = invalid
+                        print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                    end sub
+                `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const delta = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
+            expect(delta.tokens.name.text).to.eql('delta');
+
+            const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
+            expect(foxtrot.tokens.name.text).to.eql('foxtrot');
+        });
+
+        function testPositionBoundaries(newline: string) {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    alpha = 1',
+                '    s = "😀" + alpha',
+                'end sub'
+            ].join(newline));
+            //start of the literal
+            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 12)).tokens.value.text).to.eql('1');
+            //just after the end of the literal (range end is inclusive)
+            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 13)).tokens.value.text).to.eql('1');
+            //column 0 of the next line is not inside the previous statement
+            expect(isBlock(file.ast.findChildAtPosition(util.createPosition(2, 0)))).to.be.true;
+            //after a surrogate pair on the same line
+            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 15)).tokens.name.text).to.eql('alpha');
+            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 20)).tokens.name.text).to.eql('alpha');
+            //past the end of the last line
+            expect(file.ast.findChildAtPosition(util.createPosition(9, 0))).to.be.undefined;
+        }
+
+        it('handles position boundaries with LF line endings', () => {
+            testPositionBoundaries('\n');
+        });
+
+        it('handles position boundaries with CRLF line endings', () => {
+            testPositionBoundaries('\r\n');
+        });
+
+        it('does not let a character past the end of a line spill onto the next line', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                '    bb = 2',
+                'end sub'
+            ].join('\n'));
+            //line 1 is only 9 characters long, so this must not land on `bb` in line 2
+            const node = file.ast.findChildAtPosition(util.createPosition(1, 12));
+            expect(isVariableExpression(node) && node.tokens.name.text === 'bb').to.be.false;
+        });
+
+        it('finds real code inside a synthetic node', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = b',
+                'end sub'
+            ].join('\n'));
+            //wrap `a = b` in a synthetic `if cond then ... end if`
+            const block = file.ast.findChild<Block>(isBlock);
+            const assignment = block.statements[0];
+            block.statements[0] = createIfStatement({
+                condition: createVariableExpression('cond'),
+                thenBranch: createBlock({ statements: [assignment] })
+            });
+            const node = file.ast.findChildAtPosition<VariableExpression>(util.createPosition(1, 8));
+            expect(isVariableExpression(node) && node.tokens.name.text).to.eql('b');
+        });
+
+        it('does not match a node without a source on its own', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                'end sub'
+            ].join('\n'));
+            const block = file.ast.findChild<Block>(isBlock);
+            //a synthetic statement before the real one would be visited first
+            block.statements.unshift(createAssignmentStatement({ name: 'x', value: createVariableExpression('y') }));
+            const node = file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
+        });
+
+        it('does not match code parsed from a snippet against the positions of the file', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    a = 1',
+                'end sub'
+            ].join('\n'));
+            const block = file.ast.findChild<Block>(isBlock);
+            //the snippet's `zz = 2` is on line 1 too, but of a different source
+            const snippet = Parser.parse('sub snippet()\n    zz = 2\nend sub').ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            block.statements.unshift(snippet);
+            const node = file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
+        });
+    });
+
+    describe('bounds', () => {
+        it('keeps the bounds from construction when the AST is changed afterwards', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const block = ast.findChild<Block>(isBlock);
+            const bodyLocation = util.getLocation(ast);
+            const blockLocation = util.getLocation(block);
+            //a plugin moves a statement with a real position from elsewhere into this AST
+            const other = Parser.parse('\n\n\n\n\nsub other()\n    b = 2\nend sub').ast;
+            ast.statements.push(other.statements[0]);
+            block.statements.push(other.findChild<AssignmentStatement>(isAssignmentStatement));
+            expect(util.getLocation(ast)).to.eql(bodyLocation);
+            expect(util.getLocation(block)).to.eql(blockLocation);
+        });
+
+        it('computes the body bounds from its statements', () => {
+            const { ast } = Parser.parse('\n\nsub main()\nend sub\n\nsub other()\nend sub\n');
+            expect(util.getLocation(ast).range).to.eql(util.createRange(2, 0, 6, 7));
+        });
+
+        it('includes the annotation call in the annotation bounds', () => {
+            const { ast } = Parser.parse('@annotation(1, 2)\nsub main()\nend sub', { mode: ParseMode.BrighterScript });
+            const annotation = (ast.statements[0] as FunctionStatement).annotations[0];
+            expect(util.getLocation(annotation).range).to.eql(util.createRange(0, 0, 0, 17));
+        });
+
+        describe('empty blocks', () => {
+            function getEmptyBlockRanges(code: string) {
+                const { ast } = Parser.parse(code, { mode: ParseMode.BrighterScript });
+                return ast.findChildren<Block>(isBlock, { walkMode: WalkMode.visitAllRecursive }).map(x => util.getLocation(x)?.range);
+            }
+
+            it('function', () => {
+                expect(getEmptyBlockRanges('sub main(a)\nend sub')).to.eql([
+                    util.createRange(0, 11, 1, 0)
+                ]);
+            });
+
+            it('if/else', () => {
+                expect(getEmptyBlockRanges('sub main()\n    if true then\n    else\n    end if\nend sub')).to.eql([
+                    //the function body is not empty, so it's bounded by its statements
+                    util.createRange(1, 4, 3, 10),
+                    //then branch
+                    util.createRange(1, 16, 2, 4),
+                    //else branch
+                    util.createRange(2, 8, 3, 4)
+                ]);
+            });
+
+            it('for', () => {
+                expect(getEmptyBlockRanges('sub main()\n    for i = 0 to 1\n    end for\nend sub')[1]).to.eql(
+                    util.createRange(1, 18, 2, 4)
+                );
+            });
+
+            it('for each', () => {
+                expect(getEmptyBlockRanges('sub main()\n    for each x in y\n    end for\nend sub')[1]).to.eql(
+                    util.createRange(1, 19, 2, 4)
+                );
+            });
+
+            it('while', () => {
+                expect(getEmptyBlockRanges('sub main()\n    while true\n    end while\nend sub')[1]).to.eql(
+                    util.createRange(1, 14, 2, 4)
+                );
+            });
+
+            it('try/catch', () => {
+                expect(getEmptyBlockRanges('sub main()\n    try\n    catch e\n    end try\nend sub').slice(1)).to.eql([
+                    //try branch
+                    util.createRange(1, 7, 2, 4),
+                    //catch branch
+                    util.createRange(2, 11, 3, 4)
+                ]);
+            });
+
+            it('#if/#else', () => {
+                //the walker skips inactive conditional compile branches, so read both branches off the statement directly
+                const { ast } = Parser.parse('#const DEBUG = true\n#if DEBUG\n#else\n#end if', { mode: ParseMode.BrighterScript });
+                const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+                expect([statement.thenBranch, statement.elseBranch].map(x => util.getLocation(x)?.range)).to.eql([
+                    //then branch
+                    util.createRange(1, 9, 2, 0),
+                    //else branch
+                    util.createRange(2, 5, 3, 0)
+                ]);
+            });
+
+            it('select case', () => {
+                expect(getEmptyBlockRanges('sub main()\n    select case x\n        case 1\n        case else\n    end select\nend sub').slice(1)).to.eql([
+                    //`case 1` body ends at the next case
+                    util.createRange(2, 14, 3, 8),
+                    //`case else` body ends at `end select`
+                    util.createRange(3, 17, 4, 4)
+                ]);
+            });
+        });
+
+        it('spans the gap between the directives for #if/#else branches that have statements', () => {
+            const { ast } = Parser.parse('#const DEBUG = true\n#if DEBUG\n    print 1\n#else\n    print 2\n#end if', { mode: ParseMode.BrighterScript });
+            const statement = ast.findChild<ConditionalCompileStatement>(isConditionalCompileStatement);
+            expect([statement.thenBranch, statement.elseBranch].map(x => util.getLocation(x)?.range)).to.eql([
+                //then branch
+                util.createRange(1, 9, 3, 0),
+                //else branch
+                util.createRange(3, 5, 5, 0)
+            ]);
+        });
+    });
+
+    describe('findChild', () => {
+        it('finds a child that matches the matcher', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            expect(
+                file.ast.findChild((node) => {
+                    return isAssignmentStatement(node) && node.tokens.name.text === 'alpha';
+                })
+            ).instanceof(AssignmentStatement);
+        });
+
+        it('returns the exact node that matches', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha1 = invalid
+                    alpha2 = invalid
+                end sub
+            `);
+            let count = 0;
+            const instance = file.ast.findChild((node) => {
+                if (isAssignmentStatement(node)) {
+                    count++;
+                    if (count === 2) {
+                        return true;
+                    }
+                }
+            });
+            const expected = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            expect(instance).to.equal(expected);
+        });
+
+        it('returns undefined when matcher never returned true', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            expect(
+                file.ast.findChild((node) => false)
+            ).not.to.exist;
+        });
+
+        it('returns the value returned from the matcher', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            expect(
+                file.ast.findChild((node) => secondStatement)
+            ).to.equal(secondStatement);
+        });
+
+        it('cancels properly', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            let count = 0;
+            file.ast.findChild((node, cancelToken) => {
+                count++;
+                cancelToken.cancel();
+            });
+            expect(count).to.eql(1);
+        });
+    });
+
+    describe('findAncestor', () => {
+        it('returns node when matcher returns true', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const foxtrot = file.ast.findChild((node) => {
+                return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
+            })!;
+            expect(
+                foxtrot.findAncestor(isPrintStatement)
+            ).to.equal(secondStatement);
+        });
+
+        it('returns undefined when no match found', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            const foxtrot = file.ast.findChild((node) => {
+                return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
+            })!;
+            expect(
+                foxtrot.findAncestor(isClassStatement)
+            ).to.be.undefined;
+        });
+
+        it('returns overridden node when returned in matcher', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
+            const foxtrot = file.ast.findChild((node) => {
+                return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
+            })!;
+            expect(
+                foxtrot.findAncestor(node => firstStatement)
+            ).to.equal(firstStatement);
+        });
+
+        it('returns overridden node when returned in matcher', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    alpha = invalid
+                    print alpha.beta.charlie.delta(alpha.echo.foxtrot())
+                end sub
+            `);
+            let count = 0;
+            const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
+            firstStatement.findAncestor((node, cancel) => {
+                count++;
+                cancel.cancel();
+            });
+            expect(count).to.eql(1);
+        });
+    });
+
+    describe('deprecated location and range', () => {
+        it('reads a node location on demand', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const assignment = ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            expect((assignment as any).location).to.eql(util.getLocation(assignment));
+            expect((assignment as any).range).to.eql(util.createRange(1, 4, 1, 9));
+        });
+
+        it('reads a token location on demand', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            expect((name as any).location).to.eql(util.getLocation(name));
+            expect((name as any).range).to.eql(util.createRange(1, 4, 1, 5));
+        });
+
+        it('keeps the getters on cloned and created tokens', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            expect((util.cloneToken(name) as any).range).to.eql(util.createRange(1, 4, 1, 5));
+            expect((createToken(TokenKind.Identifier, 'b', name) as any).range).to.eql(util.createRange(1, 4, 1, 5));
+            expect((createToken(TokenKind.Identifier, 'b') as any).location).to.be.undefined;
+        });
+
+        it('moves synthetic nodes and tokens to an assigned location', () => {
+            const location = util.createLocation(2, 3, 2, 7, 'file:///a.brs');
+            const node = createVariableExpression('x');
+            node.location = location;
+            expect(node.location).to.eql(location);
+
+            const token = createToken(TokenKind.Identifier, 'x');
+            token.location = location;
+            expect(token.location).to.eql(location);
+            expect(util.getLocation(token)).to.eql(location);
+        });
+
+        it('keeps an assigned location in the original source when it is in that source', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            const sourceInfo = name.sourceInfo;
+            name.location = util.createLocation(2, 0, 2, 3, sourceInfo.uri);
+            expect(name.sourceInfo).to.equal(sourceInfo);
+            expect(name.location.range).to.eql(util.createRange(2, 0, 2, 3));
+        });
+
+        it('keeps an assigned location that is outside of the original source', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const name = ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name;
+            name.location = util.createLocation(20, 0, 20, 300, 'file:///other.brs');
+            expect(name.location).to.eql(util.createLocation(20, 0, 20, 300, 'file:///other.brs'));
+        });
+
+        it('clears the location when assigned undefined', () => {
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            const assignment = ast.findChild<AssignmentStatement>(isAssignmentStatement);
+            assignment.location = undefined;
+            expect(assignment.location).to.be.undefined;
+            assignment.tokens.name.location = undefined;
+            expect(assignment.tokens.name.location).to.be.undefined;
+        });
+
+        it('lets tokens be used where a `{ location: Location }` is expected', () => {
+            const getLine = (item: { text: string; location: Location }) => item.location.range.start.line;
+            const { ast } = Parser.parse('sub main()\n    a = 1\nend sub');
+            expect(getLine(ast.findChild<AssignmentStatement>(isAssignmentStatement).tokens.name)).to.equal(1);
+        });
+    });
+
+    describe('clone', () => {
+        function testClone(code: string | AstNode) {
+            let originalOuter: AstNode;
+            if (typeof code === 'string') {
+                const parser = Parser.parse(code, { mode: ParseMode.BrighterScript });
+                originalOuter = parser.ast;
+                expectZeroDiagnostics(parser);
+            } else {
+                originalOuter = code;
+            }
+
+            const cloneOuter = originalOuter.clone();
+            //ensure the clone is identical to the original
+
+            //compare them both ways to ensure no extra properties exist
+            ensureIdentical(originalOuter, cloneOuter);
+            ensureIdentical(cloneOuter, originalOuter);
+
+            function ensureIdentical(original: AstNode, clone: AstNode, ancestors = [], seenNodes = new Map<AstNode, number>()) {
+                for (let key in original) {
+                    let fullKey = [...ancestors, key].join('.');
+                    const originalValue = original?.[key];
+                    const cloneValue = clone?.[key];
+                    let typeOfValue = typeof originalValue;
+
+                    //skip these properties
+                    if (
+                        ['parent', 'symbolTable', 'startPosition', 'endPosition', 'sourceInfo'].includes(key) ||
+                        //conditional compile state is filled in by walks of the tree, and a clone has not been walked yet
+                        ['isActive', 'isConditionTrue', 'isConditionDeclared'].includes(key) ||
+                        //another index of the class members, which are already compared through `body`, `methods`, `fields` and `memberMap`
+                        (isClassStatement(original) && key === 'members') ||
+                        //this is a circular reference property or the `returnType` prop, skip it
+                        (isFunctionExpression(original) && (key === 'functionStatement' || key === 'returnType')) ||
+                        //circular reference property for annotations
+                        (isAnnotationExpression(original) && key === 'call')
+                    ) {
+                        continue;
+                    }
+
+                    //if this is an object, recurse
+                    if (typeOfValue === 'object' && originalValue !== null) {
+                        //skip circular references (but give some tollerance)
+                        if (seenNodes.get(originalValue) > 2) {
+                            throw new Error(`${fullKey} is a circular reference`);
+                        }
+                        seenNodes.set(originalValue, (seenNodes.get(originalValue) ?? 0) + 1);
+
+                        //object references should not be the same
+                        if (originalValue === cloneValue) {
+                            throw new Error(`${fullKey} is the same object reference`);
+                        }
+                        //compare child object values
+                        ensureIdentical(originalValue, cloneValue, [...ancestors, key], seenNodes);
+
+                        //for these tests, empty arrays can be the same as undefined so skip
+                    } else if (
+                        (Array.isArray(originalValue) && originalValue.length === 0 && cloneValue === undefined) ||
+                        (Array.isArray(cloneValue) && cloneValue.length === 0 && originalValue === undefined)) {
+                        continue;
+
+                        //these values must be identical
+                    } else {
+                        // eslint-disable-next-line no-useless-catch
+                        try {
+                            expect(cloneValue).to.equal(originalValue, `'${fullKey}' should be identical`);
+                        } catch (e) {
+                            //build a full list of ancestors for orig and clone
+                            let originalChain = [originalOuter];
+                            let cloneChain = [cloneOuter];
+                            for (let key of fullKey.split('.')) {
+                                originalChain.push(originalChain[originalChain.length - 1]?.[key]);
+                                cloneChain.push(cloneChain[cloneChain.length - 1]?.[key]);
+                            }
+                            console.error((e as Error)?.message, fullKey, originalChain, cloneChain);
+                            throw e;
+                        }
+                    }
+                }
+            }
+        }
+
+        it('clones EmptyStatement', () => {
+            testClone(new EmptyStatement({
+                range: util.createLocation(1, 2, 3, 4)
+            }));
+        });
+
+        it('clones body with undefined statements array', () => {
+            const original = Parser.parse(`
+                sub main()
+                end sub
+            `).ast;
+            (original.statements as any) = undefined;
+            testClone(original);
+        });
+
+        it('clones body with undefined in the statements array', () => {
+            const original = Parser.parse(`
+                sub main()
+                end sub
+            `).ast;
+            original.statements.push(undefined);
+            testClone(original);
+        });
+
+        it('clones interfaces', () => {
+            testClone(`
+                interface Empty
+                end interface
+                interface Movie
+                    name as string
+                    previous as Movie
+                    sub play()
+                    function play2(a, b as string) as dynamic
+                end interface
+                interface Short extends Movie
+                    length as integer
+                end interface
+            `);
+        });
+
+        it('handles when interfaces are missing their body', () => {
+            const original = Parser.parse(`
+                interface Empty
+                end interface
+            `).ast;
+            original.findChild<DeepWriteable<InterfaceStatement>>(isInterfaceStatement).body = undefined;
+            testClone(original);
+        });
+
+        it('handles when interfaces have undefined statements in the body', () => {
+            const original = Parser.parse(`
+                interface Empty
+                end interface
+            `).ast;
+            original.findChild<InterfaceStatement>(isInterfaceStatement).body.push(undefined);
+            testClone(original);
+        });
+
+        it('handles when interfaces have undefined field type', () => {
+            const original = Parser.parse(`
+                interface Empty
+                    name as string
+                end interface
+            `).ast;
+            original.findChild<DeepWriteable<InterfaceFieldStatement>>(isInterfaceFieldStatement).typeExpression = undefined;
+            testClone(original);
+        });
+
+        it('handles when interface function has undefined param and return type', () => {
+            const original = Parser.parse(`
+                interface Empty
+                    function test() as dynamic
+                end interface
+            `).ast;
+            original.findChild<DeepWriteable<InterfaceMethodStatement>>(isInterfaceMethodStatement).params.push(undefined);
+            original.findChild<DeepWriteable<InterfaceMethodStatement>>(isInterfaceMethodStatement).returnTypeExpression = undefined;
+            testClone(original);
+        });
+
+        it('handles when interface function has undefined params array', () => {
+            const original = Parser.parse(`
+                interface Empty
+                    function test(a) as dynamic
+                end interface
+            `).ast;
+            original.findChild<DeepWriteable<InterfaceMethodStatement>>(isInterfaceMethodStatement).params = undefined;
+            testClone(original);
+        });
+
+        it('clones empty class', () => {
+            testClone(`
+                class Movie
+                end class
+            `);
+        });
+
+        it('clones class with undefined body', () => {
+            const original = Parser.parse(`
+                class Movie
+                end class
+            `).ast;
+            original.findChild<DeepWriteable<ClassStatement>>(isClassStatement).body = undefined;
+            testClone(original);
+        });
+
+        it('clones class with undefined body statement', () => {
+            const original = Parser.parse(`
+                class Movie
+                end class
+            `).ast;
+            original.findChild<ClassStatement>(isClassStatement).body.push(undefined);
+            testClone(original);
+        });
+
+        it('clones class having parent class', () => {
+            testClone(`
+                class Video
+                end class
+                class Movie extends Video
+                end class
+            `);
+        });
+
+        it('clones class', () => {
+            testClone(`
+                class Movie
+                    name as string
+                    previous as Movie
+                    sub play()
+                    end sub
+                    function play2(a, b as string) as dynamic
+                    end function
+                end class
+            `);
+        });
+
+        it('clones access modifiers', () => {
+            testClone(`
+                class Movie
+                    public sub test()
+                    end sub
+                    protected name = "bob"
+                    private child = {}
+                end class
+            `);
+        });
+
+        it('clones AssignmentStatement', () => {
+            testClone(`
+                sub main()
+                    thing = true
+                end sub
+            `);
+        });
+
+        it('clones AssignmentStatement with missing value', () => {
+            const original = Parser.parse(`
+                sub main()
+                    thing = true
+                end sub
+            `).ast;
+            original.findChild<any>(isAssignmentStatement).value = undefined;
+            testClone(original);
+        });
+
+        it('clones Block with undefined statements array', () => {
+            const original = Parser.parse(`
+                sub main()
+                    thing = true
+                end sub
+            `).ast;
+            original.findChild<any>(isBlock).statements = undefined;
+            testClone(original);
+        });
+
+        it('clones Block with undefined statement in statements array', () => {
+            const original = Parser.parse(`
+                sub main()
+                    thing = true
+                end sub
+            `).ast;
+            original.findChild<Block>(isBlock).statements.push(undefined);
+            testClone(original);
+        });
+
+        it('clones class with undefined method modifiers array', () => {
+            const original = Parser.parse(`
+                class Movie
+                    sub test()
+                    end sub
+                end class
+            `).ast;
+            original.findChild<DeepWriteable<MethodStatement>>(isMethodStatement).modifiers = undefined;
+            testClone(original);
+        });
+
+        it('clones class with undefined func', () => {
+            const original = Parser.parse(`
+                class Movie
+                    sub test()
+                    end sub
+                end class
+            `).ast;
+            original.findChild<DeepWriteable<MethodStatement>>(isMethodStatement).func = undefined;
+            testClone(original);
+        });
+
+        it('clones ExpressionStatement', () => {
+            testClone(`
+                sub main()
+                    test()
+                end sub
+            `);
+        });
+
+        it('clones ExpressionStatement without an expression', () => {
+            const original = Parser.parse(`
+                sub main()
+                    test()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<ExpressionStatement>>(isExpressionStatement).expression = undefined;
+            testClone(original);
+        });
+
+        it('clones IfStatement', () => {
+            testClone(`
+                sub main()
+                    if true
+                    end if
+                    if true then
+                    end if
+                    if true
+                        print 1
+                    else if true
+                        print 1
+                    else
+                        print 1
+                    end if
+                end sub
+            `);
+        });
+
+        it('clones IfStatement without condition or branches', () => {
+            const original = Parser.parse(`
+                sub main()
+                    if true
+                    end if
+                end sub
+            `).ast;
+            original.findChild<any>(isIfStatement).condition = undefined;
+            original.findChild<any>(isIfStatement).thenBranch = undefined;
+            original.findChild<any>(isIfStatement).elseBranch = undefined;
+            testClone(original);
+        });
+
+        it('clones IncrementStatement', () => {
+            testClone(`
+                sub main()
+                    i = 0
+                    i++
+                end sub
+            `);
+        });
+
+        it('clones IncrementStatement with missing `value`', () => {
+            const original = Parser.parse(`
+                sub main()
+                    i = 0
+                    i++
+                end sub
+            `).ast;
+            original.findChild<any>(isIncrementStatement).value = undefined;
+            testClone(original);
+        });
+
+        it('clones PrintStatement with undefined expressions array', () => {
+            const original = Parser.parse(`
+                sub main()
+                    print 1
+                end sub
+            `).ast;
+            original.findChild<any>(isPrintStatement).expressions = undefined;
+            testClone(original);
+        });
+
+        it('clones PrintStatement with undefined expression in the expressions array', () => {
+            const original = Parser.parse(`
+                sub main()
+                    print 1
+                end sub
+            `).ast;
+            original.findChild<PrintStatement>(isPrintStatement).expressions.push(undefined);
+            testClone(original);
+        });
+
+        it('clones DimStatement', () => {
+            testClone(`
+                sub main()
+                    dim alpha[1,2]
+                end sub
+            `);
+        });
+
+        it('clones DimStatement with undefined dimensions', () => {
+            const original = Parser.parse(`
+                sub main()
+                    dim alpha[1,2]
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<DimStatement>>(isDimStatement).dimensions = undefined;
+            testClone(original);
+        });
+
+        it('clones DimStatement with undefined as item in dimensions', () => {
+            const original = Parser.parse(`
+                sub main()
+                    dim alpha[1,2]
+                end sub
+            `).ast;
+            original.findChild<DimStatement>(isDimStatement).dimensions.push(undefined);
+            testClone(original);
+        });
+
+        it('clones Goto statement', () => {
+            testClone(`
+                sub main()
+                    label1:
+                    for i = 0 to 10
+                        goto label1
+                    end for
+                end sub
+            `);
+        });
+
+        it('clones return statement', () => {
+            testClone(`
+                sub main()
+                    return
+                end sub
+            `);
+        });
+
+        it('clones return statement with value', () => {
+            testClone(`
+                function test()
+                    return true
+                end function
+            `);
+        });
+
+        it('clones return statement with undefined value expression', () => {
+            const original = Parser.parse(`
+                function test()
+                    return true
+                end function
+            `).ast;
+            original.findChild<any>(isReturnStatement).value = undefined;
+            testClone(original);
+        });
+
+        it('clones stop statement', () => {
+            testClone(`
+                sub main()
+                    stop
+                end sub
+            `);
+        });
+
+        it('clones ForStatement', () => {
+            testClone(`
+                function test()
+                    for i = 0 to 10 step 2
+                    end for
+                end function
+            `);
+        });
+
+        it('clones ForStatement with undefined items', () => {
+            const original = Parser.parse(`
+                function test()
+                    for i = 0 to 10 step 2
+                    end for
+                end function
+            `).ast;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).counterDeclaration = undefined;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).finalValue = undefined;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).body = undefined;
+            original.findChild<DeepWriteable<ForStatement>>(isForStatement).increment = undefined;
+            testClone(original);
+        });
+
+        it('clones ForEachStatement', () => {
+            testClone(`
+                function test()
+                    for each item in [1, 2, 3]
+                    end for
+                end function
+            `);
+        });
+
+        it('clones ForEachStatement with undefined props', () => {
+            const original = Parser.parse(`
+                function test()
+                    for each item in [1, 2, 3]
+                    end for
+                end function
+            `).ast;
+            original.findChild<any>(isForEachStatement).target = undefined;
+            original.findChild<any>(isForEachStatement).body = undefined;
+            testClone(original);
+        });
+
+        it('clones EndStatement', () => {
+            testClone(`
+                function test()
+                    end
+                end function
+            `);
+        });
+
+        it('clones ExitFor statement', () => {
+            testClone(`
+                sub main()
+                    for i = 0 to 10
+                        exit for
+                    end for
+                end sub
+            `);
+        });
+
+        it('clones While statement', () => {
+            testClone(`
+                sub main()
+                    while true
+                    end while
+                end sub
+            `);
+        });
+
+        it('clones While statement', () => {
+            testClone(`
+                sub main()
+                    while true
+                    end while
+                end sub
+            `);
+        });
+
+        it('clones ExitWhile statement', () => {
+            testClone(`
+                sub main()
+                    while true
+                        exit while
+                    end while
+                end sub
+            `);
+        });
+
+        it('clones tryCatch statement', () => {
+            testClone(`
+                sub main()
+                    try
+                    catch e
+                    end try
+                end sub
+            `);
+        });
+
+        it('clones tryCatch statement when missing branches', () => {
+            const original = Parser.parse(`
+               sub main()
+                    try
+                        print 1
+                    catch e
+                        print 2
+                    end try
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TryCatchStatement>>(isTryCatchStatement).tryBranch = undefined;
+            original.findChild<DeepWriteable<TryCatchStatement>>(isTryCatchStatement).catchStatement = undefined;
+            testClone(original);
+        });
+
+        it('clones tryCatch statement when missing catch branch', () => {
+            const original = Parser.parse(`
+               sub main()
+                    try
+                        print 1
+                    catch e
+                        print 2
+                    end try
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CatchStatement>>(isCatchStatement).catchBranch = undefined;
+            testClone(original);
+        });
+
+        it('clones throw statement', () => {
+            testClone(`
+                sub main()
+                    throw "Crash"
+                end sub
+            `);
+        });
+
+        it('clones throw statement with missing expression', () => {
+            const original = Parser.parse(`
+                sub main()
+                    throw "Crash"
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<ThrowStatement>>(isThrowStatement).expression = undefined;
+            testClone(original);
+        });
+
+        it('clones FunctionStatement when missing .func', () => {
+            const original = Parser.parse(`
+               sub main()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<FunctionStatement>>(isFunctionStatement).func = undefined;
+            testClone(original);
+        });
+
+        it('clones empty enum statement', () => {
+            testClone(`
+               enum Direction
+               end enum
+            `);
+        });
+
+        it('clones enum statement with comments', () => {
+            testClone(`
+                enum Direction
+                    'the up direction
+                    up = "up"
+                end enum
+            `);
+        });
+
+        it('clones enum statement with missing body', () => {
+            const original = Parser.parse(`
+                enum Direction
+                    'the up direction
+                    up = "up"
+                end enum
+            `).ast;
+            original.findChild<DeepWriteable<EnumStatement>>(isEnumStatement).body = undefined;
+            testClone(original);
+        });
+
+        it('clones enum statement with undefined in body', () => {
+            const original = Parser.parse(`
+                enum Direction
+                    'the up direction
+                    up = "up"
+                end enum
+            `).ast;
+            original.findChild<EnumStatement>(isEnumStatement).body.push(undefined);
+            testClone(original);
+        });
+
+        it('clones enum member with missing value', () => {
+            const original = Parser.parse(`
+                enum Direction
+                    up = "up"
+                end enum
+            `).ast;
+            original.findChild<DeepWriteable<EnumMemberStatement>>(isEnumMemberStatement).value = undefined;
+            testClone(original);
+        });
+
+        it('clones const', () => {
+            const original = Parser.parse(`
+                const key = "KEY"
+            `).ast;
+            testClone(original);
+        });
+
+
+        it('clones const with missing value', () => {
+            const original = Parser.parse(`
+                const key = "KEY"
+            `).ast;
+            original.findChild<DeepWriteable<ConstStatement>>(isConstStatement).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones continue statement', () => {
+            testClone(`
+                sub main()
+                    for i = 0 to 10
+                        continue for
+                    end for
+                end sub
+            `);
+        });
+
+        it('clones WhileStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    while true
+                        print hello
+                    end while
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<WhileStatement>>(isWhileStatement).condition = undefined;
+            original.findChild<DeepWriteable<WhileStatement>>(isWhileStatement).body = undefined;
+
+            testClone(original);
+        });
+
+        it('clones DottedSetStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m.value = true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones DottedSetStatement with missing properties', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m.value = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<DottedSetStatement>>(isDottedSetStatement).obj = undefined;
+            original.findChild<DeepWriteable<DottedSetStatement>>(isDottedSetStatement).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement with missing props', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"] = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).obj = undefined;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"] = true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"][2] = true
+                    m["value", 2] = true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement with undefined index entry', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value", 2] = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).indexes[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedSetStatement with missing props', () => {
+            const original = Parser.parse(`
+                sub main()
+                    m["value"] = true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedSetStatement>>(isIndexedSetStatement).indexes = undefined;
+
+            testClone(original);
+        });
+
+        it('clones LibraryStatement', () => {
+            const original = Parser.parse(`
+                Library "v30/bslCore.brs"
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NamespaceStatement', () => {
+            const original = Parser.parse(`
+                namespace Alpha
+                end namespace
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NamespaceStatement with missing items', () => {
+            const original = Parser.parse(`
+                namespace Alpha
+                end namespace
+            `).ast;
+            original.findChild<DeepWriteable<NamespaceStatement>>(isNamespaceStatement).nameExpression = undefined;
+            original.findChild<DeepWriteable<NamespaceStatement>>(isNamespaceStatement).body = undefined;
+
+            testClone(original);
+        });
+
+        it('clones ImportStatement', () => {
+            const original = Parser.parse(`
+                import "Something.brs"
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('does not shrink the ImportStatement path range again when cloning', () => {
+            const original = Parser.parse('import "Something.brs"').ast.statements[0] as ImportStatement;
+            //the path range excludes the quotes
+            expect(util.getLocation(original.tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+            const clone = original.clone();
+            expect(util.getLocation(clone.tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+            expect(util.getLocation(clone.clone().tokens.path).range).to.eql(util.createRange(0, 8, 0, 21));
+        });
+
+
+        it('clones BinaryExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print 1 + 2
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones BinaryExpression with missing props', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print 1 + 2
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<BinaryExpression>>(isBinaryExpression).left = undefined;
+            original.findChild<DeepWriteable<BinaryExpression>>(isBinaryExpression).right = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression with args', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test(1,2,3)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression with missing props', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test(1,2,3)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallExpression>>(isCallExpression).callee = undefined;
+            original.findChild<DeepWriteable<CallExpression>>(isCallExpression).args = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallExpression with args containing undefined', () => {
+            const original = Parser.parse(`
+                sub test()
+                    test(1,2,3)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallExpression>>(isCallExpression).args[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones FunctionExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones FunctionExpression with undefined props', () => {
+            const original = Parser.parse(`
+                sub test()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).parameters = undefined;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).body = undefined;
+
+            testClone(original);
+        });
+
+        it('clones FunctionExpression with a parameter that is undefined', () => {
+            const original = Parser.parse(`
+                sub test(p1)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).parameters[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones FunctionParameterExpression', () => {
+            const original = Parser.parse(`
+                sub test(p1)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones FunctionParameterExpression with default value', () => {
+            const original = Parser.parse(`
+                sub test(p1 = true)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+
+        it('clones FunctionParameterExpression with undefined default value', () => {
+            const original = Parser.parse(`
+                sub test(p1 = true)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<FunctionExpression>>(isFunctionExpression).parameters[0].defaultValue = undefined;
+
+            testClone(original);
+        });
+
+        it('clones NamespacedVariableNameExpression', () => {
+            const original = Parser.parse(`
+                sub test(p1 as Alpha.Beta)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NamespacedVariableNameExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                class Person extends Alpha.Humanoid
+                end class
+            `).ast;
+            original.findChild<DeepWriteable<ClassStatement>>(isClassStatement).parentClassName = undefined;
+
+            testClone(original);
+        });
+
+        it('clones DottedGetExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print alpha.beta.charlie
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones DottedGetExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print alpha.beta.charlie
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<DottedGetExpression>>(isDottedGetExpression).obj = undefined;
+
+            testClone(original);
+        });
+
+        it('clones XmlAttributeGetExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print xml@name
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones XmlAttributeGetExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print xml@name
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<XmlAttributeGetExpression>>(isXmlAttributeGetExpression).obj = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0]
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0]
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).obj = undefined;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).indexes = undefined;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0, 1]
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones IndexedGetExpression with indexes having undefined props', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print m.stuff[0, 1]
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<IndexedGetExpression>>(isIndexedGetExpression).indexes[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones GroupingExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print (1 + 2)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones GroupingExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print (1 + 2)
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<GroupingExpression>>(isGroupingExpression).expression = undefined;
+
+            testClone(original);
+        });
+
+        it('clones LiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ExcapedCharCodeLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`\n\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ArrayLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print []
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ArrayLiteralExpression with undefined items', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print []
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<ArrayLiteralExpression>>(isArrayLiteralExpression).elements = undefined;
+
+            testClone(original);
+        });
+
+        it('clones ArrayLiteralExpression with with elements having an undefined', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print [1,2,3]
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<ArrayLiteralExpression>>(isArrayLiteralExpression).elements[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AAMemberExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AAMemberExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<AAMemberExpression>>(isAAMemberExpression).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AAIndexedMemberExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        [someEnum.key]: 20
+                    }
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AAIndexedMemberExpression with undefined value', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        [someEnum.key]: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<AAIndexedMemberExpression>>(isAAIndexedMemberExpression).value = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AALiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AALiteralExpression with undefined items', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<AALiteralExpression>>(isAALiteralExpression).elements = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AALiteralExpression with undefined items', () => {
+            const original = Parser.parse(`
+                sub test()
+                    movie = {
+                        duration: 20
+                    }
+                end sub
+            `).ast;
+            original.findChild<AALiteralExpression>(isAALiteralExpression).elements.push(undefined);
+
+            testClone(original);
+        });
+
+        it('clones UnaryExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print not true
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones UnaryExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print not true
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<UnaryExpression>>(isUnaryExpression).right = undefined;
+
+            testClone(original);
+        });
+
+        it('clones SourceLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print LINE_NUM
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NewExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print new Person()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NewExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print new Person()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<NewExpression>>(isNewExpression).call = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallfuncExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print node@.run(1)
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones CallfuncExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print node@.run()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallfuncExpression>>(isCallfuncExpression).callee = undefined;
+            original.findChild<DeepWriteable<CallfuncExpression>>(isCallfuncExpression).args = undefined;
+
+            testClone(original);
+        });
+
+        it('clones CallfuncExpression with undefined args', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print node@.run()
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<CallfuncExpression>>(isCallfuncExpression).args[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringQuasiExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringQuasiExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringQuasiExpression>>(isTemplateStringQuasiExpression).expressions = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringQuasiExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringQuasiExpression>>(isTemplateStringQuasiExpression).expressions[0] = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name} \\n\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).quasis = undefined;
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).expressions = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print \`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).quasis.push(undefined);
+            original.findChild<DeepWriteable<TemplateStringExpression>>(isTemplateStringExpression).expressions.push(undefined);
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print tag\`hello \${name} \\n\`
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print tag\`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).quasis = undefined;
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).expressions = undefined;
+
+            testClone(original);
+        });
+
+        it('clones TemplateStringExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print tag\`hello \${name}\`
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).quasis.push(undefined);
+            original.findChild<DeepWriteable<TaggedTemplateStringExpression>>(isTaggedTemplateStringExpression).expressions.push(undefined);
+
+            testClone(original);
+        });
+
+        it('clones TernaryExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print true ? 1 : 2
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TernaryExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print true ? 1 : 2
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TernaryExpression>>(isTernaryExpression).test = undefined;
+            original.findChild<DeepWriteable<TernaryExpression>>(isTernaryExpression).consequent = undefined;
+            original.findChild<DeepWriteable<TernaryExpression>>(isTernaryExpression).alternate = undefined;
+
+            testClone(original);
+        });
+
+        it('clones NullCoalescingExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print a ?? b
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones NullCoalescingExpression with undefined expressions', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print a ?? b
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<NullCoalescingExpression>>(isNullCoalescingExpression).consequent = undefined;
+            original.findChild<DeepWriteable<NullCoalescingExpression>>(isNullCoalescingExpression).alternate = undefined;
+
+            testClone(original);
+        });
+
+        it('clones RegexLiteralExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print /test/gi
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TypeCastExpression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print name as string
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TypeCastExpression with undefined expression', () => {
+            const original = Parser.parse(`
+                sub test()
+                    print name as string
+                end sub
+            `).ast;
+            original.findChild<DeepWriteable<TypecastExpression>>(isTypecastExpression).obj = undefined;
+
+            testClone(original);
+        });
+
+        it('clones AugmentedAssignmentStatement', () => {
+            const original = Parser.parse(`
+                sub test()
+                    a += 1
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones TypecastStatement', () => {
+            const original = Parser.parse(`
+                sub test()
+                    typecast m as dynamic
+                    a += 1
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones ConditionalCompile statements', () => {
+            const original = Parser.parse(`
+                sub test()
+                    #const one = true
+                    #if true
+                        print "true"
+                    #else
+                        print "false
+                        #error "Custom error"
+                    #endif
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AliasStatement', () => {
+            const original = Parser.parse(`
+                alias test2 = test
+                sub test()
+                end sub
+            `).ast;
+
+            testClone(original);
+        });
+
+        it('clones AnnotationExpressions above every statement type', () => {
+            const original = Parser.parse(`
+                @annotation()
+                sub test()
+                    @annotation()
+                    statement = true
+                    @annotation()
+                    call()
+                    @annotation()
+                    'comment
+                end sub
+
+                @annotation()
+                class Person
+                end class
+
+                @annotation()
+                enum Direction
+                end enum
+
+                @annotation()
+                namespace alpha
+                end namespace
+
+                @annotation()
+                const thing = 1
+            `).ast;
+
+            testClone(original);
+        });
+    });
+    describe('chains', () => {
+        /**
+         * Parse `code` and return every node in the AST, in walk order, already linked to its parent
+         */
+        function parseNodes(code: string) {
+            const { ast } = Parser.parse(code);
+            const nodes: AstNode[] = [];
+            ast.walk((node) => {
+                nodes.push(node);
+            }, { walkMode: WalkMode.visitAllRecursive });
+            return nodes;
+        }
+
+        /**
+         * Render a node as the exact source text it spans. This gives the tests a readable,
+         * unambiguous label for each node without depending on transpile behavior.
+         */
+        function getText(code: string, node: AstNode) {
+            const lines = code.split(/\r?\n/);
+            const { start, end } = util.getLocation(node).range;
+            if (start.line === end.line) {
+                return lines[start.line].slice(start.character, end.character);
+            }
+            return [
+                lines[start.line].slice(start.character),
+                ...lines.slice(start.line + 1, end.line),
+                lines[end.line].slice(0, end.character)
+            ].join('\n').replace(/\s+/g, ' ');
+        }
+
+        /**
+         * Assert every terminal expression in `code`, each followed by every step of that
+         * expression via `previousInChain` (shortest prefix first). Statements are excluded so
+         * these tests stay focused on expression boundaries.
+         */
+        function expectChains(code: string, expected: Array<[string, string[]]>) {
+            const actual = parseNodes(code)
+            //only expressions (skip the root Body) that are the outermost node of their expression
+                .filter(node => node.parent && node.isTerminal() && !isStatement(node))
+                .map(node => {
+                    //collect this node and every earlier step of the same expression
+                    const links: string[] = [];
+                    for (let link: AstNode | undefined = node; link; link = link.previousInChain) {
+                        links.unshift(getText(code, link));
+                    }
+                    return [getText(code, node), links];
+                });
+            expect(actual).to.eql(expected);
+        }
+
+        /**
+         * Assert `[text, isTerminal]` for every node in `code`
+         */
+        function expectTerminals(code: string, expected: Array<[string, boolean]>) {
+            const actual = parseNodes(code)
+                .filter(node => node.parent)
+                .map(node => [getText(code, node), node.isTerminal()]);
+            expect(actual).to.eql(expected);
+        }
+
+        it('treats a lone variable as a complete chain', () => {
+            expectChains('print alpha', [
+                ['alpha', ['alpha']]
+            ]);
+        });
+
+        it('walks a simple dotted get chain', () => {
+            expectChains('print alpha.beta.charlie', [
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        it('stops at the boundary when a chain is used as a call argument', () => {
+            expectChains('print doSomething(alpha.beta.charlie)', [
+                ['doSomething(alpha.beta.charlie)', ['doSomething', 'doSomething(alpha.beta.charlie)']],
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        it('finds chains in nested function calls', () => {
+            expectChains('print alpha(beta.charlie(1 + 2))', [
+                ['alpha(beta.charlie(1 + 2))', ['alpha', 'alpha(beta.charlie(1 + 2))']],
+                ['beta.charlie(1 + 2)', ['beta', 'beta.charlie', 'beta.charlie(1 + 2)']],
+                ['1 + 2', ['1 + 2']],
+                ['1', ['1']],
+                ['2', ['2']]
+            ]);
+        });
+
+        it('treats a call of a call as one chain', () => {
+            expectChains('print alpha()()', [
+                ['alpha()()', ['alpha', 'alpha()', 'alpha()()']]
+            ]);
+        });
+
+        it('includes indexed gets in the chain but not their index', () => {
+            expectChains('print alpha.beta[charlie.delta]', [
+                ['alpha.beta[charlie.delta]', ['alpha', 'alpha.beta', 'alpha.beta[charlie.delta]']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('includes xml attribute gets in the chain', () => {
+            expectChains('print alpha.beta@charlie', [
+                ['alpha.beta@charlie', ['alpha', 'alpha.beta', 'alpha.beta@charlie']]
+            ]);
+        });
+
+        it('includes callfunc in the chain but not its args', () => {
+            expectChains('print alpha.beta@.charlie(delta.echo)', [
+                ['alpha.beta@.charlie(delta.echo)', ['alpha', 'alpha.beta', 'alpha.beta@.charlie(delta.echo)']],
+                ['delta.echo', ['delta', 'delta.echo']]
+            ]);
+        });
+
+        it('handles a long mixed chain', () => {
+            expectChains('print alpha.beta[1].charlie(2).delta@echo', [
+                [
+                    'alpha.beta[1].charlie(2).delta@echo',
+                    [
+                        'alpha',
+                        'alpha.beta',
+                        'alpha.beta[1]',
+                        'alpha.beta[1].charlie',
+                        'alpha.beta[1].charlie(2)',
+                        'alpha.beta[1].charlie(2).delta',
+                        'alpha.beta[1].charlie(2).delta@echo'
+                    ]
+                ],
+                ['1', ['1']],
+                ['2', ['2']]
+            ]);
+        });
+
+        it('treats a grouping as a boundary in both directions', () => {
+            expectChains('print (alpha.beta).charlie', [
+                ['(alpha.beta).charlie', ['(alpha.beta)', '(alpha.beta).charlie']],
+                ['alpha.beta', ['alpha', 'alpha.beta']]
+            ]);
+        });
+
+        it('treats each operand of a binary expression as its own chain', () => {
+            expectChains('print alpha.beta > charlie.delta', [
+                ['alpha.beta > charlie.delta', ['alpha.beta > charlie.delta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats the operand of a unary expression as its own chain', () => {
+            expectChains('print not alpha.beta', [
+                ['not alpha.beta', ['not alpha.beta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']]
+            ]);
+        });
+
+        it('treats array literal elements as their own chains', () => {
+            expectChains('print [alpha.beta, charlie.delta]', [
+                ['[alpha.beta, charlie.delta]', ['[alpha.beta, charlie.delta]']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats aa literal member values as their own chains', () => {
+            expectChains('print {alpha: beta.charlie}', [
+                ['{alpha: beta.charlie}', ['{alpha: beta.charlie}']],
+                ['alpha: beta.charlie', ['alpha: beta.charlie']],
+                ['beta.charlie', ['beta', 'beta.charlie']]
+            ]);
+        });
+
+        it('treats each part of a ternary as its own chain', () => {
+            expectChains('print alpha.beta ? charlie.delta : echo.foxtrot', [
+                [
+                    'alpha.beta ? charlie.delta : echo.foxtrot',
+                    ['alpha.beta ? charlie.delta : echo.foxtrot']
+                ],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']],
+                ['echo.foxtrot', ['echo', 'echo.foxtrot']]
+            ]);
+        });
+
+        it('treats each part of a null coalescing expression as its own chain', () => {
+            expectChains('print alpha.beta ?? charlie.delta', [
+                ['alpha.beta ?? charlie.delta', ['alpha.beta ?? charlie.delta']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats template string interpolations as their own chains', () => {
+            /* eslint-disable no-template-curly-in-string */
+            expectChains('print `hello ${alpha.beta} world`', [
+                ['`hello ${alpha.beta} world`', ['`hello ${alpha.beta} world`']],
+                ['hello ', ['hello ']],
+                ['hello ', ['hello ']],
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                [' world', [' world']],
+                [' world', [' world']]
+            ]);
+            /* eslint-enable no-template-curly-in-string */
+        });
+
+        it('includes the wrapped call in a new expression chain', () => {
+            expectChains('print new Alpha.Beta(charlie.delta)', [
+                [
+                    'new Alpha.Beta(charlie.delta)',
+                    [
+                        'Alpha',
+                        //master listed 'Alpha.Beta' twice here: once for the DottedGetExpression and
+                        //once for the NamespacedVariableNameExpression wrapping it. v1 removed that
+                        //wrapper class, so the chain has one fewer step.
+                        'Alpha.Beta',
+                        'Alpha.Beta(charlie.delta)',
+                        'new Alpha.Beta(charlie.delta)'
+                    ]
+                ],
+                ['charlie.delta', ['charlie', 'charlie.delta']]
+            ]);
+        });
+
+        it('treats the parts of a dotted set statement as separate chains', () => {
+            expectChains('alpha.beta.charlie = delta.echo', [
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['delta.echo', ['delta', 'delta.echo']]
+            ]);
+        });
+
+        it('treats the parts of an indexed set statement as separate chains', () => {
+            expectChains('alpha.beta[charlie.delta] = echo.foxtrot', [
+                ['alpha.beta', ['alpha', 'alpha.beta']],
+                ['charlie.delta', ['charlie', 'charlie.delta']],
+                ['echo.foxtrot', ['echo', 'echo.foxtrot']]
+            ]);
+        });
+
+        it('finds chains in statement expressions', () => {
+            expectChains([
+                'for each item in alpha.beta.charlie',
+                'end for'
+            ].join('\n'), [
+                ['alpha.beta.charlie', ['alpha', 'alpha.beta', 'alpha.beta.charlie']]
+            ]);
+        });
+
+        describe('isTerminal', () => {
+            it('is true only for the outermost node of each expression', () => {
+                expectTerminals('print alpha.beta(charlie)', [
+                    ['print alpha.beta(charlie)', true],
+                    //the whole call
+                    ['alpha.beta(charlie)', true],
+                    //the callee, reached through by the call
+                    ['alpha.beta', false],
+                    //reached through by `alpha.beta`
+                    ['alpha', false],
+                    //an argument, so its own expression
+                    ['charlie', true]
+                ]);
+            });
+
+            it('is true for a nested expression that is only an argument', () => {
+                //`alpha.beta` is terminal even though it sits inside the call
+                expectTerminals('print doSomething(alpha.beta)', [
+                    ['print doSomething(alpha.beta)', true],
+                    ['doSomething(alpha.beta)', true],
+                    ['doSomething', false],
+                    ['alpha.beta', true],
+                    ['alpha', false]
+                ]);
+            });
+
+            it('is true for statements', () => {
+                expectTerminals('alpha = 1', [
+                    ['alpha = 1', true],
+                    ['1', true]
+                ]);
+            });
+        });
+    });
+});

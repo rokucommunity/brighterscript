@@ -4,8 +4,8 @@ import * as fsExtra from 'fs-extra';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
 import { standardizePath as s } from '../../util';
-import type { XmlFile } from '../XmlFile';
-import type { BrsFile } from '../BrsFile';
+import type { XmlFile } from '../xml/XmlFile';
+import type { BrsFile } from '../brs/BrsFile';
 import { expectDiagnostics, expectZeroDiagnostics, getTestTranspile, trim, trimMap } from '../../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../../testHelpers.spec';
 

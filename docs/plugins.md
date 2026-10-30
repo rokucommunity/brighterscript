@@ -538,7 +538,7 @@ export default function (pluginOptions: PluginOptions) {
 
 Plugins are JavaScript modules dynamically loaded by the compiler. Their entry point is a default function that returns an object that follows the `CompilerPlugin` interface.
 
-To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/parser/ASTUtils`.
+To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/astUtils` (also exported from the package root).
 
 ### Conditional compilation
 Walks skip the inactive branches of `#if` / `#else if` / `#else` statements, unless the walk mode includes `InternalWalkMode.visitFalseConditionalCompilationBlocks`. Which branches are active depends on the `bs_const` values from the manifest, and on the `#const` declarations that precede each `#if`.

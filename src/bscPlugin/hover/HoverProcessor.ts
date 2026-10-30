@@ -1,18 +1,18 @@
 import { isAssignmentStatement, isBrsFile, isCallfuncExpression, isClassStatement, isConstStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
-import type { XmlFile } from '../../files/XmlFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
-import type { Token } from '../../lexer/Token';
-import { TokenKind } from '../../lexer/TokenKind';
-import { BrsTranspileState } from '../../parser/BrsTranspileState';
-import { ParseMode } from '../../parser/Parser';
+import type { Token } from '../../files/brs/lexer/Token';
+import { TokenKind } from '../../files/brs/lexer/TokenKind';
+import { BrsTranspileState } from '../../files/brs/parser/BrsTranspileState';
+import { ParseMode } from '../../files/brs/parser/Parser';
 import util from '../../util';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AstNode, Expression } from '../../parser/AstNode';
+import type { AstNode, Expression } from '../../files/brs/parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';
 import type { BscType } from '../../types/BscType';
-import type { ClassStatement, ConstStatement, EnumStatement, FieldStatement, InterfaceFieldStatement, InterfaceStatement } from '../../parser/Statement';
+import type { ClassStatement, ConstStatement, EnumStatement, FieldStatement, InterfaceFieldStatement, InterfaceStatement } from '../../files/brs/parser/Statement';
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 

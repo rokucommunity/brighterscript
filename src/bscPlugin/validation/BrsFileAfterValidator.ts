@@ -1,6 +1,6 @@
 import { isBrsFile } from '../../astUtils/reflection';
 
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import type { AfterValidateFileEvent } from '../../interfaces';
 
 

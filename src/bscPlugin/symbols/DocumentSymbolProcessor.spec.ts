@@ -4,7 +4,7 @@ import { createSandbox } from 'sinon';
 import { rootDir } from '../../testHelpers.spec';
 import type { DocumentSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import { util } from '../../util';
 let sinon = createSandbox();
 

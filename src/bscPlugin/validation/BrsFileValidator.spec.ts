@@ -1,7 +1,7 @@
 import { expect } from '../../chai-config.spec';
-import type { BrsFile } from '../../files/BrsFile';
-import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../parser/Expression';
-import type { AssignmentStatement, ClassStatement, ConditionalCompileStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../parser/Statement';
+import type { BrsFile } from '../../files/brs/BrsFile';
+import type { AALiteralExpression, DottedGetExpression, FunctionExpression } from '../../files/brs/parser/Expression';
+import type { AssignmentStatement, ClassStatement, ConditionalCompileStatement, ForEachStatement, FunctionStatement, NamespaceStatement, PrintStatement } from '../../files/brs/parser/Statement';
 import { DiagnosticCodeMap, DiagnosticMessages } from '../../DiagnosticMessages';
 import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, rootDir, tempDir, trim } from '../../testHelpers.spec';
 import { Program } from '../../Program';
@@ -17,7 +17,7 @@ import { StringType } from '../../types/StringType';
 import { ArrayType } from '../../types/ArrayType';
 import { DynamicType } from '../../types/DynamicType';
 import { TypedFunctionType } from '../../types/TypedFunctionType';
-import { ParseMode, Parser } from '../../parser/Parser';
+import { ParseMode, Parser } from '../../files/brs/parser/Parser';
 import type { BsDiagnostic, ExtraSymbolData } from '../../interfaces';
 import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
@@ -26,7 +26,7 @@ import { TypeStatementType } from '../../types/TypeStatementType';
 import * as fsExtra from 'fs-extra';
 import type { Range } from 'vscode-languageserver';
 import { createToken } from '../../astUtils/creators';
-import { TokenKind } from '../../lexer/TokenKind';
+import { TokenKind } from '../../files/brs/lexer/TokenKind';
 
 describe('BrsFileValidator', () => {
     let program: Program;

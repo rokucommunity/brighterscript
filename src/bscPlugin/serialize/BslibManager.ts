@@ -2,8 +2,8 @@ import type { BeforeBuildProgramEvent } from '../../interfaces';
 import { standardizePath as s } from '../../util';
 import { source as bslibSource } from '@rokucommunity/bslib';
 import { Cache } from '../../Cache';
-import { BrsFile } from '../../files/BrsFile';
-import type { FunctionStatement } from '../../parser/Statement';
+import { BrsFile } from '../../files/brs/BrsFile';
+import type { FunctionStatement } from '../../files/brs/parser/Statement';
 import type { Editor } from '../../astUtils/Editor';
 const bslibSrcPath = s`${require.resolve('@rokucommunity/bslib')}/dist/source/bslib.brs`;
 export class BslibManager {

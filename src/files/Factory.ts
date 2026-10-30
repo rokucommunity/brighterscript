@@ -1,5 +1,5 @@
-import { BrsFile } from './BrsFile';
-import { XmlFile } from './XmlFile';
+import { BrsFile } from './brs/BrsFile';
+import { XmlFile } from './xml/XmlFile';
 import { AssetFile } from './AssetFile';
 import type { Program } from '../Program';
 import type { FileData } from './LazyFileData';

@@ -16,7 +16,7 @@
     "test:watch": "mocha --watch",
     "test-related-projects": "ts-node scripts/test-related-projects.ts",
     "audit": "npm audit || audit-ci --config ./audit-ci.jsonc",
-    "dep-graph": "madge --image graph.svg --extensions ts ./src/parser",
+    "dep-graph": "madge --image graph.svg --extensions ts ./src/files",
     "docs": "ts-node scripts/compile-doc-examples.ts",
     "benchmark": "cd ./benchmarks && ts-node ./index.ts",
     "benchmark:scenarios": "cd ./benchmarks && ts-node --transpile-only ./scenarios/index.ts",

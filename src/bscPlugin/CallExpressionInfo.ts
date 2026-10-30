@@ -1,11 +1,11 @@
-import type { Expression } from '../parser/AstNode';
-import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
-import type { ClassStatement } from '../parser/Statement';
+import type { Expression } from '../files/brs/parser/AstNode';
+import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../files/brs/parser/Expression';
+import type { ClassStatement } from '../files/brs/parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
-import type { BrsFile } from '../files/BrsFile';
+import type { BrsFile } from '../files/brs/BrsFile';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
-import { ParseMode } from '../parser/Parser';
+import { ParseMode } from '../files/brs/parser/Parser';
 import type { NamespaceContainer } from '../Scope';
 
 

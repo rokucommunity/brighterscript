@@ -1,7 +1,7 @@
 import type { Position } from 'vscode-languageserver';
 import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
 import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
-import { TokenKind } from './lexer/TokenKind';
+import { TokenKind } from './files/brs/lexer/TokenKind';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscType } from './types/BscType';
