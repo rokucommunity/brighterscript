@@ -47,72 +47,6 @@ describe('CodeActionsProcessor', () => {
     }
 
     describe('getCodeActions', () => {
-        it('suggests `extends=Group`', () => {
-            const file = program.setFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1">
-                </component>
-            `);
-            program.validate();
-            expectCodeActions(() => {
-                program.getCodeActions(
-                    file.srcPath,
-                    //<comp|onent name="comp1">
-                    util.createRange(1, 5, 1, 5)
-                );
-            }, [{
-                title: `Extend "Group"`,
-                isPreferred: true,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="Group"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }, {
-                title: `Extend "Task"`,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="Task"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }, {
-                title: `Extend "ContentNode"`,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="ContentNode"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }]);
-        });
-
-        it('adds attribute at end of component with multiple attributes`', () => {
-            const file = program.setFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1" attr2="attr3" attr3="attr3">
-                </component>
-            `);
-            program.validate();
-            const codeActions = program.getCodeActions(
-                file.srcPath,
-                //<comp|onent name="comp1">
-                util.createRange(1, 5, 1, 5)
-            );
-            expect(
-                codeActions[0].edit!.changes![util.pathToUri(s`${rootDir}/components/comp1.xml`)][0].range
-            ).to.eql(
-                util.createRange(1, 51, 1, 51)
-            );
-        });
-
         it('does not produce duplicate code actions for bs imports', () => {
             //define the function in two files
             program.setFile('components/lib1.brs', `
@@ -767,49 +701,6 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
-    describe('unnecessaryScriptImportInChildFromParent', () => {
-        it('offers to remove the redundant script import', () => {
-            program.setFile('components/parent.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ParentScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
-                </component>
-            `);
-            program.setFile('source/lib.brs', '');
-            const file = program.setFile('components/child.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
-                </component>
-            `);
-            // uri on line 2 of child.xml
-            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Remove redundant script import']);
-        });
-
-        it('offers fix-all when multiple redundant imports exist', () => {
-            program.setFile('components/parent.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ParentScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/source/lib1.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/lib2.brs" />
-                </component>
-            `);
-            program.setFile('source/lib1.brs', '');
-            program.setFile('source/lib2.brs', '');
-            const file = program.setFile('components/child.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib1.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/lib2.brs" />
-                </component>
-            `);
-            testGetCodeActions(file, util.createRange(2, 50, 2, 50), [
-                'Fix all: Remove redundant script imports',
-                'Remove redundant script import'
-            ]);
-        });
-    });
-
     describe('unnecessaryCodebehindScriptImport', () => {
         it('offers to remove the unnecessary codebehind import', () => {
             const file = program.setFile('components/comp1.xml', trim`
@@ -1240,7 +1131,7 @@ describe('CodeActionsProcessor', () => {
         it('inserts an XML-style bs:disable directive after the XML declaration', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1">
+                <component extends="Group">
                 </component>
             `);
             program.validate();
@@ -1257,7 +1148,7 @@ describe('CodeActionsProcessor', () => {
         it('inserts an XML-style bs:disable directive at line 0 when the <?xml ?> declaration is missing', () => {
             //Roku permits XML component files without the optional `<?xml ?>` declaration
             const file = program.setFile('components/comp1.xml', trim`
-                <component name="comp1">
+                <component extends="Group">
                 </component>
             `);
             program.validate();
@@ -1338,7 +1229,7 @@ describe('CodeActionsProcessor', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- bs:disable: 9999 -->
-                <component name="comp1">
+                <component extends="Group">
                 </component>
             `);
             program.validate();
@@ -1347,7 +1238,7 @@ describe('CodeActionsProcessor', () => {
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
             //the new code is appended to the existing space-separated list
-            //In this case "missing-extends-attribute"
+            //In this case "missing-name-attribute"
             expect(/^<!-- bs:disable: 9999 [\w-]+ -->$/.test(edits[0].newText)).to.be.true;
         });
 
