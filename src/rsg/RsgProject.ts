@@ -13,19 +13,10 @@ export interface RokuConfig {
      */
     entryPoint?: string;
     /**
-     * The folder holding the manifest, `source/` and other static assets (`app.staticAssetsDir`), relative to the roku-config file
-     */
-    staticAssetsDir: string;
-    /**
      * Is this a BrightScript-only app (`app.brsOnly`)
      */
     brsOnly: boolean;
 }
-
-/**
- * The default `app.staticAssetsDir` used by the SDK
- */
-const DEFAULT_STATIC_ASSETS_DIR = './pkg';
 
 /**
  * TypeScript extensions that are followed when resolving imports
@@ -38,14 +29,13 @@ const typeScriptExtensions = ['.ts', '.tsx', '.mts'];
  */
 export function parseRokuConfig(text: string): RokuConfig {
     const tokens = tokenize(text ?? '');
-    //the `app` object is the object that holds `entryPoint` (or `brsOnly`/`staticAssetsDir` for BrightScript-only apps)
-    const objectStart = ['entryPoint', 'brsOnly', 'staticAssetsDir'].map(key => findObjectsWithKey(tokens, key)[0]).find(x => x !== undefined);
+    //the `app` object is the object that holds `entryPoint` (or `brsOnly` for BrightScript-only apps)
+    const objectStart = ['entryPoint', 'brsOnly'].map(key => findObjectsWithKey(tokens, key)[0]).find(x => x !== undefined);
     const app = objectStart !== undefined ? new ValueParser(tokens, objectStart).parse() : undefined;
     const properties = app?.kind === 'object' ? app.properties : new Map<string, Value>();
     const brsOnly = properties.get('brsOnly');
     return {
         entryPoint: getString(properties.get('entryPoint')),
-        staticAssetsDir: getString(properties.get('staticAssetsDir')) ?? DEFAULT_STATIC_ASSETS_DIR,
         brsOnly: brsOnly?.kind === 'reference' && brsOnly.name === 'true'
     };
 }
@@ -70,10 +60,6 @@ export interface RsgProject {
      * The absolute path to the app's TypeScript entry point (if it exists)
      */
     entryPoint?: string;
-    /**
-     * The absolute path to the folder holding the manifest, `source/` and other static assets
-     */
-    staticAssetsDir: string;
     /**
      * The absolute path of every TypeScript file reachable from the entry point through relative imports
      */
@@ -105,7 +91,6 @@ export function discoverRsgProject(rokuConfigPath: string): RsgProject {
     const result: RsgProject = {
         rokuConfigPath: rokuConfigPath,
         config: config,
-        staticAssetsDir: s`${path.resolve(configDir, config.staticAssetsDir)}`,
         sourceFiles: [],
         xmlComponentImports: [],
         anchorNodes: [],

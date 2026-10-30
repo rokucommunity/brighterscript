@@ -39,22 +39,20 @@ describe('RsgProject', () => {
     `;
 
     describe('parseRokuConfig', () => {
-        it('reads the entry point and defaults the static assets folder', () => {
+        it('reads the entry point', () => {
             expect(parseRokuConfig(rokuConfig)).to.eql({
                 entryPoint: 'src/index.ts',
-                staticAssetsDir: './pkg',
                 brsOnly: false
             });
         });
 
-        it('reads an inline default export with a custom static assets folder', () => {
+        it('reads an inline default export', () => {
             expect(parseRokuConfig(`
                 export default {
                     app: { entryPoint: 'app/main.tsx', staticAssetsDir: './static' }
                 } satisfies RokuConfig;
             `)).to.eql({
                 entryPoint: 'app/main.tsx',
-                staticAssetsDir: './static',
                 brsOnly: false
             });
         });
@@ -64,7 +62,6 @@ describe('RsgProject', () => {
                 export default { app: { brsOnly: true, staticAssetsDir: "./pkg" } };
             `)).to.eql({
                 entryPoint: undefined,
-                staticAssetsDir: './pkg',
                 brsOnly: true
             });
         });
@@ -121,7 +118,6 @@ describe('RsgProject', () => {
             const project = discoverRsgProject(s`${projectDir}/roku-config.ts`);
             expect(project.problems).to.eql([]);
             expect(project.entryPoint).to.eql(s`${projectDir}/src/index.ts`);
-            expect(project.staticAssetsDir).to.eql(s`${projectDir}/pkg`);
             expect(project.sourceFiles.sort()).to.eql([
                 s`${projectDir}/src/components/descriptors/index.ts`,
                 s`${projectDir}/src/components/shared.ts`,
