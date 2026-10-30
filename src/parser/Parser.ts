@@ -94,6 +94,7 @@ import {
     TypecastExpression,
     TypeExpression,
     TypedArrayExpression,
+    TypeArgumentsExpression,
     SpreadExpression,
     UnaryExpression,
     VariableExpression,
@@ -528,6 +529,7 @@ export class Parser {
             TokenKind.Interface
         );
         const nameToken = this.identifier(...this.allowedLocalIdentifiers);
+        const typeParameters = this.typeParameterList();
 
         let extendsToken: Token;
         let parentInterfaceName: TypeExpression;
@@ -601,6 +603,7 @@ export class Parser {
             body: body,
             endInterface: endInterfaceToken
         });
+        statement.typeParameters = typeParameters;
         this.exitAnnotationBlock(parentAnnotations);
         return statement;
     }
@@ -685,6 +688,7 @@ export class Parser {
 
         //get the class name
         let className = this.tryConsume(DiagnosticMessages.expectedIdentifier('class'), TokenKind.Identifier, ...this.allowedLocalIdentifiers) as Identifier;
+        const typeParameters = this.typeParameterList();
 
         //see if the class inherits from parent
         if (this.peek().text.toLowerCase() === 'extends') {
@@ -735,6 +739,7 @@ export class Parser {
             extends: extendsKeyword,
             parentClassName: parentClassName
         });
+        result.typeParameters = typeParameters;
 
         this.exitAnnotationBlock(parentAnnotations);
         return result;
@@ -953,6 +958,7 @@ export class Parser {
             let functionTypeText = isSub ? 'sub' : 'function';
             let name: Identifier;
             let leftParen: Token;
+            let typeParameters: Identifier[];
 
             if (isAnonymous) {
                 leftParen = this.consume(
@@ -965,6 +971,7 @@ export class Parser {
                     TokenKind.Identifier,
                     ...AllowedProperties
                 ) as Identifier;
+                typeParameters = this.typeParameterList();
                 leftParen = this.consume(
                     DiagnosticMessages.expectedToken('('),
                     TokenKind.LeftParen
@@ -1058,6 +1065,7 @@ export class Parser {
                 as: asToken,
                 returnTypeExpression: typeExpression
             });
+            func.typeParameters = typeParameters;
 
             if (isAnonymous) {
                 return func;
@@ -3293,6 +3301,10 @@ export class Parser {
         let newToken = this.advance();
 
         let nameExpr = this.identifyingExpression();
+        let typeArguments: TypeExpression[];
+        if (this.options.mode === ParseMode.BrighterScript && this.check(TokenKind.Less)) {
+            typeArguments = this.typeArguments(nameExpr).typeArguments;
+        }
         let leftParen = this.tryConsume(
             DiagnosticMessages.unexpectedToken(this.peek().text),
             TokenKind.LeftParen,
@@ -3311,6 +3323,7 @@ export class Parser {
         //pop the call from the  callExpressions list because this is technically something else
         this.callExpressions.pop();
         let result = new NewExpression({ new: newToken, call: call });
+        result.typeArguments = typeArguments;
         return result;
     }
 
@@ -3528,7 +3541,7 @@ export class Parser {
      * @returns an expression that was successfully parsed
      */
     private getTypeExpressionPart(changedTokens: { token: Token; oldKind: TokenKind }[]) {
-        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression;
+        let expr: VariableExpression | DottedGetExpression | TypedArrayExpression | InlineInterfaceExpression | GroupingExpression | TypedFunctionTypeExpression | TypeArgumentsExpression;
 
         if (this.checkAny(TokenKind.Sub, TokenKind.Function) && this.checkNext(TokenKind.LeftParen)) {
             // this is a tyyed function type expression, eg. "function(type1, type2) as type3"
@@ -3568,6 +3581,9 @@ export class Parser {
                     nextToken.kind = TokenKind.Identifier;
                 }
                 expr = this.identifyingExpression(AllowedTypeIdentifiers);
+                if (this.options.mode === ParseMode.BrighterScript && this.check(TokenKind.Less)) {
+                    expr = this.typeArguments(expr);
+                }
             }
         }
 
@@ -3592,6 +3608,54 @@ export class Parser {
         }
 
         return expr;
+    }
+
+    /**
+     * Parse an optional list of generic type parameters, eg. the `<T, U>` in `function pair<T, U>(a as T, b as U)`
+     */
+    private typeParameterList(): Identifier[] {
+        if (this.options.mode !== ParseMode.BrighterScript || !this.check(TokenKind.Less)) {
+            return undefined;
+        }
+        this.advance();
+        const typeParameters: Identifier[] = [];
+        do {
+            typeParameters.push(this.identifier(...this.allowedLocalIdentifiers));
+        } while (this.match(TokenKind.Comma));
+        this.consumeClosingAngleBracket();
+        return typeParameters;
+    }
+
+    /**
+     * Parse the type arguments of a generic type, eg. the `<integer>` in `Box<integer>`
+     */
+    private typeArguments(typeName: VariableExpression | DottedGetExpression): TypeArgumentsExpression {
+        const open = this.advance();
+        const typeArguments: TypeExpression[] = [];
+        do {
+            typeArguments.push(this.typeExpression());
+        } while (this.match(TokenKind.Comma));
+        const close = this.consumeClosingAngleBracket();
+        return new TypeArgumentsExpression({ typeName: typeName, open: open, typeArguments: typeArguments, close: close });
+    }
+
+    /**
+     * Consume a `>`. The lexer produces `>>` (and `>=`) for nested generics like `Box<Box<integer>>`, so split those tokens
+     */
+    private consumeClosingAngleBracket(): Token {
+        const token = this.peek();
+        const remainderKinds = {
+            [TokenKind.RightShift]: TokenKind.Greater,
+            [TokenKind.RightShiftEqual]: TokenKind.GreaterEqual,
+            [TokenKind.GreaterEqual]: TokenKind.Equal
+        };
+        const remainderKind = remainderKinds[token.kind];
+        if (remainderKind) {
+            const remainder = { ...token, kind: remainderKind, text: token.text.substring(1), startPosition: token.startPosition + 1 };
+            const close = { ...token, kind: TokenKind.Greater, text: '>', endPosition: token.startPosition + 1 };
+            this.tokens.splice(this.current, 1, close, remainder);
+        }
+        return this.consume(DiagnosticMessages.expectedToken('>'), TokenKind.Greater);
     }
 
     private typedFunctionTypeExpression() {

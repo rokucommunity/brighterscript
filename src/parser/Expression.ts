@@ -316,6 +316,11 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public readonly body: Block;
     public readonly returnTypeExpression?: TypeExpression;
 
+    /**
+     * Generic type parameters, eg. the `T` in `function identity<T>(value as T) as T`
+     */
+    public typeParameters?: Identifier[];
+
     readonly tokens: {
         readonly functionType?: Token;
         readonly endFunctionType?: Token;
@@ -1976,6 +1981,11 @@ export class NewExpression extends Expression {
     public readonly call: CallExpression;
 
     /**
+     * Generic type arguments, eg. the `string` in `new Stack<string>()`
+     */
+    public typeArguments?: TypeExpression[];
+
+    /**
      * The name of the class to initialize (with optional namespace prefixed)
      */
     public get className() {
@@ -3109,6 +3119,75 @@ export class TypedArrayExpression extends Expression {
                 rightBracket: util.cloneToken(this.tokens.rightBracket)
             }),
             ['innerType']
+        );
+    }
+}
+
+/**
+ * A generic type with type arguments, eg. `Box<integer>` or `Alpha.Pair<string, float>`
+ */
+export class TypeArgumentsExpression extends Expression {
+    constructor(options: {
+        typeName: VariableExpression | DottedGetExpression;
+        open?: Token;
+        typeArguments: TypeExpression[];
+        close?: Token;
+    }) {
+        super();
+        this.tokens = {
+            open: options.open,
+            close: options.close
+        };
+        this.typeName = options.typeName;
+        this.typeArguments = options.typeArguments ?? [];
+        util.setBounds(this,
+            this.typeName,
+            this.tokens.open,
+            ...this.typeArguments,
+            this.tokens.close
+        );
+    }
+
+    public readonly tokens: {
+        readonly open?: Token;
+        readonly close?: Token;
+    };
+
+    public readonly typeName: VariableExpression | DottedGetExpression;
+
+    public readonly typeArguments: TypeExpression[];
+
+    public readonly kind = AstNodeKind.TypeArgumentsExpression;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return ['dynamic'];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeName', visitor, options);
+            walkArray(this.typeArguments, visitor, options, this);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        //the built-in type engine doesn't understand generics; the type arguments are only used by the TypeScript type engine
+        return this.typeName.getType(options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeArgumentsExpression({
+                typeName: this.typeName?.clone(),
+                open: util.cloneToken(this.tokens.open),
+                typeArguments: this.typeArguments?.map(x => x?.clone()),
+                close: util.cloneToken(this.tokens.close)
+            }),
+            ['typeName', 'typeArguments']
         );
     }
 }

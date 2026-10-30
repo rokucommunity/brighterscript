@@ -2167,6 +2167,11 @@ export class InterfaceStatement extends Statement implements TypedefProvider {
     public readonly parentInterfaceName?: TypeExpression;
     public readonly body: Statement[];
 
+    /**
+     * Generic type parameters, eg. the `T` in `interface Box<T>`
+     */
+    public typeParameters?: Identifier[];
+
     public readonly kind = AstNodeKind.InterfaceStatement;
 
     public readonly tokens = {} as {
@@ -2689,6 +2694,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
             ...Object.values(this.tokens)
         );
     }
+
+    /**
+     * Generic type parameters, eg. the `T` in `interface Box<T>`
+     */
+    public typeParameters?: Identifier[];
 
     public readonly kind = AstNodeKind.ClassStatement;
 
