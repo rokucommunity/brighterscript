@@ -1,4 +1,4 @@
-import { isBrsFile, isFunctionType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsFile, isConstStatement, isFunctionType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsFile } from '../../files/BrsFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Hover, ProvideHoverEvent } from '../../interfaces';
@@ -6,6 +6,7 @@ import type { Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import { BrsTranspileState } from '../../parser/BrsTranspileState';
 import { ParseMode } from '../../parser/Parser';
+import type { ConstStatement } from '../../parser/Statement';
 import util from '../../util';
 
 export class HoverProcessor {
@@ -64,7 +65,8 @@ export class HoverProcessor {
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
-            const constant = scope?.getConstFileLink(fullName, containingNamespace);
+            const referencingConst = expression.findAncestor<ConstStatement>(isConstStatement);
+            const constant = scope?.getConstFileLink(fullName, containingNamespace, referencingConst);
             if (constant) {
                 const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(file))).toString();
                 return {
