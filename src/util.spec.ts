@@ -284,6 +284,31 @@ describe('util', () => {
             }
         });
 
+        it('only includes v1 options, in the right section', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            const topLevelKeys: string[] = [];
+            const compilerOptionKeys: string[] = [];
+            //every setting (commented or not) starts its line. 4 spaces of indent is top-level, 8 is inside `compilerOptions`
+            for (const line of contents.split('\n')) {
+                const match = /^( +)(?:\/\/ )?"(\w+)":/.exec(line);
+                if (match) {
+                    (match[1].length === 4 ? topLevelKeys : compilerOptionKeys).push(match[2]);
+                }
+            }
+            //an exact list, so a deprecated option (`stagingDir`, `deploy`, top-level compiler options, etc.) or a
+            //v0-only option (`host`, `password`, `outFile`, etc.) can't sneak in
+            expect(topLevelKeys.sort()).to.eql([
+                'compilerOptions', 'cwd', 'diagnosticFilters', 'diagnosticLevel', 'diagnosticReporters', 'diagnosticSeverityOverrides',
+                'extends', 'files', 'logLevel', 'noEmit', 'outDir', 'plugins', 'require', 'rootDir', 'showDiagnosticsInConsole',
+                'validate', 'watch'
+            ]);
+            expect(compilerOptionKeys.sort()).to.eql([
+                'allowBrighterScriptInBrightScript', 'autoImportComponentScript', 'bslibDestinationDir', 'emitDefinitions',
+                'emitFullPaths', 'legacyCallfuncHandling', 'manifest', 'minFirmwareVersion', 'pruneEmptyCodeFiles', 'relativeSourceMaps',
+                'removeParameterTypes', 'resolveSourceRoot', 'sourceMap', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers'
+            ]);
+        });
+
         it('puts each description on the same line as its setting', () => {
             const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
             const settingLines = contents.split('\n').filter(line => line.includes('": '));
