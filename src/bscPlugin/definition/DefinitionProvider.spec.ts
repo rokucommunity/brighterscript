@@ -459,6 +459,20 @@ describe('DefinitionProvider', () => {
         }
     });
 
+    it('does not resolve a namespaced const to itself when its initializer references an outer symbol with the same name', () => {
+        const file = program.setFile('source/main.bs', `
+            function chain()
+            end function
+            namespace promises
+                const chain = chain
+            end namespace
+        `);
+        program.validate();
+        //go to definition on the right-hand `chain`, which is the global function on line 1
+        const locations = program.getDefinition(file.srcPath, util.createPosition(4, 32));
+        expect(locations.map(x => (x as Location).range?.start.line)).to.eql([1]);
+    });
+
     describe('disk-based file lookup for non-program files', () => {
         let diskProgram: Program;
         const diskRootDir = s`${tempDir}/definitionProviderDiskTest`;

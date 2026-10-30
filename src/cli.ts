@@ -76,12 +76,13 @@ async function main() {
             server.run();
         } else if (options.init) {
             const cwd = path.resolve(process.cwd(), options.cwd ?? process.cwd());
-            const configPath = util.createConfigFile(cwd);
+            const targetPath = path.resolve(cwd, options.project ?? 'bsconfig.json');
+            const configPath = util.createConfigFile(cwd, options.project);
             if (configPath) {
                 console.log(`Created a new bsconfig.json file at`, chalk.green(configPath));
                 await finalize(0);
             } else {
-                console.error(chalk.red(`A bsconfig.json file already exists at "${path.join(cwd, 'bsconfig.json')}". No changes were made.`));
+                console.error(chalk.red(`A bsconfig.json file already exists at "${targetPath}". No changes were made.`));
                 await finalize(1);
             }
         } else {
