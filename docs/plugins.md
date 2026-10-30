@@ -62,7 +62,7 @@ There are two exceptions, where BrighterScript goes first in the "during" phase:
 - `validateFile`: BrighterScript registers the file's declarations (functions, classes, variables, etc.) first, so your `validateFile` handler can look up the file's symbols and types. BrighterScript's file diagnostics are still added in `afterValidateFile`.
 - `validateScope`: BrighterScript validates scopes first, so your `validateScope` handler runs after BrighterScript's scope validation.
 
-Full compiler lifecycle:
+Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's own work happens):
 
 - `beforeProvideProgram`
 - `afterProvideProgram`
@@ -70,6 +70,7 @@ Full compiler lifecycle:
     - For each physical file:
         - `beforeProvideFile`
         - `onProvideFile`
+        - **BrighterScript runs** (provides the file)
         - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
@@ -79,18 +80,23 @@ Full compiler lifecycle:
     - For each file:
         - `beforeValidateFile`
         - `validateFile`
+        - **BrighterScript runs** (validates the file)
         - `afterValidateFile`
     - For each scope:
         - `beforeValidateScope`
+        - **BrighterScript runs** (validates the scope)
         - `validateScope`
         - `afterValidateScope`
+    - **BrighterScript runs** (validates the program)
     - `afterValidateProgram`
 - `beforePrepublish`
 - `afterPrepublish`
 - `beforeSerializeProgram`
+    - **BrighterScript runs** (prepares the build)
     - `beforeBuildProgram`
     - For each file:
         - `beforePrepareFile`
+        - **BrighterScript runs** (prepares the file)
         - `afterPrepareFile`
     - `afterBuildProgram`
 - `afterSerializeProgram`
