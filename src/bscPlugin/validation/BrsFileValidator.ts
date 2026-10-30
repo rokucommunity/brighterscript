@@ -25,17 +25,6 @@ import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION }
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
 import { globalCallableMap } from '../../globalCallables';
 
-/**
- * The type implied by each type designator character that can end a variable or parameter name
- */
-const typeDesignatorTypes: Record<string, string> = {
-    '$': 'string',
-    '%': 'integer',
-    '!': 'float',
-    '#': 'double',
-    '&': 'longinteger'
-};
-
 export class BrsFileValidator {
     constructor(
         public event: ValidateFileEvent<BrsFile>
@@ -735,21 +724,16 @@ export class BrsFileValidator {
      * Anything else, including `as dynamic` and `as object`, is a "Type Mismatch" compile error on device.
      */
     private validateTypeDesignatorMatchesDeclaredType(param: FunctionParameterExpression) {
-        if (!param.typeExpression) {
-            return;
-        }
-        const paramName = param.tokens.name.text;
-        const designatorType = typeDesignatorTypes[paramName[paramName.length - 1]];
+        const designatorType = param.getMismatchedTypeDesignatorType();
         if (!designatorType) {
             return;
         }
+        const paramName = param.tokens.name.text;
         const declaredType = param.typeExpression.getName(ParseMode.BrighterScript);
-        if (declaredType?.toLowerCase() !== designatorType) {
-            this.event.program.diagnostics.register({
-                ...DiagnosticMessages.typeDesignatorMismatch(paramName, designatorType, declaredType),
-                location: param.location
-            });
-        }
+        this.event.program.diagnostics.register({
+            ...DiagnosticMessages.typeDesignatorMismatch(paramName, designatorType.toString(), declaredType),
+            location: param.location
+        });
     }
 
     private validateFunctionParameterCount(func: FunctionExpression) {

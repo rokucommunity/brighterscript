@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -574,11 +574,35 @@ export class FunctionParameterExpression extends Expression {
     public readonly defaultValue?: Expression;
     public readonly typeExpression?: TypeExpression;
 
+    /**
+     * If this parameter has a type designator (i.e. `name$`) and an `as` type that doesn't match it (i.e. `name$ as integer`),
+     * get the type the designator implies. The device compiler rejects such a mismatch, so the designator wins:
+     * it determines the parameter's type, and the conflicting `as` clause is dropped at transpile.
+     * Parameters of function type annotations (i.e. `callback as function(name$ as integer) as void`) are never emitted, so they are ignored.
+     * @returns the designator's type when it conflicts with the declared `as` type, otherwise `undefined`
+     */
+    public getMismatchedTypeDesignatorType(): BscType | undefined {
+        if (!this.typeExpression || isTypedFunctionTypeExpression(this.parent)) {
+            return undefined;
+        }
+        const designatorType = util.getTypeDesignatorType(this.tokens.name?.text);
+        if (!designatorType) {
+            return undefined;
+        }
+        const declaredType = this.typeExpression.getName(ParseMode.BrighterScript);
+        if (declaredType?.toLowerCase() === designatorType.toString()) {
+            return undefined;
+        }
+        return designatorType;
+    }
+
     public getType(options: GetTypeOptions) {
         const docs = getFunctionDocs(this.parent);
         const paramName = this.tokens.name.text;
 
-        let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+        //a type designator that conflicts with the `as` type wins, since that's what the device uses
+        let paramTypeFromCode = this.getMismatchedTypeDesignatorType() ??
+            this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             util.getDefaultTypeFromValueType(this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }));
         if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
             paramTypeFromCode = undefined;
@@ -609,8 +633,8 @@ export class FunctionParameterExpression extends Expression {
             result.push(' = ');
             result.push(this.defaultValue.transpile(state));
         }
-        //type declaration
-        if (this.typeExpression && !state.options.removeParameterTypes) {
+        //type declaration (omitted when it conflicts with the type designator, since the device rejects that and the designator wins)
+        if (this.typeExpression && !state.options.removeParameterTypes && !this.getMismatchedTypeDesignatorType()) {
             result.push(' ');
             result.push(state.transpileToken(this.tokens.as, 'as'));
             result.push(' ');
