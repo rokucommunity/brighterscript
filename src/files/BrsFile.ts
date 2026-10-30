@@ -51,6 +51,7 @@ export class BrsFile implements BscFile {
             document: this,
             program: options?.program
         });
+        this._codeSegments = [this.codeSegment];
         if (options) {
             this.srcPath = s`${options.srcPath}`;
             this.destPath = s`${options.destPath}`;
@@ -102,8 +103,10 @@ export class BrsFile implements BscFile {
      * The BrightScript code segments this file provides
      */
     public get codeSegments(): readonly BrsCodeSegment[] {
-        return [this.codeSegment];
+        return this._codeSegments;
     }
+
+    private _codeSegments: readonly BrsCodeSegment[];
 
     /**
      * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.

@@ -646,7 +646,14 @@ export class Scope {
      * Get the code provided by every file in this scope, including files from ancestor scopes
      */
     public getAllCodeSegments(): BrsCodeSegment[] {
-        return this.getAllFiles().flatMap(file => util.getCodeSegments(file));
+        const result = [] as BrsCodeSegment[];
+        for (const file of this.getAllFiles()) {
+            const codeSegments = util.getCodeSegments(file);
+            if (codeSegments) {
+                result.push(...codeSegments);
+            }
+        }
+        return result;
     }
 
     /**
@@ -778,7 +785,11 @@ export class Scope {
      */
     public enumerateBrsCodeSegments(callback: (codeSegment: BrsCodeSegment) => void) {
         for (const file of this.getSymbolFiles()) {
-            for (const codeSegment of util.getCodeSegments(file)) {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
+                continue;
+            }
+            for (const codeSegment of codeSegments) {
                 if (isBrsCodeSegment(codeSegment)) {
                     callback(codeSegment);
                 }
@@ -792,7 +803,11 @@ export class Scope {
      */
     public enumerateBrsCodeSegmentsWithBreak(callback: (codeSegment: BrsCodeSegment) => boolean) {
         for (const file of this.getSymbolFiles()) {
-            for (const codeSegment of util.getCodeSegments(file)) {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
+                continue;
+            }
+            for (const codeSegment of codeSegments) {
                 if (isBrsCodeSegment(codeSegment) && callback(codeSegment)) {
                     return;
                 }
@@ -805,7 +820,11 @@ export class Scope {
      */
     public enumerateOwnBrsCodeSegments(callback: (codeSegment: BrsCodeSegment) => void) {
         for (const file of this.getOwnSymbolFiles()) {
-            for (const codeSegment of util.getCodeSegments(file)) {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
+                continue;
+            }
+            for (const codeSegment of codeSegments) {
                 callback(codeSegment);
             }
         }
@@ -950,7 +969,11 @@ export class Scope {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
             for (let file of this.getOwnFiles()) {
-                for (const codeSegment of util.getCodeSegments(file)) {
+                const codeSegments = util.getCodeSegments(file);
+                if (!codeSegments) {
+                    continue;
+                }
+                for (const codeSegment of codeSegments) {
                     if (isBrsCodeSegment(codeSegment)) {
                         result.mergeSymbolTable(codeSegment.parser?.symbolTable);
                     }

@@ -97,19 +97,21 @@ export class XmlFile implements BscFile {
     public program: Program;
 
     /**
-     * The BrightScript embedded in this component's `<script>` blocks (`<![CDATA[ ... ]]>`), in the order they appear
+     * The BrightScript embedded in this component's `<script>` blocks (`<![CDATA[ ... ]]>`), in the order they appear.
+     * Undefined when the component has no CDATA blocks
      */
-    private scriptCodeSegments = [] as BrsCodeSegment[];
+    private scriptCodeSegments: BrsCodeSegment[] | undefined;
 
     /**
-     * The `<script>` element each piece of embedded code came from
+     * The `<script>` element each of `scriptCodeSegments` came from (same order). Undefined when the component has no CDATA blocks
      */
-    private scriptElementsByCodeSegment = new Map<BrsCodeSegment, SGScript>();
+    private scriptElementsWithCode: SGScript[] | undefined;
 
     /**
-     * The BrightScript code segments this file provides: the code in its `<script>` blocks, in the order they appear
+     * The BrightScript code segments this file provides: the code in its `<script>` blocks, in the order they appear.
+     * Undefined when the component has no CDATA blocks
      */
-    public get codeSegments(): readonly BrsCodeSegment[] {
+    public get codeSegments(): readonly BrsCodeSegment[] | undefined {
         return this.scriptCodeSegments;
     }
 
@@ -117,22 +119,15 @@ export class XmlFile implements BscFile {
      * Get the code embedded in a `<script>` element, if it has any
      */
     public getCodeSegmentForScript(script: SGScript): BrsCodeSegment | undefined {
-        for (const [codeSegment, scriptElement] of this.scriptElementsByCodeSegment) {
-            if (scriptElement === script) {
-                return codeSegment;
-            }
-        }
+        const index = this.scriptElementsWithCode?.indexOf(script) ?? -1;
+        return index >= 0 ? this.scriptCodeSegments[index] : undefined;
     }
 
     /**
      * Create a piece of BrightScript code for every `<script>` element that has its code inline in a CDATA block
      */
     private createScriptCodeSegments() {
-        for (const codeSegment of this.scriptCodeSegments) {
-            codeSegment.dispose();
-        }
-        this.scriptCodeSegments = [];
-        this.scriptElementsByCodeSegment.clear();
+        this.disposeScriptCodeSegments();
 
         const cdataOpen = '<![CDATA[';
         const cdataClose = ']]>';
@@ -149,7 +144,7 @@ export class XmlFile implements BscFile {
                 parseMode: isBrighterScript ? ParseMode.BrighterScript : ParseMode.BrightScript,
                 isEmbedded: true
             });
-            codeSegment.key = `${this.pkgPath}#script-${this.scriptCodeSegments.length}`;
+            codeSegment.key = `${this.pkgPath}#script-${this.scriptCodeSegments?.length ?? 0}`;
             //the code is everything between `<![CDATA[` and `]]>`
             const hasClose = cdata.text.endsWith(cdataClose);
             const startCharacter = range.start.character + cdataOpen.length;
@@ -163,9 +158,17 @@ export class XmlFile implements BscFile {
                 cdata.text.substring(cdataOpen.length, hasClose ? cdata.text.length - cdataClose.length : cdata.text.length),
                 { startLine: range.start.line, startCharacter: startCharacter }
             );
-            this.scriptCodeSegments.push(codeSegment);
-            this.scriptElementsByCodeSegment.set(codeSegment, script);
+            (this.scriptCodeSegments ??= []).push(codeSegment);
+            (this.scriptElementsWithCode ??= []).push(script);
         }
+    }
+
+    private disposeScriptCodeSegments() {
+        for (const codeSegment of this.scriptCodeSegments ?? []) {
+            codeSegment.dispose();
+        }
+        this.scriptCodeSegments = undefined;
+        this.scriptElementsWithCode = undefined;
     }
 
     /**
@@ -371,7 +374,7 @@ export class XmlFile implements BscFile {
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
             ) ||
             //embedded code that needs transpiling has to be written back into this file
-            this.scriptCodeSegments.some(codeSegment => codeSegment.needsTranspiled)
+            this.scriptCodeSegments?.some(codeSegment => codeSegment.needsTranspiled)
         );
     }
     public set needsTranspiled(value) {
@@ -465,10 +468,16 @@ export class XmlFile implements BscFile {
      */
     public get dependencies() {
         const dependencies = [
-            ...this.scriptTagImports.map(x => x.destPath.toLowerCase()),
-            //`import` statements in the code embedded in `<script>` blocks
-            ...this.scriptCodeSegments.flatMap(codeSegment => codeSegment.ownScriptImports).filter(x => !!x.destPath).map(x => x.destPath.toLowerCase())
+            ...this.scriptTagImports.map(x => x.destPath.toLowerCase())
         ];
+        //`import` statements in the code embedded in `<script>` blocks
+        for (const codeSegment of this.scriptCodeSegments ?? []) {
+            for (const scriptImport of codeSegment.ownScriptImports) {
+                if (scriptImport.destPath) {
+                    dependencies.push(scriptImport.destPath.toLowerCase());
+                }
+            }
+        }
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program?.options?.autoImportComponentScript) {
             dependencies.push(
@@ -939,8 +948,6 @@ export class XmlFile implements BscFile {
     public dispose() {
         //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
-        for (const codeSegment of this.scriptCodeSegments) {
-            codeSegment.dispose();
-        }
+        this.disposeScriptCodeSegments();
     }
 }

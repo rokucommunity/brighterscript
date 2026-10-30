@@ -13,7 +13,11 @@ export class WorkspaceSymbolProcessor {
 
     public process() {
         const results = Object.values(this.event.program.files).map(file => {
-            return util.getCodeSegments(file).map(codeSegment => {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
+                return [];
+            }
+            return codeSegments.map(codeSegment => {
                 if (isBrsCodeSegment(codeSegment)) {
                     return this.getBrsCodeSegmentWorkspaceSymbols(codeSegment);
                 }

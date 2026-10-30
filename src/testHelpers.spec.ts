@@ -559,7 +559,7 @@ export async function once<T = any>(
  * Get the brightscript code a file provides: a brs/bs file's code, or the code in an xml file's `<script>` blocks, in order
  */
 export function getBrsCodeSegments(file: BscFile): BrsCodeSegment[] {
-    return util.getCodeSegments(file).filter(isBrsCodeSegment);
+    return util.getCodeSegments(file)?.filter(isBrsCodeSegment) ?? [];
 }
 
 /**

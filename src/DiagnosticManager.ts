@@ -245,15 +245,18 @@ export class DiagnosticManager {
                 const file = this.program?.getFile(uri);
                 inactiveRanges = [];
                 //every piece of BrightScript in the file (a file can provide several, i.e. the `<script>` blocks of an xml file)
-                for (const codeSegment of util.getCodeSegments(file)) {
-                    if (!isBrsCodeSegment(codeSegment)) {
-                        continue;
-                    }
-                    // eslint-disable-next-line @typescript-eslint/dot-notation
-                    for (const statement of codeSegment['_cachedLookups'].conditionalCompileStatements) {
-                        for (const branch of [statement.thenBranch, statement.elseBranch]) {
-                            if (isBlock(branch) && branch.isActive === false && branch.location) {
-                                inactiveRanges.push(branch.location.range);
+                const codeSegments = util.getCodeSegments(file);
+                if (codeSegments) {
+                    for (const codeSegment of codeSegments) {
+                        if (!isBrsCodeSegment(codeSegment)) {
+                            continue;
+                        }
+                        // eslint-disable-next-line @typescript-eslint/dot-notation
+                        for (const statement of codeSegment['_cachedLookups'].conditionalCompileStatements) {
+                            for (const branch of [statement.thenBranch, statement.elseBranch]) {
+                                if (isBlock(branch) && branch.isActive === false && branch.location) {
+                                    inactiveRanges.push(branch.location.range);
+                                }
                             }
                         }
                     }
@@ -306,8 +309,12 @@ export class DiagnosticManager {
             return [];
         }
         const flags = isXmlFile(file) ? [...file.commentFlags] : [] as CommentFlag[];
+        const codeSegments = util.getCodeSegments(file);
+        if (!codeSegments) {
+            return flags;
+        }
         const codeSegmentAtLocation = this.program.getCodeSegmentAt(file, location.range?.start);
-        for (const codeSegment of util.getCodeSegments(file)) {
+        for (const codeSegment of codeSegments) {
             if (codeSegment === codeSegmentAtLocation || !codeSegment.range) {
                 flags.push(...codeSegment.commentFlags);
             }

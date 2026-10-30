@@ -193,7 +193,7 @@ describe('BrsCodeSegment', () => {
             `);
             expect(brsFile.codeSegments).to.eql([getBrsCodeSegment(brsFile)]);
             //a component with no inline `<script>` blocks provides no BrightScript
-            expect(xmlFile.codeSegments).to.eql([]);
+            expect(xmlFile.codeSegments).to.be.undefined;
         });
 
         it('can be told apart from other objects', () => {

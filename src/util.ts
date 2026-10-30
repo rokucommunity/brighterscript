@@ -2404,13 +2404,14 @@ export class Util {
     }
 
     /**
-     * Get the BrightScript code segments a file provides. Only brs/bs and xml files provide code segments, so every other file provides none
+     * Get the BrightScript code segments a file provides. Only brs/bs and xml files provide code segments.
+     * Returns undefined when the file provides none (no empty array is allocated)
      */
-    public getCodeSegments(file: BscFile): readonly BrsCodeSegment[] {
+    public getCodeSegments(file: BscFile): readonly BrsCodeSegment[] | undefined {
         if (isBrsFile(file) || isXmlFile(file)) {
             return file.codeSegments;
         }
-        return [];
+        return undefined;
     }
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {

@@ -10,6 +10,9 @@ export class BrsFileAfterValidator {
 
     public process() {
         const codeSegments = util.getCodeSegments(this.event.file);
+        if (!codeSegments) {
+            return;
+        }
         //link all of the file's code segments to the global symbol table as a group, so the links (and the type caches
         //they invalidate) happen once for the file rather than once per code segment
         const unlinkGlobalSymbolTables = codeSegments.map(codeSegment => {

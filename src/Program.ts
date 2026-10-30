@@ -397,16 +397,22 @@ export class Program {
 
     private buildNamespaceContributors(): Map<string, Set<BrsCodeSegment>> {
         const contributors = new Map<string, Set<BrsCodeSegment>>();
-        for (const codeSegment of Object.values(this.files).flatMap(file => util.getCodeSegments(file))) {
-            if (isBrsCodeSegment(codeSegment)) {
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (const nameLower of codeSegment['getNamespaceContributions']().keys()) {
-                    let set = contributors.get(nameLower);
-                    if (!set) {
-                        set = new Set<BrsCodeSegment>();
-                        contributors.set(nameLower, set);
+        for (const file of Object.values(this.files)) {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
+                continue;
+            }
+            for (const codeSegment of codeSegments) {
+                if (isBrsCodeSegment(codeSegment)) {
+                    // eslint-disable-next-line @typescript-eslint/dot-notation
+                    for (const nameLower of codeSegment['getNamespaceContributions']().keys()) {
+                        let set = contributors.get(nameLower);
+                        if (!set) {
+                            set = new Set<BrsCodeSegment>();
+                            contributors.set(nameLower, set);
+                        }
+                        set.add(codeSegment);
                     }
-                    set.add(codeSegment);
                 }
             }
         }
@@ -1201,18 +1207,17 @@ export class Program {
             if (this.isSourceBrsFile(file)) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
-            if (!keepSymbolInformation) {
-                for (const codeSegment of util.getCodeSegments(file)) {
-                    if (isBrsCodeSegment(codeSegment)) {
+            const codeSegments = util.getCodeSegments(file);
+            if (codeSegments) {
+                for (const codeSegment of codeSegments) {
+                    if (!keepSymbolInformation && isBrsCodeSegment(codeSegment)) {
                         this.logger.debug('Removing code symbol info', codeSegment.key);
                         //the symbols this code provided are gone, so anything that required them needs to be revalidated
                         this.addRemovedCodeSegmentSymbolsToChangedSymbols(codeSegment);
                         this.codeSegmentSymbolInformation.delete(codeSegment.key);
                     }
+                    this.crossScopeValidation.clearResolutionsForCodeSegment(codeSegment);
                 }
-            }
-            for (const codeSegment of util.getCodeSegments(file)) {
-                this.crossScopeValidation.clearResolutionsForCodeSegment(codeSegment);
             }
 
             this.diagnostics.clearForFile(file.srcPath);
@@ -1406,34 +1411,38 @@ export class Program {
                     program: this,
                     file: file
                 };
-                const codeEvents = codeSegments.map(codeSegment => ({
+                const codeEvents = codeSegments?.map(codeSegment => ({
                     program: this,
                     file: file,
                     codeSegment: codeSegment
                 }));
                 this.plugins.emit('beforeValidateFile', fileEvent);
-                for (const codeEvent of codeEvents) {
-                    this.plugins.emit('beforeValidateBrsCodeSegment', codeEvent);
+                if (codeEvents) {
+                    for (const codeEvent of codeEvents) {
+                        this.plugins.emit('beforeValidateBrsCodeSegment', codeEvent);
+                    }
                 }
                 this.plugins.emit('validateFile', fileEvent);
-                for (const codeEvent of codeEvents) {
-                    this.plugins.emit('validateBrsCodeSegment', codeEvent);
+                if (codeEvents) {
+                    for (const codeEvent of codeEvents) {
+                        this.plugins.emit('validateBrsCodeSegment', codeEvent);
+                    }
                 }
                 this.plugins.emit('afterValidateFile', fileEvent);
-                for (const codeEvent of codeEvents) {
-                    this.plugins.emit('afterValidateBrsCodeSegment', codeEvent);
-                    codeEvent.codeSegment.isValidated = true;
+                if (codeEvents) {
+                    for (const codeEvent of codeEvents) {
+                        this.plugins.emit('afterValidateBrsCodeSegment', codeEvent);
+                        codeEvent.codeSegment.isValidated = true;
+                        if (isBrsCodeSegment(codeEvent.codeSegment)) {
+                            brsCodeSegmentsValidated.push(codeEvent.codeSegment);
+                        }
+                    }
                 }
                 file.isValidated = true;
                 if (isBrsFile(file)) {
                     brsFilesValidated.push(file);
                 } else if (isXmlFile(file)) {
                     xmlFilesValidated.push(file);
-                }
-                for (const codeSegment of codeSegments) {
-                    if (isBrsCodeSegment(codeSegment)) {
-                        brsCodeSegmentsValidated.push(codeSegment);
-                    }
                 }
             })
             .forEach('do deferred component creation', () => [...brsCodeSegmentsValidated, ...xmlFilesValidated], (fileOrCodeSegment) => {
@@ -1571,11 +1580,14 @@ export class Program {
                 this.validationDetails.changedComponentTypes = [];
             })
             .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
-                const brsCodeSegments = util.getCodeSegments(file).filter(codeSegment => isBrsCodeSegment(codeSegment)) as BrsCodeSegment[];
-                for (const codeSegment of brsCodeSegments) {
+                const codeSegments = util.getCodeSegments(file);
+                if (!codeSegments) {
+                    return;
+                }
+                for (const codeSegment of codeSegments) {
                     codeSegment.validationSegmenter.unValidateAllSegments();
                 }
-                if (brsCodeSegments.length > 0 && !this.isFirstValidation) {
+                if (!this.isFirstValidation) {
                     scopesToInvalidate.push(...this.getScopesForFile(file));
                 }
             })
@@ -1875,7 +1887,11 @@ export class Program {
      */
     public getCodeSegmentAt(file: BscFile, position: Position): BrsCodeSegment | undefined {
         let result: BrsCodeSegment;
-        for (const codeSegment of util.getCodeSegments(file)) {
+        const codeSegments = util.getCodeSegments(file);
+        if (!codeSegments) {
+            return undefined;
+        }
+        for (const codeSegment of codeSegments) {
             if (!codeSegment.range) {
                 //code that covers the whole document is the fallback when no more specific code contains the position
                 result ??= codeSegment;
@@ -1892,7 +1908,8 @@ export class Program {
      * Get what a file-wide request should be emitted for: the file itself (`undefined`), then each of its code segments
      */
     private getCodeSegmentsForRequest(file: BscFile): Array<BrsCodeSegment | undefined> {
-        return [undefined, ...util.getCodeSegments(file)];
+        const codeSegments = util.getCodeSegments(file);
+        return codeSegments ? [undefined, ...codeSegments] : [undefined];
     }
 
     /**
@@ -1984,24 +2001,30 @@ export class Program {
         }
 
         //look through all files in scope for matches
-        for (const codeSegment of scope.getOwnFiles().flatMap(file => util.getCodeSegments(file))) {
-            //skip non-brs code, or code we've already processed
-            if (!isBrsCodeSegment(codeSegment) || codeSegmentsSearched.has(codeSegment)) {
+        for (const file of scope.getOwnFiles()) {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
                 continue;
             }
-            codeSegmentsSearched.add(codeSegment);
+            for (const codeSegment of codeSegments) {
+                //skip non-brs code, or code we've already processed
+                if (!isBrsCodeSegment(codeSegment) || codeSegmentsSearched.has(codeSegment)) {
+                    continue;
+                }
+                codeSegmentsSearched.add(codeSegment);
 
-            codeSegment.ast.walk(createVisitor({
-                FunctionStatement: (statement: FunctionStatement) => {
-                    if (funcNames.has(statement.tokens.name.text)) {
-                        if (!results.has(statement)) {
-                            results.set(statement, { item: statement, codeSegment: codeSegment });
+                codeSegment.ast.walk(createVisitor({
+                    FunctionStatement: (statement: FunctionStatement) => {
+                        if (funcNames.has(statement.tokens.name.text)) {
+                            if (!results.has(statement)) {
+                                results.set(statement, { item: statement, codeSegment: codeSegment });
+                            }
                         }
                     }
-                }
-            }), {
-                walkMode: WalkMode.visitStatements
-            });
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
+            }
         }
         return [...results.values()];
     }
@@ -2235,13 +2258,13 @@ export class Program {
             //outside of its code segments (i.e. in the xml of a component). Each event only gets the diagnostics that
             //belong to it, the same as source fix-all. A range inside a single code segment (like a cursor) gets one event
             const codeSegments = util.getCodeSegments(file);
-            const isRangeInOneCodeSegment = codeSegments.some(codeSegment => {
+            const isRangeInOneCodeSegment = !!codeSegments?.some(codeSegment => {
                 return !codeSegment.range || (util.rangeContains(codeSegment.range, range.start) && util.rangeContains(codeSegment.range, range.end));
             });
-            const targets = [
-                ...(isRangeInOneCodeSegment ? [] : [undefined]),
-                ...codeSegments.filter(codeSegment => !codeSegment.range || util.rangesIntersectOrTouch(codeSegment.range, range))
-            ];
+            const targets: Array<BrsCodeSegment | undefined> = isRangeInOneCodeSegment ? [] : [undefined];
+            if (codeSegments) {
+                targets.push(...codeSegments.filter(codeSegment => !codeSegment.range || util.rangesIntersectOrTouch(codeSegment.range, range)));
+            }
             const events = targets.map((codeSegment): ProvideCodeActionsEvent => ({
                 program: this,
                 file: file,
@@ -2527,7 +2550,7 @@ export class Program {
                 scope: scope,
                 outputPath: this.getOutputPath(file, outDir)
             } as PrepareFileEvent & { outputPath: string };
-            const codeEvents = util.getCodeSegments(file).map((codeSegment): PrepareBrsCodeSegmentEvent => ({
+            const codeEvents = util.getCodeSegments(file)?.map((codeSegment): PrepareBrsCodeSegmentEvent => ({
                 program: this,
                 file: file,
                 codeSegment: codeSegment,
@@ -2545,8 +2568,10 @@ export class Program {
         for (const [fileEventName, codeEventName] of phases) {
             await this.runWithScopes(entries, async (entry) => {
                 await this.plugins.emitAsync(fileEventName, entry.event);
-                for (const codeEvent of entry.codeEvents) {
-                    await this.plugins.emitAsync(codeEventName, codeEvent);
+                if (entry.codeEvents) {
+                    for (const codeEvent of entry.codeEvents) {
+                        await this.plugins.emitAsync(codeEventName, codeEvent);
+                    }
                 }
             });
         }
@@ -2710,7 +2735,11 @@ export class Program {
                 //a file added by a plugin very late in the flow might not have an editor at all
                 file.editor?.undoAll();
                 //code can have an editor of its own (i.e. code embedded in an xml file)
-                for (const codeSegment of util.getCodeSegments(file)) {
+                const codeSegments = util.getCodeSegments(file);
+                if (!codeSegments) {
+                    continue;
+                }
+                for (const codeSegment of codeSegments) {
                     if (codeSegment.editor && codeSegment.editor !== file.editor) {
                         codeSegment.editor.undoAll();
                     }

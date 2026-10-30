@@ -153,7 +153,7 @@ export class ProvidedSymbolIndex {
      */
     public prune(program: Program) {
         for (const codeSegment of [...this.codeSegments.keys()]) {
-            if (!util.getCodeSegments(program.getFile(codeSegment.srcPath)).includes(codeSegment)) {
+            if (!util.getCodeSegments(program.getFile(codeSegment.srcPath))?.includes(codeSegment)) {
                 this.remove(codeSegment);
             }
         }

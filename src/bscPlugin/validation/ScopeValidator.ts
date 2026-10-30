@@ -1910,28 +1910,34 @@ export class ScopeValidator {
             return functionNames;
         };
 
-        for (const codeSegment of scope.getOwnFiles().flatMap(file => util.getCodeSegments(file))) {
-            if (!isBrsCodeSegment(codeSegment)) {
+        for (const file of scope.getOwnFiles()) {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
                 continue;
             }
-            // eslint-disable-next-line @typescript-eslint/dot-notation
-            for (const expression of codeSegment['_cachedLookups'].expressions) {
-                if (!isCallExpression(expression) || !this.isObserverCallWithStringCallback(expression)) {
+            for (const codeSegment of codeSegments) {
+                if (!isBrsCodeSegment(codeSegment)) {
                     continue;
                 }
-                const callbackArg = expression.args[1] as LiteralExpression;
-                const callbackName = callbackArg.tokens.value.text.replace(/^"|"$/g, '');
-                const lowerCallbackName = callbackName.toLowerCase();
-                if (!callbackName || getFunctionNames().has(lowerCallbackName)) {
-                    continue;
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const expression of codeSegment['_cachedLookups'].expressions) {
+                    if (!isCallExpression(expression) || !this.isObserverCallWithStringCallback(expression)) {
+                        continue;
+                    }
+                    const callbackArg = expression.args[1] as LiteralExpression;
+                    const callbackName = callbackArg.tokens.value.text.replace(/^"|"$/g, '');
+                    const lowerCallbackName = callbackName.toLowerCase();
+                    if (!callbackName || getFunctionNames().has(lowerCallbackName)) {
+                        continue;
+                    }
+                    //if it was written with its BrighterScript name (`alpha.onChange`), suggest the name it actually has at runtime
+                    const isBrighterScriptName = [...getFunctionNames().values()].includes(lowerCallbackName);
+                    const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
+                    this.addMultiScopeDiagnostic({
+                        ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
+                        location: callbackArg.location
+                    }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
                 }
-                //if it was written with its BrighterScript name (`alpha.onChange`), suggest the name it actually has at runtime
-                const isBrighterScriptName = [...getFunctionNames().values()].includes(lowerCallbackName);
-                const suggestedName = isBrighterScriptName ? callbackName.replace(/\./g, '_') : undefined;
-                this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.observerCallbackNotFound(callbackName, scope.xmlFile.componentName?.text, suggestedName),
-                    location: callbackArg.location
-                }, ScopeValidatorDiagnosticTag.ObserverCallbacks);
             }
         }
     }
