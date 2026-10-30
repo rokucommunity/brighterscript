@@ -79,7 +79,7 @@ Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's o
     - `beforeValidateProgram`
     - For each file:
         - `beforeValidateFile`
-        - **BrighterScript runs** (registers the file's declarations)
+        - _\<BrighterScript registers the file's declarations\>_
         - `validateFile`
         - _\<BrighterScript validates the file\>_
         - `afterValidateFile`
