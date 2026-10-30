@@ -956,7 +956,7 @@ export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
-export type AfterValidateFileEvent<T extends BscFile = BscFile> = ValidateFileEvent;
+export type AfterValidateFileEvent<T extends BscFile = BscFile> = ValidateFileEvent<T>;
 
 export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;

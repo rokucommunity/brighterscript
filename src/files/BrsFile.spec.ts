@@ -7238,7 +7238,7 @@ describe('BrsFile', () => {
                         west = "W"
                     end enum
                 `);
-                program.plugins.emit('validateFile', { program: program, file: mainFile });
+                validateFile(mainFile);
                 runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
                 let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);

@@ -48,39 +48,80 @@ While there are no restrictions on plugin names, it helps others to find your pl
 
 ## Compiler events
 
-Full compiler lifecycle:
+### When does BrighterScript run?
+Most events come in three phases: `before<Event>`, `<event>` (the "during" phase), and `after<Event>`. Every plugin's handler for a phase runs before the next phase starts.
+
+BrighterScript's own built-in work (parsing, validation, hovers, completions, transpiling, writing files, etc.) is the **last participant in the "during" phase** of every event. So:
+
+- `before<Event>`: runs before BrighterScript has done anything for this event.
+- `<event>`: runs before BrighterScript. Use this to contribute results alongside BrighterScript or to handle something yourself first. For example, providing a file in `provideFile` keeps BrighterScript from providing that file, and adding a file to `processedFiles` in `writeFile` keeps BrighterScript from writing it.
+- `after<Event>`: runs after BrighterScript. BrighterScript's results are available here, so this is the place to inspect, modify, or remove them.
+
+The one exception is scope validation: BrighterScript validates scopes first in `validateScope`, so your `validateScope` handler runs after BrighterScript's scope validation.
+
+Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's own work happens):
 
 - `beforeProvideProgram`
+- `provideProgram`
 - `afterProvideProgram`
     - `afterProvideScope` ("source" scope)
     - For each physical file:
         - `beforeProvideFile`
-        - `onProvideFile`
+        - `provideFile`
+        - _\<BrighterScript provides the file\>_
         - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
+        - `addFile`
         - `afterAddFile`
+        - `beforeProvideScope` (component scope)
+        - `provideScope` (component scope)
         - `afterProvideScope` (component scope)
     - `beforeValidateProgram`
+    - `validateProgram`
     - For each file:
         - `beforeValidateFile`
         - `validateFile`
+        - _\<BrighterScript validates the file\>_
         - `afterValidateFile`
     - For each scope:
         - `beforeValidateScope`
+        - _\<BrighterScript validates the scope\>_
         - `validateScope`
         - `afterValidateScope`
+    - _\<BrighterScript validates the program\>_
     - `afterValidateProgram`
-- `beforePrepublish`
-- `afterPrepublish`
-- `beforeSerializeProgram`
-    - `beforeBuildProgram`
+- _\<BrighterScript prepares the build\>_
+- `beforeBuildProgram`
+- `buildProgram`
+    - `beforePrepareProgram`
+    - `prepareProgram`
     - For each file:
         - `beforePrepareFile`
+        - `prepareFile`
+        - _\<BrighterScript prepares the file\>_
         - `afterPrepareFile`
-    - `afterBuildProgram`
-- `afterSerializeProgram`
+    - `afterPrepareProgram`
+    - `beforeSerializeProgram`
+    - `serializeProgram`
+    - For each file:
+        - `beforeSerializeFile`
+        - `serializeFile`
+        - _\<BrighterScript serializes the file\>_
+        - `afterSerializeFile`
+    - `afterSerializeProgram`
+    - `beforeWriteProgram`
+    - `writeProgram`
+    - For each serialized file:
+        - `beforeWriteFile`
+        - `writeFile`
+        - _\<BrighterScript writes the file\>_
+        - `afterWriteFile`
+    - `afterWriteProgram`
+- `afterBuildProgram`
 - `beforeRemoveProgram`
+- `removeProgram`
+- `afterRemoveProgram`
 
 ### Language server
 
