@@ -67,6 +67,17 @@ export class ProjectManager {
      */
     private standaloneProjects = new Map<string, StandaloneProject>();
 
+    /**
+     * Projects that were discovered but not activated because none of their files are open in the editor.
+     * They get activated the first time one of their files is opened. Keyed by projectKey.
+     */
+    private dormantProjects = new Map<string, DormantProject>();
+
+    /**
+     * The srcPaths of all documents currently open in the editor
+     */
+    private openDocuments = new Set<string>();
+
     private documentManager: DocumentManager;
     public static documentManagerDelay = 150;
 
@@ -117,6 +128,12 @@ export class ProjectManager {
         await this.onInitialized();
 
         const actions = [...event.actions] as DocumentActionWithStatus[];
+
+        //wake up any dormant projects that own a file opened in the editor, so they can handle these actions
+        //(this must happen before standalone project creation, otherwise those files would get a standalone project instead)
+        await this.activateDormantProjectsForFiles(
+            actions.filter(x => x.type === 'set' && x.allowStandaloneProject).map(x => x.srcPath)
+        );
 
         let idSequence = 0;
         //add an ID to every action (so we can track which actions were handled by which projects)
@@ -309,31 +326,49 @@ export class ProjectManager {
             for (const project of this.projects) {
                 this.removeProject(project);
             }
+            for (const projectKey of [...this.dormantProjects.keys()]) {
+                this.removeDormantProject(projectKey);
+            }
         }
         this.logger.log('syncProjects', workspaceConfigs.map(x => x.workspaceFolder));
 
         const generation = ++this.syncGeneration;
 
         this.syncPromise = (async () => {
+            //keys of projects whose workspace has lazy project activation enabled
+            const lazyProjectKeys = new Set<string>();
+
             //build a list of unique projects across all workspace folders
             let projectConfigs = (await Promise.all(
                 workspaceConfigs.map(async workspaceConfig => {
                     const discoveredProjects = await this.discoverProjectsForWorkspace(workspaceConfig);
-                    return discoveredProjects.map<ProjectConfig>(discoveredProject => ({
-                        name: discoveredProject?.name,
-                        projectKey: s`${discoveredProject.bsconfigPath ?? discoveredProject.dir}`,
-                        projectDir: s`${discoveredProject.dir}`,
-                        bsconfigPath: discoveredProject?.bsconfigPath,
-                        workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
-                        excludePatterns: workspaceConfig.excludePatterns,
-                        enableThreading: workspaceConfig.languageServer.enableThreading
-                    }));
+                    return discoveredProjects.map<ProjectConfig>(discoveredProject => {
+                        const projectKey = s`${discoveredProject.bsconfigPath ?? discoveredProject.dir}`;
+                        if (workspaceConfig.languageServer.lazyProjectActivation) {
+                            lazyProjectKeys.add(projectKey);
+                        }
+                        return {
+                            name: discoveredProject?.name,
+                            projectKey: projectKey,
+                            projectDir: s`${discoveredProject.dir}`,
+                            bsconfigPath: discoveredProject?.bsconfigPath,
+                            workspaceFolder: s`${workspaceConfig.workspaceFolder}`,
+                            excludePatterns: workspaceConfig.excludePatterns,
+                            enableThreading: workspaceConfig.languageServer.enableThreading
+                        };
+                    });
                 })
             )).flat(1);
 
             //TODO handle when a project came from the workspace config .projects array (it should probably never be filtered out)
             //filter the project paths to only include those that are allowed by the path filterer
             projectConfigs = this.pathFilterer.filter(projectConfigs, x => x.projectKey);
+
+            //leaving projects dormant only helps when there's more than one project
+            const totalProjectCount = projectConfigs.length;
+            const canBeDormant = (config: ProjectConfig) => {
+                return totalProjectCount > 1 && lazyProjectKeys.has(config.projectKey);
+            };
 
             //delete projects not represented in the list
             for (const project of this.projects) {
@@ -343,9 +378,17 @@ export class ProjectManager {
                 }
             }
 
+            //delete dormant projects that are no longer in the list, or that are no longer allowed to be dormant (they get activated below)
+            for (const dormantProject of [...this.dormantProjects.values()]) {
+                const config = projectConfigs.find(x => x.projectKey === dormantProject.config.projectKey);
+                if (!config || !canBeDormant(config)) {
+                    this.removeDormantProject(dormantProject.config.projectKey);
+                }
+            }
+
             // skip projects we already have (they're already loaded...no need to reload them)
             projectConfigs = projectConfigs.filter(x => {
-                return !this.hasProject(x);
+                return !this.hasProject(x) && !this.dormantProjects.has(x.projectKey);
             });
 
             //dedupe by projectKey
@@ -355,6 +398,11 @@ export class ProjectManager {
                     new Map<string, typeof projectConfigs[0]>()
                 ).values()
             ];
+
+            //leave projects dormant if none of their files are open. They'll be activated once one of their files is opened
+            projectConfigs = projectConfigs.filter(config => {
+                return !(canBeDormant(config) && this.tryCreateDormantProject(config));
+            });
 
             // Phase 1: activate projects with concurrency limit (awaited — gates LSP readiness)
             const activatedProjects: LspProject[] = [];
@@ -514,6 +562,17 @@ export class ProjectManager {
                 projectsToReload.map(x => this.reloadProject(x))
             );
         }
+
+        //a dormant project's bsconfig.json changed, so recompute which files belong to it (or activate it if one of its files is now open)
+        for (const dormantProject of [...this.dormantProjects.values()]) {
+            if (dormantProject.config.bsconfigPath?.toLowerCase() === change.srcPath.toLowerCase()) {
+                this.removeDormantProject(dormantProject.config.projectKey);
+                if (!this.tryCreateDormantProject(dormantProject.config)) {
+                    const project = await this.createAndActivateProject(dormantProject.config);
+                    void project.validate();
+                }
+            }
+        }
     }
 
     /**
@@ -521,9 +580,100 @@ export class ProjectManager {
      */
     public async handleFileClose(event: { srcPath: string }) {
         this.logger.debug(`File was closed. ${event.srcPath}`);
+        this.openDocuments.delete(util.standardizePath(event.srcPath));
         this.removeStandaloneProject(event.srcPath);
         //most other methods on this class are async, might as well make this one async too for consistency and future expansion
         await Promise.resolve();
+    }
+
+    /**
+     * Handle when a file is opened in the editor. Dormant projects are activated when the file's contents are flushed,
+     * but we track open files here so that later syncs won't leave the projects for open files dormant.
+     */
+    public async handleFileOpen(event: { srcPath: string }) {
+        this.logger.debug(`File was opened. ${event.srcPath}`);
+        this.openDocuments.add(util.standardizePath(event.srcPath));
+        //most other methods on this class are async, might as well make this one async too for consistency and future expansion
+        await Promise.resolve();
+    }
+
+    /**
+     * Build a matcher for the files that belong to a project by resolving its bsconfig.json the same way `ProgramBuilder` does,
+     * but without finding or loading any of the project's files
+     */
+    private getProjectFilePatterns(config: ProjectConfig) {
+        let bsconfigPath = config.bsconfigPath ? path.resolve(config.projectDir, config.bsconfigPath) : undefined;
+        if (!bsconfigPath) {
+            bsconfigPath = [s`${config.projectDir}/bsconfig.json`, s`${config.projectDir}/brsconfig.json`].find(x => fsExtra.pathExistsSync(x));
+        }
+        const options = util.normalizeAndResolveConfig({
+            cwd: bsconfigPath ? path.dirname(bsconfigPath) : config.projectDir,
+            project: bsconfigPath
+        });
+        const rootDir = util.getRootDir(options);
+        const globs = rokuDeploy.normalizeFilesArray(options.files).map(x => {
+            return typeof x === 'string' ? x : x.src;
+        });
+        return { rootDir: rootDir, globs: globs };
+    }
+
+    /**
+     * Register a project as dormant if none of its files are open in the editor
+     * @returns true if the project was left dormant, false if it needs to be activated
+     */
+    private tryCreateDormantProject(config: ProjectConfig): boolean {
+        let filePatterns: { rootDir: string; globs: string[] };
+        try {
+            filePatterns = this.getProjectFilePatterns(config);
+        } catch (e) {
+            //if we can't resolve the config, activate the project so its errors get reported the normal way
+            this.logger.debug(`Could not resolve file patterns for '${config.projectKey}', so it will be activated`, e);
+            return false;
+        }
+        const filterer = new PathCollection(filePatterns);
+        //a file from this project is already open, so it should be activated right away
+        if ([...this.openDocuments].some(srcPath => filterer.isMatch(srcPath))) {
+            return false;
+        }
+        this.logger.log(`Leaving project dormant until one of its files is opened: "${config.projectKey}"`);
+        this.dormantProjects.set(config.projectKey, {
+            config: config,
+            filterer: filterer,
+            //register this project's files with the path filterer so changes to them still flow through (just like active projects)
+            unregisterIncludeList: this.pathFilterer.registerIncludeList(filePatterns.rootDir, filePatterns.globs)
+        });
+        return true;
+    }
+
+    private removeDormantProject(projectKey: string) {
+        const dormantProject = this.dormantProjects.get(projectKey);
+        if (dormantProject) {
+            dormantProject.unregisterIncludeList();
+            this.dormantProjects.delete(projectKey);
+        }
+        return dormantProject;
+    }
+
+    /**
+     * Activate (and validate) every dormant project that owns at least one of the given files
+     */
+    private async activateDormantProjectsForFiles(srcPaths: string[]) {
+        if (this.dormantProjects.size === 0 || srcPaths.length === 0) {
+            return;
+        }
+        const configs: ProjectConfig[] = [];
+        for (const dormantProject of [...this.dormantProjects.values()]) {
+            if (srcPaths.some(srcPath => dormantProject.filterer.isMatch(srcPath))) {
+                //remove it synchronously so concurrent flushes don't activate it twice
+                this.removeDormantProject(dormantProject.config.projectKey);
+                configs.push(dormantProject.config);
+            }
+        }
+        await this.runWithConcurrencyLimit(configs, this.projectActivationConcurrencyLimit, async (config) => {
+            this.logger.log(`Activating dormant project because one of its files was opened: "${config.projectKey}"`);
+            const project = await this.createAndActivateProject(config);
+            void project.validate();
+        });
     }
 
     /**
@@ -1112,6 +1262,9 @@ export class ProjectManager {
         for (const project of this.projects) {
             project?.dispose?.();
         }
+        for (const projectKey of [...this.dormantProjects.keys()]) {
+            this.removeDormantProject(projectKey);
+        }
     }
 }
 
@@ -1161,7 +1314,27 @@ export interface WorkspaceConfig {
          * additional projects are multiplexed onto existing worker threads rather than spawning new ones.
          */
         maxWorkerThreads?: number;
+        /**
+         * When multiple projects are discovered, should projects be left dormant (not parsed or validated) until
+         * one of their files is opened in the editor?
+         */
+        lazyProjectActivation?: boolean;
     };
+}
+
+/**
+ * A project that was discovered but has not been activated because none of its files are open
+ */
+interface DormantProject {
+    config: ProjectConfig;
+    /**
+     * Matches the files that belong to this project (built from its bsconfig.json without loading any files)
+     */
+    filterer: PathCollection;
+    /**
+     * Unregisters this project's file patterns from the path filterer
+     */
+    unregisterIncludeList: () => void;
 }
 
 interface StandaloneProject extends LspProject {
