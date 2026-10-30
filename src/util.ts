@@ -1333,7 +1333,6 @@ export class Util {
             const result = new TokenObject(
                 token.kind,
                 token.text,
-                token.isReserved,
                 token.startPosition,
                 token.endPosition,
                 token.sourceInfo,

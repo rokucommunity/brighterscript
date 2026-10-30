@@ -52,56 +52,48 @@ describe('parser additive expressions', () => {
                 kind: TokenKind.Identifier,
                 text: '_',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 2, 0, 2)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '1',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Plus,
                 text: '+',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 6, 0, 7)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '2',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.Plus,
                 text: '+',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 10, 0, 11)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '3',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 12, 0, 13)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 13, 0, 14)
             }
         ]);

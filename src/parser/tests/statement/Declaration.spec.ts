@@ -91,28 +91,24 @@ describe('parser variable declarations', () => {
                 kind: TokenKind.Identifier,
                 text: 'foo',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Invalid,
                 text: 'invalid',
                 leadingTrivia: [],
-                isReserved: true,
                 ...testLocatable(0, 6, 0, 13)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 13, 0, 14)
             }
         ]);

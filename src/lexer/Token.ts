@@ -14,11 +14,6 @@ export interface Token extends Locatable {
      */
     text: string;
     /**
-     * True if this token's `text` is a reserved word, otherwise `false`.
-     *
-     */
-    isReserved?: boolean;
-    /**
      * Any tokens starting on the next line of the previous token, up to the start of this token
      */
     leadingTrivia?: Token[];

@@ -50,42 +50,36 @@ describe('parser boolean expressions', () => {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
                 leadingTrivia: [],
-                isReserved: true,
                 ...testLocatable(0, 4, 0, 8)
             },
             {
                 kind: TokenKind.And,
                 text: 'and',
                 leadingTrivia: [],
-                isReserved: true,
                 ...testLocatable(0, 9, 0, 12)
             },
             {
                 kind: TokenKind.False,
                 text: 'false',
                 leadingTrivia: [],
-                isReserved: true,
                 ...testLocatable(0, 13, 0, 18)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 18, 0, 19)
             }
         ]);
