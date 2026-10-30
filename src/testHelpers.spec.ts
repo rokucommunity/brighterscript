@@ -1,14 +1,14 @@
-import type { BsDiagnostic } from './interfaces';
+import type { BsDiagnostic, BsDiagnosticInput, DiagnosticLocationInput } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
-import { standardizePath as s } from './util';
+import { util, standardizePath as s } from './util';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
@@ -18,6 +18,7 @@ import type { LspDiagnostic } from './lsp/LspProject';
 import { Project } from './lsp/Project';
 import { isProgram, isProject } from './astUtils/reflection';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
+import type { Locatable, SourceInfo } from './lexer/Token';
 
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
@@ -32,6 +33,20 @@ export const workspaceSettings: WorkspaceConfig = {
 };
 
 export const trim = undent;
+
+/**
+ * A shared source for hand-built test tokens, where every line is 1000 characters long
+ */
+const testSource: SourceInfo = { uri: undefined, linePositions: Array.from({ length: 1000 }, (x, i) => i * 1000) };
+
+/**
+ * Create a `Locatable` for a hand-built test token from line/character positions
+ */
+export function testLocatable(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Locatable & { location: Location } {
+    const locatable: Locatable = { startPosition: (startLine * 1000) + startCharacter, endPosition: (endLine * 1000) + endCharacter, sourceInfo: testSource };
+    //hand-built tokens are plain objects without the deprecated `location` getter, so give them the matching value
+    return { ...locatable, location: util.getLocation(locatable) };
+}
 const sinon = createSandbox();
 
 beforeEach(() => {
@@ -41,12 +56,43 @@ afterEach(() => {
     sinon.restore();
 });
 
-type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic | LspDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnostic[] } | BsDiagnostic[] | LspDiagnostic[];
+type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic | LspDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnosticInput[] } | BsDiagnosticInput[] | LspDiagnostic[];
 type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
+
+/**
+ * Is this location a `Locatable` (i.e. from `lexer.diagnostics` or `parser.diagnostics`) rather than a `Location`?
+ */
+function isLocatableLocation(location: DiagnosticLocationInput) {
+    //same check as `DiagnosticManager`: tokens and nodes always have a `startPosition` key, and may have deprecated `range`/`location` getters
+    return !!location && ('startPosition' in location || !('uri' in location));
+}
+
+/**
+ * Resolve any `Locatable` locations in the diagnostic (including `relatedInformation`) into `Location`s,
+ * the same way `DiagnosticManager.getDiagnostics()` does
+ */
+function resolveDiagnostic(diagnostic: BsDiagnosticInput): BsDiagnostic {
+    if (!isLocatableLocation(diagnostic?.location) && !diagnostic?.relatedInformation?.some(x => isLocatableLocation(x.location))) {
+        return diagnostic as BsDiagnostic;
+    }
+    const resolve = (location: DiagnosticLocationInput) => (isLocatableLocation(location) ? util.getLocation(location as Locatable) : location as Location);
+    return {
+        ...diagnostic,
+        location: resolve(diagnostic.location),
+        relatedInformation: diagnostic.relatedInformation?.map(x => ({ ...x, location: resolve(x.location) }))
+    } as BsDiagnostic;
+}
+
+/**
+ * Get the resolved range of a diagnostic whose location might be a `Locatable` (i.e. from `parser.diagnostics`)
+ */
+export function getDiagnosticRange(diagnostic: BsDiagnosticInput): Range {
+    return resolveDiagnostic(diagnostic)?.location?.range;
+}
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
-        return arg as BsDiagnostic[];
+        return (arg as BsDiagnosticInput[]).map(x => resolveDiagnostic(x));
 
         //project.getDiagnostics() returns LspDiagonstics
     } else if (arg instanceof Project) {
@@ -63,7 +109,7 @@ function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     } else if ((arg as any).getDiagnostics) {
         return (arg as any).getDiagnostics();
     } else if ((arg as any).diagnostics) {
-        return (arg as any).diagnostics;
+        return ((arg as any).diagnostics as BsDiagnosticInput[]).map(x => resolveDiagnostic(x));
     } else {
         throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
     }

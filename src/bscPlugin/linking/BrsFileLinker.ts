@@ -12,6 +12,7 @@ import { DynamicType } from '../../types/DynamicType';
 import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
 import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
+import util from '../../util';
 
 /**
  * Populates a file's symbol tables from its AST and registers the file's symbol information with the program,
@@ -261,7 +262,7 @@ export class BrsFileLinker {
                     blockSymbolTable.isOrdered = true;
                 }
                 if (!isFunctionExpression(node.parent) && node.parent) {
-                    node.symbolTable.name = `Block-${node.parent.kind}@${node.location?.range?.start?.line}`;
+                    node.symbolTable.name = `Block-${node.parent.kind}@${util.getLocation(node)?.range?.start?.line}`;
                     // we're a block inside another block (or body). This block is a pocket in the bigger block
                     node.parent.getSymbolTable().addPocketTable({
                         index: node.parent.statementIndex,
