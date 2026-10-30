@@ -62,18 +62,23 @@ The one exception is scope validation: BrighterScript validates scopes first in 
 Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's own work happens):
 
 - `beforeProvideProgram`
+- `provideProgram`
 - `afterProvideProgram`
     - `afterProvideScope` ("source" scope)
     - For each physical file:
         - `beforeProvideFile`
-        - `onProvideFile`
+        - `provideFile`
         - _\<BrighterScript provides the file\>_
         - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
+        - `addFile`
         - `afterAddFile`
+        - `beforeProvideScope` (component scope)
+        - `provideScope` (component scope)
         - `afterProvideScope` (component scope)
     - `beforeValidateProgram`
+    - `validateProgram`
     - For each file:
         - `beforeValidateFile`
         - `validateFile`
@@ -86,18 +91,37 @@ Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's o
         - `afterValidateScope`
     - _\<BrighterScript validates the program\>_
     - `afterValidateProgram`
-- `beforePrepublish`
-- `afterPrepublish`
-- `beforeSerializeProgram`
-    - _\<BrighterScript prepares the build\>_
-    - `beforeBuildProgram`
+- _\<BrighterScript prepares the build\>_
+- `beforeBuildProgram`
+- `buildProgram`
+    - `beforePrepareProgram`
+    - `prepareProgram`
     - For each file:
         - `beforePrepareFile`
+        - `prepareFile`
         - _\<BrighterScript prepares the file\>_
         - `afterPrepareFile`
-    - `afterBuildProgram`
-- `afterSerializeProgram`
+    - `afterPrepareProgram`
+    - `beforeSerializeProgram`
+    - `serializeProgram`
+    - For each file:
+        - `beforeSerializeFile`
+        - `serializeFile`
+        - _\<BrighterScript serializes the file\>_
+        - `afterSerializeFile`
+    - `afterSerializeProgram`
+    - `beforeWriteProgram`
+    - `writeProgram`
+    - For each serialized file:
+        - `beforeWriteFile`
+        - `writeFile`
+        - _\<BrighterScript writes the file\>_
+        - `afterWriteFile`
+    - `afterWriteProgram`
+- `afterBuildProgram`
 - `beforeRemoveProgram`
+- `removeProgram`
+- `afterRemoveProgram`
 
 ### Language server
 
