@@ -7,6 +7,7 @@ import { getUniqueType } from './types/helpers';
 import { isAnyReferenceType, isNamespaceType, isReferenceType } from './astUtils/reflection';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { UninitializedType } from './types/UninitializedType';
+import { createExtraSymbolData } from './interfaces';
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
@@ -387,7 +388,7 @@ export class SymbolTable implements SymbolTypeGetter {
                     if (depth === 0) {
                         // we got pocket tables results, and this is the top recursion
                         // add uninitialized
-                        result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: {}, flags: bitFlags }, ...pocketTableResults];
+                        result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: createExtraSymbolData(), flags: bitFlags }, ...pocketTableResults];
                     } else {
                         //just return pocket table results:
                         result = pocketTableResults;
@@ -497,7 +498,7 @@ export class SymbolTable implements SymbolTypeGetter {
         if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data, flags: foundFlags }, options);
         }
-        options.data ??= {};
+        options.data ??= createExtraSymbolData();
         if (options.data) {
             options.data.definingNode = data?.definingNode;
             options.data.description = data?.description;

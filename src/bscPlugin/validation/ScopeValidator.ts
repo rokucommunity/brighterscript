@@ -41,6 +41,7 @@ import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
 import type { EnumType } from '../../types/EnumType';
 import type { Scope } from '../../Scope';
+import { createExtraSymbolData } from '../../interfaces';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -720,7 +721,7 @@ export class ScopeValidator {
 
 
     private validateCallExpression(file: BrsFile, expression: CallExpression) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: createExtraSymbolData() };
         let funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
@@ -863,7 +864,7 @@ export class ScopeValidator {
                 // unable to find a paramType -- maybe there are more args than params
                 break;
             }
-            const data = {} as ExtraSymbolData;
+            const data = createExtraSymbolData();
             let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
@@ -932,7 +933,7 @@ export class ScopeValidator {
         const typeChainExpectedLHS = [] as TypeChainEntry[];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: createExtraSymbolData(), typeChain: typeChainExpectedLHS });
         const actualRHSType = this.getNodeTypeWrapper(file, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         // check if anything in typeChain is an AA - if so, just allow it
@@ -980,7 +981,7 @@ export class ScopeValidator {
 
         const typeChainExpectedLHS = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
-        const expectedLHSType = this.getNodeTypeWrapper(file, assignStmt.typeExpression, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const expectedLHSType = this.getNodeTypeWrapper(file, assignStmt.typeExpression, { ...getTypeOpts, data: createExtraSymbolData(), typeChain: typeChainExpectedLHS });
         const actualRHSType = this.getNodeTypeWrapper(file, assignStmt.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         if (!expectedLHSType || !expectedLHSType.isResolvable()) {

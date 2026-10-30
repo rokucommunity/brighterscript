@@ -3,7 +3,7 @@ import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
 import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
+import type { OnPrepareFileEvent } from '../../interfaces';
 import type { Identifier, Locatable, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
@@ -16,6 +16,7 @@ import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
+import { createExtraSymbolData } from '../../interfaces';
 
 /**
  * When at least this many plain array elements follow a spread, they are appended as one literal
@@ -783,7 +784,7 @@ export class BrsFilePreTranspileProcessor {
 
         if (isVariableExpression(potentiallyAliased) && potentialAliasedTextsLower.includes(potentiallyAliased.getName().toLowerCase())) {
             //check if it is an alias
-            let data = {} as ExtraSymbolData;
+            let data = createExtraSymbolData();
 
             potentiallyAliased.getSymbolTable().getSymbolType(potentiallyAliased.getName(), {
                 data: data,
