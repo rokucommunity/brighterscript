@@ -259,6 +259,9 @@ export class Util {
             if (result.outDir) {
                 result.outDir = path.resolve(projectFileCwd, result.outDir);
             }
+            if (result.rokuConfig) {
+                result.rokuConfig = path.resolve(projectFileCwd, result.rokuConfig);
+            }
             //map the deprecated staging options to `outDir` (relative to THIS config file).
             //the deprecated options themselves are left as-is so consumers that still read them keep working
             if (!('outDir' in projectConfig)) {

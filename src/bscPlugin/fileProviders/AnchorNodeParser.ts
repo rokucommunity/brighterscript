@@ -68,25 +68,60 @@ export function findAnchorNodeDeclarations(text: string): AnchorNodeDeclaration[
     }
     const tokens = tokenize(text);
     const result: AnchorNodeDeclaration[] = [];
+    for (const objectStart of findObjectsWithKey(tokens, 'componentName')) {
+        const declaration = toDeclaration(new ValueParser(tokens, objectStart).parse(), getPosition(text, tokens[objectStart].offset));
+        if (declaration) {
+            result.push(declaration);
+        }
+    }
+    return result;
+}
+
+/**
+ * Find the index of the opening `{` token of every object literal that has the given key (i.e. `{ key: ... }`)
+ */
+export function findObjectsWithKey(tokens: Token[], key: string): number[] {
+    const result = [] as number[];
     //the index of the `{` token of every object (or block) we are currently inside of
     const openBraces = [] as number[];
-    const visited = new Set<number>();
     for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i];
         if (token.text === '{') {
             openBraces.push(i);
         } else if (token.text === '}') {
             openBraces.pop();
-        } else if (token.kind === 'identifier' && token.text === 'componentName' && tokens[i + 1]?.text === ':' && openBraces.length > 0) {
+        } else if (
+            (token.kind === 'identifier' || token.kind === 'string') &&
+            (token.value ?? token.text) === key &&
+            tokens[i + 1]?.text === ':' &&
+            openBraces.length > 0
+        ) {
             const objectStart = openBraces[openBraces.length - 1];
-            if (visited.has(objectStart)) {
-                continue;
+            if (result[result.length - 1] !== objectStart) {
+                result.push(objectStart);
             }
-            visited.add(objectStart);
-            const declaration = toDeclaration(new ValueParser(tokens, objectStart).parse(), getPosition(text, tokens[objectStart].offset));
-            if (declaration) {
-                result.push(declaration);
-            }
+        }
+    }
+    return result;
+}
+
+/**
+ * Find the module specifier of every import in a TypeScript/JavaScript file:
+ * `import x from 'a'`, `import 'a'`, `export * from 'a'`, `import('a')` and `require('a')`
+ */
+export function findImportSpecifiers(text: string): string[] {
+    const tokens = tokenize(text);
+    const result = [] as string[];
+    for (let i = 1; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (token.kind !== 'string' || token.text === '`') {
+            continue;
+        }
+        const previous = tokens[i - 1];
+        const isImport = previous.kind === 'identifier' && (previous.text === 'from' || previous.text === 'import');
+        const isCall = previous.text === '(' && tokens[i - 2]?.kind === 'identifier' && (tokens[i - 2].text === 'import' || tokens[i - 2].text === 'require');
+        if (isImport || isCall) {
+            result.push(token.value);
         }
     }
     return result;
@@ -136,7 +171,7 @@ function toDeclaration(value: Value, position: AnchorNodeDeclaration['position']
     return declaration;
 }
 
-function getString(value: Value): string | undefined {
+export function getString(value: Value): string | undefined {
     return value?.kind === 'string' ? value.value : undefined;
 }
 
@@ -150,7 +185,7 @@ function getFieldType(value: Value): string | undefined {
     return fieldTypes[value.callee[value.callee.length - 1].toLowerCase()];
 }
 
-type Value =
+export type Value =
     | { kind: 'string'; value: string }
     | { kind: 'object'; properties: Map<string, Value> }
     | { kind: 'array'; items: Value[] }
@@ -161,7 +196,7 @@ type Value =
 /**
  * Reads the static parts of a JavaScript expression (object/array literals, strings, references and calls)
  */
-class ValueParser {
+export class ValueParser {
     constructor(
         private tokens: Token[],
         public index: number
@@ -362,7 +397,7 @@ function skipExpression(tokens: Token[], index: number, terminators: string[]) {
     return index;
 }
 
-interface Token {
+export interface Token {
     kind: 'identifier' | 'string' | 'number' | 'punctuation';
     text: string;
     /**
@@ -385,7 +420,7 @@ const regexPrecedingKeywords = new Set(['return', 'typeof', 'case', 'do', 'else'
  * so it doesn't understand JSX. Strings and regular expressions never span lines, so any confusion
  * (such as an apostrophe in JSX text) only affects the rest of that line.
  */
-function tokenize(text: string): Token[] {
+export function tokenize(text: string): Token[] {
     const tokens: Token[] = [];
     let i = 0;
     const isIdentifierStart = (char: string) => /[A-Za-z_$]/.test(char) || char > '\x7f';

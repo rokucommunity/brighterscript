@@ -1,6 +1,6 @@
 import { expect } from '../../chai-config.spec';
 import type { AnchorNodeDeclaration } from './AnchorNodeParser';
-import { findAnchorNodeDeclarations } from './AnchorNodeParser';
+import { findAnchorNodeDeclarations, findImportSpecifiers } from './AnchorNodeParser';
 
 describe('AnchorNodeParser', () => {
     describe('findAnchorNodeDeclarations', () => {
@@ -186,6 +186,41 @@ describe('AnchorNodeParser', () => {
                 extends: undefined,
                 fields: [{ name: 'own', direction: 'input', type: 'float' }]
             }]);
+        });
+    });
+
+    describe('findImportSpecifiers', () => {
+        it('finds every kind of import', () => {
+            expect(findImportSpecifiers(`
+                import Default from "./default";
+                import * as everything from './everything';
+                import { a, type B } from "./named";
+                import type { C } from "./types";
+                import "./side-effect.xml";
+                export * from "./re-export";
+                export { d } from './re-export-named';
+                const lazy = await import("./lazy");
+                const old = require('./old');
+            `)).to.eql([
+                './default',
+                './everything',
+                './named',
+                './types',
+                './side-effect.xml',
+                './re-export',
+                './re-export-named',
+                './lazy',
+                './old'
+            ]);
+        });
+
+        it('ignores strings that are not imports', () => {
+            expect(findImportSpecifiers(`
+                // import "./commented";
+                const text = "./not-an-import";
+                console.log(\`import "./in-template"\`);
+                <Label text="from" />
+            `)).to.eql([]);
         });
     });
 });

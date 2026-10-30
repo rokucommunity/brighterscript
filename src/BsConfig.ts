@@ -49,6 +49,13 @@ export interface BsConfig {
     files?: Array<string | { src: string | string[]; dest?: string }>;
 
     /**
+     * The path to the `roku-config.ts` of an RSG 2.0 SDK app. When set, the app's TypeScript sources are found by following
+     * imports from `app.entryPoint`, and the anchor nodes they declare are discovered.
+     * Relative paths are resolved relative to the bsconfig file (or `cwd` when there is no bsconfig file).
+     */
+    rokuConfig?: string;
+
+    /**
      * If true, the files are not copied to outDir.
      */
     noEmit?: boolean;
@@ -444,6 +451,7 @@ type OptionalBsConfigFields =
     | 'copyToStaging'
     | 'diagnosticLevel'
     | 'rootDir'
+    | 'rokuConfig'
     | 'stagingDir'
     | 'stagingFolderPath'
     | 'minFirmwareVersion'
