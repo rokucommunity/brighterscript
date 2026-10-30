@@ -54,7 +54,7 @@ describe('ConstStatement', () => {
         expect(value).to.be.instanceof(LiteralExpression);
         expect(value.tokens.value?.text).to.eql('"abc"');
         //ensure range is correct
-        expect(statement.location?.range).to.eql(util.createRange(0, 0, 0, 21));
+        expect(util.getLocation(statement)?.range).to.eql(util.createRange(0, 0, 0, 21));
     });
 
     it('produces typedef', async () => {

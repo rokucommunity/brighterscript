@@ -4,7 +4,7 @@ import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUna
 import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
-import type { Identifier, Token } from '../../lexer/Token';
+import type { Identifier, Locatable, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import type { AALiteralExpression, NullCoalescingExpression, TernaryExpression } from '../../parser/Expression';
@@ -12,7 +12,6 @@ import { ArrayLiteralExpression, BinaryExpression, DottedGetExpression, LiteralE
 import { ParseMode } from '../../parser/Parser';
 import type { Block, Body, ConstStatement, NamespaceStatement } from '../../parser/Statement';
 import { AugmentedAssignmentStatement, ExpressionStatement, type AliasStatement, type IfStatement } from '../../parser/Statement';
-import type { Location } from 'vscode-languageserver';
 import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
@@ -127,18 +126,18 @@ export class BrsFilePreTranspileProcessor {
             return;
         }
         const editor = this.event.editor;
-        const location = expression.tokens.questionQuestion?.location;
+        const locatable = expression.tokens.questionQuestion;
 
         //`if <name> = invalid then <name> = <alternate> end if`
         const createFallback = (name: string) => createIfStatement({
             condition: new BinaryExpression({
-                left: createVariableExpression(name, location),
-                operator: createToken(TokenKind.Equal, '=', location),
-                right: createInvalidLiteral('invalid', location)
+                left: createVariableExpression(name, locatable),
+                operator: createToken(TokenKind.Equal, '=', locatable),
+                right: createInvalidLiteral('invalid', locatable)
             }),
             thenBranch: createBlock({
                 statements: [
-                    createAssignmentStatement({ name: createIdentifier(name, location), value: expression.alternate })
+                    createAssignmentStatement({ name: createIdentifier(name, locatable), value: expression.alternate })
                 ]
             })
         });
@@ -152,10 +151,10 @@ export class BrsFilePreTranspileProcessor {
         } else {
             const tmpName = '__bsc_tmp_coalesce';
             newStatements = [
-                createAssignmentStatement({ name: createIdentifier(tmpName, location), value: expression.consequent }),
+                createAssignmentStatement({ name: createIdentifier(tmpName, locatable), value: expression.consequent }),
                 createFallback(tmpName)
             ];
-            editor.setProperty(statement, 'value', createVariableExpression(tmpName, location));
+            editor.setProperty(statement, 'value', createVariableExpression(tmpName, locatable));
             editor.arraySplice(block.statements, index, 0, ...newStatements);
         }
 
@@ -209,16 +208,16 @@ export class BrsFilePreTranspileProcessor {
             // - `m.list = [...]`: every follow-up statement would re-evaluate `m.list`; a local is 10-40% faster (bsbench)
             // - `list = [...list, 4]`: assigning the trimmed literal first would clobber `list` before we read it
             const tmpName = '__bsc_tmp_spread';
-            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(tmpName, literal.location, leadingTrivia);
+            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(tmpName, literal, leadingTrivia);
             statements = [
-                createAssignmentStatement({ name: createIdentifier(tmpName, literal.location), value: literal }),
+                createAssignmentStatement({ name: createIdentifier(tmpName, literal), value: literal }),
                 ...this.createSpreadStatements(createTarget, trailing, isArray)
             ];
             editor.setProperty(statement, 'value', createTarget());
             editor.arraySplice(block.statements, index, 0, ...statements);
         } else {
             //local variable target: assign the trimmed literal, then append/push/set the rest directly on it
-            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(statement.tokens.name.text, statement.tokens.name.location, leadingTrivia);
+            const createTarget = (leadingTrivia?: Token[]) => this.createTargetExpression(statement.tokens.name.text, statement.tokens.name, leadingTrivia);
             statements = this.createSpreadStatements(createTarget, trailing, isArray);
             editor.arraySplice(block.statements, index + 1, 0, ...statements);
         }
@@ -244,7 +243,7 @@ export class BrsFilePreTranspileProcessor {
             if (isArray && run.length >= ARRAY_SPREAD_APPEND_THRESHOLD) {
                 //elements keep their own comments here: inside an array literal they transpile fine on their own lines
                 const literal = new ArrayLiteralExpression({ elements: run });
-                statements.push(this.createMethodCallStatement(createTarget(), 'append', literal, run[0].location));
+                statements.push(this.createMethodCallStatement(createTarget(), 'append', literal, run[0]));
             } else {
                 for (const element of run) {
                     const target = createTarget(this.takeLeadingTrivia(element));
@@ -257,7 +256,7 @@ export class BrsFilePreTranspileProcessor {
             if (isSpreadExpression(element)) {
                 flushRun();
                 const target = createTarget(this.takeLeadingTrivia(element));
-                statements.push(this.createMethodCallStatement(target, 'append', element.expression, element.location));
+                statements.push(this.createMethodCallStatement(target, 'append', element.expression, element));
             } else {
                 run.push(element);
             }
@@ -270,8 +269,8 @@ export class BrsFilePreTranspileProcessor {
      * A fresh reference to the variable the follow-up statements operate on, optionally carrying the comments
      * that should be emitted above the statement
      */
-    private createTargetExpression(name: string, location: Location, leadingTrivia?: Token[]) {
-        const target = createVariableExpression(name, location);
+    private createTargetExpression(name: string, locatable: Locatable, leadingTrivia?: Token[]) {
+        const target = createVariableExpression(name, locatable);
         if (leadingTrivia?.length > 0) {
             target.tokens.name.leadingTrivia = leadingTrivia;
         }
@@ -300,7 +299,7 @@ export class BrsFilePreTranspileProcessor {
     private createElementStatement(target: Expression, element: Expression, isArray: boolean): Statement {
         if (isArray) {
             //`target.push(value)`
-            return this.createMethodCallStatement(target, 'push', element, element.location);
+            return this.createMethodCallStatement(target, 'push', element, element);
         }
         if (isAAIndexedMemberExpression(element)) {
             //`[key]: value` -> `target[key] = value`
@@ -323,13 +322,13 @@ export class BrsFilePreTranspileProcessor {
     /**
      * `obj.methodName(arg)` as a standalone statement
      */
-    private createMethodCallStatement(obj: Expression, methodName: string, arg: Expression, location: Location) {
+    private createMethodCallStatement(obj: Expression, methodName: string, arg: Expression, locatable: Locatable) {
         return new ExpressionStatement({
             expression: createCall(
                 new DottedGetExpression({
                     obj: obj,
-                    name: createIdentifier(methodName, location),
-                    dot: createToken(TokenKind.Dot, '.', location)
+                    name: createIdentifier(methodName, locatable),
+                    dot: createToken(TokenKind.Dot, '.', locatable)
                 }),
                 [arg]
             )
@@ -361,9 +360,9 @@ export class BrsFilePreTranspileProcessor {
 
         if (isAssignmentStatement(parent)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         createAssignmentStatement({
@@ -373,7 +372,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         createAssignmentStatement({
@@ -383,13 +382,13 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
         } else if (isDottedSetStatement(parent)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         createDottedSetStatement({
@@ -400,7 +399,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         createDottedSetStatement({
@@ -411,15 +410,15 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
 
             //if this is an indexedSetStatement, and the ternary expression is NOT an index
         } else if (isIndexedSetStatement(parent) && !parent.indexes?.includes(ternaryExpression)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         createIndexedSetStatement({
@@ -432,7 +431,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         createIndexedSetStatement({
@@ -445,13 +444,13 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
         } else if (isAugmentedAssignmentStatement(parent)) {
             ifStatement = createIfStatement({
-                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark.location),
+                if: createToken(TokenKind.If, 'if', ternaryExpression.tokens.questionMark),
                 condition: ternaryExpression.test,
-                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark.location),
+                then: createToken(TokenKind.Then, 'then', ternaryExpression.tokens.questionMark),
                 thenBranch: createBlock({
                     statements: [
                         new AugmentedAssignmentStatement({
@@ -461,7 +460,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark.location),
+                else: createToken(TokenKind.Else, 'else', ternaryExpression.tokens.questionMark),
                 elseBranch: createBlock({
                     statements: [
                         new AugmentedAssignmentStatement({
@@ -471,7 +470,7 @@ export class BrsFilePreTranspileProcessor {
                         })
                     ]
                 }),
-                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark.location)
+                endIf: createToken(TokenKind.EndIf, 'end if', ternaryExpression.tokens.questionMark)
             });
         }
 
@@ -610,7 +609,7 @@ export class BrsFilePreTranspileProcessor {
             // skip any changes in an Alias Statement
             return;
         }
-        let containingNamespaceStmt = this.event.file.getNamespaceStatementForPosition(expression.location?.range.start);
+        let containingNamespaceStmt = this.event.file.getNamespaceStatementForPosition(util.getLocation(expression)?.range.start);
         let containingNamespace = containingNamespaceStmt?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);

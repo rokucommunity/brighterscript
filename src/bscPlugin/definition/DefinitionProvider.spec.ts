@@ -751,4 +751,217 @@ describe('DefinitionProvider', () => {
             );
         });
     });
+
+    describe('location boundaries', () => {
+        //NOTE: these tests intentionally only use public `Program` APIs (Position in, Location out) so they
+        //can be run against any implementation of token/node locations. All expected values are hand-counted.
+
+        /**
+         * Join lines with the given line ending. No trailing newline is added
+         */
+        function lines(eol: string, ...items: string[]) {
+            return items.join(eol);
+        }
+
+        function definitionAt(srcPath: string, line: number, character: number) {
+            return program.getDefinition(srcPath, util.createPosition(line, character));
+        }
+
+        function loc(srcPath: string, startLine: number, startCharacter: number, endLine: number, endCharacter: number) {
+            return {
+                uri: util.pathToUri(srcPath),
+                range: util.createRange(startLine, startCharacter, endLine, endCharacter)
+            };
+        }
+
+        it('finds the identifier at its first character, middle, and immediately after its last character', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    alpha = 1',
+                '    print alpha',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [loc(file.srcPath, 1, 4, 1, 9)];
+            //print |alpha
+            expect(definitionAt(file.srcPath, 2, 10)).to.eql(expected);
+            //print al|pha
+            expect(definitionAt(file.srcPath, 2, 12)).to.eql(expected);
+            //print alpha|  (the end of a range is inclusive)
+            expect(definitionAt(file.srcPath, 2, 15)).to.eql(expected);
+
+            //print| alpha  (immediately after `print`, which has no definition)
+            expect(definitionAt(file.srcPath, 2, 9)).to.eql([]);
+            //leading whitespace
+            expect(definitionAt(file.srcPath, 2, 2)).to.eql([]);
+        });
+
+        it('finds identifiers at column 0 of a line and at the end of a line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                'beta = 1',
+                'print beta',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [loc(file.srcPath, 1, 0, 1, 4)];
+            //|beta = 1
+            expect(definitionAt(file.srcPath, 1, 0)).to.eql(expected);
+            //print beta|
+            expect(definitionAt(file.srcPath, 2, 10)).to.eql(expected);
+            //print |beta
+            expect(definitionAt(file.srcPath, 2, 6)).to.eql(expected);
+        });
+
+        it('handles CRLF line endings and returns the uri of the other file for cross-file definitions', () => {
+            const libFile = program.setFile('source/lib.brs', lines('\r\n',
+                `' helpers`,
+                'function helper()',
+                '    return 1',
+                'end function'
+            ));
+            const mainFile = program.setFile('source/main.brs', lines('\r\n',
+                'sub main()',
+                '    helper()',
+                'helper()',
+                '    x = helper()',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [loc(libFile.srcPath, 1, 0, 3, 12)];
+            //|helper()
+            expect(definitionAt(mainFile.srcPath, 1, 4)).to.eql(expected);
+            //hel|per()
+            expect(definitionAt(mainFile.srcPath, 1, 7)).to.eql(expected);
+            //helper|()
+            expect(definitionAt(mainFile.srcPath, 1, 10)).to.eql(expected);
+            //column 0 after a `\r\n`
+            expect(definitionAt(mainFile.srcPath, 2, 0)).to.eql(expected);
+            //x = helper|()
+            expect(definitionAt(mainFile.srcPath, 3, 14)).to.eql(expected);
+        });
+
+        it('uses utf-16 code units for characters after a surrogate pair emoji on the same line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    name = "x"',
+                '    print "😀😀" + name',
+                '    x = "😀": y = 1',
+                '    print y',
+                'end sub'
+            ));
+            program.validate();
+            //each emoji is 2 utf-16 code units, so `name` starts at 19 (not 17)
+            const expected = [loc(file.srcPath, 1, 4, 1, 8)];
+            expect(definitionAt(file.srcPath, 2, 19)).to.eql(expected);
+            expect(definitionAt(file.srcPath, 2, 21)).to.eql(expected);
+            expect(definitionAt(file.srcPath, 2, 23)).to.eql(expected);
+
+            //the declaration of `y` comes after an emoji on its line
+            expect(definitionAt(file.srcPath, 4, 10)).to.eql([loc(file.srcPath, 3, 14, 3, 15)]);
+            //y| = 1
+            expect(definitionAt(file.srcPath, 3, 15)).to.eql([loc(file.srcPath, 3, 14, 3, 15)]);
+        });
+
+        it('counts lines through multi-line template strings', () => {
+            const file = program.setFile('source/main.bs', lines('\n',
+                'sub main()',
+                '    name = "bob"',
+                /* eslint-disable no-template-curly-in-string */
+                '    msg = `hello ${name}',
+                'line two ${name}',
+                'and ${name} three`',
+                /* eslint-enable no-template-curly-in-string */
+                '    after = msg',
+                '    print after + name',
+                'end sub'
+            ));
+            program.validate();
+            const nameDeclaration = [loc(file.srcPath, 1, 4, 1, 8)];
+            //inside `${}` on later lines of the template string
+            expect(definitionAt(file.srcPath, 3, 13)).to.eql(nameDeclaration);
+            expect(definitionAt(file.srcPath, 3, 15)).to.eql(nameDeclaration);
+            expect(definitionAt(file.srcPath, 4, 8)).to.eql(nameDeclaration);
+            expect(definitionAt(file.srcPath, 4, 10)).to.eql(nameDeclaration);
+
+            //after the template string (both the declaration and the usage come after it)
+            expect(definitionAt(file.srcPath, 6, 10)).to.eql([loc(file.srcPath, 5, 4, 5, 9)]);
+            expect(definitionAt(file.srcPath, 6, 15)).to.eql([loc(file.srcPath, 5, 4, 5, 9)]);
+            //after = msg|
+            expect(definitionAt(file.srcPath, 5, 15)).to.eql([loc(file.srcPath, 2, 4, 2, 7)]);
+            //print after + name|
+            expect(definitionAt(file.srcPath, 6, 22)).to.eql(nameDeclaration);
+        });
+
+        it('finds items on the last line of a file with no trailing newline', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    last()',
+                'end sub',
+                'sub last(): value = 1: print value: end sub'
+            ));
+            program.validate();
+            //print value|:
+            expect(definitionAt(file.srcPath, 3, 34)).to.eql([loc(file.srcPath, 3, 12, 3, 17)]);
+            //print |value
+            expect(definitionAt(file.srcPath, 3, 29)).to.eql([loc(file.srcPath, 3, 12, 3, 17)]);
+            //the function statement ends at the very end of the file
+            expect(definitionAt(file.srcPath, 1, 4)).to.eql([loc(file.srcPath, 3, 0, 3, 43)]);
+        });
+
+        it('finds symbols in namespaces, classes, and empty function bodies across files', () => {
+            const libFile = program.setFile('source/lib.bs', lines('\n',
+                'namespace alpha.beta',
+                '    function noop()',
+                '    end function',
+                '    class Widget',
+                '        sub render()',
+                '        end sub',
+                '    end class',
+                'end namespace',
+                'sub empty()',
+                'end sub'
+            ));
+            const mainFile = program.setFile('source/main.bs', lines('\n',
+                'sub main()',
+                '    alpha.beta.noop()',
+                '    w = new alpha.beta.Widget()',
+                '    empty()',
+                'end sub'
+            ));
+            program.validate();
+            //new alpha.beta.|Widget()
+            expect(definitionAt(mainFile.srcPath, 2, 24)).to.eql([loc(libFile.srcPath, 3, 10, 3, 16)]);
+            //new alpha.beta.Widget|()
+            expect(definitionAt(mainFile.srcPath, 2, 29)).to.eql([loc(libFile.srcPath, 3, 10, 3, 16)]);
+            //alpha.beta.noop|()  (an empty function inside a namespace)
+            expect(definitionAt(mainFile.srcPath, 1, 19)).to.eql([loc(libFile.srcPath, 1, 4, 2, 16)]);
+            //empty|()  (an empty function)
+            expect(definitionAt(mainFile.srcPath, 3, 9)).to.eql([loc(libFile.srcPath, 8, 0, 9, 7)]);
+        });
+
+        it('finds namespaced consts and enum members in another file', () => {
+            const libFile = program.setFile('source/lib.bs', lines('\n',
+                'namespace alpha',
+                '    const PI = 3.14',
+                '    enum Direction',
+                '        up = "up"',
+                '    end enum',
+                'end namespace'
+            ));
+            const mainFile = program.setFile('source/main.bs', lines('\n',
+                'sub main()',
+                '    print alpha.PI',
+                '    print alpha.Direction.up',
+                'end sub'
+            ));
+            program.validate();
+            //print alpha.PI|
+            expect(definitionAt(mainFile.srcPath, 1, 18)).to.eql([loc(libFile.srcPath, 1, 10, 1, 12)]);
+            //print alpha.Direction.up|
+            expect(definitionAt(mainFile.srcPath, 2, 28)).to.eql([loc(libFile.srcPath, 3, 8, 3, 10)]);
+            //print alpha.Direc|tion.up
+            expect(definitionAt(mainFile.srcPath, 2, 21)).to.eql([loc(libFile.srcPath, 2, 9, 2, 18)]);
+        });
+    });
 });
