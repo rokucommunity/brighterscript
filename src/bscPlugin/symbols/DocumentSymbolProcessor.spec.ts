@@ -5,6 +5,7 @@ import { rootDir } from '../../testHelpers.spec';
 import type { DocumentSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
 import type { BrsFile } from '../../files/BrsFile';
+import { util } from '../../util';
 let sinon = createSandbox();
 
 describe('DocumentSymbolProcessor', () => {
@@ -285,6 +286,157 @@ describe('DocumentSymbolProcessor', () => {
                     }
                 }
             }
+        });
+    });
+
+    describe('location boundaries', () => {
+        /**
+         * Flatten the document symbols into `name|kind|range|selectionRange` strings, indenting children by 2 spaces per level
+         */
+        function getSymbolStrings(srcPath: string) {
+            const result: string[] = [];
+            function walk(symbols: DocumentSymbol[], indent: string) {
+                for (const symbol of symbols ?? []) {
+                    result.push(`${indent}${symbol.name}|${SymbolKindMap.get(symbol.kind)}|${util.rangeToString(symbol.range)}|${util.rangeToString(symbol.selectionRange)}`);
+                    walk(symbol.children, indent + '  ');
+                }
+            }
+            walk(program.getDocumentSymbols(srcPath), '');
+            return result;
+        }
+
+        it('computes exact ranges for nested multi-line constructs in a .bs file with no trailing newline', () => {
+            program.setFile('source/main.bs', [
+                'namespace alpha',
+                '    namespace beta.charlie',
+                '        class Person',
+                '            name as string',
+                '            sub speak()',
+                '            end sub',
+                '        end class',
+                '    end namespace',
+                '    enum Direction',
+                '        up = "up"',
+                '        down = "down"',
+                '    end enum',
+                '    interface Shape',
+                '        width as integer',
+                '        function area() as float',
+                '    end interface',
+                '    const PI = 3.14',
+                'end namespace',
+                'function empty()',
+                'end function',
+                'const LAST_ONE = true'
+            ].join('\n'));
+            expect(getSymbolStrings('source/main.bs')).to.eql([
+                'alpha|Namespace|0:0-17:13|0:10-0:15',
+                '  charlie|Namespace|1:4-7:17|1:14-1:26',
+                '    Person|Class|2:8-6:17|2:14-2:20',
+                '      name|Field|3:12-3:26|3:12-3:16',
+                '      speak|Method|4:12-5:19|4:16-4:21',
+                '  Direction|Enum|8:4-11:12|8:9-8:18',
+                '    up|EnumMember|9:8-9:17|9:8-9:10',
+                '    down|EnumMember|10:8-10:21|10:8-10:12',
+                '  Shape|Interface|12:4-15:17|12:14-12:19',
+                '    width|Field|13:8-13:24|13:8-13:13',
+                '    area|Method|14:8-14:32|14:17-14:21',
+                '  PI|Constant|16:4-16:19|16:10-16:12',
+                'empty|Function|18:0-19:12|18:9-18:14',
+                'LAST_ONE|Constant|20:0-20:21|20:6-20:14'
+            ]);
+        });
+
+        it('computes exact ranges for empty-bodied constructs', () => {
+            program.setFile('source/main.bs', [
+                'namespace alpha',
+                'end namespace',
+                'class Beta',
+                'end class',
+                'interface Charlie',
+                'end interface',
+                'enum Delta',
+                'end enum',
+                'sub main()',
+                '    if true then',
+                '    else if false then',
+                '    else',
+                '    end if',
+                '    while true',
+                '    end while',
+                '    for i = 0 to 1',
+                '    end for',
+                'end sub'
+            ].join('\n'));
+            expect(getSymbolStrings('source/main.bs')).to.eql([
+                'alpha|Namespace|0:0-1:13|0:10-0:15',
+                'Beta|Class|2:0-3:9|2:6-2:10',
+                'Charlie|Interface|4:0-5:13|4:10-4:17',
+                'Delta|Enum|6:0-7:8|6:5-6:10',
+                'main|Function|8:0-17:7|8:4-8:8'
+            ]);
+        });
+
+        it('computes exact ranges in a .brs file with CRLF line endings, emoji, and elseif', () => {
+            program.setFile('source/main.brs', [
+                '\' 😀 header comment',
+                'function alpha(a, b)',
+                '    if a then',
+                '        print "😀"',
+                '    elseif b then',
+                '        print 2',
+                '    else',
+                '        print 3',
+                '    end if',
+                'end function',
+                'sub beta() : print "😀😀" : end sub : sub charlie() : end sub',
+                'sub empty()',
+                'end sub',
+                ''
+            ].join('\r\n'));
+            expect(getSymbolStrings('source/main.brs')).to.eql([
+                'alpha|Function|1:0-9:12|1:9-1:14',
+                'beta|Function|10:0-10:35|10:4-10:8',
+                'charlie|Function|10:38-10:61|10:42-10:49',
+                'empty|Function|11:0-12:7|11:4-11:9'
+            ]);
+        });
+
+        it('uses utf-16 code units for symbols that follow an emoji on the same line', () => {
+            program.setFile('source/main.bs', [
+                'const A = "😀" : const B = 2',
+                'enum E',
+                '    x = "😀😀" : y = "b"',
+                'end enum'
+            ].join('\n'));
+            expect(getSymbolStrings('source/main.bs')).to.eql([
+                'A|Constant|0:0-0:14|0:6-0:7',
+                'B|Constant|0:17-0:28|0:23-0:24',
+                'E|Enum|1:0-3:8|1:5-1:6',
+                '  x|EnumMember|2:4-2:14|2:4-2:5',
+                '  y|EnumMember|2:17-2:24|2:17-2:18'
+            ]);
+        });
+
+        it('computes exact ranges for symbols after a multi-line template string', () => {
+            program.setFile('source/main.bs', [
+                'sub main(who as string)',
+                '    count = 1',
+                '    text = `line one 😀',
+                // eslint-disable-next-line no-template-curly-in-string
+                'two ${who} and ${count}',
+                // eslint-disable-next-line no-template-curly-in-string
+                'three ${ lcase(who) }`',
+                '    print text',
+                'end sub',
+                'function after()',
+                'end function',
+                ''
+            ].join('\n'));
+            expect(getSymbolStrings('source/main.bs')).to.eql([
+                'main|Function|0:0-6:7|0:4-0:8',
+                'after|Function|7:0-8:12|7:9-7:14'
+            ]);
         });
     });
 
