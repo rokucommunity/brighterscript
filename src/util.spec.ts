@@ -297,6 +297,23 @@ describe('util', () => {
             expect(util.createConfigFile(rootDir)).to.be.undefined;
             expect(fsExtra.readFileSync(configPath).toString()).to.equal('{ "rootDir": "custom" }');
         });
+
+        it('writes to the provided project path resolved against cwd', () => {
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '{ "rootDir": "existing" }');
+
+            const configPath = util.createConfigFile(rootDir, 'sub/bsconfig.json');
+            expect(configPath).to.equal(s`${rootDir}/sub/bsconfig.json`);
+            expect(fsExtra.pathExistsSync(configPath!)).to.be.true;
+            expect(fsExtra.readFileSync(s`${rootDir}/bsconfig.json`).toString()).to.equal('{ "rootDir": "existing" }');
+        });
+
+        it('does not overwrite an existing file at the provided project path', () => {
+            const configPath = s`${rootDir}/sub/bsconfig.json`;
+            fsExtra.outputFileSync(configPath, '{ "rootDir": "custom" }');
+
+            expect(util.createConfigFile(rootDir, 'sub/bsconfig.json')).to.be.undefined;
+            expect(fsExtra.readFileSync(configPath).toString()).to.equal('{ "rootDir": "custom" }');
+        });
     });
 
     describe('pathSepNormalize', () => {
