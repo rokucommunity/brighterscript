@@ -23,7 +23,7 @@ export class ArrayType extends BscType {
 
     public innerTypes: BscType[] = [];
 
-    public _defaultType: BscType;
+    public _defaultType: BscType = undefined;
     private isCheckingInnerTypesForDefaultType = false;
 
     public get defaultType(): BscType {

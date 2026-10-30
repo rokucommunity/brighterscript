@@ -33,7 +33,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Indexed by lower symbol name
      */
     //lazy -- most member tables (ReferenceType, BscType, etc) never get a symbol added
-    private symbolMap: Map<string, BscSymbol[]> | undefined;
+    private symbolMap: Map<string, BscSymbol[]> | undefined = undefined;
 
     private parentProviders = [] as SymbolTableProvider[];
 
@@ -90,7 +90,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     //lazy -- most SymbolTables never get a sibling
-    private siblings: Set<SymbolTable> | undefined;
+    private siblings: Set<SymbolTable> | undefined = undefined;
 
     /**
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
@@ -168,7 +168,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     //lazy -- only branch-complement tables ever use this
-    private complementsTables: Set<SymbolTable> | undefined;
+    private complementsTables: Set<SymbolTable> | undefined = undefined;
 
     /**
      * This table complements this other table
