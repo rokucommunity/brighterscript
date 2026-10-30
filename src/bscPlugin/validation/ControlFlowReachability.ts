@@ -1,8 +1,8 @@
 import { isBinaryExpression, isConditionalCompileStatement, isEndStatement, isExitStatement, isForEachStatement, isForStatement, isGotoStatement, isGroupingExpression, isIfStatement, isLabelStatement, isLiteralExpression, isReturnStatement, isSelectCaseStatement, isThrowStatement, isContinueStatement, isTryCatchStatement, isUnaryExpression, isWhileStatement } from '../../astUtils/reflection';
-import { TokenKind } from '../../lexer/TokenKind';
-import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import type { FunctionExpression } from '../../parser/Expression';
-import type { Block, ConditionalCompileStatement, ForEachStatement, ForStatement, IfStatement, SelectCaseStatement, WhileStatement } from '../../parser/Statement';
+import { TokenKind } from '../../files/brs/lexer/TokenKind';
+import type { AstNode, Expression, Statement } from '../../files/brs/parser/AstNode';
+import type { FunctionExpression } from '../../files/brs/parser/Expression';
+import type { Block, ConditionalCompileStatement, ForEachStatement, ForStatement, IfStatement, SelectCaseStatement, WhileStatement } from '../../files/brs/parser/Statement';
 import util from '../../util';
 import type { Location } from 'vscode-languageserver';
 

@@ -1,9 +1,9 @@
 import { createSGScript } from '../../astUtils/creators';
 import { isXmlFile } from '../../astUtils/reflection';
 import { isSGScript } from '../../astUtils/xml';
-import type { XmlFile } from '../../files/XmlFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import type { AfterPrepareFileEvent } from '../../interfaces';
-import type { SGScript } from '../../parser/SGTypes';
+import type { SGScript } from '../../files/xml/parser/SGTypes';
 import util from '../../util';
 
 export class XmlFilePreTranspileProcessor {

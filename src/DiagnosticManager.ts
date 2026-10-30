@@ -1,6 +1,6 @@
 import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair, BsDiagnosticInput, DiagnosticLocationInput } from './interfaces';
-import type { Locatable } from './lexer/Token';
-import type { AstNode } from './parser/AstNode';
+import type { Locatable } from './files/brs/lexer/Token';
+import type { AstNode } from './files/brs/parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
@@ -13,7 +13,7 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/brs/BrsFile';
 import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import * as path from 'path';
 

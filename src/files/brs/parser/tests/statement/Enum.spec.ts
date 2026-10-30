@@ -1,0 +1,1283 @@
+import { expect } from '../../../../../chai-config.spec';
+import { LiteralExpression } from '../../Expression';
+import { DiagnosticMessages } from '../../../../../DiagnosticMessages';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectInstanceOf, expectZeroDiagnostics, getTestTranspile, trim } from '../../../../../testHelpers.spec';
+import { ParseMode, Parser } from '../../Parser';
+import { util, standardizePath as s } from '../../../../../util';
+import { EnumStatement, InterfaceStatement } from '../../Statement';
+import { Program } from '../../../../../Program';
+import { createSandbox } from 'sinon';
+import type { BrsFile } from '../../../BrsFile';
+import { CancellationTokenSource } from 'vscode-languageserver-protocol';
+import { WalkMode } from '../../../../../astUtils/visitors';
+import { isEnumStatement } from '../../../../../astUtils/reflection';
+import { rootDir } from '../../../../../testHelpers.spec';
+
+const sinon = createSandbox();
+
+describe('EnumStatement', () => {
+    let program: Program;
+    let testTranspile = getTestTranspile(() => [program, rootDir]);
+
+    beforeEach(() => {
+        program = new Program({ rootDir: rootDir, sourceMap: true });
+    });
+    afterEach(() => {
+        sinon.restore();
+        program.dispose();
+    });
+
+    it('parses empty enum statement', () => {
+        const parser = Parser.parse(`
+            enum SomeEnum
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(parser.ast.statements[0]).to.be.instanceOf(EnumStatement);
+    });
+
+    it('supports annotations above', () => {
+        const parser = Parser.parse(`
+            @someAnnotation
+            enum SomeEnum
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(parser.ast.statements[0].annotations![0].name).to.eql('someAnnotation');
+    });
+
+    it('constructs when missing enum name', () => {
+        const parser = Parser.parse(`
+            enum
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectDiagnostics(parser, [
+            DiagnosticMessages.expectedIdentifier()
+        ]);
+        expect(parser.ast.statements[0]).to.be.instanceOf(EnumStatement);
+    });
+
+    it('collects uninitialized members', () => {
+        const parser = Parser.parse(`
+            enum Direction
+                up
+                down
+                left
+                right
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(
+            (parser.ast.statements[0] as EnumStatement).getMembers().map(x => x.tokens.name.text)
+        ).to.eql([
+            'up',
+            'down',
+            'left',
+            'right'
+        ]);
+    });
+
+    it('collects int-initialized members', () => {
+        const parser = Parser.parse(`
+            enum Direction
+                up = 1
+                down = 2
+                left = 3
+                right = 4
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        const values = (parser.ast.statements[0] as EnumStatement).getMembers().map(x => x.value) as LiteralExpression[];
+        expectInstanceOf(values, [
+            LiteralExpression,
+            LiteralExpression,
+            LiteralExpression,
+            LiteralExpression
+        ]);
+        expect(values.map(x => x.tokens.value.text)).to.eql([
+            '1',
+            '2',
+            '3',
+            '4'
+        ]);
+    });
+
+    it('collects string-initialized members', () => {
+        const parser = Parser.parse(`
+            enum Direction
+                up = "u"
+                down = "d"
+                left = "l"
+                right = "r"
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        const values = (parser.ast.statements[0] as EnumStatement).getMembers().map(x => x.value) as LiteralExpression[];
+        expectInstanceOf(values, [
+            LiteralExpression,
+            LiteralExpression,
+            LiteralExpression,
+            LiteralExpression
+        ]);
+        expect(values.map(x => x.tokens.value.text)).to.eql([
+            '"u"',
+            '"d"',
+            '"l"',
+            '"r"'
+        ]);
+    });
+
+    it('flags when used in brs mode', () => {
+        const parser = Parser.parse(`
+            enum Direction
+                up = "u"
+                down = "d"
+                left = "l"
+                right = "r"
+            end enum
+        `, { mode: ParseMode.BrightScript });
+        expectDiagnostics(parser, [
+            DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('enum declarations')
+        ]);
+    });
+
+    it('allows enum at top of file', () => {
+        const parser = Parser.parse(`
+            enum Direction
+                value1
+            end enum
+
+            interface Person
+                name as string
+            end interface
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(parser.ast.statements[0]).instanceof(EnumStatement);
+        expect(parser.ast.statements[1]).instanceof(InterfaceStatement);
+    });
+
+    it('allows enum at bottom of file', () => {
+        const parser = Parser.parse(`
+            interface Person
+                name as string
+            end interface
+
+            enum Direction
+                value1
+            end enum
+        `, { mode: ParseMode.BrighterScript });
+
+        expectZeroDiagnostics(parser);
+        expect(parser.ast.statements[0]).instanceof(InterfaceStatement);
+        expect(parser.ast.statements[1]).instanceof(EnumStatement);
+    });
+
+    it('allows enum in namespace', () => {
+        const file = program.setFile<BrsFile>('source/types.bs', `
+            namespace entities
+                enum Person
+                    name
+                end enum
+            end namespace
+
+            enum Direction
+                up
+            end enum
+        `);
+        program.validate();
+
+        expectZeroDiagnostics(program);
+        expect(file.ast.findChildren<EnumStatement>(isEnumStatement).map(x => x.fullName)).to.eql([
+            'entities.Person',
+            'Direction'
+        ]);
+    });
+
+    describe('validation', () => {
+        it('allows enums named `optional`', () => {
+            program.setFile('source/main.bs', `
+                enum optional
+                    thing = 1
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('catches duplicate enums from same file', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [{
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
+                relatedInformation: [{
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(5, 21, 5, 30)
+                    ),
+                    message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: `In scope 'source'`
+                }]
+            }, {
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
+                relatedInformation: [{
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(5, 21, 5, 30)
+                    ),
+                    message: `In scope 'source'`
+                }]
+            }]);
+        });
+
+        it('catches duplicate enums from different files in same scope', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.setFile('source/lib.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [{
+                ...DiagnosticMessages.nameCollision('Enum', 'Enum', 'Direction'),
+                relatedInformation: [{
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/lib.bs`),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: 'Enum declared here'
+                },
+                {
+                    location: util.createLocationFromRange(
+                        util.pathToUri(s`${rootDir}/source/main.bs`),
+                        util.createRange(1, 21, 1, 30)
+                    ),
+                    message: `In scope 'source'`
+                }]
+            }]);
+        });
+
+        it('allows duplicate enums across different scopes', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.setFile('components/comp1.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Comp1" extends="Scene">
+                    <script uri="comp1.bs" />
+                </component>
+            `);
+            program.setFile('components/comp1.bs', `
+                enum Direction
+                    up
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags duplicate members', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    name
+                    name
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.duplicateIdentifier('name'),
+                location: { range: util.createRange(3, 20, 3, 24) }
+            }]);
+        });
+
+        it('flags mixed enum value types with int first', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a = 1
+                    b = "c"
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueMustBeType('integer'),
+                location: { range: util.createRange(3, 24, 3, 27) }
+            }]);
+        });
+
+        it('flags mixed enum value types with string first', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a = "a"
+                    b = 1
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueMustBeType('string'),
+                location: { range: util.createRange(3, 24, 3, 25) }
+            }]);
+        });
+
+        it('flags missing value for string enum when string is first item', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a = "a"
+                    b
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueIsRequired('string'),
+                location: { range: util.createRange(3, 20, 3, 21) }
+            }]);
+        });
+
+        it('allows mixing-and-matching int and hex int', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a = 1
+                    b = &HFF
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows floats', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a = 1.2
+                    b = 5.2345
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('only support non-object literals', () => {
+            program.setFile('source/main.bs', `
+                enum AppConfig
+                    serverInfo = {}
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueMustBeType('integer'),
+                location: { range: util.createRange(2, 33, 2, 35) }
+            }]);
+        });
+
+        it('considers -1 to be an integer', () => {
+            program.setFile('source/main.bs', `
+                enum AppConfig
+                    alpha = 1
+                    beta = -1
+                end enum
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags missing value for string enum where string is not first item', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    a
+                    b = "b" 'since this is the only value present, this is a string enum
+                end enum
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.enumValueIsRequired('string'),
+                location: { range: util.createRange(2, 20, 2, 21) }
+            }]);
+        });
+
+        it('catches unknown non-namespaced enum members', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                end enum
+
+                sub main()
+                    print Direction.up
+                    print Direction.DOWN
+                    print Direction.down
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('DOWN', 'Direction.DOWN', 'Direction', 'enum'),
+                location: { range: util.createRange(7, 36, 7, 40) }
+            }, {
+                ...DiagnosticMessages.cannotFindName('down', 'Direction.down', 'Direction', 'enum'),
+                location: { range: util.createRange(8, 36, 8, 40) }
+            }]);
+        });
+
+        it('catches unknown namespaced enum members', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print Enums.Direction.DOWN
+                    print Enums.Direction.down
+                    print Enums.Direction.up
+                end sub
+                namespace Enums
+                    enum Direction
+                        up
+                    end enum
+                end namespace
+
+            `);
+            program.validate();
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.cannotFindName('DOWN', 'Enums.Direction.DOWN', 'Enums.Direction', 'enum'),
+                location: { range: util.createRange(2, 42, 2, 46) }
+            }, {
+                ...DiagnosticMessages.cannotFindName('down', 'Enums.Direction.down', 'Enums.Direction', 'enum'),
+                location: { range: util.createRange(3, 42, 3, 46) }
+            }]);
+        });
+    });
+
+    describe('getMemberValueMap', () => {
+        function expectMemberValueMap(code: string, expected: Record<string, string>) {
+            const file = program.setFile<BrsFile>('source/lib.brs', code);
+            const cancel = new CancellationTokenSource();
+            let firstEnum: EnumStatement | undefined;
+            file.ast.walk(statement => {
+                if (isEnumStatement(statement)) {
+                    firstEnum = statement;
+                    cancel.cancel();
+                }
+            }, {
+                walkMode: WalkMode.visitStatements,
+                cancel: cancel.token
+            });
+            expect(firstEnum).to.exist;
+            const values = firstEnum!.getMemberValueMap();
+            expect(
+                [...values].reduce((prev, [key, value]) => {
+                    prev[key] = value;
+                    return prev;
+                }, {})
+            ).to.eql(expected);
+        }
+
+        it('defaults first enum value to 0', () => {
+            expectMemberValueMap(`
+                enum Direction
+                    up
+                    down
+                    left
+                    right
+                end enum
+            `, {
+                up: '0',
+                down: '1',
+                left: '2',
+                right: '3'
+            });
+        });
+
+        it('continues incrementing after defined int value', () => {
+            expectMemberValueMap(`
+                enum Direction
+                    up
+                    down = 9
+                    left
+                    right = 20
+                    other
+                end enum
+            `, {
+                up: '0',
+                down: '9',
+                left: '10',
+                right: '20',
+                other: '21'
+            });
+        });
+
+        it('returns string values when defined', () => {
+            expectMemberValueMap(`
+                enum Direction
+                    up = "up"
+                    down = "DOWN"
+                    left = "LeFt"
+                    right = "righT"
+                end enum
+            `, {
+                up: '"up"',
+                down: '"DOWN"',
+                left: '"LeFt"',
+                right: '"righT"'
+            });
+        });
+    });
+
+    describe('transpile', () => {
+        it('transpiles negative number', async () => {
+            await testTranspile(`
+                sub main()
+                    print Direction.up
+                end sub
+                enum Direction
+                    up = -1
+                end enum
+            `, `
+                sub main()
+                    print -1
+                end sub
+            `, undefined, undefined, false);
+        });
+
+        it('includes original value when no value could be computed', async () => {
+            await testTranspile(`
+                sub main()
+                    print Direction.up
+                end sub
+                enum Direction
+                    up = {}
+                end enum
+            `, `
+                sub main()
+                    print invalid
+                end sub
+            `, undefined, undefined, false);
+        });
+        it('writes all literal values as-is (even if there are errors)', async () => {
+            await testTranspile(`
+                sub main()
+                    print Direction.up
+                    print Direction.down
+                    print Direction.left
+                    print Direction.right
+                    print Direction.upRight
+                end sub
+                enum Direction
+                    up = 1
+                    down = "asdf"
+                    left = 3.14
+                    right = &HFF '255
+                    upRight ' will be 256 since hex ints are parsed as ints
+                end enum
+            `, `
+                sub main()
+                    print 1
+                    print "asdf"
+                    print 3.14
+                    print &HFF
+                    print 256
+                end sub
+            `, 'trim', undefined, false);
+        });
+
+        it('supports default-as-integer', async () => {
+            await testTranspile(`
+                enum Direction
+                    up
+                    down
+                    left
+                    right
+                end enum
+                sub main()
+                    print Direction.up, Direction.down, Direction.left, Direction.right
+                end sub
+            `, `
+                sub main()
+                    print 0, 1, 2, 3
+                end sub
+            `);
+        });
+
+        it('supports string enums', async () => {
+            await testTranspile(`
+                enum Direction
+                    up = "up"
+                    down = "down"
+                    left = "left"
+                    right = "right"
+                end enum
+                sub main()
+                    print Direction.up, Direction.down, Direction.left, Direction.right
+                end sub
+            `, `
+                sub main()
+                    print "up", "down", "left", "right"
+                end sub
+            `);
+        });
+
+        it('recognizes namespace-relative enums', () => {
+            program.setFile('source/main.bs', `
+                namespace MyNamespace
+                    enum MyEnum
+                        val1
+                        val2
+                    end enum
+
+                    function foo() as MyEnum
+                        return MyEnum.val1
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('replaces enum values from separate file with literals', async () => {
+            program.setFile('source/enum.bs', `
+                enum CharacterType
+                    Human = "Human"
+                    Zombie = "Zombie"
+                end enum
+                namespace Locations
+                    enum Houses
+                        TownHouse
+                        FarmHouse
+                    end enum
+                end namespace
+            `);
+            await testTranspile(`
+                sub test()
+                    print CharacterType.Human
+                    print CharacterType.Zombie
+                    print Locations.Houses.TownHouse
+                    print Locations.Houses.FarmHouse
+                end sub
+            `, `
+                sub test()
+                    print "Human"
+                    print "Zombie"
+                    print 0
+                    print 1
+                end sub
+            `);
+        });
+
+        it('replaces enums in if statements', async () => {
+            await testTranspile(`
+                enum CharacterType
+                    zombie = "zombie"
+                end enum
+                sub main()
+                    if "one" = CharacterType.zombie or "two" = CharacterType.zombie and "three" = CharacterType.zombie
+                        print true
+                    end if
+                end sub
+            `, `
+                sub main()
+                    if "one" = "zombie" or "two" = "zombie" and "three" = "zombie"
+                        print true
+                    end if
+                end sub
+            `);
+        });
+
+        it('handles both sides of a logical expression', async () => {
+            await testTranspile(`
+                sub main()
+                    dir = m.direction = Direction.up
+                    dir = Direction.up = m.direction
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    dir = m.direction = "up"
+                    dir = "up" = m.direction
+                end sub
+            `);
+        });
+
+        it('handles when found in boolean expressions', async () => {
+            await testTranspile(`
+                sub main()
+                    result = Direction.up = "up" or Direction.down = "down" and Direction.up = Direction.down
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    result = "up" = "up" or "down" = "down" and "up" = "down"
+                end sub
+            `);
+        });
+
+        it('replaces enum values in if statements', async () => {
+            await testTranspile(`
+                sub main()
+                    if m.direction = Direction.up
+                        print Direction.up
+                    end if
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    if m.direction = "up"
+                        print "up"
+                    end if
+                end sub
+            `);
+        });
+
+        it('replaces enum values in function default parameter value expressions', async () => {
+            await testTranspile(`
+                sub speak(dir = Direction.up)
+                end sub
+                enum Direction
+                    up = "up"
+                end enum
+            `, `
+                sub speak(dir = "up")
+                end sub
+            `);
+        });
+
+        it('replaces enum values in for loops', async () => {
+            await testTranspile(`
+                sub main()
+                    for i = Loop.start to Loop.end step Loop.step
+                    end for
+                end sub
+                enum Loop
+                    start = 0
+                    end = 10
+                    step = 1
+                end enum
+            `, `
+                sub main()
+                    for i = 0 to 10 step 1
+                    end for
+                end sub
+            `);
+        });
+
+        it('transpiles enum values when used in complex expressions', async () => {
+            await testTranspile(`
+                sub main()
+                    print Direction.up.toStr()
+                end sub
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `, `
+                sub main()
+                    print "up".toStr()
+                end sub
+            `);
+        });
+
+        it('works when enum is in a namespace', async () => {
+            program.setFile('components/Colors.bs', `
+                namespace Colors
+                    enum Primary
+                        red = "#FF0000"
+                    end enum
+                end namespace
+            `);
+
+            program.setFile('components/Button.xml', `
+                <component name="Button" extends="Group">
+                    <script type="text/brightscript" uri="pkg:/components/Button.bs" />
+                </component>
+            `);
+            const file = program.setFile('components/Button.bs', `
+                import "Colors.bs"
+
+                namespace alpha
+                    sub testIt()
+                        print Colors.Primary.red
+                        aa = {
+                            value: Colors.Primary.red
+                        }
+                    end sub
+                end namespace
+
+                namespace Colors
+                    sub testIt()
+                        print Primary.red
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            await testTranspile(file, `
+                'import "Colors.bs"
+                sub alpha_testIt()
+                    print "#FF0000"
+                    aa = {
+                        value: "#FF0000"
+                    }
+                end sub
+                sub Colors_testIt()
+                    print "#FF0000"
+                end sub
+            `);
+        });
+    });
+
+    describe('computed AA keys', () => {
+        it('transpiles enum member as AA key', async () => {
+            await testTranspile(`
+                enum MyKey
+                    first = "key1"
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('emits diagnostic for integer enum member used as AA key', () => {
+            program.setFile('source/main.bs', `
+                enum MyKey
+                    first = 1
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value1"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('transpiles const as AA key', async () => {
+            await testTranspile(`
+                const MY_KEY = "myKey"
+                sub main()
+                    myAA = {
+                        [MY_KEY]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "myKey": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles namespaced enum member as AA key', async () => {
+            await testTranspile(`
+                namespace Keys
+                    enum MyKey
+                        first = "key1"
+                    end enum
+                end namespace
+                sub main()
+                    myAA = {
+                        [Keys.MyKey.first]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles literal string as AA key', async () => {
+            await testTranspile(`
+                sub main()
+                    myAA = {
+                        ["my-hyphenated-key"]: "value1"
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "my-hyphenated-key": "value1"
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles multiple computed keys in one AA', async () => {
+            await testTranspile(`
+                enum Keys
+                    a = "keyA"
+                    b = "keyB"
+                end enum
+                sub main()
+                    myAA = {
+                        [Keys.a]: 1,
+                        [Keys.b]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "keyA": 1
+                        "keyB": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles mixed computed and normal keys', async () => {
+            await testTranspile(`
+                enum Keys
+                    first = "key1"
+                end enum
+                sub main()
+                    myAA = {
+                        normalKey: 1,
+                        [Keys.first]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        normalKey: 1
+                        "key1": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('transpiles const from enum', async () => {
+            await testTranspile(`
+                enum Keys
+                    first = "key1"
+                end enum
+                const MY_KEY = Keys.first
+                sub main()
+                    myAA = {
+                        [MY_KEY]: 2
+                    }
+                end sub
+            `, `
+                sub main()
+                    myAA = {
+                        "key1": 2
+                    }
+                end sub
+            `);
+        });
+
+        it('emits diagnostic for non-constant computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    someVar = "key"
+                    myAA = {
+                        [someVar]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string literal used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [42]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string const used as computed key', () => {
+            program.setFile('source/main.bs', `
+                const MY_INT_KEY = 42
+                sub main()
+                    myAA = {
+                        [MY_INT_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('accepts a const that chains to a string const', () => {
+            program.setFile('source/main.bs', `
+                const BASE_KEY = "myKey"
+                const ALIAS_KEY = BASE_KEY
+                sub main()
+                    myAA = {
+                        [ALIAS_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('emits diagnostic when a const chain resolves to a non-string', () => {
+            program.setFile('source/main.bs', `
+                const INT_KEY = 99
+                const ALIAS_KEY = INT_KEY
+                sub main()
+                    myAA = {
+                        [ALIAS_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for circular const reference', () => {
+            program.setFile('source/main.bs', `
+                const A = B
+                const B = A
+                sub main()
+                    myAA = {
+                        [A]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            //v1 also fires the bare single-symbol "Circular reference detected 'B'" form
+            //during reference resolution (in addition to the rotated chain diagnostics).
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B']).message,
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for three-cycle circular const reference', () => {
+            program.setFile('source/main.bs', `
+                const A = B
+                const B = C
+                const C = A
+                sub main()
+                    myAA = {
+                        [A]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            //v1 also reports the cycle during type resolution (duplicate and partial chains), so only check for the cycles themselves
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'C', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'A', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['C', 'A', 'B', 'C']).message,
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('accepts a namespaced const that references a global string const with the same name', () => {
+            program.setFile('source/main.bs', `
+                const KEY = "myKey"
+                namespace alpha
+                    const KEY = KEY
+                    sub inside()
+                        myAA = {
+                            [KEY]: "value"
+                        }
+                    end sub
+                end namespace
+                sub main()
+                    myAA = {
+                        [alpha.KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('emits diagnostic when a namespaced const references a global non-string const with the same name', () => {
+            program.setFile('source/main.bs', `
+                const KEY = 42
+                namespace alpha
+                    const KEY = KEY
+                end namespace
+                sub main()
+                    myAA = {
+                        [alpha.KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('resolves a namespaced const chain relative to the const namespace, not the usage namespace', () => {
+            program.setFile('source/main.bs', `
+                namespace alpha
+                    const BASE = "alphaKey"
+                    const KEY = BASE
+                end namespace
+                namespace beta
+                    const BASE = 42
+                    sub inside()
+                        myAA = {
+                            [alpha.KEY]: "value"
+                        }
+                    end sub
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('emits diagnostic for boolean literal used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [true]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for float literal used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [3.14]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for function call used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub getKey() as string
+                    return "key"
+                end sub
+                sub main()
+                    myAA = {
+                        [getKey()]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+
+        it('emits diagnostic for arithmetic expression used as computed key', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myAA = {
+                        [1 + 2]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedPropertyKeyMustBeConstantExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string default enum member used as computed key', () => {
+            program.setFile('source/main.bs', `
+                enum MyKey
+                    first
+                end enum
+                sub main()
+                    myAA = {
+                        [MyKey.first]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+
+        it('emits diagnostic for non-string namespaced const used as computed key', () => {
+            program.setFile('source/main.bs', `
+                namespace Keys
+                    const MY_KEY = 42
+                end namespace
+                sub main()
+                    myAA = {
+                        [Keys.MY_KEY]: "value"
+                    }
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.computedAAKeyMustBeStringExpression()
+            ]);
+        });
+    });
+});

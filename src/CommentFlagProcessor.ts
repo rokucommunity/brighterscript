@@ -2,7 +2,7 @@ import type { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BscFile } from './files/BscFile';
 import type { BsDiagnosticInput, CommentFlag, DiagnosticCode } from './interfaces';
-import type { Locatable } from './lexer/Token';
+import type { Locatable } from './files/brs/lexer/Token';
 import { util } from './util';
 
 export class CommentFlagProcessor {

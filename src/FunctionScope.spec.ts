@@ -1,7 +1,7 @@
 import { expect } from 'chai';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/brs/BrsFile';
 import { FunctionScope } from './FunctionScope';
-import type { FunctionExpression } from './parser/Expression';
+import type { FunctionExpression } from './files/brs/parser/Expression';
 import { Program } from './Program';
 
 describe('FunctionScope', () => {

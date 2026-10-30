@@ -1,4 +1,4 @@
-import { BrsFile } from './files/BrsFile';
+import { BrsFile } from './files/brs/BrsFile';
 import type { Callable } from './interfaces';
 import { ArrayType } from './types/ArrayType';
 import { BooleanType } from './types/BooleanType';

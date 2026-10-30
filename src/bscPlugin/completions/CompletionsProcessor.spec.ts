@@ -4,16 +4,16 @@ import util, { standardizePath as s } from '../../util';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, outDir, trim, expectZeroDiagnostics } from '../../testHelpers.spec';
-import { XmlFile } from '../../files/XmlFile';
-import { Keywords } from '../../lexer/TokenKind';
+import { XmlFile } from '../../files/xml/XmlFile';
+import { Keywords } from '../../files/brs/lexer/TokenKind';
 import { CompletionsProcessor } from './CompletionsProcessor';
 import * as pick from 'object.pick';
-import { BrsFile } from '../../files/BrsFile';
+import { BrsFile } from '../../files/brs/BrsFile';
 import type { FileObj } from '../../interfaces';
 import * as fsExtra from 'fs-extra';
 import { isAssignmentStatement, isFunctionExpression } from '../../astUtils/reflection';
-import type { AssignmentStatement } from '../../parser/Statement';
-import type { FunctionExpression } from '../../parser/Expression';
+import type { AssignmentStatement } from '../../files/brs/parser/Statement';
+import type { FunctionExpression } from '../../files/brs/parser/Expression';
 
 describe('CompletionsProcessor', () => {
     let program: Program;

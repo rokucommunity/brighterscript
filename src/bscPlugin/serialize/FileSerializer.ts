@@ -1,7 +1,7 @@
 import { isAssetFile, isBrsFile, isXmlFile } from '../../astUtils/reflection';
 import type { AssetFile } from '../../files/AssetFile';
-import type { BrsFile } from '../../files/BrsFile';
-import type { XmlFile } from '../../files/XmlFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import type { SerializedFile, SerializeFileEvent } from '../../interfaces';
 import { util } from '../../util';
 

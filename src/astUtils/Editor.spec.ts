@@ -1,12 +1,12 @@
 import { expect } from '../chai-config.spec';
-import { BrsTranspileState } from '../parser/BrsTranspileState';
+import { BrsTranspileState } from '../files/brs/parser/BrsTranspileState';
 import { Editor } from './Editor';
 import { util } from '../util';
 import { createToken } from './creators';
-import { TokenKind } from '../lexer/TokenKind';
+import { TokenKind } from '../files/brs/lexer/TokenKind';
 import { Program } from '../Program';
-import { BrsFile } from '../files/BrsFile';
-import { LiteralExpression } from '../parser/Expression';
+import { BrsFile } from '../files/brs/BrsFile';
+import { LiteralExpression } from '../files/brs/parser/Expression';
 import { SourceNode } from 'source-map';
 
 describe('Editor', () => {

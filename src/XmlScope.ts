@@ -1,5 +1,5 @@
 import { Scope } from './Scope';
-import type { XmlFile } from './files/XmlFile';
+import type { XmlFile } from './files/xml/XmlFile';
 import type { Program } from './Program';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';

@@ -1,6 +1,6 @@
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import type { Scope } from './Scope';
-import type { BrsFile, ProvidedSymbol, ProvidedSymbolInfo } from './files/BrsFile';
+import type { BrsFile, ProvidedSymbol, ProvidedSymbolInfo } from './files/brs/BrsFile';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { Program } from './Program';
 import { util } from './util';
@@ -14,12 +14,12 @@ import { BscTypeKind } from './types/BscTypeKind';
 import { getAllTypesFromCompoundType } from './types/helpers';
 import type { BscType } from './types/BscType';
 import type { BscFile } from './files/BscFile';
-import type { ClassStatement, ConstStatement, EnumMemberStatement, EnumStatement, InterfaceStatement, NamespaceStatement } from './parser/Statement';
-import { ParseMode } from './parser/Parser';
+import type { ClassStatement, ConstStatement, EnumMemberStatement, EnumStatement, InterfaceStatement, NamespaceStatement } from './files/brs/parser/Statement';
+import { ParseMode } from './files/brs/parser/Parser';
 import { globalFile } from './globalCallables';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, VariableExpression } from './files/brs/parser/Expression';
 import type { InheritableType } from './types';
-import type { Locatable } from './lexer/Token';
+import type { Locatable } from './files/brs/lexer/Token';
 
 
 interface FileSymbolPair {

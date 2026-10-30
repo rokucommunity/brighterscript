@@ -1,7 +1,7 @@
 import { expect } from './chai-config.spec';
 import { Position, Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { XmlFile } from './files/XmlFile';
+import type { XmlFile } from './files/xml/XmlFile';
 import { Program } from './Program';
 import { expectDiagnostics, expectTypeToBe, expectZeroDiagnostics, trim } from './testHelpers.spec';
 import { standardizePath as s, util } from './util';

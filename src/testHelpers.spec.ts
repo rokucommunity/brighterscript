@@ -6,7 +6,7 @@ import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/brs/BrsFile';
 import type { Program } from './Program';
 import { util, standardizePath as s } from './util';
 import { getDiagnosticLine } from './diagnosticUtils';
@@ -18,7 +18,7 @@ import type { LspDiagnostic } from './lsp/LspProject';
 import { Project } from './lsp/Project';
 import { isProgram, isProject } from './astUtils/reflection';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
-import type { Locatable, SourceInfo } from './lexer/Token';
+import type { Locatable, SourceInfo } from './files/brs/lexer/Token';
 
 export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;

@@ -1,4 +1,4 @@
-import type { XmlFile } from '../../files/XmlFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import type { BsDiagnostic } from '../../interfaces';
 import { util } from '../../util';
 

@@ -1,4 +1,4 @@
-import type { BrsFile } from '../../src/files/BrsFile';
+import type { BrsFile } from '../../src/files/brs/BrsFile';
 import type { TargetOptions } from '../target-runner';
 import { createBuilder, getConfig } from '../helpers';
 

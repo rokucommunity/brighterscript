@@ -1,7 +1,7 @@
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import type { XmlFile } from '../../files/XmlFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import type { ValidateFileEvent } from '../../interfaces';
-import type { SGAst, SGElement } from '../../parser/SGTypes';
+import type { SGAst, SGElement } from '../../files/xml/parser/SGTypes';
 import { isSGInterface } from '../../astUtils/xml';
 import util from '../../util';
 

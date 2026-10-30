@@ -1,4 +1,4 @@
-import type { SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGElement } from '../parser/SGTypes';
+import type { SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGElement } from '../files/xml/parser/SGTypes';
 
 export function isSGComponent(tag: SGElement): tag is SGComponent {
     return tag?.constructor.name === 'SGComponent';

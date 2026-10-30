@@ -1,12 +1,12 @@
 import type { Location } from 'vscode-languageserver';
-import type { Identifier, Locatable, Token } from '../lexer/Token';
-import type { SGToken } from '../parser/SGTypes';
-import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../parser/SGTypes';
-import { TokenKind } from '../lexer/TokenKind';
-import type { Expression, Statement } from '../parser/AstNode';
-import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../parser/Expression';
-import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../parser/Statement';
-import { TokenObject } from '../lexer/TokenObject';
+import type { Identifier, Locatable, Token } from '../files/brs/lexer/Token';
+import type { SGToken } from '../files/xml/parser/SGTypes';
+import { SGAttribute, SGComponent, SGInterface, SGInterfaceField, SGInterfaceFunction, SGScript } from '../files/xml/parser/SGTypes';
+import { TokenKind } from '../files/brs/lexer/TokenKind';
+import type { Expression, Statement } from '../files/brs/parser/AstNode';
+import { LiteralExpression, CallExpression, DottedGetExpression, VariableExpression, FunctionExpression } from '../files/brs/parser/Expression';
+import { AssignmentStatement, Block, DottedSetStatement, IfStatement, IndexedSetStatement, MethodStatement } from '../files/brs/parser/Statement';
+import { TokenObject } from '../files/brs/lexer/TokenObject';
 import util from '../util';
 
 const tokenDefaults = {

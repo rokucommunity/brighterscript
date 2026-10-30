@@ -2,7 +2,7 @@ import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { Program } from './Program';
 import * as path from 'path';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/brs/BrsFile';
 import { trim, expectZeroDiagnostics, expectDiagnostics, expectDiagnosticsIncludes } from './testHelpers.spec';
 import { expect } from 'chai';
 import { SymbolTypeFlag } from './SymbolTypeFlag';

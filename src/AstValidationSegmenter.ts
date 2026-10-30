@@ -1,14 +1,14 @@
-import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { DottedGetExpression, TypeExpression, VariableExpression } from './files/brs/parser/Expression';
 import { isAliasStatement, isArrayType, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypecastStatement, isTypeExpression, isTypeStatement, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
 import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
-import type { AstNode, Expression } from './parser/AstNode';
+import type { AstNode, Expression } from './files/brs/parser/AstNode';
 import { util } from './util';
-import type { ClassStatement, NamespaceStatement } from './parser/Statement';
+import type { ClassStatement, NamespaceStatement } from './files/brs/parser/Statement';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import type { Token } from './lexer/Token';
-import type { BrsFile } from './files/BrsFile';
-import { TokenKind } from './lexer/TokenKind';
+import type { Token } from './files/brs/lexer/Token';
+import type { BrsFile } from './files/brs/BrsFile';
+import { TokenKind } from './files/brs/lexer/TokenKind';
 import type { BscSymbol } from './SymbolTable';
 
 // eslint-disable-next-line no-bitwise

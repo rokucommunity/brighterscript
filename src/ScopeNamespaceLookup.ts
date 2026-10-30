@@ -1,4 +1,4 @@
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/brs/BrsFile';
 import type { Scope, NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { isBrsFile } from './astUtils/reflection';
 

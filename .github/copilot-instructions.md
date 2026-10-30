@@ -9,9 +9,10 @@ Compiler (written in TypeScript) to transform BrighterScript (a superset of Roku
 - **Language Server**: Implements LSP for IDE features like autocompletion, diagnostics, and code navigation
 
 ## Key Directories
-- `src/parser/` - Parser and AST nodes
-- `src/lexer/` - Tokenization
-- `src/files/` - File handlers (`BrsFile`, `XmlFile`)
+- `src/files/` - File handlers, grouped by file type
+  - `src/files/brs/` - `BrsFile`, plus `lexer/` (tokenization) and `parser/` (Parser and AST nodes)
+  - `src/files/xml/` - `XmlFile`, plus `parser/` (`SGParser`, `SGTypes`)
+  - `src/files/common/` - pieces shared by multiple file types (`TranspileState`)
 - `src/lsp/` - Language Server Protocol implementation
 - `src/astUtils/` - AST manipulation utilities (visitors, editors, creators)
 - `src/bscPlugin/` - Built-in plugin (validation, completions, hover, code actions)

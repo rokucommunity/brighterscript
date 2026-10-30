@@ -1,0 +1,1222 @@
+/* eslint-disable func-names */
+import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
+import type { Locatable, SourceInfo, Token } from './Token';
+import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import util from '../../../util';
+import { TokenObject } from './TokenObject';
+import type { BsDiagnosticInput } from '../../../interfaces';
+
+/**
+ * Numeric type designators can only be one of these characters
+ */
+const numericTypeDesignatorCharsRegexp = /[#d!e&%]/;
+
+export class Lexer {
+    /**
+     * The zero-indexed position at which the token under consideration begins.
+     */
+    private start: number;
+
+    /**
+     * The zero-indexed position being examined for the token under consideration.
+     */
+    private current: number;
+
+    /**
+     * The BrightScript code being converted to an array of `Token`s.
+     */
+    public source: string;
+
+    /**
+     * The tokens produced from `source`.
+     */
+    public tokens: Token[];
+
+    /**
+     * The errors produced from `source.`
+     */
+    public diagnostics: BsDiagnosticInput[];
+
+    /**
+     * The options used to scan this file
+     */
+    public options: ScanOptions;
+
+    /**
+     * Contains trivia/comments, etc. before this line
+     */
+    private leadingTrivia: Token[] = [];
+
+    /**
+     * Info about the source being scanned, shared by every token produced by this scan. `undefined` when locations aren't being tracked
+     */
+    private sourceInfo: SourceInfo | undefined;
+
+    /**
+     * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
+     * containing BrightScript code to an array of `Token` objects that will later be used to build
+     * an abstract syntax tree.
+     *
+     * @param toScan the BrightScript code to convert into tokens
+     * @param options options used to customize the scan process
+     * @returns an object containing an array of `errors` and an array of `tokens` to be passed to a parser.
+     */
+    static scan(toScan: string, options?: ScanOptions): Lexer {
+        return new Lexer().scan(toScan, options);
+    }
+
+    /**
+     * Converts a string containing BrightScript code to an array of `Token` objects that will
+     * later be used to build an abstract syntax tree.
+     *
+     * @param toScan the BrightScript code to convert into tokens
+     * @param options options used to customize the scan process
+     * @returns an object containing an array of `errors` and an array of `tokens` to be passed to a parser.
+     */
+    public scan(toScan: string, options?: ScanOptions): this {
+        this.source = toScan;
+        this.options = this.sanitizeOptions(options);
+        this.start = 0;
+        this.current = 0;
+        this.tokens = [];
+        this.diagnostics = [];
+        this.sourceInfo = this.options.trackLocations
+            ? { uri: util.pathToUri(options?.srcPath), linePositions: [0] }
+            : undefined;
+        while (!this.isAtEnd()) {
+            this.scanToken();
+        }
+
+        this.tokens.push(new TokenObject(
+            TokenKind.Eof,
+            '',
+            false,
+            this.current,
+            this.current + 1,
+            this.sourceInfo,
+            this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
+        ));
+        return this;
+    }
+
+    /**
+     * Pushes a token into the leadingTrivia list
+     */
+    private pushTrivia(token: Token) {
+        this.leadingTrivia.push(token);
+    }
+
+    /**
+     * Fill in missing/invalid options with defaults
+     */
+    private sanitizeOptions(options: ScanOptions) {
+        options ??= {};
+        options.includeWhitespace ??= false;
+        options.trackLocations ??= true;
+        return options;
+    }
+
+    /**
+     * Determines whether or not the lexer as reached the end of its input.
+     * @returns `true` if the lexer has read to (or past) the end of its input, otherwise `false`.
+     */
+    private isAtEnd() {
+        return !this.source || this.current >= this.source.length;
+    }
+
+    /**
+     * Map for looking up token functions based solely upon a single character
+     * Should be used in conjunction with `tokenKindMap`
+     */
+    private static tokenFunctionMap = {
+        '\r': Lexer.prototype.newline,
+        '\n': Lexer.prototype.newline,
+        ' ': Lexer.prototype.whitespace,
+        '\t': Lexer.prototype.whitespace,
+        '#': Lexer.prototype.preProcessedConditional,
+        '"': Lexer.prototype.string,
+        '\'': Lexer.prototype.comment,
+        '`': Lexer.prototype.templateString,
+        '.': function (this: Lexer) {
+            // this might be a float/double literal, because decimals without a leading 0
+            // are allowed
+            if (isDecimalDigit(this.peek())) {
+                this.decimalNumber(true);
+            } else if (this.peek() === '.' && this.peekNext() === '.') {
+                this.advance();
+                this.advance();
+                this.addToken(TokenKind.DotDotDot);
+            } else {
+                this.addToken(TokenKind.Dot);
+            }
+        },
+        '@': function (this: Lexer) {
+            if (this.peek() === '.') {
+                this.advance();
+                this.addToken(TokenKind.Callfunc);
+            } else {
+                this.addToken(TokenKind.At);
+            }
+        },
+        '+': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.PlusEqual);
+                    break;
+                case '+':
+                    this.advance();
+                    this.addToken(TokenKind.PlusPlus);
+                    break;
+                default:
+                    this.addToken(TokenKind.Plus);
+                    break;
+            }
+        },
+        '-': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.MinusEqual);
+                    break;
+                case '-':
+                    this.advance();
+                    this.addToken(TokenKind.MinusMinus);
+                    break;
+                default:
+                    this.addToken(TokenKind.Minus);
+                    break;
+            }
+        },
+        '*': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.StarEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Star);
+                    break;
+            }
+        },
+        '/': function (this: Lexer) {
+            //try capturing a regex literal. If that doesn't work, fall back to normal handling
+            if (!this.regexLiteral()) {
+                switch (this.peek()) {
+                    case '=':
+                        this.advance();
+                        this.addToken(TokenKind.ForwardslashEqual);
+                        break;
+                    default:
+                        this.addToken(TokenKind.Forwardslash);
+                        break;
+                }
+            }
+        },
+        '\\': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.BackslashEqual);
+                    break;
+                default:
+                    this.addToken(TokenKind.Backslash);
+                    break;
+            }
+        },
+        '<': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.LessEqual);
+                    break;
+                case '<':
+                    this.advance();
+                    switch (this.peek()) {
+                        case '=':
+                            this.advance();
+                            this.addToken(TokenKind.LeftShiftEqual);
+                            break;
+                        default:
+                            this.addToken(TokenKind.LeftShift);
+                            break;
+                    }
+                    break;
+                case '>':
+                    this.advance();
+                    this.addToken(TokenKind.LessGreater);
+                    break;
+                default:
+                    this.addToken(TokenKind.Less);
+                    break;
+            }
+        },
+        '>': function (this: Lexer) {
+            switch (this.peek()) {
+                case '=':
+                    this.advance();
+                    this.addToken(TokenKind.GreaterEqual);
+                    break;
+                case '>':
+                    this.advance();
+                    switch (this.peek()) {
+                        case '=':
+                            this.advance();
+                            this.addToken(TokenKind.RightShiftEqual);
+                            break;
+                        default:
+                            this.addToken(TokenKind.RightShift);
+                            break;
+                    }
+                    break;
+                default:
+                    this.addToken(TokenKind.Greater);
+                    break;
+            }
+        },
+        '?': function (this: Lexer) {
+            if (this.peek() === '?') {
+                this.advance();
+                this.addToken(TokenKind.QuestionQuestion);
+            } else if (this.peek() === '.') {
+                this.advance();
+                this.addToken(TokenKind.QuestionDot);
+            } else if (this.peek() === '[' && !this.isStartOfStatement()) {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftSquare);
+            } else if (this.peek() === '(' && !this.isStartOfStatement()) {
+                this.advance();
+                this.addToken(TokenKind.QuestionLeftParen);
+            } else if (this.peek() === '@') {
+                this.advance();
+                this.addToken(TokenKind.QuestionAt);
+            } else {
+                this.addToken(TokenKind.Question);
+            }
+        }
+    };
+
+    /**
+     * Determine if the current position is at the beginning of a statement.
+     * This means the token to the left, excluding whitespace, is either a newline or a colon
+     */
+    private isStartOfStatement() {
+        for (let i = this.tokens.length - 1; i >= 0; i--) {
+            const token = this.tokens[i];
+            //skip whitespace
+            if (token.kind === TokenKind.Whitespace) {
+                continue;
+            }
+            if (token.kind === TokenKind.Newline || token.kind === TokenKind.Colon) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        //if we got here, there were no tokens or only whitespace, so it's the start of the file
+        return true;
+    }
+
+    /**
+     * Map for looking up token kinds based solely on a single character.
+     * Should be used in conjunction with `tokenFunctionMap`
+     */
+    private static tokenKindMap = {
+        '(': TokenKind.LeftParen,
+        ')': TokenKind.RightParen,
+        '=': TokenKind.Equal,
+        ',': TokenKind.Comma,
+        '{': TokenKind.LeftCurlyBrace,
+        '}': TokenKind.RightCurlyBrace,
+        '[': TokenKind.LeftSquareBracket,
+        ']': TokenKind.RightSquareBracket,
+        '^': TokenKind.Caret,
+        ':': TokenKind.Colon,
+        ';': TokenKind.Semicolon
+    };
+
+    /**
+     * Reads a non-deterministic number of characters from `source`, produces a `Token`, and adds it to
+     * the `tokens` array.
+     *
+     * Accepts and returns nothing, because it's side-effect driven.
+     */
+    public scanToken(): void {
+        this.advance();
+        let c = this.source.charAt(this.current - 1);
+
+        let tokenKind: TokenKind | undefined;
+        let tokenFunction: (lexer: Lexer) => void | undefined;
+
+        if (isAlpha(c)) {
+            this.identifier();
+
+            // eslint-disable-next-line no-cond-assign
+        } else if (tokenFunction = Lexer.tokenFunctionMap[c]) {
+            tokenFunction.call(this, undefined);
+
+            // eslint-disable-next-line no-cond-assign
+        } else if (tokenKind = Lexer.tokenKindMap[c]) {
+            this.addToken(tokenKind);
+
+        } else if (isDecimalDigit(c)) {
+            this.decimalNumber(false);
+
+        } else if (c === '&' && this.peek().toLowerCase() === 'h') {
+            this.advance(); // move past 'h'
+            this.hexadecimalNumber();
+
+        } else {
+            this.diagnostics.push({
+                ...DiagnosticMessages.unexpectedCharacter(c),
+                location: this.locationOf()
+            });
+        }
+    }
+
+    private comment() {
+        // BrightScript doesn't have block comments; only line
+        while (this.peek() !== '\r' && this.peek() !== '\n' && !this.isAtEnd()) {
+            this.advance();
+        }
+        this.addToken(TokenKind.Comment);
+    }
+
+    private whitespace() {
+        while (this.peek() === ' ' || this.peek() === '\t') {
+            this.advance();
+        }
+        //NOTE: master's version of this method skipped `addToken` entirely on the
+        //`includeWhitespace === false` path to avoid allocating a Token it would immediately
+        //discard. That optimization isn't safe here: `addToken` is also what routes the token into
+        //`leadingTrivia` (see `isTrivia`), and this branch reconstructs spacing and comments from
+        //trivia. Skipping it silently drops all whitespace trivia. `addToken` interns the text for
+        //us, so the memory half of that optimization still applies.
+        this.addToken(TokenKind.Whitespace);
+        //if we aren't keeping the whitespace tokens, then remove this one from the token output.
+        //it stays referenced by `leadingTrivia`, which is why it must be created above.
+        if (this.options.includeWhitespace === false) {
+            this.tokens.pop();
+        }
+        this.start = this.current;
+    }
+
+    private newline() {
+        //if this is a windows \r\n, we have already consumed the \r, so now consume the \n
+        if (this.checkPrevious('\r')) {
+            //consume the \n
+            this.advance();
+        }
+
+        this.addToken(TokenKind.Newline);
+        this.start = this.current;
+        this.sourceInfo?.linePositions.push(this.current);
+    }
+
+    /**
+     * Reads and returns the next character from `string` while **moving the current position forward**.
+     */
+    private advance(): void {
+        this.current++;
+    }
+
+    private lookaheadStack = [] as number[];
+    private pushLookahead() {
+        this.lookaheadStack.push(this.current);
+    }
+    private popLookahead() {
+        this.current = this.lookaheadStack.pop();
+    }
+
+    /**
+     * Returns the character at position `current` or a null character if we've reached the end of
+     * input.
+     *
+     * @returns the current character if we haven't reached the end of input, otherwise a null
+     *          character.
+     */
+    private peek() {
+        if (this.isAtEnd()) {
+            return '\0';
+        }
+        return this.source.charAt(this.current);
+    }
+
+    /**
+     * Returns the character after position `current`, or a null character if we've reached the end of
+     * input.
+     *
+     * @returns the character after the current one if we haven't reached the end of input, otherwise a
+     *          null character.
+     */
+    private peekNext() {
+        if (this.current + 1 > this.source.length) {
+            return '\0';
+        }
+        return this.source.charAt(this.current + 1);
+    }
+
+    /**
+     * Reads characters within a string literal, advancing through escaped characters to the
+     * terminating `"`, and adds the produced token to the `tokens` array. Creates a `BrsError` if the
+     * string is terminated by a newline or the end of input.
+     */
+    private string() {
+        let isUnterminated = false;
+        while (!this.isAtEnd()) {
+            if (this.peek() === '"') {
+                if (this.peekNext() === '"') {
+                    // skip over two consecutive `"` characters to handle escaped `"` literals
+                    this.advance();
+                } else {
+                    // otherwise the string has ended
+                    break;
+                }
+            }
+
+            if (this.peekNext() === '\n' || this.peekNext() === '\r') {
+                // BrightScript doesn't support multi-line strings
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unterminatedString(),
+                    location: this.locationOf()
+                });
+                isUnterminated = true;
+                break;
+            }
+
+            this.advance();
+        }
+
+        if (this.isAtEnd()) {
+            // terminating a string with EOF is also not allowed
+            this.diagnostics.push({
+                ...DiagnosticMessages.unterminatedString(),
+                location: this.locationOf()
+            });
+            isUnterminated = true;
+        }
+
+        // move past the closing `"`
+        this.advance();
+
+        let endIndex = isUnterminated ? this.current : this.current - 1;
+
+        //get the string text (and trim the leading and trailing quote)
+        let value = this.source.slice(this.start + 1, endIndex);
+
+        //replace escaped quotemarks "" with a single quote
+        value = value.replace(/""/g, '"');
+        this.addToken(TokenKind.StringLiteral);
+    }
+    /**
+     * Reads characters within a string literal, advancing through escaped characters to the
+     * terminating `"`, and adds the produced token to the `tokens` array. Creates a `BrsError` if the
+     * string is terminated by a newline or the end of input.
+     */
+    private templateString() {
+        this.addToken(TokenKind.BackTick);
+        while (!this.isAtEnd() && !this.check('`')) {
+            //handle line/column tracking when capturing newlines
+            if (this.check('\n')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                //store the char code
+                token.charCode = 10;
+
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current);
+                continue;
+            } else if (this.check('\r') && this.peekNext() === '\n') {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
+
+                this.advance();
+                token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 10;
+
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current);
+                continue;
+
+                //a lone `\r` is a newline too (the same as everywhere else in the lexer, and in LSP)
+            } else if (this.check('\r')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
+
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current);
+                continue;
+
+                //escaped chars
+            } else if (this.check('\\')) {
+                this.templateQuasiString();
+
+                //step past the escape character
+                this.advance();
+                let charCode: number;
+                //a few common cases
+                if (this.check('n')) {
+                    charCode = '\n'.charCodeAt(0);
+                } else if (this.check('r')) {
+                    charCode = '\r'.charCodeAt(0);
+                } else if (this.check('\\')) {
+                    charCode = '\\'.charCodeAt(0);
+
+                    //support escaped unicode codes
+                } else if (this.check('c')) {
+                    let numText = '';
+                    //read tokens until we find a non-numeric one
+                    while (
+                        !isNaN(
+                            parseInt(
+                                this.peekNext()
+                            )
+                        )
+                    ) {
+                        this.advance();
+                        numText += this.peek();
+                    }
+                    charCode = parseInt(numText);
+                } else {
+                    charCode = this.peek().charCodeAt(0);
+                }
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = charCode;
+                continue;
+            } else if (this.check('"')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                //store the char code
+                token.charCode = '"'.charCodeAt(0);
+                continue;
+            }
+
+            if (this.check('$') && this.peekNext() === '{') {
+                this.templateQuasiString();
+                this.advance();
+                this.advance();
+                this.addToken(TokenKind.TemplateStringExpressionBegin);
+                this.templateStringExpression();
+            } else {
+                this.advance();
+            }
+        }
+
+        //get last quasi
+        this.templateQuasiString();
+
+        if (this.check('`')) {
+            // move past the closing ```
+            this.advance();
+            this.addToken(TokenKind.BackTick);
+        }
+    }
+
+    /**
+     * Scans the contents of a `${...}` template string expression, stopping just after the `}` that closes it.
+     * Assumes the `${` has already been consumed and its token emitted.
+     *
+     * All actual token scanning is delegated to `scanToken`, so this method's only job is deciding
+     * which `}` terminates the expression. A `}` that closes a brace opened _inside_ the expression
+     * (an associative array literal, for example) is not the terminator, so we track how many
+     * unclosed `{` we've scanned past and only stop at a `}` seen at depth zero.
+     *
+     * Nested template strings need no special handling here: `scanToken` routes a backtick back into
+     * `templateString`, which recurses into this method for its own expressions. Each level therefore
+     * gets its own `depth` local, so arbitrarily deep nesting works without any shared state.
+     */
+    private templateStringExpression() {
+        let depth = 0;
+        while (!this.isAtEnd()) {
+            if (this.check('}')) {
+                if (depth === 0) {
+                    //this is the `}` that closes the expression
+                    this.advance();
+                    this.addToken(TokenKind.TemplateStringExpressionEnd);
+                    this.start = this.current;
+                    return;
+                }
+                depth--;
+            } else if (this.check('{')) {
+                depth++;
+            }
+            this.start = this.current;
+            this.scanToken();
+        }
+
+        //we hit the end of the file before finding the closing `}`
+        this.diagnostics.push({
+            ...DiagnosticMessages.unexpectedConditionalCompilationString(),
+            location: this.locationOf()
+        });
+        this.start = this.current;
+    }
+
+    private templateQuasiString() {
+        let value = this.source.slice(this.start, this.current);
+        if (value !== '`') { // if this is an empty string straight after an expression, then we'll accidentally consume the backtick
+            this.addToken(TokenKind.TemplateStringQuasi);
+        }
+    }
+
+    /**
+     * Reads characters within a base-10 number literal, advancing through fractional and
+     * exponential portions as well as trailing type identifiers, and adds the produced token
+     * to the `tokens` array. Also responsible for BrightScript's integer literal vs. float
+     * literal rules.
+     * @param hasSeenDecimal `true` if decimal point has already been found, otherwise `false`
+     * @see https://sdkdocs.roku.com/display/sdkdoc/Expressions%2C+Variables%2C+and+Types#Expressions,Variables,andTypes-NumericLiterals
+     */
+    private decimalNumber(hasSeenDecimal: boolean) {
+        let containsDecimal = hasSeenDecimal;
+        while (isDecimalDigit(this.peek())) {
+            this.advance();
+        }
+
+        // look for a fractional portion
+        if (!hasSeenDecimal && this.peek() === '.') {
+            containsDecimal = true;
+
+            // consume the "." parse the fractional part
+            this.advance();
+
+            // read the remaining digits
+            while (isDecimalDigit(this.peek())) {
+                this.advance();
+            }
+        }
+
+        let asString = this.source.slice(this.start, this.current);
+        let numberOfDigits = containsDecimal ? asString.length - 1 : asString.length;
+        let designator = this.peek().toLowerCase();
+        //set to undefined if it's not one of the supported designator chars
+        if (!numericTypeDesignatorCharsRegexp.test(designator)) {
+            designator = undefined;
+        }
+
+        if (numberOfDigits >= 10 && !designator) {
+            // numeric literals over 10 digits with no type designator are implicitly Doubles
+            this.addToken(TokenKind.DoubleLiteral);
+        } else if (designator === '#') {
+            // numeric literals ending with "#" are forced to Doubles
+            this.advance();
+            this.addToken(TokenKind.DoubleLiteral);
+        } else if (designator === 'd') {
+            // literals that use "D" as the exponent are also automatic Doubles
+
+            // consume the "D"
+            this.advance();
+
+            // exponents are optionally signed
+            if (this.peek() === '+' || this.peek() === '-') {
+                this.advance();
+            }
+
+            // consume the exponent
+            while (isDecimalDigit(this.peek())) {
+                this.advance();
+            }
+
+            // replace the exponential marker with a JavaScript-friendly "e"
+            asString = this.source.slice(this.start, this.current).replace(/[dD]/, 'e');
+            this.addToken(TokenKind.DoubleLiteral);
+        } else if (designator === '!') {
+            // numeric literals ending with "!" are forced to Floats
+            this.advance();
+            this.addToken(TokenKind.FloatLiteral);
+        } else if (designator === 'e') {
+            // literals that use "e" as the exponent are also automatic Floats
+
+            // consume the "e"
+            this.advance();
+
+            // exponents are optionally signed
+            if (this.peek() === '+' || this.peek() === '-') {
+                this.advance();
+            }
+
+            // consume the exponent
+            while (isDecimalDigit(this.peek())) {
+                this.advance();
+            }
+
+            //optionally consume a trailing type designator
+            if (numericTypeDesignatorCharsRegexp.test(this.peek())) {
+                this.advance();
+            }
+
+            this.addToken(TokenKind.FloatLiteral);
+        } else if (containsDecimal) {
+            // anything with a decimal but without matching Double rules is a Float
+            this.addToken(TokenKind.FloatLiteral);
+        } else if (designator === '&') {
+            // numeric literals ending with "&" are forced to LongIntegers
+            this.advance();
+            this.addToken(TokenKind.LongIntegerLiteral);
+        } else if (designator === '%') {
+            //numeric literals ending with "%" are forced to Integer
+            this.advance();
+            this.addToken(TokenKind.IntegerLiteral);
+        } else {
+            // otherwise, it's a regular integer
+            this.addToken(TokenKind.IntegerLiteral);
+        }
+    }
+
+    /**
+     * Reads characters within a base-16 number literal, advancing through trailing type
+     * identifiers, and adds the produced token to the `tokens` array. Also responsible for
+     * BrightScript's integer literal vs. long-integer literal rules _for hex literals only_.
+     *
+     * @see https://sdkdocs.roku.com/display/sdkdoc/Expressions%2C+Variables%2C+and+Types#Expressions,Variables,andTypes-NumericLiterals
+     */
+    private hexadecimalNumber() {
+        while (isHexDigit(this.peek())) {
+            this.advance();
+        }
+
+        if (this.peek() === '&') {
+            // literals ending with "&" are forced to LongIntegers
+            this.advance();
+            this.addToken(TokenKind.LongIntegerLiteral);
+        } else {
+            this.addToken(TokenKind.IntegerLiteral);
+        }
+    }
+
+    /**
+     * Reads characters within an identifier, advancing through alphanumeric characters. Adds the
+     * produced token to the `tokens` array.
+     */
+    private identifier() {
+        while (isAlphaNumeric(this.peek())) {
+            this.advance();
+        }
+
+        let text = this.source.slice(this.start, this.current);
+        let lowerText = text.toLowerCase();
+
+        // some identifiers can be split into two words, so check the "next" word and see what we get
+        if (
+            (lowerText === 'end' || lowerText === 'exit' || lowerText === 'for') &&
+            (this.peek() === ' ' || this.peek() === '\t')
+        ) {
+            let savedCurrent = this.current;
+
+            // skip past any whitespace
+            let whitespace = '';
+            while (this.peek() === ' ' || this.peek() === '\t') {
+                //keep the whitespace so we can replace it later
+                whitespace += this.peek();
+                this.advance();
+            }
+            while (isAlphaNumeric(this.peek())) {
+                this.advance();
+            } // read the next word
+
+            let twoWords = this.source.slice(this.start, this.current);
+            // replace all of the whitespace with a single space character so we can properly match keyword token types
+            twoWords = twoWords.replace(whitespace, ' ');
+            let maybeTokenType = Keywords[twoWords.toLowerCase()];
+            if (maybeTokenType) {
+                this.addToken(maybeTokenType);
+                return;
+            } else {
+                // reset if the last word and the current word didn't form a multi-word TokenKind
+                this.current = savedCurrent;
+            }
+        }
+
+        // split `elseif` into `else` and `if` tokens
+        if (lowerText === 'elseif' && !this.checkPreviousToken(TokenKind.Dot)) {
+            let savedCurrent = this.current;
+            this.current -= 2;
+            this.addToken(TokenKind.Else);
+
+            this.start = savedCurrent - 2;
+            this.current = savedCurrent;
+            this.addToken(TokenKind.If);
+            return;
+        }
+
+        // look for a type designator character ($ % ! # &). vars may have them, but functions
+        // may not. Let the parser figure that part out.
+        let nextChar = this.peek();
+        if (['$', '%', '!', '#', '&'].includes(nextChar)) {
+            lowerText += nextChar;
+            this.advance();
+        }
+
+        let tokenType = Keywords[lowerText] || TokenKind.Identifier;
+        if (tokenType === Keywords.rem) {
+            //the rem keyword can be used as an identifier on objects,
+            //so do a quick look-behind to see if there's a preceeding dot
+            if (this.checkPreviousToken(TokenKind.Dot)) {
+                this.addToken(TokenKind.Identifier);
+            } else {
+                this.comment();
+            }
+        } else {
+            this.addToken(tokenType);
+        }
+    }
+
+    /**
+     * Check that the previous token was of the specified type
+     */
+    private checkPreviousToken(kind: TokenKind) {
+        let previous = this.tokens[this.tokens.length - 1];
+        if (previous && previous.kind === kind) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Looks at the current char and returns true if at least one of the candidates is a match
+     */
+    private check(...candidates: string[]) {
+        if (this.isAtEnd()) {
+            return false;
+        }
+        return candidates.includes(this.source.charAt(this.current));
+    }
+
+    /**
+     * Check the previous character
+     */
+    private checkPrevious(...candidates: string[]) {
+        this.current--;
+        let result = this.check(...candidates);
+        this.current++;
+        return result;
+    }
+
+
+    /**
+     * Reads characters within an identifier with a leading '#', typically reserved for conditional
+     * compilation. Adds the produced token to the `tokens` array.
+     */
+    private preProcessedConditional() {
+        this.advance(); // advance past the leading #
+
+        //consume whitespace
+        while (this.check(' ', '\t')) {
+            this.advance();
+        }
+
+        while (isAlphaNumeric(this.peek())) {
+            this.advance();
+        }
+
+        let text = this.source.slice(this.start, this.current).toLowerCase();
+
+        // some identifiers can be split into two words (`#end if`, `#else if`), so check the "next" word and see what we get
+        if ((text.endsWith('end') || text.endsWith('else')) && this.check(' ', '\t')) {
+            let endOfFirstWord = this.current;
+
+            //skip past whitespace
+            while (this.check(' ', '\t')) {
+                this.advance();
+            }
+
+            while (isAlphaNumeric(this.peek())) {
+                this.advance();
+            } // read the next word
+
+            let twoWords = this.source.slice(this.start, this.current).toLowerCase();
+            switch (twoWords.replace(/\s+/g, '')) {
+                case '#elseif':
+                    this.addToken(TokenKind.HashElseIf);
+                    return;
+                case '#endif':
+                    this.addToken(TokenKind.HashEndIf);
+                    return;
+            }
+
+            // reset if the last word and the current word didn't form a multi-word TokenKind
+            this.current = endOfFirstWord;
+        }
+
+        switch (text.replace(/\s+/g, '')) {
+            case '#if':
+                this.addToken(TokenKind.HashIf);
+                return;
+            case '#else':
+                this.addToken(TokenKind.HashElse);
+                return;
+            case '#elseif':
+                this.addToken(TokenKind.HashElseIf);
+                return;
+            case '#endif':
+                this.addToken(TokenKind.HashEndIf);
+                return;
+            case '#const':
+                this.addToken(TokenKind.HashConst);
+                return;
+            case '#error':
+                this.addToken(TokenKind.HashError);
+                this.start = this.current;
+
+                //create a token from whitespace after the #error token
+                if (this.check(' ', '\t')) {
+                    this.whitespace();
+                }
+
+                let hasErrorMessage = false;
+                while (!this.isAtEnd() && !this.check('\r') && !this.check('\n')) {
+                    hasErrorMessage = true;
+                    this.advance();
+                }
+
+                if (hasErrorMessage) {
+                    // grab all text since we found #error as one token
+                    this.addToken(TokenKind.HashErrorMessage);
+                }
+
+                this.start = this.current;
+                return;
+            default:
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedConditionalCompilationString(),
+                    location: this.locationOf()
+                });
+        }
+    }
+
+    /**
+     * Find the closest previous non-whtespace token
+     */
+    private getPreviousNonWhitespaceToken() {
+        for (let i = this.tokens.length - 1; i >= 0; i--) {
+            let token = this.tokens[i];
+            if (token && token.kind !== TokenKind.Whitespace) {
+                return this.tokens[i];
+            }
+        }
+    }
+
+    /**
+     * Capture a regex literal token. Returns false if not found.
+     * This is lookahead lexing which might techincally belong in the parser,
+     * but it's easy enough to do here in the lexer
+     */
+    private regexLiteral() {
+        this.pushLookahead();
+
+        let nextCharNeedsEscaped = false;
+
+        //regexps can only occur when preceeded by exactly one of these tokens:
+        const previousKind = this.getPreviousNonWhitespaceToken()?.kind;
+
+        //preceeded by an allowed token, or if there are no previous tokens (i.e. this is the first token in the file).
+        if (PreceedingRegexTypes.has(previousKind) || !previousKind) {
+
+            //finite loop to prevent infinite loop if something went wrong
+            for (let i = this.current; i < this.source.length; i++) {
+
+                //if we reached the end of the regex, consume any flags
+                if (this.check('/') && !nextCharNeedsEscaped) {
+                    this.advance();
+                    //consume all flag-like chars (let the parser validate the actual values)
+                    while (/[a-z]/i.exec(this.peek())) {
+                        this.advance();
+                    }
+                    //finalize the regex literal and EXIT
+                    this.addToken(TokenKind.RegexLiteral);
+                    return true;
+
+                    //if we found a non-escaped newline, there's a syntax error with this regex (or it's not a regex), so quit
+                } else if (this.check('\n') || this.isAtEnd()) {
+                    break;
+                } else if (this.check('\\')) {
+                    this.advance();
+                    nextCharNeedsEscaped = true;
+                } else {
+                    this.advance();
+                    nextCharNeedsEscaped = false;
+                }
+            }
+        }
+        this.popLookahead();
+        return false;
+    }
+
+    /**
+     * Determine if this token is a trivia token
+     */
+    private isTrivia(token: Token) {
+        return AllowedTriviaTokens.includes(token.kind);
+    }
+
+    /**
+     * Returns a single shared string instance for `text`, so that repeated occurrences of
+     * the same text all reference one string rather than each holding its own copy from
+     * `source.slice()`. Only worth calling for token kinds with a small, bounded set of
+     * possible values (`Newline`, `Whitespace`) -- for something like `Identifier` the set
+     * is unbounded and the table would just grow without ever paying off.
+     *
+     * The table is capped: interning is a pure optimization, so once it is full we hand
+     * back the original slice rather than growing a process-lifetime cache without bound.
+     * See `LEXER_TEXT_CACHE_MAX_ENTRIES`.
+     */
+    private internText(text: string) {
+        const cached = LexerTextCache.get(text);
+        if (cached !== undefined) {
+            return cached;
+        }
+        if (LexerTextCache.size < LEXER_TEXT_CACHE_MAX_ENTRIES) {
+            LexerTextCache.set(text, text);
+        }
+        return text;
+    }
+
+    /**
+     * Creates a `Token` and adds it to the `tokens` array.
+     * @param kind the type of token to produce.
+     */
+    private addToken(kind: TokenKind) {
+        //Ordered by real-world token frequency, measured over ~2.9M tokens of production
+        //and open-source BrightScript. V8 compiles a string switch to a chain of
+        //pointer-equality compares (not a jump table -- those need dense integers), so
+        //the order of these cases is load-bearing: the hottest kinds must come first.
+        //Distribution: Identifier 27.5%, Newline 16.7%, Dot 10.2%, R/LParen 10.5%,
+        //Equal 4.5%, Comma 3.1%, Colon 1.9%. Those cases cover ~75% of all tokens.
+        let text: string;
+        switch (kind) {
+            //most common kind, and its text is always content-dependent: slice directly
+            //and skip the FixedTokenText probe entirely (it could never hit).
+            case TokenKind.Identifier:
+                text = this.source.slice(this.start, this.current);
+                break;
+
+            //Second most common kind. Only three forms are possible ('\n', '\r\n', '\r'),
+            //so compare against them directly instead of paying a Map lookup to intern --
+            //measured 6-8x cheaper per newline. Which form is tested first barely matters
+            //(~0.02ms per 90k newlines either way), so this stays in the order that reads
+            //best rather than favoring LF or CRLF: the mix varies by platform and by git's
+            //autocrlf setting, and it is not worth optimizing for a guess.
+            case TokenKind.Newline: {
+                const raw = this.source.slice(this.start, this.current);
+                if (raw === '\n') {
+                    text = '\n';
+                } else if (raw === '\r\n') {
+                    text = '\r\n';
+                } else if (raw === '\r') {
+                    text = '\r';
+                } else {
+                    text = raw;
+                }
+                break;
+            }
+
+            //hottest fixed-text kinds, inlined so they resolve without a table probe
+            case TokenKind.Dot:
+                text = '.';
+                break;
+            case TokenKind.LeftParen:
+                text = '(';
+                break;
+            case TokenKind.RightParen:
+                text = ')';
+                break;
+            case TokenKind.Equal:
+                text = '=';
+                break;
+            case TokenKind.Comma:
+                text = ',';
+                break;
+            case TokenKind.Colon:
+                text = ':';
+                break;
+
+            //`Whitespace` always reaches here, because the Token has to exist to be recorded as
+            //leading trivia even when `includeWhitespace` is false (`whitespace()` pops it from
+            //the token list afterward). Indent strings are unbounded in principle, so this one
+            //uses the capped intern table to collapse repeat indents onto one shared string.
+            case TokenKind.Whitespace:
+                text = this.internText(
+                    this.source.slice(this.start, this.current)
+                );
+                break;
+
+            //everything else: the remaining fixed-text kinds resolve from the table, and
+            //literals/comments/keywords fall through to a plain slice.
+            default: {
+                const fixedText = FixedTokenText[kind];
+                text = fixedText !== undefined
+                    ? fixedText
+                    : this.source.slice(this.start, this.current);
+            }
+        }
+        //this is the canonical Token field order. Every other place that synthesizes a
+        //Token should use this same order (and set every field) so all tokens share a
+        //single V8 hidden class instead of forcing megamorphic property access downstream
+        let token: Token = new TokenObject(
+            kind,
+            text,
+            ReservedTokenKinds.has(kind),
+            this.start,
+            this.current,
+            this.sourceInfo,
+            undefined
+        );
+
+        if (this.isTrivia(token)) {
+            this.pushTrivia(token);
+        } else if (this.leadingTrivia.length > 0) {
+            token.leadingTrivia = [...this.leadingTrivia];
+            this.leadingTrivia = [];
+        }
+        if (kind !== TokenKind.Comment) {
+            this.tokens.push(token);
+        }
+        this.sync();
+        return token;
+    }
+
+    /**
+     * Move the start pointer to the current position. Normally called after adding a token.
+     */
+    private sync() {
+        this.start = this.current;
+    }
+
+    /**
+     * Creates a `Locatable` at the lexer's current position
+     * @returns the locatable of `text`
+     */
+    private locationOf(): Locatable {
+        return { startPosition: this.start, endPosition: this.current, sourceInfo: this.sourceInfo };
+    }
+}
+
+export interface ScanOptions {
+    /**
+     * If true, the whitespace tokens are included. If false, they are discarded
+     * @default false
+     */
+    includeWhitespace?: boolean;
+    /**
+     * Should locations be tracked. If false, the `range` property will be omitted
+     * @default true
+     */
+    trackLocations?: boolean;
+    /**
+     * Path to the file where this source code originated
+     */
+    srcPath?: string;
+}

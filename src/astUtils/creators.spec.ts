@@ -1,9 +1,9 @@
 import { expect } from '../chai-config.spec';
 import { createCall, createIdentifier, createStringLiteral, createToken, createVariableExpression } from './creators';
-import { TokenKind } from '../lexer/TokenKind';
-import { Lexer } from '../lexer/Lexer';
+import { TokenKind } from '../files/brs/lexer/TokenKind';
+import { Lexer } from '../files/brs/lexer/Lexer';
 import { util } from '../util';
-import type { Locatable } from '../lexer/Token';
+import type { Locatable } from '../files/brs/lexer/Token';
 import type { Location } from 'vscode-languageserver';
 
 describe('creators', () => {

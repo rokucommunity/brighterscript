@@ -17,8 +17,8 @@ import type { BsConfig } from '../BsConfig';
 import type { Logger, LogLevel } from '../logging';
 import { createLogger } from '../logging';
 import * as fsExtra from 'fs-extra';
-import type { XmlFile } from '../files/XmlFile';
-import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/xml/XmlFile';
+import type { BrsFile } from '../files/brs/BrsFile';
 
 export class Project implements LspProject {
     public constructor(

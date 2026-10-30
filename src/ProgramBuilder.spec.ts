@@ -8,7 +8,7 @@ import { standardizePath as s, util } from './util';
 import { LogLevel, createLogger } from './logging';
 import * as diagnosticUtils from './diagnosticUtils';
 import { DiagnosticSeverity } from 'vscode-languageserver';
-import { BrsFile } from './files/BrsFile';
+import { BrsFile } from './files/brs/BrsFile';
 import { expectZeroDiagnostics, expectDiagnosticsIncludes } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';

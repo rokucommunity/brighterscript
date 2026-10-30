@@ -3,17 +3,17 @@ import * as fsExtra from 'fs-extra';
 import { rokuDeploy } from 'roku-deploy';
 import type { StandardizedFileEntry, FileEntry } from 'roku-deploy';
 import { isBrsFile, isClassStatement, isConstStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isVariableExpression, isXmlFile, isXmlScope } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import type { ProvideDefinitionEvent } from '../../interfaces';
-import { TokenKind } from '../../lexer/TokenKind';
+import { TokenKind } from '../../files/brs/lexer/TokenKind';
 import type { Location, LocationLink, Range } from 'vscode-languageserver-protocol';
-import type { ClassStatement, ConstStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
-import { ParseMode } from '../../parser/Parser';
+import type { ClassStatement, ConstStatement, FunctionStatement, NamespaceStatement } from '../../files/brs/parser/Statement';
+import { ParseMode } from '../../files/brs/parser/Parser';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { Token } from '../../lexer/Token';
-import type { XmlFile } from '../../files/XmlFile';
-import type { SGAttribute, SGElement } from '../../parser/SGTypes';
+import type { Token } from '../../files/brs/lexer/Token';
+import type { XmlFile } from '../../files/xml/XmlFile';
+import type { SGAttribute, SGElement } from '../../files/xml/parser/SGTypes';
 
 export class DefinitionProvider {
     constructor(

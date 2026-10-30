@@ -1,0 +1,808 @@
+import { expect } from '../../../../../chai-config.spec';
+import * as assert from 'assert';
+import { Parser } from '../../Parser';
+import { Lexer } from '../../../lexer/Lexer';
+import { TokenKind } from '../../../lexer/TokenKind';
+import { EOF, identifier, token } from '../Parser.spec';
+import { isBlock, isFunctionStatement, isIfStatement } from '../../../../../astUtils/reflection';
+import type { Block, FunctionStatement, IfStatement } from '../../Statement';
+import { expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../../../testHelpers.spec';
+import { DiagnosticMessages } from '../../../../../DiagnosticMessages';
+import { util } from '../../../../../util';
+
+describe('parser if statements', () => {
+    it('allows empty if blocks', () => {
+        let { tokens } = Lexer.scan(`
+            if true then
+
+            else if true then
+                stop
+            else
+                stop
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('allows empty elseif blocks', () => {
+        let { tokens } = Lexer.scan(`
+            if true then
+                stop
+            else if true then
+
+            else
+                stop
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('allows empty else blocks', () => {
+        let { tokens } = Lexer.scan(`
+            if true then
+                stop
+            else if true then
+                stop
+            else
+
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics[0]?.message).not.to.exist;
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('single-line if next to else or endif', () => {
+        let { tokens } = Lexer.scan(`
+            if type(component.TextAttrs.font) = "roString"
+                font = m.fonts.Lookup(component.TextAttrs.font)
+                if font = invalid then font = m.fonts.medium
+            else if type(component.TextAttrs.font) = "roFont"
+                font = component.TextAttrs.font
+            else
+                font = m.fonts.reg.GetDefaultFont()
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+
+        let ifs = ast.statements[0];
+        if (!isIfStatement(ifs) || !isIfStatement(ifs.thenBranch?.statements[1])) {
+            assert.fail('Missing single-line if inside if-then');
+        }
+        if (!isIfStatement(ifs.elseBranch)) {
+            assert.fail('Missing chained else-if statement');
+        }
+        expect(ifs.elseBranch.elseBranch).to.exist;
+    });
+
+    it('single-line if inside multi-line if', () => {
+        let { tokens } = Lexer.scan(`
+            if true
+                if true then t = 1
+            else
+                ' empty line or line with just a comment causes crash
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+
+        let ifs = ast.statements[0];
+        if (!isIfStatement(ifs) || !isIfStatement(ifs.thenBranch?.statements[0])) {
+            assert.fail('Missing single-line if inside if-then');
+        }
+        expect(ifs.elseBranch).to.exist;
+        if (!isBlock(ifs.elseBranch)) {
+            assert.fail('Missing comment inside else branch');
+        }
+    });
+
+    it('dotted set in else block', () => {
+        let { tokens } = Lexer.scan(`
+            if true then m.top.visible = true else m.top.visible = false
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+
+        if (diagnostics.length > 0) {
+            console.log(diagnostics);
+        }
+
+        expect(diagnostics).to.be.lengthOf(0);
+
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    describe('colon before if', () => {
+        //verified on device (Roku OS 16.0.4): a colon before a single-line `if` compiles, a colon before a multi-line `if` is a syntax error
+        it('allows a colon before a single-line if', () => {
+            const { diagnostics } = Parser.parse(`
+                sub test()
+                    x = 1 : if x = 1 then print "a"
+                    x = 1 : if x = 1 then print "a" else print "b"
+                    : if x = 1 then print "a"
+                end sub
+            `);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('flags a colon before a multi-line if', () => {
+            const { diagnostics } = Parser.parse(`
+                sub test()
+                    x = 1 : if x = 1 then
+                        print "a"
+                    end if
+                    x = 1 : if x = 1
+                        print "a"
+                    end if
+                    print "z" : if x = 1 then
+                        print "a"
+                    else
+                        print "b"
+                    end if
+                    x = 1 : if x = 1 then : print "a" : end if
+                end sub
+            `);
+            expect(
+                diagnostics.filter(x => x.code === DiagnosticMessages.unexpectedColonBeforeIfStatement().code)
+            ).to.be.lengthOf(4);
+        });
+    });
+
+    describe('single-line if', () => {
+        it('parses if only', () => {
+            let { ast, diagnostics } = Parser.parse([
+                token(TokenKind.If, 'if'),
+                token(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.Then, 'then'),
+                identifier('foo'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.Newline, '\n'),
+                EOF
+            ]);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('parses if-else', () => {
+            let { ast, diagnostics } = Parser.parse([
+                token(TokenKind.If, 'if'),
+                token(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.Then, 'then'),
+                identifier('foo'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.Else, 'else'),
+                identifier('foo'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.False, 'true'),
+                token(TokenKind.Newline, '\n'),
+                EOF
+            ]);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('parses if-elseif-else', () => {
+            let { ast, diagnostics } = Parser.parse([
+                token(TokenKind.If, 'if'),
+                token(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.Then, 'then'),
+                identifier('foo'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.Else, 'else'),
+                token(TokenKind.If, 'if'),
+                token(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.IntegerLiteral, '2'),
+                token(TokenKind.Then, 'then'),
+                identifier('same'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.Else, 'else'),
+                identifier('foo'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.Newline, '\n'),
+                EOF
+            ]);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('allows \'then\' to be skipped', () => {
+            // if 1 < 2 foo = true else if 1 = 2 same = true
+            let { ast, diagnostics } = Parser.parse([
+                token(TokenKind.If, 'if'),
+                token(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.Less, '<'),
+                token(TokenKind.IntegerLiteral, '2'),
+                identifier('foo'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.Else, 'else'),
+                token(TokenKind.If, 'if'),
+                token(TokenKind.IntegerLiteral, '1'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.IntegerLiteral, '2'),
+                identifier('same'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.True, 'true'),
+                token(TokenKind.Else, 'else'),
+                identifier('foo'),
+                token(TokenKind.Equal, '='),
+                token(TokenKind.False, 'false'),
+                token(TokenKind.Newline, '\n'),
+                EOF
+            ]);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('parses special statements in inline block', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                if true print 1 else print 1
+                if true then print 1 else print 1
+                if true print "x=" ; 1 else print 1
+                if true then print "x=", 1 else print 1
+                if true print "x=" 1 else print 1
+                if true return else print 1
+                if true then return else print 1
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('colon used between inline else statements', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                if x print 1 else print 2 : print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(1);
+            const ifStatement = ast.statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(1);
+            expect((ifStatement.elseBranch as Block).statements).to.be.lengthOf(2);
+        });
+
+        it('colon used between inline else if statements', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                if x print 1 else if y print 2 : print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(1);
+            const ifStatement = ast.statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(1);
+            expect((ifStatement.elseBranch as IfStatement).thenBranch.statements).to.be.lengthOf(2);
+        });
+
+        it('colon used between all kinds of statements', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                if x print 1 : print 1 else if y print 2 : print 2 : print 2 else print 3 : print 3: print 3: print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(1);
+            const ifStatement = ast.statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(2);
+            const elseIf = ifStatement.elseBranch as IfStatement;
+            expect(elseIf.thenBranch.statements).to.be.lengthOf(3);
+            expect((elseIf.elseBranch as Block).statements).to.be.lengthOf(4);
+        });
+
+        it('has diagnostic with extra else', () => {
+            const { diagnostics } = Parser.parse(`
+                if x=1 print 1 else print 2 else print 3
+            `);
+
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedNewlineOrColon().message
+            ]);
+        });
+
+        it('nested inline if statements', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                if x=1 print 1 else if x=2 print 2 : if y=1 print "y is 1" else print "y is not 1" else print 3: print 3: print 3
+            `);
+
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(1);
+            const ifStatement = ast.statements[0] as IfStatement;
+            expect(ifStatement.thenBranch.statements).to.be.lengthOf(1);
+            const elseIf = ifStatement.elseBranch as IfStatement;
+            expect(elseIf.thenBranch.statements).to.be.lengthOf(2);
+            expect(isIfStatement(elseIf.thenBranch.statements[1])).to.be.true;
+            const nestedInlineIf = elseIf.thenBranch.statements[1] as IfStatement;
+            expect(nestedInlineIf.thenBranch.statements).to.be.lengthOf(1);
+            expect((nestedInlineIf.elseBranch as Block).statements).to.be.lengthOf(1);
+            expect((elseIf.elseBranch as Block).statements).to.be.lengthOf(3);
+        });
+
+        describe('expected inline if', () => {
+
+            it('non-inline statement used in inline if', () => {
+                const { ast, diagnostics } = Parser.parse(`
+                    if true print 1 else
+                        print 1
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(ast.statements.length).to.be.greaterThan(0);
+            });
+
+            it('non inline statement used in inline else if', () => {
+                const { ast, diagnostics } = Parser.parse(`
+                    if x print 1 else if y
+                        print 2
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(ast.statements.length).to.be.greaterThan(0);
+            });
+
+            it('colon used after inline else', () => {
+                const { ast, diagnostics } = Parser.parse(`
+                    if x print 1 else : print 2 : print 3: end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(ast.statements.length).to.be.greaterThan(0);
+            });
+
+            it('new line used in inline else', () => {
+                const { ast, diagnostics } = Parser.parse(`
+                    if x print 1 else
+                        print 2
+                        print 3
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(ast.statements.length).to.be.greaterThan(0);
+            });
+
+
+            it('colon used after inline else if', () => {
+                const { diagnostics } = Parser.parse(`
+                    if x print 1 else if y : print 2
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedTerminator(['end if', 'else if', 'else'], 'then', 'block').message
+                ]);
+            });
+
+            it('new line used in inline else if', () => {
+                const { ast, diagnostics } = Parser.parse(`
+                    if x print 1 else if y
+                        print 2
+                    end if
+                `);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.expectedInlineIfStatement().message
+                ]);
+                expect(ast.statements.length).to.be.greaterThan(0);
+            });
+
+        });
+    });
+
+    describe('block if', () => {
+        it('parses if only', () => {
+            //because the parser depends on line numbers for certain if statements, this needs to be location-aware
+            let { tokens } = Lexer.scan(`
+                if 1 < 2 THEN
+                    foo = true
+                    bar = true
+                end if
+            `);
+            let { ast, diagnostics } = Parser.parse(tokens);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('parses if-else', () => {
+            //this test requires token locations, so use the lexer
+            let { tokens } = Lexer.scan(`
+                if 1 < 2 then
+                    foo = true
+                else
+                    foo = false
+                    bar = false
+                end if
+            `);
+            let { ast, diagnostics } = Parser.parse(tokens);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('parses if-elseif-else', () => {
+            //this test requires token locations, so use the lexer
+            let { tokens } = Lexer.scan(`
+                if 1 < 2 then
+                    foo = true
+                else if 1 > 2 then
+                    foo = 3
+                    bar = true
+                else
+                    foo = false
+                end if
+            `);
+            let { ast, diagnostics } = Parser.parse(tokens);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('allows \'then\' to be skipped', () => {
+            //this test requires token locations, so use the lexer
+            let { tokens } = Lexer.scan(`
+                if 1 < 2
+                    foo = true
+                else if 1 > 2
+                    foo = 3
+                    bar = true
+                else
+                    foo = false
+                end if
+            `);
+            let { ast, diagnostics } = Parser.parse(tokens);
+
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+        });
+
+        it('sets endif token properly', () => {
+            //this test requires token locations, so use the lexer
+            let { tokens } = Lexer.scan(`
+                sub a()
+                    if true then
+                        print false
+                    else if true then
+                        print "true"
+                    else
+                        print "else"
+                    end if 'comment
+                end sub
+            `);
+            let { ast, diagnostics } = Parser.parse(tokens) as any;
+            expect(diagnostics).to.be.lengthOf(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
+
+            //the endif token should be set
+            let ifs = ast.statements[0].func.body.statements[0];
+            if (!isIfStatement(ifs) || !isIfStatement(ifs.elseBranch)) {
+                assert.fail('Unexpected statement found');
+            }
+            expect(ifs.tokens.endIf).to.not.exist;
+            expect(ifs.elseBranch.tokens.endIf).to.exist;
+        });
+    });
+
+    it('supports trailing colons after conditional statements', () => {
+        let { tokens } = Lexer.scan(`
+            sub main()
+                if 1 > 0:
+                    print "positive!"
+                else if 1 < 0:
+                    print "negative!"
+                else:
+                    print "tHaT NuMbEr iS ZeRo"
+                end if
+            end sub
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports trailing colons for one-line if statements', () => {
+        let { tokens } = Lexer.scan(`
+            if 1 < 2: return true: end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches one-line if statement missing first colon', () => {
+        //missing colon after 2
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 return true : end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches one-line if statement with multiple statements missing first colon', () => {
+        //missing colon after 2
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 print "ok" : return true : end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches one-line if statement missing second colon', () => {
+        //missing colon after `2`
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 : return true end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches one-line if statement with else missing colons', () => {
+        //missing colon after `2`
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 : return true: else return false end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches one-line if statement with colon and missing end if', () => {
+        //missing colon after `2`
+        let { tokens } = Lexer.scan(`
+            if 1 < 2: return true
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.lengthOf(0);
+    });
+
+    it('catches one-line if multi-statement with colon and missing end if', () => {
+        //missing colon after `2`
+        let { tokens } = Lexer.scan(`
+            if 1 < 2: print "ok": return true
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.lengthOf(0);
+    });
+
+    it('catches one-line if statement with colon and missing endif inside a function', () => {
+        //missing 'end if'
+        let { tokens } = Lexer.scan(`
+            function missingendif()
+                if true : return true
+            end function
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(2);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches extraneous colon at the end of one-line if-else', () => {
+        //colon at the end not allowed
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then return true else return false:
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches colon before if, unless there is `then` before', () => {
+        //colon before if isn't allowed
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then: if 2<3: return false: end if
+            : if 1 < 2: return true: end if
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches extraneous colon+end if at the end of one-line if-else', () => {
+        //expected newline + unexpected endif
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then return true else return false: end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(2);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('recovers from extraneous endif at the end of one-line if-else', () => {
+        //unexpected endif
+        let { tokens } = Lexer.scan(`
+            function test1()
+                if 1 < 2: return true: else return false end if
+            end function
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(2);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('recovers from missing end-if', () => {
+        //unexpected endif
+        let { tokens } = Lexer.scan(`
+            function test1()
+                if 1 < 2 then if 1 < 3
+                    return true
+            end function
+            function test2()
+            end function
+        `);
+        const { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.lengthOf(2);
+        const functionStatements = ast.findChildren<FunctionStatement>(isFunctionStatement);
+        expect(functionStatements).to.be.lengthOf(2);
+    });
+
+    it('catches extraneous colon at the end of one-line if', () => {
+        //colon at the end not allowed
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then return true:
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches multi-line if inside a one-line if branch', () => {
+        //second if should be inline
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then if 1 < 3
+                return true
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports multiple statements in one-line if statements', () => {
+        //second if should be inline
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then ok = true : m.ok = true : print "ok" : ook() else if 1 < 3
+                return true
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches multi-line if inside a one-line if else branch', () => {
+        //second if should be inline
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then return false else if 1 < 3
+                return true
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(1);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('catches else statement missing colon', () => {
+        //missing colon before `end if`
+        let { tokens } = Lexer.scan(`
+            if 1 < 2
+              return true
+            else return false end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.lengthOf(1);
+    });
+
+    it('supports if statement with condition and action on one line, but end if on separate line', () => {
+        let { tokens } = Lexer.scan(`
+            if 1 < 2: return true
+            end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports colon after return in single-line if statement', () => {
+        let { tokens } = Lexer.scan(`
+            if false : print "true" : end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports if elseif endif single line', () => {
+        let { tokens } = Lexer.scan(`
+            if true: print "8 worked": else if true: print "not run": else: print "not run": end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports comment at the end of one-line if', () => {
+        let { tokens } = Lexer.scan(`
+            if 1 > 2 then return true 'OK
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports colon at the beginning of a line', () => {
+        let { tokens } = Lexer.scan(`
+            if 1 < 2 then: if 1 < 4 then return false
+            : end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('supports one-line functions inside of one-line if statement', () => {
+        let { tokens } = Lexer.scan(`
+            if true then : test = sub() : print "yes" : end sub : end if
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
+    });
+
+    it('single-line if block statements have correct range', () => {
+        let { tokens } = Lexer.scan(`
+            if false then print "true"
+            if false then print "true": a = 10
+            if false then print "true" else print "false"
+            if false then print "true" else print "false": a = 20
+        `);
+        let { ast, diagnostics } = Parser.parse(tokens);
+        expect(diagnostics).to.be.lengthOf(0);
+
+        const then1 = (ast.statements[0] as IfStatement).thenBranch;
+        expect(util.getLocation(then1)).to.eql(util.createBoundingLocation(...then1.statements));
+
+        const then2 = (ast.statements[1] as IfStatement).thenBranch;
+        expect(util.getLocation(then2)).to.eql(util.createBoundingLocation(...then2.statements));
+
+        const else1 = (ast.statements[2] as IfStatement).elseBranch as Block;
+        expect(util.getLocation(else1)).to.eql(util.createBoundingLocation(...else1.statements));
+
+        const else2 = (ast.statements[3] as IfStatement).elseBranch as Block;
+        expect(util.getLocation(else2)).to.eql(util.createBoundingLocation(...else2.statements));
+    });
+});

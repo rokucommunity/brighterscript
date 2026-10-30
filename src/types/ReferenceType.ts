@@ -6,7 +6,7 @@ import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isBinaryOperatorRe
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
-import type { Token } from '../lexer/Token';
+import type { Token } from '../files/brs/lexer/Token';
 import { util } from '../util';
 
 export type AnyReferenceType = ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType | ArrayDefaultTypeReferenceType;

@@ -1,14 +1,14 @@
 import { SemanticTokenModifiers } from 'vscode-languageserver-protocol';
 import { SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import { isCallableType, isClassType, isComponentType, isConstStatement, isDottedGetExpression, isDynamicType, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionStatement, isInterfaceType, isNamespaceType, isPrimitiveType, isVariableExpression } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import type { ExtraSymbolData, ProvideSemanticTokensEvent, SemanticToken, TypeChainEntry } from '../../interfaces';
-import type { Locatable, Token } from '../../lexer/Token';
+import type { Locatable, Token } from '../../files/brs/lexer/Token';
 import util from '../../util';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { BscType } from '../../types/BscType';
 import { InternalWalkMode, WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { AstNode } from '../../parser/AstNode';
+import type { AstNode } from '../../files/brs/parser/AstNode';
 
 export class BrsFileSemanticTokensProcessor {
     public constructor(

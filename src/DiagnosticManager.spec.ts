@@ -1,12 +1,12 @@
 import { Scope } from './Scope';
-import type { BrsFile } from './files/BrsFile';
+import type { BrsFile } from './files/brs/BrsFile';
 import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
 import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
 import util, { standardizePath as s } from './util';
 import { expect } from './chai-config.spec';
 import { createSandbox } from 'sinon';
-import { TokenKind } from './lexer/TokenKind';
+import { TokenKind } from './files/brs/lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import { DiagnosticSeverity } from 'vscode-languageserver-protocol';

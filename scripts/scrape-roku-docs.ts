@@ -7,9 +7,9 @@
 import * as phin from 'phin';
 import * as fsExtra from 'fs-extra';
 import { standardizePath as s } from '../src/util';
-import { ParseMode, Parser } from '../src/parser/Parser';
-import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
-import type { ExpressionStatement, FunctionStatement } from '../src/parser/Statement';
+import { ParseMode, Parser } from '../src/files/brs/parser/Parser';
+import type { CallExpression, LiteralExpression } from '../src/files/brs/parser/Expression';
+import type { ExpressionStatement, FunctionStatement } from '../src/files/brs/parser/Statement';
 import TurndownService = require('turndown');
 import { gfm } from '@guyplusplus/turndown-plugin-gfm';
 import { marked } from 'marked';

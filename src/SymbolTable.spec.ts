@@ -9,7 +9,7 @@ import { expectTypeToBe } from './testHelpers.spec';
 import { NamespaceType } from './types/NamespaceType';
 import { TypedFunctionType } from './types/TypedFunctionType';
 import { DynamicType, FloatType, UninitializedType, UnionType } from './types';
-import type { AstNode } from './parser/AstNode';
+import type { AstNode } from './files/brs/parser/AstNode';
 
 
 describe('SymbolTable', () => {

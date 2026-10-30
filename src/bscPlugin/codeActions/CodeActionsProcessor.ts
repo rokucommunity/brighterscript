@@ -3,20 +3,20 @@ import { codeActionUtil } from '../../CodeActionUtil';
 import type { DeleteChange, InsertChange, ReplaceChange } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap, isDiagnosticOfType } from '../../DiagnosticMessages';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsFile } from '../../files/brs/BrsFile';
 import type { BscFile } from '../../files/BscFile';
-import type { XmlFile } from '../../files/XmlFile';
+import type { XmlFile } from '../../files/xml/XmlFile';
 import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
-import { ParseMode } from '../../parser/Parser';
+import { ParseMode } from '../../files/brs/parser/Parser';
 import { util } from '../../util';
 import { isBrsFile, isFunctionExpression, isMethodStatement, isVoidType, isXmlFile } from '../../astUtils/reflection';
-import type { FunctionExpression } from '../../parser/Expression';
-import type { MethodStatement } from '../../parser/Statement';
+import type { FunctionExpression } from '../../files/brs/parser/Expression';
+import type { MethodStatement } from '../../files/brs/parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
-import { TokenKind } from '../../lexer/TokenKind';
+import { TokenKind } from '../../files/brs/lexer/TokenKind';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
-import { rangeFromTokenValue } from '../../parser/SGParser';
+import { rangeFromTokenValue } from '../../files/xml/parser/SGParser';
 import type { Range } from 'vscode-languageserver';
 
 export class CodeActionsProcessor {

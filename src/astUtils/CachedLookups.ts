@@ -1,13 +1,13 @@
-import type { AALiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../parser/Expression';
-import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConditionalCompileStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../parser/Statement';
+import type { AALiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, VariableExpression } from '../files/brs/parser/Expression';
+import type { AliasStatement, AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConditionalCompileStatement, ConstStatement, EnumStatement, FunctionStatement, ImportStatement, InterfaceStatement, LibraryStatement, NamespaceStatement, TypecastStatement } from '../files/brs/parser/Statement';
 import { Cache } from '../Cache';
 import { InternalWalkMode, WalkMode, createVisitor } from './visitors';
-import type { Expression } from '../parser/AstNode';
+import type { Expression } from '../files/brs/parser/AstNode';
 import { isAAMemberExpression, isBinaryExpression, isCallExpression, isDottedGetExpression, isFunctionExpression, isGroupingExpression, isIndexedGetExpression, isLiteralExpression, isMethodStatement, isNamespaceStatement, isNewExpression, isVariableExpression } from './reflection';
-import type { Parser } from '../parser/Parser';
-import { ParseMode } from '../parser/Parser';
-import type { Token } from '../lexer/Token';
-import { isToken } from '../lexer/Token';
+import type { Parser } from '../files/brs/parser/Parser';
+import { ParseMode } from '../files/brs/parser/Parser';
+import type { Token } from '../files/brs/lexer/Token';
+import { isToken } from '../files/brs/lexer/Token';
 import type { Program } from '../Program';
 import util from '../util';
 

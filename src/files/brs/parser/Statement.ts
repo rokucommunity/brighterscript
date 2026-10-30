@@ -1,0 +1,5533 @@
+/* eslint-disable no-bitwise */
+import type { Token, Identifier, Locatable, SourceInfo } from '../lexer/Token';
+import { TokenKind } from '../lexer/TokenKind';
+import type { DottedGetExpression, LiteralExpression, TypecastExpression } from './Expression';
+import { FunctionExpression, FunctionParameterExpression, TypeExpression } from './Expression';
+import { CallExpression, VariableExpression } from './Expression';
+import { util } from '../../../util';
+import type { Location } from 'vscode-languageserver';
+import type { BrsTranspileState } from './BrsTranspileState';
+import { ParseMode } from './Parser';
+import type { WalkVisitor, WalkOptions } from '../../../astUtils/visitors';
+import { InternalWalkMode, walk, createVisitor, WalkMode, walkArray } from '../../../astUtils/visitors';
+import { isBinaryExpression, isBlock, isCallExpression, isCaseStatement, isClassType, isConditionalCompileStatement, isLiteralBoolean, isEnumMemberStatement, isEnumType, isEnumStatement, isExitStatement, isExpressionStatement, isFieldStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInvalidType, isLiteralExpression, isMethodStatement, isNamespaceStatement, isPrintSeparatorExpression, isSelectCaseStatement, isTypecastExpression, isTypedefProvider, isUnaryExpression, isUninitializedType, isVariableExpression, isVoidType, isWhileStatement } from '../../../astUtils/reflection';
+import type { GetTypeOptions } from '../../../interfaces';
+import { TypeChainEntry, type TranspileResult, type TypedefProvider } from '../../../interfaces';
+import { createDottedIdentifier, createIdentifier, createInvalidLiteral, createMethodStatement, createToken, createVariableExpression } from '../../../astUtils/creators';
+import { DynamicType } from '../../../types/DynamicType';
+import type { BscType } from '../../../types/BscType';
+import { SymbolTable } from '../../../SymbolTable';
+import type { AstNode, Expression } from './AstNode';
+import { AstNodeKind, Statement } from './AstNode';
+import { ClassType } from '../../../types/ClassType';
+import { EnumMemberType, EnumType } from '../../../types/EnumType';
+import { NamespaceType } from '../../../types/NamespaceType';
+import { InterfaceType } from '../../../types/InterfaceType';
+import { VoidType } from '../../../types/VoidType';
+import { TypedFunctionType } from '../../../types/TypedFunctionType';
+import { ArrayType } from '../../../types/ArrayType';
+import { SymbolTypeFlag } from '../../../SymbolTypeFlag';
+import brsDocParser from './BrightScriptDocParser';
+import { ArrayDefaultTypeReferenceType } from '../../../types/ReferenceType';
+export class EmptyStatement extends Statement {
+    constructor(options?: { range?: Location }
+    ) {
+        super();
+        util.setBounds(this);
+    }
+    /**
+     * Create a negative range to indicate this is an interpolated location
+     */
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public readonly kind = AstNodeKind.EmptyStatement;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new EmptyStatement()
+        );
+    }
+}
+
+/**
+ * This is a top-level statement. Consider this the root of the AST
+ */
+export class Body extends Statement implements TypedefProvider {
+    constructor(options?: {
+        statements?: Statement[];
+    }) {
+        super();
+        this.statements = options?.statements ?? [];
+        util.setBounds(this, this.statements);
+    }
+
+    public readonly statements: Statement[] = [];
+    public readonly kind = AstNodeKind.Body;
+
+    public readonly symbolTable = new SymbolTable('Body', () => this.parent?.getSymbolTable());
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let result: TranspileResult = state.transpileAnnotations(this);
+        for (let i = 0; i < this.statements.length; i++) {
+            let statement = this.statements[i];
+            let previousStatement = this.statements[i - 1];
+            let nextStatement = this.statements[i + 1];
+
+            if (!previousStatement) {
+                //this is the first statement. do nothing related to spacing and newlines
+
+                //if comment is on same line as prior sibling
+            } else if (util.hasLeadingComments(statement) && previousStatement && util.getLocation(util.getLeadingComments(statement)?.[0])?.range?.start.line === util.getLocation(previousStatement)?.range?.end.line) {
+                result.push(
+                    ' '
+                );
+                //add double newline if this is a comment, and next is a function
+            } else if (util.hasLeadingComments(statement) && nextStatement && isFunctionStatement(nextStatement)) {
+                result.push(state.newline, state.newline);
+
+                //add double newline if is function not preceeded by a comment
+            } else if (isFunctionStatement(statement) && previousStatement && !util.hasLeadingComments(statement)) {
+                result.push(state.newline, state.newline);
+            } else {
+                //separate statements by a single newline
+                result.push(state.newline);
+            }
+
+            util.pushAll(result, statement.transpile(state));
+        }
+        return result;
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        let result = [] as TranspileResult;
+        for (const statement of this.statements) {
+            //if the current statement supports generating typedef, call it
+            if (isTypedefProvider(statement)) {
+                result.push(
+                    state.indent(),
+                    ...statement.getTypedef(state),
+                    state.newline
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (!(options.walkMode & InternalWalkMode.walkStatements)) {
+            return;
+        }
+        const fullWalkMode = InternalWalkMode.walkStatements | InternalWalkMode.walkExpressions | InternalWalkMode.recurseChildFunctions;
+        //only a full walk from the root of the tree resolves conditional compile statements, because `#const` applies in source order.
+        //a walk that skips part of the tree would miss the `#const` statements there, so it uses the results of the last full walk instead
+        const isFullWalk = (options.walkMode & fullWalkMode) === fullWalkMode && !options.skipChildren;
+        //constants passed by the caller already flow down the walk as they are
+        if (this.parent || options.bsConsts || !isFullWalk) {
+            walkArray(this.statements, visitor, options, this);
+            return;
+        }
+        //carry the manifest `bs_const` values down the walk, and let each `#const` add to them as the walk reaches it.
+        //copy them so the walk never changes `ast.bsConsts`, and copy the options so the caller's object is untouched
+        walkArray(this.statements, visitor, { ...options, bsConsts: new Map(this.bsConsts) }, this);
+    }
+
+    public clone() {
+        const clone = this.finalizeClone(
+            new Body({
+                statements: this.statements?.map(s => s?.clone())
+            }),
+            ['statements']
+        );
+        //keep the manifest `bs_const` values, so a full walk of the clone resolves `#if` statements the same way
+        if (this.bsConsts) {
+            clone.bsConsts = new Map(this.bsConsts);
+        }
+        return clone;
+    }
+}
+
+export class AssignmentStatement extends Statement {
+    constructor(options: {
+        name: Identifier;
+        equals?: Token;
+        value: Expression;
+        as?: Token;
+        typeExpression?: TypeExpression;
+    }) {
+        super();
+        this.value = options.value;
+        this.tokens = {
+            equals: options.equals,
+            name: options.name,
+            as: options.as
+        };
+        this.typeExpression = options.typeExpression;
+        util.setBounds(this, ...Object.values(this.tokens), this.value);
+    }
+
+    public readonly tokens: {
+        readonly equals?: Token;
+        readonly name: Identifier;
+        readonly as?: Token;
+    };
+
+    public readonly value: Expression;
+
+    public readonly typeExpression?: TypeExpression;
+
+    public readonly kind = AstNodeKind.AssignmentStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals ?? createToken(TokenKind.Equal), '='),
+            ' ',
+            ...this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const variableTypeFromCode = this.typeExpression?.getType({ ...options, typeChain: undefined });
+        const docs = brsDocParser.parseNode(this);
+        const variableTypeFromDocs = docs?.getTypeTagBscType(options);
+        const variableType = util.chooseTypeFromCodeOrDocComment(variableTypeFromCode, variableTypeFromDocs, options) ?? this.value.getType({ ...options, typeChain: undefined });
+
+        // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
+        // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
+        options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, locatable: this.tokens.name, astNode: this }));
+        return variableType;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AssignmentStatement({
+                name: util.cloneToken(this.tokens.name),
+                value: this.value?.clone(),
+                as: util.cloneToken(this.tokens.as),
+                equals: util.cloneToken(this.tokens.equals),
+                typeExpression: this.typeExpression?.clone()
+            }),
+            ['value', 'typeExpression']
+        );
+    }
+}
+
+export class AugmentedAssignmentStatement extends Statement {
+    constructor(options: {
+        item: Expression;
+        operator: Token;
+        value: Expression;
+    }) {
+        super();
+        this.value = options.value;
+        this.tokens = {
+            operator: options.operator
+        };
+        this.item = options.item;
+        this.value = options.value;
+        util.setBounds(this, this.item, ...Object.values(this.tokens), this.value);
+    }
+
+    public readonly tokens: {
+        readonly operator?: Token;
+    };
+
+    public readonly item: Expression;
+
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.AugmentedAssignmentStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            this.item.transpile(state),
+            ' ',
+            state.transpileToken(this.tokens.operator),
+            ' ',
+            this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'item', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const variableType = util.binaryOperatorResultType(this.item.getType(options), this.tokens.operator, this.value.getType(options));
+
+        //const variableType = this.typeExpression?.getType({ ...options, typeChain: undefined }) ?? this.value.getType({ ...options, typeChain: undefined });
+
+        // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
+        // so this.value will be a BinaryExpression, and BinaryExpressions can figure out their own types
+        // options.typeChain?.push(new TypeChainEntry({ name: this.tokens.name.text, type: variableType, data: options.data, range: this.tokens.name.range, astNode: this }));
+        return variableType;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.item.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AugmentedAssignmentStatement({
+                item: this.item?.clone(),
+                operator: util.cloneToken(this.tokens.operator),
+                value: this.value?.clone()
+            }),
+            ['item', 'value']
+        );
+    }
+}
+
+export class Block extends Statement {
+    constructor(options: {
+        statements: Statement[];
+    }) {
+        super();
+        this.statements = options.statements;
+        this.symbolTable = new SymbolTable('Block', () => this.parent.getSymbolTable());
+        util.setBounds(this, this.statements);
+    }
+
+    public readonly statements: Statement[];
+
+    public readonly kind = AstNodeKind.Block;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * An empty block has no statements to get its bounds from, so its parent calls this (from the parent's constructor)
+     * to set the bounds to the gap between the parent's code on either side of the block. Does nothing if the block has statements,
+     * unless `options.evenIfNotEmpty` is true. If either side has no position, the block keeps the bounds of its statements.
+     * @param before the parent's code just before this block (i.e. a function's signature)
+     * @param after the parent's code just after this block (i.e. `end function`)
+     * @param options extra options
+     * @param options.evenIfNotEmpty span the gap even when the block has statements (i.e. a conditional compile branch, which also covers blank lines, comments and code that did not parse)
+     */
+    public setBoundsBetween(before: Locatable | undefined, after: Locatable | undefined, options?: { evenIfNotEmpty?: boolean }) {
+        if (this.statements?.length > 0 && !options?.evenIfNotEmpty) {
+            return;
+        }
+        //offsets from different sources can't be compared, so both sides must come from the same source
+        if (before?.sourceInfo && before.sourceInfo === after?.sourceInfo) {
+            const self = this as Locatable;
+            self.startPosition = util.getContentEnd(before);
+            self.endPosition = after.startPosition;
+            self.sourceInfo = before.sourceInfo;
+        }
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        state.blockDepth++;
+        let results = [] as TranspileResult;
+        for (let i = 0; i < this.statements.length; i++) {
+            let previousStatement = this.statements[i - 1];
+            let statement = this.statements[i];
+            //is not a comment
+            //if comment is on same line as parent
+            if (util.isLeadingCommentOnSameLine(state.lineage[0], statement) ||
+                util.isLeadingCommentOnSameLine(util.getLocation(previousStatement), statement)
+            ) {
+                results.push(' ');
+
+                //is not a comment
+            } else {
+                //add a newline and indent
+                results.push(
+                    state.newline,
+                    state.indent()
+                );
+            }
+
+            //push block onto parent list
+            state.lineage.unshift(this);
+            util.pushAll(results, statement.transpile(state));
+            state.lineage.shift();
+        }
+        //if a `continue` inside this block was rewritten into a `goto`, emit its jump target as
+        //the last line of the block. Done here (rather than in the loop statements) so the label
+        //picks up the block's own indent depth.
+        //`state` can come from an older brighterscript version (i.e. a plugin bundling a newer
+        //brighterscript than the host), so guard against the loop-label api being absent
+        const loopLabel = state.peekLoopLabel?.();
+        if (loopLabel?.wasAccessed && loopLabel.blockDepth === state.blockDepth) {
+            results.push(
+                state.newline,
+                state.indent(),
+                `${loopLabel.label}:`
+            );
+        }
+        state.blockDepth--;
+        return results;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.statements[0]?.leadingTrivia ?? [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walkArray(this.statements, visitor, options, this);
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new Block({
+                statements: this.statements?.map(s => s?.clone())
+            }),
+            ['statements']
+        );
+    }
+}
+
+export class ExpressionStatement extends Statement {
+    constructor(options: {
+        expression: Expression;
+    }) {
+        super();
+        this.expression = options.expression;
+        util.setBounds(this, this.expression);
+    }
+    public readonly expression: Expression;
+    public readonly kind = AstNodeKind.ExpressionStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileAnnotations(this),
+            this.expression.transpile(state)
+        ];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        //ExpressionStatements should not be included in typedefs
+        //as they represent code execution which is not part of the type definition
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.expression.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ExpressionStatement({
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
+    }
+}
+
+export class ExitStatement extends Statement {
+    constructor(options?: {
+        exit?: Token;
+        loopType: Token;
+    }) {
+        super();
+        this.tokens = {
+            exit: options?.exit,
+            loopType: options.loopType
+        };
+        util.setBounds(this,
+            this.tokens.exit,
+            this.tokens.loopType
+        );
+    }
+
+    public readonly tokens: {
+        readonly exit: Token;
+        readonly loopType?: Token;
+    };
+
+    public readonly kind = AstNodeKind.ExitStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        //`select case` is transpiled to an if/else chain, so there's nothing to exit. Jump past the end of it instead.
+        //(An `exit select` at the end of a case is dropped by the case itself, so it never gets here)
+        if (this.tokens.loopType?.kind === TokenKind.Select) {
+            const selectCase = getExitSelectTarget(this)?.selectCase;
+            if (!selectCase) {
+                //validation flags this. Keep any comments, but there's nothing sensible to emit
+                return state.transpileLeadingComments(this.tokens.exit);
+            }
+            return [
+                ...state.transpileLeadingComments(this.tokens.exit),
+                state.sourceNode(this, `goto ${state.getExitSelectLabel(selectCase)}`)
+            ];
+        }
+        return [
+            state.transpileToken(this.tokens.exit, 'exit'),
+            (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
+            state.transpileToken(this.tokens.loopType)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.exit?.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ExitStatement({
+                loopType: util.cloneToken(this.tokens.loopType),
+                exit: util.cloneToken(this.tokens.exit)
+            })
+        );
+    }
+}
+
+export class FunctionStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        name: Identifier;
+        func: FunctionExpression;
+    }) {
+        super();
+        this.tokens = {
+            name: options.name
+        };
+        this.func = options.func;
+        if (this.func) {
+            this.func.symbolTable.name += `: '${this.tokens.name?.text}'`;
+        }
+
+        util.setBounds(this, this.func);
+    }
+
+    public readonly tokens: {
+        readonly name: Identifier;
+    };
+    public readonly func: FunctionExpression;
+
+    public readonly kind = AstNodeKind.FunctionStatement as AstNodeKind;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * Get the name of this expression based on the parse mode
+     */
+    public getName(parseMode: ParseMode) {
+        const namespace = this.findAncestor(isNamespaceStatement);
+        if (namespace) {
+            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            let namespaceName = namespace.getName(parseMode);
+            return namespaceName + delimiter + this.tokens.name?.text;
+        } else {
+            return this.tokens.name.text;
+        }
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.func.leadingTrivia;
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        //create a fake token using the full transpiled name
+        let nameToken = {
+            ...this.tokens.name,
+            text: this.getName(ParseMode.BrightScript)
+        };
+
+        return [
+            ...state.transpileAnnotations(this),
+            ...this.func.transpile(state, nameToken)
+        ];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        let result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push(
+            ...this.func.getTypedef(state)
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'func', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const funcExprType = this.func.getType(options);
+        funcExprType.setName(this.getName(ParseMode.BrighterScript));
+        return funcExprType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new FunctionStatement({
+                func: this.func?.clone(),
+                name: util.cloneToken(this.tokens.name)
+            }),
+            ['func']
+        );
+    }
+}
+
+export class IfStatement extends Statement {
+    constructor(options: {
+        if?: Token;
+        then?: Token;
+        else?: Token;
+        endIf?: Token;
+
+        condition: Expression;
+        thenBranch: Block;
+        elseBranch?: IfStatement | Block;
+    }) {
+        super();
+        this.condition = options.condition;
+        this.thenBranch = options.thenBranch;
+        this.elseBranch = options.elseBranch;
+
+        this.tokens = {
+            if: options.if,
+            then: options.then,
+            else: options.else,
+            endIf: options.endIf
+        };
+
+        //give empty branches the bounds of the gap they occupy (the else branch first, since the then branch ends where it starts)
+        if (isBlock(this.elseBranch)) {
+            this.elseBranch.setBoundsBetween(this.tokens.else, this.tokens.endIf);
+        }
+        this.thenBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.tokens.then, this.condition),
+            util.setBounds({} as Locatable, this.tokens.else, this.elseBranch, this.tokens.endIf)
+        );
+
+        util.setBounds(this,
+            ...Object.values(this.tokens),
+            this.condition,
+            this.thenBranch,
+            this.elseBranch
+        );
+    }
+
+    readonly tokens: {
+        readonly if?: Token;
+        readonly then?: Token;
+        readonly else?: Token;
+        readonly endIf?: Token;
+    };
+    public readonly condition: Expression;
+    public readonly thenBranch: Block;
+    public readonly elseBranch?: IfStatement | Block;
+
+    public readonly kind = AstNodeKind.IfStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    get isInline() {
+        const allLeadingTrivia = [
+            ...this.thenBranch.leadingTrivia,
+            ...this.thenBranch.statements.map(s => s.leadingTrivia).flat(),
+            ...(this.tokens.else?.leadingTrivia ?? []),
+            ...(this.tokens.endIf?.leadingTrivia ?? [])
+        ];
+
+        const hasNewline = allLeadingTrivia.find(t => t.kind === TokenKind.Newline);
+        return !hasNewline;
+    }
+
+    transpile(state: BrsTranspileState) {
+        let results = [] as TranspileResult;
+        //if   (already indented by block)
+        results.push(state.transpileToken(this.tokens.if ?? createToken(TokenKind.If)));
+        results.push(' ');
+        //conditions
+        results.push(...this.condition.transpile(state));
+        //then
+        if (this.tokens.then) {
+            results.push(' ');
+            results.push(
+                state.transpileToken(this.tokens.then, 'then')
+            );
+        }
+        state.lineage.unshift(this);
+
+        //if statement body
+        let thenNodes = this.thenBranch.transpile(state);
+        state.lineage.shift();
+        if (thenNodes.length > 0) {
+            results.push(thenNodes);
+        }
+        //else branch
+        if (this.elseBranch) {
+            //else
+            results.push(...state.transpileEndBlockToken(this.thenBranch, this.tokens.else, 'else'));
+
+            if (isIfStatement(this.elseBranch)) {
+                //chained elseif
+                state.lineage.unshift(this.elseBranch);
+                let body = this.elseBranch.transpile(state);
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    //zero or more spaces between the `else` and the `if`
+                    results.push(util.getLeadingWhitespace(this.elseBranch.tokens.if));
+                    util.pushAll(results, body);
+
+                    // stop here because chained if will transpile the rest
+                    return results;
+                } else {
+                    results.push('\n');
+                }
+
+            } else {
+                //else body
+                state.lineage.unshift(this.tokens.else!);
+                let body = this.elseBranch.transpile(state);
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    util.pushAll(results, body);
+                }
+            }
+        }
+
+        //end if
+        results.push(...state.transpileEndBlockToken(this.elseBranch ?? this.thenBranch, this.tokens.endIf, 'end if'));
+
+        return results;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'condition', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'thenBranch', visitor, options);
+        }
+        if (this.elseBranch && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'elseBranch', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.if?.leadingTrivia ?? [];
+    }
+
+    get endTrivia(): Token[] {
+        return this.tokens.endIf?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new IfStatement({
+                if: util.cloneToken(this.tokens.if),
+                else: util.cloneToken(this.tokens.else),
+                endIf: util.cloneToken(this.tokens.endIf),
+                then: util.cloneToken(this.tokens.then),
+                condition: this.condition?.clone(),
+                thenBranch: this.thenBranch?.clone(),
+                elseBranch: this.elseBranch?.clone()
+            }),
+            ['condition', 'thenBranch', 'elseBranch']
+        );
+    }
+}
+
+export class IncrementStatement extends Statement {
+    constructor(options: {
+        value: Expression;
+        operator: Token;
+    }) {
+        super();
+        this.value = options.value;
+        this.tokens = {
+            operator: options.operator
+        };
+        util.setBounds(this,
+            this.value,
+            this.tokens.operator
+        );
+    }
+
+    public readonly value: Expression;
+    public readonly tokens: {
+        readonly operator: Token;
+    };
+
+    public readonly kind = AstNodeKind.IncrementStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            ...this.value.transpile(state),
+            state.transpileToken(this.tokens.operator)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.value?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new IncrementStatement({
+                value: this.value?.clone(),
+                operator: util.cloneToken(this.tokens.operator)
+            }),
+            ['value']
+        );
+    }
+}
+
+/**
+ * Represents a `print` statement within BrightScript.
+ */
+export class PrintStatement extends Statement {
+    /**
+     * The maximum combined count of printed values and `,` separators in a single print statement.
+     * The device fails to compile a print statement that exceeds it. `;` separators and whitespace
+     * between values do not count.
+     */
+    public static readonly MaximumPrintCount = 20;
+
+    /**
+     * Creates a new internal representation of a BrightScript `print` statement.
+     * @param options the options for this statement
+     * @param options.print a print token
+     * @param options.expressions an array of expressions to be evaluated and printed. Wrap PrintSeparator tokens (`;` or `,`) in `PrintSeparatorExpression`
+     */
+    constructor(options: {
+        print?: Token;
+        expressions: Array<Expression>;
+    }) {
+        super();
+        this.tokens = {
+            print: options.print
+        };
+        this.expressions = options.expressions;
+        util.setBounds(this,
+            this.tokens.print,
+            ...(this.expressions ?? [])
+        );
+    }
+
+    public readonly tokens: {
+        readonly print?: Token;
+    };
+
+    public readonly expressions: Array<Expression>;
+
+    public readonly kind = AstNodeKind.PrintStatement;
+
+    /**
+     * Counts the printed values and the `,` separators in this statement
+     */
+    public getPrintCounts() {
+        let valueCount = 0;
+        let commaCount = 0;
+        for (const expression of this.expressions) {
+            if (!isPrintSeparatorExpression(expression)) {
+                valueCount++;
+            } else if (expression.tokens.separator.kind === TokenKind.Comma) {
+                commaCount++;
+            }
+        }
+        return { valueCount: valueCount, commaCount: commaCount };
+    }
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let result = [
+            state.transpileToken(this.tokens.print, 'print')
+        ] as TranspileResult;
+
+        //if the first expression has no leading whitespace, add a single space between the `print` and the expression
+        if (this.expressions.length > 0 && !this.expressions[0].leadingTrivia?.find(t => t?.kind === TokenKind.Whitespace)) {
+            result.push(' ');
+        }
+
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
+        for (let i = 0; i < this.expressions.length; i++) {
+            const expression = this.expressions[i];
+            let leadingWhitespace = expression.leadingTrivia?.find(t => t?.kind === TokenKind.Whitespace)?.text;
+            if (leadingWhitespace) {
+                result.push(leadingWhitespace);
+                //if the previous expression was NOT a separator, and this one is not also, add a space between them
+            } else if (i > 0 && !isPrintSeparatorExpression(this.expressions[i - 1]) && !isPrintSeparatorExpression(expression) && !leadingWhitespace) {
+                result.push(' ');
+            }
+
+            result.push(
+                ...expression.transpile(state)
+            );
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.expressions, visitor, options, this);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.print?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new PrintStatement({
+                print: util.cloneToken(this.tokens.print),
+                expressions: this.expressions?.map(e => e?.clone())
+            }),
+            ['expressions']
+        );
+    }
+}
+
+export class DimStatement extends Statement {
+    constructor(options: {
+        dim?: Token;
+        name: Identifier;
+        openingSquare?: Token;
+        dimensions: Expression[];
+        closingSquare?: Token;
+    }) {
+        super();
+        this.tokens = {
+            dim: options?.dim,
+            name: options.name,
+            openingSquare: options.openingSquare,
+            closingSquare: options.closingSquare
+        };
+        this.dimensions = options.dimensions;
+        util.setBounds(this,
+            options.dim,
+            options.name,
+            options.openingSquare,
+            ...(this.dimensions ?? []),
+            options.closingSquare
+        );
+    }
+
+    public readonly tokens: {
+        readonly dim?: Token;
+        readonly name: Identifier;
+        readonly openingSquare?: Token;
+        readonly closingSquare?: Token;
+    };
+    public readonly dimensions: Expression[];
+
+    public readonly kind = AstNodeKind.DimStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public transpile(state: BrsTranspileState) {
+        let result: TranspileResult = [
+            state.transpileToken(this.tokens.dim, 'dim'),
+            ' ',
+            state.transpileToken(this.tokens.name),
+            state.transpileToken(this.tokens.openingSquare, '[')
+        ];
+        for (let i = 0; i < this.dimensions.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(
+                ...this.dimensions![i].transpile(state)
+            );
+        }
+        result.push(state.transpileToken(this.tokens.closingSquare, ']'));
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.dimensions?.length !== undefined && this.dimensions?.length > 0 && options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.dimensions, visitor, options, this);
+
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        const numDimensions = this.dimensions?.length ?? 1;
+        let type = new ArrayType();
+        for (let i = 0; i < numDimensions - 1; i++) {
+            type = new ArrayType(type);
+        }
+        return type;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.dim?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new DimStatement({
+                dim: util.cloneToken(this.tokens.dim),
+                name: util.cloneToken(this.tokens.name),
+                openingSquare: util.cloneToken(this.tokens.openingSquare),
+                dimensions: this.dimensions?.map(e => e?.clone()),
+                closingSquare: util.cloneToken(this.tokens.closingSquare)
+            }),
+            ['dimensions']
+        );
+    }
+}
+
+export class GotoStatement extends Statement {
+    constructor(options: {
+        goto?: Token;
+        label: Token;
+    }) {
+        super();
+        this.tokens = {
+            goto: options.goto,
+            label: options.label
+        };
+        util.setBounds(this,
+            this.tokens.goto,
+            this.tokens.label
+        );
+    }
+
+    public readonly tokens: {
+        readonly goto?: Token;
+        readonly label: Token;
+    };
+
+    public readonly kind = AstNodeKind.GotoStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.goto, 'goto'),
+            ' ',
+            state.transpileToken(this.tokens.label)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.goto?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new GotoStatement({
+                goto: util.cloneToken(this.tokens.goto),
+                label: util.cloneToken(this.tokens.label)
+            })
+        );
+    }
+}
+
+export class LabelStatement extends Statement {
+    constructor(options: {
+        name: Token;
+        colon?: Token;
+    }) {
+        super();
+        this.tokens = {
+            name: options.name,
+            colon: options.colon
+        };
+        util.setBounds(this,
+            this.tokens.name,
+            this.tokens.colon
+        );
+    }
+    public readonly tokens: {
+        readonly name: Token;
+        readonly colon: Token;
+    };
+    public readonly kind = AstNodeKind.LabelStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia;
+    }
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.name),
+            state.transpileToken(this.tokens.colon, ':')
+
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new LabelStatement({
+                name: util.cloneToken(this.tokens.name),
+                colon: util.cloneToken(this.tokens.colon)
+            })
+        );
+    }
+}
+
+export class ReturnStatement extends Statement {
+    constructor(options?: {
+        return?: Token;
+        value?: Expression;
+    }) {
+        super();
+        this.tokens = {
+            return: options?.return
+        };
+        this.value = options?.value;
+        util.setBounds(this,
+            this.tokens.return,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly return?: Token;
+    };
+    public readonly value?: Expression;
+    public readonly kind = AstNodeKind.ReturnStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let result = [] as TranspileResult;
+        result.push(
+            state.transpileToken(this.tokens.return, 'return')
+        );
+        if (this.value) {
+            result.push(' ');
+            result.push(...this.value.transpile(state));
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.return?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ReturnStatement({
+                return: util.cloneToken(this.tokens.return),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
+}
+
+export class EndStatement extends Statement {
+    constructor(options?: {
+        end?: Token;
+    }) {
+        super();
+        this.tokens = {
+            end: options?.end
+        };
+        util.setBounds(this, this.tokens.end);
+    }
+    public readonly tokens: {
+        readonly end?: Token;
+    };
+    public readonly kind = AstNodeKind.EndStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.end, 'end')
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.end?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new EndStatement({
+                end: util.cloneToken(this.tokens.end)
+            })
+        );
+    }
+}
+
+export class StopStatement extends Statement {
+    constructor(options?: {
+        stop?: Token;
+    }) {
+        super();
+        this.tokens = { stop: options?.stop };
+        util.setBounds(this, this.tokens?.stop);
+    }
+    public readonly tokens: {
+        readonly stop?: Token;
+    };
+
+    public readonly kind = AstNodeKind.StopStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.stop, 'stop')
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.stop?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new StopStatement({
+                stop: util.cloneToken(this.tokens.stop)
+            })
+        );
+    }
+}
+
+export class ForStatement extends Statement {
+    constructor(options: {
+        for?: Token;
+        counterDeclaration: AssignmentStatement;
+        to?: Token;
+        finalValue: Expression;
+        body: Block;
+        endFor?: Token;
+        step?: Token;
+        increment?: Expression;
+    }) {
+        super();
+        this.tokens = {
+            for: options.for,
+            to: options.to,
+            endFor: options.endFor,
+            step: options.step
+        };
+        this.counterDeclaration = options.counterDeclaration;
+        this.finalValue = options.finalValue;
+        this.body = options.body;
+        this.increment = options.increment;
+
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.increment, this.tokens.step, this.finalValue, this.tokens.to, this.counterDeclaration, this.tokens.for),
+            this.tokens.endFor
+        );
+        util.setBounds(this,
+            this.tokens.for,
+            this.counterDeclaration,
+            this.tokens.to,
+            this.finalValue,
+            this.tokens.step,
+            this.increment,
+            this.body,
+            this.tokens.endFor
+        );
+    }
+
+    public readonly tokens: {
+        readonly for?: Token;
+        readonly to?: Token;
+        readonly endFor?: Token;
+        readonly step?: Token;
+    };
+
+    public readonly counterDeclaration: AssignmentStatement;
+    public readonly finalValue: Expression;
+    public readonly body: Block;
+    public readonly increment?: Expression;
+
+    public readonly kind = AstNodeKind.ForStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let result = [] as TranspileResult;
+        //for
+        result.push(
+            state.transpileToken(this.tokens.for, 'for'),
+            ' '
+        );
+        //i=1
+        result.push(
+            ...this.counterDeclaration.transpile(state),
+            ' '
+        );
+        //to
+        result.push(
+            state.transpileToken(this.tokens.to, 'to'),
+            ' '
+        );
+        //final value
+        result.push(this.finalValue.transpile(state));
+        //step
+        if (this.increment) {
+            result.push(
+                ' ',
+                state.transpileToken(this.tokens.step, 'step'),
+                ' ',
+                this.increment!.transpile(state)
+            );
+        }
+        //loop body
+        state.lineage.unshift(this);
+        state.pushLoopLabel?.();
+        util.pushAll(result, this.body.transpile(state));
+        state.popLoopLabel?.();
+        state.lineage.shift();
+
+        //end for
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endFor, 'end for'));
+
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'counterDeclaration', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'finalValue', visitor, options);
+            walk(this, 'increment', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.for?.leadingTrivia ?? [];
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endFor?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ForStatement({
+                for: util.cloneToken(this.tokens.for),
+                counterDeclaration: this.counterDeclaration?.clone(),
+                to: util.cloneToken(this.tokens.to),
+                finalValue: this.finalValue?.clone(),
+                body: this.body?.clone(),
+                endFor: util.cloneToken(this.tokens.endFor),
+                step: util.cloneToken(this.tokens.step),
+                increment: this.increment?.clone()
+            }),
+            ['counterDeclaration', 'finalValue', 'body', 'increment']
+        );
+    }
+}
+
+export class ForEachStatement extends Statement {
+    constructor(options: {
+        forEach?: Token;
+        item: Token;
+        as?: Token;
+        typeExpression?: TypeExpression;
+        in?: Token;
+        target: Expression;
+        body: Block;
+        endFor?: Token;
+    }) {
+        super();
+        this.tokens = {
+            forEach: options.forEach,
+            item: options.item,
+            as: options.as,
+            in: options.in,
+            endFor: options.endFor
+        };
+        this.body = options.body;
+        this.target = options.target;
+        this.typeExpression = options.typeExpression;
+
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.target, this.tokens.in, this.typeExpression, this.tokens.as, this.tokens.item, this.tokens.forEach),
+            this.tokens.endFor
+        );
+        util.setBounds(this,
+            this.tokens.forEach,
+            this.tokens.item,
+            this.tokens.as,
+            this.typeExpression,
+            this.tokens.in,
+            this.target,
+            this.body,
+            this.tokens.endFor
+        );
+    }
+
+    public readonly tokens: {
+        readonly forEach?: Token;
+        readonly item: Token;
+        readonly as: Token;
+        readonly in?: Token;
+        readonly endFor?: Token;
+    };
+    public readonly body: Block;
+    public readonly target: Expression;
+    public readonly typeExpression?: TypeExpression;
+
+    public readonly kind = AstNodeKind.ForEachStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let result = [] as TranspileResult;
+        //for each
+        result.push(
+            state.transpileToken(this.tokens.forEach, 'for each'),
+            ' '
+        );
+        //item
+        result.push(
+            state.transpileToken(this.tokens.item),
+            ' '
+        );
+        //in
+        result.push(
+            state.transpileToken(this.tokens.in, 'in'),
+            ' '
+        );
+        //target
+        result.push(...this.target.transpile(state));
+        //body
+        state.lineage.unshift(this);
+        state.pushLoopLabel?.();
+        util.pushAll(result, this.body.transpile(state));
+        state.popLoopLabel?.();
+        state.lineage.shift();
+
+        //end for
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endFor, 'end for'));
+
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'target', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        // Used for hovers on the statement 'item' token
+        return this.getLoopVariableType(options);
+    }
+
+    getLoopVariableType(options: GetTypeOptions): BscType {
+        if (this.typeExpression) {
+            return this.typeExpression.getType(options);
+        }
+        //register the for loop variable
+        const loopTargetType = this.target.getType({ flags: SymbolTypeFlag.runtime });
+        const loopVarType = new ArrayDefaultTypeReferenceType(loopTargetType);
+
+        return loopVarType;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.forEach?.leadingTrivia ?? [];
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endFor?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ForEachStatement({
+                forEach: util.cloneToken(this.tokens.forEach),
+                in: util.cloneToken(this.tokens.in),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
+                endFor: util.cloneToken(this.tokens.endFor),
+                item: util.cloneToken(this.tokens.item),
+                target: this.target?.clone(),
+                body: this.body?.clone()
+            }),
+            ['target', 'body']
+        );
+    }
+}
+
+export class WhileStatement extends Statement {
+    constructor(options: {
+        while?: Token;
+        endWhile?: Token;
+        condition: Expression;
+        body: Block;
+    }) {
+        super();
+        this.tokens = {
+            while: options.while,
+            endWhile: options.endWhile
+        };
+        this.body = options.body;
+        this.condition = options.condition;
+        this.body?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.condition, this.tokens.while),
+            this.tokens.endWhile
+        );
+        util.setBounds(this,
+            this.tokens.while,
+            this.condition,
+            this.body,
+            this.tokens.endWhile
+        );
+    }
+
+    public readonly tokens: {
+        readonly while?: Token;
+        readonly endWhile?: Token;
+    };
+    public readonly condition: Expression;
+    public readonly body: Block;
+
+    public readonly kind = AstNodeKind.WhileStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let result = [] as TranspileResult;
+        //while
+        result.push(
+            state.transpileToken(this.tokens.while, 'while'),
+            ' '
+        );
+        //condition
+        result.push(
+            ...this.condition.transpile(state)
+        );
+        state.lineage.unshift(this);
+        //body
+        state.pushLoopLabel?.();
+        util.pushAll(result, this.body.transpile(state));
+        state.popLoopLabel?.();
+        state.lineage.shift();
+
+        //end while
+        result.push(...state.transpileEndBlockToken(this.body, this.tokens.endWhile, 'end while'));
+
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'condition', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.while?.leadingTrivia ?? [];
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endWhile?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new WhileStatement({
+                while: util.cloneToken(this.tokens.while),
+                endWhile: util.cloneToken(this.tokens.endWhile),
+                condition: this.condition?.clone(),
+                body: this.body?.clone()
+            }),
+            ['condition', 'body']
+        );
+    }
+}
+
+export class DottedSetStatement extends Statement {
+    constructor(options: {
+        obj: Expression;
+        name: Identifier;
+        value: Expression;
+        dot?: Token;
+        equals?: Token;
+    }) {
+        super();
+        this.tokens = {
+            name: options.name,
+            dot: options.dot,
+            equals: options.equals
+        };
+        this.obj = options.obj;
+        this.value = options.value;
+        util.setBounds(this,
+            this.obj,
+            this.tokens.dot,
+            this.tokens.equals,
+            this.tokens.name,
+            this.value
+        );
+    }
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly equals?: Token;
+        readonly dot?: Token;
+    };
+
+    public readonly obj: Expression;
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.DottedSetStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        //if the value is a compound assignment, don't add the obj, dot, name, or operator...the expression will handle that
+        return [
+            //object
+            ...this.obj.transpile(state),
+            this.tokens.dot ? state.tokenToSourceNode(this.tokens.dot) : '.',
+            //name
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            //right-hand-side of assignment
+            ...this.value.transpile(state)
+        ];
+
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const objType = this.obj?.getType(options);
+        const result = objType?.getMemberType(this.tokens.name?.text, options);
+        options.typeChain?.push(new TypeChainEntry({
+            name: this.tokens.name?.text,
+            type: result, data: options.data,
+            locatable: this.tokens.name,
+            astNode: this
+        }));
+        return result;
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new DottedSetStatement({
+                obj: this.obj?.clone(),
+                dot: util.cloneToken(this.tokens.dot),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['obj', 'value']
+        );
+    }
+}
+
+export class IndexedSetStatement extends Statement {
+    constructor(options: {
+        obj: Expression;
+        indexes: Expression[];
+        value: Expression;
+        openingSquare?: Token;
+        closingSquare?: Token;
+        equals?: Token;
+    }) {
+        super();
+        this.tokens = {
+            openingSquare: options.openingSquare,
+            closingSquare: options.closingSquare,
+            equals: options.equals
+        };
+        this.obj = options.obj;
+        this.indexes = options.indexes ?? [];
+        this.value = options.value;
+        util.setBounds(this,
+            this.obj,
+            this.tokens.openingSquare,
+            ...this.indexes,
+            this.tokens.closingSquare,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly openingSquare?: Token;
+        readonly closingSquare?: Token;
+        readonly equals?: Token;
+    };
+    public readonly obj: Expression;
+    public readonly indexes: Expression[];
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.IndexedSetStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        const result = [];
+        result.push(
+            //obj
+            ...this.obj.transpile(state),
+            //   [
+            state.transpileToken(this.tokens.openingSquare, '[')
+        );
+        for (let i = 0; i < this.indexes.length; i++) {
+            //add comma between indexes
+            if (i > 0) {
+                result.push(', ');
+            }
+            let index = this.indexes[i];
+            result.push(
+                ...(index?.transpile(state) ?? [])
+            );
+        }
+        result.push(
+            state.transpileToken(this.tokens.closingSquare, ']'),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            ...this.value.transpile(state)
+        );
+        return result;
+
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'obj', visitor, options);
+            walkArray(this.indexes, visitor, options, this);
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.obj.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new IndexedSetStatement({
+                obj: this.obj?.clone(),
+                openingSquare: util.cloneToken(this.tokens.openingSquare),
+                indexes: this.indexes?.map(x => x?.clone()),
+                closingSquare: util.cloneToken(this.tokens.closingSquare),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['obj', 'indexes', 'value']
+        );
+    }
+}
+
+export class LibraryStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        library: Token;
+        filePath?: Token;
+    }) {
+        super();
+        this.tokens = {
+            library: options?.library,
+            filePath: options?.filePath
+        };
+        util.setBounds(this,
+            this.tokens.library,
+            this.tokens.filePath
+        );
+    }
+    public readonly tokens: {
+        readonly library: Token;
+        readonly filePath?: Token;
+    };
+
+    public readonly kind = AstNodeKind.LibraryStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let result = [] as TranspileResult;
+        result.push(
+            state.transpileToken(this.tokens.library)
+        );
+        //there will be a parse error if file path is missing, but let's prevent a runtime error just in case
+        if (this.tokens.filePath) {
+            result.push(
+                ' ',
+                state.transpileToken(this.tokens.filePath)
+            );
+        }
+        return result;
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        return this.transpile(state);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.library?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new LibraryStatement({
+                library: util.cloneToken(this.tokens?.library),
+                filePath: util.cloneToken(this.tokens?.filePath)
+            })
+        );
+    }
+}
+
+export class NamespaceStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        namespace?: Token;
+        nameExpression: VariableExpression | DottedGetExpression;
+        body: Body;
+        endNamespace?: Token;
+    }) {
+        super();
+        this.tokens = {
+            namespace: options.namespace,
+            endNamespace: options.endNamespace
+        };
+        this.nameExpression = options.nameExpression;
+        this.body = options.body;
+        util.setBounds(this, this.tokens.namespace, this.nameExpression, this.body, this.tokens.endNamespace);
+        this.symbolTable = new SymbolTable(`NamespaceStatement: '${this.name}'`, () => this.getRoot()?.getSymbolTable());
+    }
+
+    public readonly tokens: {
+        readonly namespace?: Token;
+        readonly endNamespace?: Token;
+    };
+
+    public readonly nameExpression: VariableExpression | DottedGetExpression;
+    public readonly body: Body;
+
+    public readonly kind = AstNodeKind.NamespaceStatement;
+
+    /**
+     * The string name for this namespace
+     */
+    public get name(): string {
+        return this.getName(ParseMode.BrighterScript);
+    }
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public getName(parseMode: ParseMode) {
+        const sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+        let name = util.getAllDottedGetPartsAsString(this.nameExpression, parseMode);
+        if ((this.parent as Body)?.parent?.kind === AstNodeKind.NamespaceStatement) {
+            name = (this.parent.parent as NamespaceStatement).getName(parseMode) + sep + name;
+        }
+        return name;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.namespace?.leadingTrivia;
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endNamespace?.leadingTrivia;
+    }
+
+    public getNameParts() {
+        let parts = util.getAllDottedGetParts(this.nameExpression);
+
+        if ((this.parent as Body)?.parent?.kind === AstNodeKind.NamespaceStatement) {
+            parts = (this.parent.parent as NamespaceStatement).getNameParts().concat(parts);
+        }
+        return parts;
+    }
+
+    transpile(state: BrsTranspileState) {
+        //namespaces don't actually have any real content, so just transpile their bodies
+        return [
+            state.transpileAnnotations(this),
+            state.transpileLeadingComments(this.tokens.namespace),
+            this.body.transpile(state),
+            state.transpileLeadingComments(this.tokens.endNamespace)
+        ];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        let result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+
+        result.push('namespace ',
+            ...this.getName(ParseMode.BrighterScript),
+            state.newline
+        );
+        state.blockDepth++;
+        result.push(
+            ...this.body.getTypedef(state)
+        );
+        state.blockDepth--;
+
+        result.push(
+            state.indent(),
+            'end namespace'
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'nameExpression', visitor, options);
+        }
+
+        if (this.body.statements.length > 0 && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const resultType = new NamespaceType(this.name);
+        return resultType;
+    }
+
+    public clone() {
+        const clone = this.finalizeClone(
+            new NamespaceStatement({
+                namespace: util.cloneToken(this.tokens.namespace),
+                nameExpression: this.nameExpression?.clone(),
+                body: this.body?.clone(),
+                endNamespace: util.cloneToken(this.tokens.endNamespace)
+            }),
+            ['nameExpression', 'body']
+        );
+        return clone;
+    }
+}
+
+export class ImportStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        import?: Token;
+        path?: Token;
+    }) {
+        super();
+        this.tokens = {
+            import: options.import,
+            path: options.path
+        };
+        util.setBounds(this,
+            this.tokens.import,
+            this.tokens.path
+        );
+        if (this.tokens.path) {
+            //remove quotes
+            this.filePath = this.tokens.path.text.replace(/"/g, '');
+            //adjust the range to exclude the quotes (but only if that hasn't already been done, such as for a cloned token)
+            const path = this.tokens.path;
+            if (path.sourceInfo && path.text.startsWith('"') && path.endPosition - path.startPosition === path.text.length) {
+                path.startPosition++;
+                path.endPosition--;
+            }
+        }
+    }
+
+    public readonly tokens: {
+        readonly import?: Token;
+        readonly path: Token;
+    };
+
+    public readonly kind = AstNodeKind.ImportStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public readonly filePath: string;
+
+    transpile(state: BrsTranspileState) {
+        //The xml files are responsible for adding the additional script imports, but
+        //add the import statement as a comment just for debugging purposes
+        return [
+            state.transpileToken(this.tokens.import, 'import', true),
+            ' ',
+            state.transpileToken(this.tokens.path)
+        ];
+    }
+
+    /**
+     * Get the typedef for this statement
+     */
+    public getTypedef(state: BrsTranspileState) {
+        return [
+            this.tokens.import?.text ?? 'import',
+            ' ',
+            //replace any `.bs` extension with `.brs`
+            this.tokens.path.text.replace(/\.bs"?$/i, '.brs"')
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.import?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ImportStatement({
+                import: util.cloneToken(this.tokens.import),
+                path: util.cloneToken(this.tokens.path)
+            })
+        );
+    }
+}
+
+export class InterfaceStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        interface: Token;
+        name: Identifier;
+        extends?: Token;
+        parentInterfaceName?: TypeExpression;
+        body: Statement[];
+        endInterface?: Token;
+    }) {
+        super();
+        this.tokens = {
+            interface: options.interface,
+            name: options.name,
+            extends: options.extends,
+            endInterface: options.endInterface
+        };
+        this.parentInterfaceName = options.parentInterfaceName;
+        this.body = options.body;
+        util.setBounds(this,
+            this.tokens.interface,
+            this.tokens.name,
+            this.tokens.extends,
+            this.parentInterfaceName,
+            ...this.body ?? [],
+            this.tokens.endInterface
+        );
+    }
+    public readonly parentInterfaceName?: TypeExpression;
+    public readonly body: Statement[];
+
+    public readonly kind = AstNodeKind.InterfaceStatement;
+
+    public readonly tokens = {} as {
+        readonly interface?: Token;
+        readonly name: Identifier;
+        readonly extends?: Token;
+        readonly endInterface?: Token;
+    };
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public get fields(): InterfaceFieldStatement[] {
+        return this.body.filter(x => isInterfaceFieldStatement(x)) as InterfaceFieldStatement[];
+    }
+
+    public get methods(): InterfaceMethodStatement[] {
+        return this.body.filter(x => isInterfaceMethodStatement(x)) as InterfaceMethodStatement[];
+    }
+
+
+    public hasParentInterface() {
+        return !!this.parentInterfaceName;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.interface?.leadingTrivia;
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endInterface?.leadingTrivia;
+    }
+
+
+    /**
+     * The name of the interface WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            const namespace = this.findAncestor(isNamespaceStatement);
+            if (namespace) {
+                let namespaceName = namespace.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this interface doesn't have a name
+            return undefined;
+        }
+    }
+
+    /**
+     * The name of the interface (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    /**
+     * Get the name of this expression based on the parse mode
+     */
+    public getName(parseMode: ParseMode) {
+        const namespace = this.findAncestor(isNamespaceStatement);
+        if (namespace) {
+            let delimiter = parseMode === ParseMode.BrighterScript ? '.' : '_';
+            let namespaceName = namespace.getName(parseMode);
+            return namespaceName + delimiter + this.name;
+        } else {
+            return this.name;
+        }
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //interfaces should completely disappear at runtime
+        return [
+            state.transpileLeadingComments(this.tokens.interface)
+        ];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.interface.text,
+            ' ',
+            this.tokens.name.text
+        );
+        const parentInterfaceName = this.parentInterfaceName?.getName();
+        if (parentInterfaceName) {
+            result.push(
+                ' extends ',
+                parentInterfaceName
+            );
+        }
+        const body = this.body ?? [];
+        if (body.length > 0) {
+            state.blockDepth++;
+        }
+        for (const statement of body) {
+            if (isInterfaceMethodStatement(statement) || isInterfaceFieldStatement(statement)) {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.getTypedef(state)
+                );
+            } else {
+                result.push(
+                    state.newline,
+                    state.indent(),
+                    ...statement.transpile(state)
+                );
+            }
+        }
+        if (body.length > 0) {
+            state.blockDepth--;
+        }
+        result.push(
+            state.newline,
+            state.indent(),
+            'end interface',
+            state.newline
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //visitor-less walk function to do parent linking
+        walk(this, 'parentInterfaceName', null, options);
+
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walkArray(this.body, visitor, options, this);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const superIface = this.parentInterfaceName?.getType(options) as InterfaceType;
+
+        const resultType = new InterfaceType(this.getName(ParseMode.BrighterScript), superIface);
+        for (const statement of this.methods) {
+            const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, memberType, flag);
+        }
+        for (const statement of this.fields) {
+            const memberType = statement?.getType({ ...options, typeChain: undefined }); // no typechain info needed
+            const flag = statement.isOptional ? SymbolTypeFlag.runtime | SymbolTypeFlag.optional : SymbolTypeFlag.runtime;
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement, isInstance: true }, memberType, flag);
+        }
+        options.typeChain?.push(new TypeChainEntry({
+            name: this.getName(ParseMode.BrighterScript),
+            type: resultType,
+            data: options.data,
+            astNode: this
+        }));
+        return resultType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new InterfaceStatement({
+                interface: util.cloneToken(this.tokens.interface),
+                name: util.cloneToken(this.tokens.name),
+                extends: util.cloneToken(this.tokens.extends),
+                parentInterfaceName: this.parentInterfaceName?.clone(),
+                body: this.body?.map(x => x?.clone()),
+                endInterface: util.cloneToken(this.tokens.endInterface)
+            }),
+            ['parentInterfaceName', 'body']
+        );
+    }
+}
+
+export class InterfaceFieldStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(options: {
+        name: Identifier;
+        as?: Token;
+        typeExpression?: TypeExpression;
+        optional?: Token;
+    }) {
+        super();
+        this.tokens = {
+            optional: options.optional,
+            name: options.name,
+            as: options.as
+        };
+        this.typeExpression = options.typeExpression;
+        util.setBounds(this,
+            this.tokens.optional,
+            this.tokens.name,
+            this.tokens.as,
+            this.typeExpression
+        );
+    }
+
+    public readonly kind = AstNodeKind.InterfaceFieldStatement;
+
+    public readonly typeExpression?: TypeExpression;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly as: Token;
+        readonly optional?: Token;
+    };
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
+    }
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    public get isOptional() {
+        return !!this.tokens.optional;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+        }
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional!.text,
+                ' '
+            );
+        }
+        result.push(
+            this.tokens.name.text
+        );
+
+        if (this.typeExpression) {
+            result.push(
+                ' as ',
+                ...this.typeExpression.getTypedef(state)
+            );
+        }
+        return result;
+    }
+
+    public getType(options: GetTypeOptions): BscType {
+        return this.typeExpression?.getType(options) ?? DynamicType.instance;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new InterfaceFieldStatement({
+                name: util.cloneToken(this.tokens.name),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
+                optional: util.cloneToken(this.tokens.optional)
+            })
+        );
+    }
+
+}
+
+//TODO: there is much that is similar with this and FunctionExpression.
+//It would be nice to refactor this so there is less duplicated code
+export class InterfaceMethodStatement extends Statement implements TypedefProvider {
+    public transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('Method not implemented.');
+    }
+    constructor(options: {
+        functionType?: Token;
+        name: Identifier;
+        leftParen?: Token;
+        params?: FunctionParameterExpression[];
+        rightParen?: Token;
+        as?: Token;
+        returnTypeExpression?: TypeExpression;
+        optional?: Token;
+    }) {
+        super();
+        this.tokens = {
+            optional: options.optional,
+            functionType: options.functionType,
+            name: options.name,
+            leftParen: options.leftParen,
+            rightParen: options.rightParen,
+            as: options.as
+        };
+        this.params = options.params ?? [];
+        this.returnTypeExpression = options.returnTypeExpression;
+        util.setBounds(this,
+            this.tokens.optional,
+            this.tokens.functionType,
+            this.tokens.name,
+            this.tokens.leftParen,
+            ...(this.params ?? []),
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.returnTypeExpression
+        );
+    }
+
+    public readonly kind = AstNodeKind.InterfaceMethodStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+    /**
+     * Get the name of this method.
+     */
+    public getName(parseMode: ParseMode) {
+        return this.tokens.name.text;
+    }
+
+    public readonly tokens: {
+        readonly optional?: Token;
+        readonly functionType: Token;
+        readonly name: Identifier;
+        readonly leftParen?: Token;
+        readonly rightParen?: Token;
+        readonly as?: Token;
+    };
+
+    public readonly params: FunctionParameterExpression[];
+    public readonly returnTypeExpression?: TypeExpression;
+
+    public get isOptional() {
+        return !!this.tokens.optional;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.optional?.leadingTrivia ?? this.tokens.functionType.leadingTrivia;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'returnTypeExpression', visitor, options);
+        }
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        if (this.isOptional) {
+            result.push(
+                this.tokens.optional!.text,
+                ' '
+            );
+        }
+        result.push(
+            this.tokens.functionType?.text ?? 'function',
+            ' ',
+            this.tokens.name.text,
+            '('
+        );
+        const params = this.params ?? [];
+        for (let i = 0; i < params.length; i++) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            const param = params[i];
+            result.push(param.tokens.name.text);
+            if (param.typeExpression) {
+                result.push(
+                    ' as ',
+                    ...param.typeExpression.getTypedef(state)
+                );
+            }
+        }
+        result.push(
+            ')'
+        );
+        if (this.returnTypeExpression) {
+            result.push(
+                ' as ',
+                ...this.returnTypeExpression.getTypedef(state)
+            );
+        }
+        return result;
+    }
+
+    public getType(options: GetTypeOptions): TypedFunctionType {
+        //if there's a defined return type, use that
+        let returnType = this.returnTypeExpression?.getType(options);
+        const isSub = this.tokens.functionType?.kind === TokenKind.Sub || !returnType;
+        //if we don't have a return type and this is a sub, set the return type to `void`. else use `dynamic`
+        if (!returnType) {
+            returnType = isSub ? VoidType.instance : DynamicType.instance;
+        }
+        const resultType = new TypedFunctionType(returnType);
+        resultType.isSub = isSub;
+        for (let param of this.params) {
+            resultType.addParameter(param.tokens.name.text, param.getType(options), !!param.defaultValue);
+        }
+        if (options.typeChain) {
+            // need Interface type for type chain
+            this.parent?.getType(options);
+        }
+        let funcName = this.getName(ParseMode.BrighterScript);
+        resultType.setName(funcName);
+        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, astNode: this }));
+        return resultType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new InterfaceMethodStatement({
+                optional: util.cloneToken(this.tokens.optional),
+                functionType: util.cloneToken(this.tokens.functionType),
+                name: util.cloneToken(this.tokens.name),
+                leftParen: util.cloneToken(this.tokens.leftParen),
+                params: this.params?.map(p => p?.clone()),
+                rightParen: util.cloneToken(this.tokens.rightParen),
+                as: util.cloneToken(this.tokens.as),
+                returnTypeExpression: this.returnTypeExpression?.clone()
+            }),
+            ['params']
+        );
+    }
+}
+
+/**
+ * The one place that knows how a conditional compile branch chain links together (`elseBranch` is
+ * either a nested `ConditionalCompileStatement` for `#else if`, or a plain `Block` for a final `#else`).
+ * `branch` is `undefined` for that trailing `#else` block, since it has no condition of its own.
+ */
+function forEachConditionalCompileBranch(
+    statement: ConditionalCompileStatement,
+    callback: (statements: Statement[], branch: ConditionalCompileStatement | undefined) => void
+) {
+    let branch: ConditionalCompileStatement | undefined = statement;
+    while (branch) {
+        callback(branch.thenBranch?.statements ?? [], branch);
+        if (isConditionalCompileStatement(branch.elseBranch)) {
+            branch = branch.elseBranch;
+        } else {
+            if (isBlock(branch.elseBranch)) {
+                callback(branch.elseBranch.statements, undefined);
+            }
+            branch = undefined;
+        }
+    }
+}
+
+export class ClassStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        class?: Token;
+        /**
+         * The name of the class (without namespace prefix)
+         */
+        name: Identifier;
+        body: Statement[];
+        endClass?: Token;
+        extends?: Token;
+        parentClassName?: TypeExpression;
+    }) {
+        super();
+        this.body = options.body ?? [];
+        this.tokens = {
+            name: options.name,
+            class: options.class,
+            endClass: options.endClass,
+            extends: options.extends
+        };
+        this.parentClassName = options.parentClassName;
+        this.symbolTable = new SymbolTable(`ClassStatement: '${this.tokens.name?.text}'`, () => this.parent?.getSymbolTable());
+
+        this.registerMembers(this.body);
+
+        util.setBounds(this,
+            this.parentClassName,
+            ...(this.body ?? []),
+            ...Object.values(this.tokens)
+        );
+    }
+
+    public readonly kind = AstNodeKind.ClassStatement;
+
+
+    public readonly tokens: {
+        readonly class?: Token;
+        /**
+         * The name of the class (without namespace prefix)
+         */
+        readonly name: Identifier;
+        readonly endClass?: Token;
+        readonly extends?: Token;
+    };
+    public readonly body: Statement[];
+    public readonly parentClassName: TypeExpression;
+
+
+    public getName(parseMode: ParseMode) {
+        const name = this.tokens.name?.text;
+        if (name) {
+            const namespace = this.findAncestor(isNamespaceStatement);
+            if (namespace) {
+                let namespaceName = namespace.getName(parseMode);
+                let separator = parseMode === ParseMode.BrighterScript ? '.' : '_';
+                return namespaceName + separator + name;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this class doesn't have a name
+            return undefined;
+        }
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.class?.leadingTrivia;
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endClass?.leadingTrivia ?? [];
+    }
+
+    /**
+     * Every member by lowercase name. When conditional compile branches declare the same name, a member that is not inactive wins
+     * over an inactive one, and otherwise the last one wins. A name declared only in inactive branches maps to its inactive member,
+     * since inactive code is still transpiled. Check `isActive` on a member to find what is visible to the type system.
+     *
+     * Rebuilt on every access, because `isActive` changes as the tree is walked.
+     */
+    public get memberMap(): Record<string, MemberStatement> {
+        const memberMap = {} as Record<string, MemberStatement>;
+        const activeNames = new Set<string>();
+        for (const member of this.members) {
+            const nameLower = member?.tokens.name?.text.toLowerCase();
+            if (member.isActive !== false) {
+                activeNames.add(nameLower);
+                memberMap[nameLower] = member;
+            } else if (!activeNames.has(nameLower)) {
+                memberMap[nameLower] = member;
+            }
+        }
+        return memberMap;
+    }
+    /**
+     * Every method in source order, including methods in inactive conditional compile branches
+     */
+    public readonly methods = [] as MethodStatement[];
+    /**
+     * Every field in source order, including fields in inactive conditional compile branches
+     */
+    public readonly fields = [] as FieldStatement[];
+    /**
+     * Every method and field in source order, including members in inactive conditional compile branches
+     */
+    public readonly members = [] as MemberStatement[];
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * Register all members (methods and fields) found in the given statements,
+     * descending into conditional compile blocks
+     */
+    private registerMembers(statements: Statement[]) {
+        for (let statement of statements) {
+            if (isMethodStatement(statement)) {
+                this.methods.push(statement);
+                this.members.push(statement);
+            } else if (isFieldStatement(statement)) {
+                this.fields.push(statement);
+                this.members.push(statement);
+            } else if (isConditionalCompileStatement(statement)) {
+                forEachConditionalCompileBranch(statement, (branchStatements) => {
+                    this.registerMembers(branchStatements);
+                });
+            }
+        }
+    }
+
+
+    transpile(state: BrsTranspileState) {
+        let result = [] as TranspileResult;
+
+        const className = this.getName(ParseMode.BrightScript).replace(/\./g, '_');
+        const ancestors = this.getAncestors(state);
+        const body = this.getTranspiledClassBody(ancestors);
+
+        //make the methods
+        util.pushAll(result, this.getTranspiledMethods(state, className, body));
+        //make the builder
+        util.pushAll(result, this.getTranspiledBuilder(state, className, ancestors, body));
+        result.push('\n', state.indent());
+        //make the class assembler (i.e. the public-facing class creator method)
+        util.pushAll(result, this.getTranspiledClassFunction(state, className));
+
+        return result;
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            'class ',
+            this.tokens.name.text
+        );
+        if (this.parentClassName) {
+            const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+            const fqName = util.getFullyQualifiedClassName(
+                this.parentClassName.getName(),
+                namespace?.getName(ParseMode.BrighterScript)
+            );
+            result.push(
+                ` extends ${fqName}`
+            );
+        }
+        result.push(state.newline);
+        state.blockDepth++;
+
+        let body = this.body;
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            const constructor = createMethodStatement('new', TokenKind.Sub);
+            constructor.parent = this;
+            //walk the constructor to set up parent links
+            constructor.link();
+            body = [
+                constructor,
+                ...this.body
+            ];
+        }
+
+        for (const member of body) {
+            if (isTypedefProvider(member)) {
+                result.push(
+                    state.indent(),
+                    ...member.getTypedef(state),
+                    state.newline
+                );
+            }
+        }
+        state.blockDepth--;
+        result.push(
+            state.indent(),
+            'end class'
+        );
+        return result;
+    }
+
+    /**
+     * Find the parent index for this class's parent.
+     * For class inheritance, every class is given an index.
+     * The base class is index 0, its child is index 1, and so on.
+     */
+    public getParentClassIndex(state: BrsTranspileState) {
+        let myIndex = 0;
+        let stmt = this as ClassStatement;
+        while (stmt) {
+            if (stmt.parentClassName) {
+                const namespace = stmt.findAncestor(isNamespaceStatement);
+                //find the parent class
+                stmt = state.file.getClassFileLink(
+                    stmt.parentClassName.getName(),
+                    namespace?.getName(ParseMode.BrighterScript)
+                )?.item;
+                myIndex++;
+            } else {
+                break;
+            }
+        }
+        const result = myIndex - 1;
+        if (result >= 0) {
+            return result;
+        } else {
+            return null;
+        }
+    }
+
+    public hasParentClass() {
+        return !!this.parentClassName;
+    }
+
+    /**
+     * Get all ancestor classes, in closest-to-furthest order (i.e. 0 is parent, 1 is grandparent, etc...).
+     * This will return an empty array if no ancestors were found
+     */
+    public getAncestors(state: BrsTranspileState) {
+        let ancestors = [] as ClassStatement[];
+        let stmt = this as ClassStatement;
+        while (stmt) {
+            if (stmt.parentClassName) {
+                const namespace = stmt.findAncestor(isNamespaceStatement);
+                stmt = state.file.getClassFileLink(
+                    stmt.parentClassName.getName(),
+                    namespace?.getName(ParseMode.BrighterScript)
+                )?.item;
+                ancestors.push(stmt);
+            } else {
+                break;
+            }
+        }
+        return ancestors;
+    }
+
+    private getBuilderName(transpiledClassName: string) {
+        return `__${transpiledClassName}_builder`;
+    }
+
+    private getMethodIdentifier(transpiledClassName: string, statement: MethodStatement) {
+        return { ...statement.tokens.name, text: `__${transpiledClassName}_method_${statement.tokens.name.text}` };
+    }
+
+    public getConstructorType() {
+        const constructorType = this.getConstructorFunction()?.getType({ flags: SymbolTypeFlag.runtime }) ?? new TypedFunctionType(null);
+        constructorType.returnType = this.getType({ flags: SymbolTypeFlag.runtime });
+        return constructorType;
+    }
+
+    /**
+     * Get the constructor function for this class (if exists), or undefined if not exist
+     */
+    private getConstructorFunction() {
+        return this.memberMap.new as MethodStatement;
+    }
+
+    /**
+     * `new` methods declared inside a `#if` block - not supported, since builder/class-function
+     * generation assume a single, unconditionally-present constructor signature
+     */
+    public getConditionalCompileConstructors(): MethodStatement[] {
+        return this.methods.filter((method) => {
+            return method.tokens.name?.text?.toLowerCase() === 'new' &&
+                !!method.findAncestor((node: AstNode, cancellationToken) => {
+                    if (node === this) {
+                        cancellationToken.cancel();
+                        return false;
+                    }
+                    return isConditionalCompileStatement(node);
+                });
+        });
+    }
+
+    /**
+     * Return the parameters for the first constructor function for this class
+     * @param ancestors The list of ancestors for this class
+     * @returns The parameters for the first constructor function for this class
+     */
+    private getConstructorParams(ancestors: ClassStatement[]) {
+        for (let ancestor of ancestors) {
+            const ctor = ancestor?.getConstructorFunction();
+            if (ctor) {
+                return ctor.func.parameters;
+            }
+        }
+        return [];
+    }
+
+    /**
+     * Clone a parent constructor's parameter for use in a synthesized subclass constructor.
+     * The clone is detached from the AST (no parent), so if the parameter's type is a class
+     * or enum, its type reference can't be re-resolved by symbol name once cloned - especially
+     * since the subclass may live in a different namespace than the one the parameter's type
+     * was originally declared in, where even a fully-qualified reference has no symbol table
+     * to resolve against. Resolve the type now (while the original is still properly attached),
+     * and bake the fully-qualified name/type directly into the clone.
+     */
+    private cloneConstructorParam(param: FunctionParameterExpression): FunctionParameterExpression {
+        const exprType = param.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
+        if (!isClassType(exprType) && !isEnumType(exprType)) {
+            return param.clone();
+        }
+        const nameParts = exprType.toString().split('.');
+        const qualifiedExpression = nameParts.length > 1 ? createDottedIdentifier(nameParts) : createVariableExpression(nameParts[0]);
+        return new FunctionParameterExpression({
+            name: param.tokens.name,
+            equals: param.tokens.equals,
+            defaultValue: param.defaultValue?.clone(),
+            as: param.tokens.as,
+            typeExpression: new TypeExpression({ expression: qualifiedExpression, resolvedType: exprType })
+        });
+    }
+
+    /**
+     * Determine if the specified field was declared in one of the ancestor classes
+     */
+    public isFieldDeclaredByAncestor(fieldName: string, ancestors: ClassStatement[]) {
+        let lowerFieldName = fieldName.toLowerCase();
+        for (let ancestor of ancestors) {
+            if (ancestor.memberMap[lowerFieldName]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The builder is a function that assigns all of the methods and property names to a class instance.
+     * This needs to be a separate function so that child classes can call the builder from their parent
+     * without instantiating the parent constructor at that point in time.
+     */
+    private getTranspiledBuilder(state: BrsTranspileState, transpiledClassName: string, ancestors: ClassStatement[], body: Statement[]) {
+        let result = [] as TranspileResult;
+        result.push(`function ${this.getBuilderName(transpiledClassName)}()\n`);
+        state.blockDepth++;
+        //indent
+        result.push(state.indent());
+
+        //construct parent class or empty object
+        if (ancestors[0]) {
+            const ancestorNamespace = ancestors[0].findAncestor(isNamespaceStatement);
+            let fullyQualifiedClassName = util.getFullyQualifiedClassName(
+                ancestors[0].getName(ParseMode.BrighterScript)!,
+                ancestorNamespace?.getName(ParseMode.BrighterScript)
+            );
+            result.push(`instance = ${this.getBuilderName(fullyQualifiedClassName.replace(/\./g, '_'))}()`);
+        } else {
+            //use an empty object.
+            result.push('instance = {}');
+        }
+        result.push(
+            state.newline,
+            state.indent()
+        );
+        let parentClassIndex = this.getParentClassIndex(state);
+
+        const transpileMemberAssignments = (statements: Statement[]) => {
+            let memberResults = [] as TranspileResult;
+            for (let statement of statements) {
+                //is field statement
+                if (isFieldStatement(statement)) {
+                    //do nothing with class fields in this situation, they are handled elsewhere
+                    continue;
+
+                    //methods
+                } else if (isMethodStatement(statement)) {
+
+                    //store overridden parent methods as super{parentIndex}_{methodName}
+                    if (
+                        //is override method
+                        statement.tokens.override ||
+                        //is constructor function in child class
+                        (statement.tokens.name.text.toLowerCase() === 'new' && ancestors[0])
+                    ) {
+                        memberResults.push(
+                            `instance.super${parentClassIndex}_${statement.tokens.name.text} = instance.${statement.tokens.name.text}`,
+                            state.newline,
+                            state.indent()
+                        );
+                    }
+
+                    state.classStatement = this;
+                    state.skipLeadingComments = true;
+                    //add leading comments
+                    if ((statement.leadingTrivia?.filter(token => token.kind === TokenKind.Comment) ?? []).length > 0) {
+                        memberResults.push(
+                            ...state.transpileComments(statement.leadingTrivia),
+                            state.indent()
+                        );
+                    }
+                    memberResults.push(
+                        'instance.',
+                        state.transpileToken(statement.tokens.name),
+                        ' = ',
+                        state.transpileToken(this.getMethodIdentifier(transpiledClassName, statement)),
+                        state.newline,
+                        state.indent()
+                    );
+                    state.skipLeadingComments = false;
+                    delete state.classStatement;
+                } else if (isConditionalCompileStatement(statement)) {
+                    util.pushAll(memberResults, this.getTranspiledConditionalCompileMembers(state, statement, transpileMemberAssignments));
+                } else {
+                    //other random statements (probably just comments)
+                    memberResults.push(
+                        ...statement.transpile(state),
+                        state.newline,
+                        state.indent()
+                    );
+                }
+            }
+            return memberResults;
+        };
+        util.pushAll(result, transpileMemberAssignments(body));
+        //return the instance
+        result.push('return instance\n');
+        state.blockDepth--;
+        result.push(state.indent());
+        result.push(`end function`);
+        return result;
+    }
+
+    /**
+     * Returns a copy of the class' body, with the constructor function added if it doesn't exist.
+     */
+    private getTranspiledClassBody(ancestors: ClassStatement[]): Statement[] {
+        const body = [];
+        body.push(...this.body);
+
+        //inject an empty "new" method if missing
+        if (!this.getConstructorFunction()) {
+            if (ancestors.length === 0) {
+                body.unshift(createMethodStatement('new', TokenKind.Sub));
+            } else {
+                const params = this.getConstructorParams(ancestors);
+                const call = new ExpressionStatement({
+                    expression: new CallExpression({
+                        callee: new VariableExpression({
+                            name: createToken(TokenKind.Identifier, 'super')
+                        }),
+                        openingParen: createToken(TokenKind.LeftParen),
+                        args: params.map(x => new VariableExpression({
+                            name: x.tokens.name
+                        })),
+                        closingParen: createToken(TokenKind.RightParen)
+                    })
+                });
+                body.unshift(
+                    new MethodStatement({
+                        modifiers: [],
+                        name: createIdentifier('new'),
+                        func: new FunctionExpression({
+                            parameters: params.map(x => this.cloneConstructorParam(x)),
+                            body: new Block({ statements: [call] }),
+                            functionType: createToken(TokenKind.Sub),
+                            endFunctionType: createToken(TokenKind.EndSub),
+                            leftParen: createToken(TokenKind.LeftParen),
+                            rightParen: createToken(TokenKind.RightParen)
+                        }),
+                        override: null
+                    })
+                );
+            }
+        }
+
+        return body;
+    }
+
+    /**
+     * These are the methods that are defined in this class. They are transpiled outside of the class body
+     * to ensure they don't appear as "$anon_#" in stack traces and crash logs.
+     */
+    private getTranspiledMethods(state: BrsTranspileState, transpiledClassName: string, body: Statement[]) {
+        let result = [] as TranspileResult;
+        for (let statement of body) {
+            if (isMethodStatement(statement)) {
+                state.classStatement = this;
+                util.pushAll(result, statement.transpile(state, this.getMethodIdentifier(transpiledClassName, statement)));
+                result.push(
+                    state.newline,
+                    state.indent()
+                );
+                delete state.classStatement;
+            } else if (isConditionalCompileStatement(statement)) {
+                util.pushAll(result, this.getTranspiledConditionalCompileMembers(state, statement, (branchStatements) => {
+                    return this.getTranspiledMethods(state, transpiledClassName, branchStatements);
+                }));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Transpile a conditional compile statement found in a class body, emitting the `#if`/`#else if`/`#else`/`#end if`
+     * directives and delegating the transpilation of the members in each branch to the given callback.
+     */
+    private getTranspiledConditionalCompileMembers(state: BrsTranspileState, statement: ConditionalCompileStatement, transpileBranchMembers: (statements: Statement[]) => TranspileResult) {
+        let result = [] as TranspileResult;
+        let hasContent = false;
+
+        const transpileBranchBody = (branchStatements: Statement[]) => {
+            state.blockDepth++;
+            const leadingIndent = state.indent();
+            const body = transpileBranchMembers(branchStatements);
+            state.blockDepth--;
+            if (body.length === 0) {
+                //nothing to emit for this branch - just move to the next line
+                return [state.newline, state.indent()] as TranspileResult;
+            }
+            hasContent = true;
+            //remove the trailing indent from the final member (it was emitted at the deeper block depth)
+            body.pop();
+            return [state.newline, leadingIndent, ...body, state.indent()] as TranspileResult;
+        };
+
+        let isFirstBranch = true;
+        forEachConditionalCompileBranch(statement, (branchStatements, branch) => {
+            if (branch) {
+                result.push(isFirstBranch ? '#if ' : '#else if ');
+                if (branch.tokens.not) {
+                    result.push('not ');
+                }
+                result.push(state.transpileToken(branch.tokens.condition));
+            } else {
+                result.push('#else');
+            }
+            util.pushAll(result, transpileBranchBody(branchStatements));
+            isFirstBranch = false;
+        });
+        result.push(
+            '#end if',
+            state.newline,
+            state.indent()
+        );
+
+        //if no branch produced any output, skip this conditional compile statement entirely
+        if (!hasContent) {
+            return [] as TranspileResult;
+        }
+        return result;
+    }
+
+    /**
+     * The class function is the function with the same name as the class. This is the function that
+     * consumers should call to create a new instance of that class.
+     * This invokes the builder, gets an instance of the class, then invokes the "new" function on that class.
+     */
+    private getTranspiledClassFunction(state: BrsTranspileState, transpiledClassName: string) {
+        let result: TranspileResult = state.transpileAnnotations(this);
+
+        const constructorFunction = this.getConstructorFunction();
+        let constructorParams: FunctionParameterExpression[] = [];
+        if (constructorFunction) {
+            constructorParams = constructorFunction.func.parameters;
+        } else {
+            constructorParams = this.getConstructorParams(this.getAncestors(state));
+        }
+
+        result.push(
+            state.transpileLeadingComments(this.tokens.class),
+            state.sourceNode(this.tokens.class, 'function'),
+            state.sourceNode(this.tokens.class, ' '),
+            state.sourceNode(this.tokens.name, this.getName(ParseMode.BrightScript)),
+            `(`
+        );
+        let i = 0;
+        for (let param of constructorParams) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(
+                param.transpile(state)
+            );
+            i++;
+        }
+        result.push(
+            ')',
+            '\n'
+        );
+
+        state.blockDepth++;
+        result.push(state.indent());
+        result.push(`instance = ${this.getBuilderName(transpiledClassName)}()\n`);
+
+        result.push(state.indent());
+        result.push(`instance.new(`);
+
+        //append constructor arguments
+        i = 0;
+        for (let param of constructorParams) {
+            if (i > 0) {
+                result.push(', ');
+            }
+            result.push(
+                state.transpileToken(param.tokens.name)
+            );
+            i++;
+        }
+        result.push(
+            ')',
+            '\n'
+        );
+
+        result.push(state.indent());
+        result.push(`return instance\n`);
+
+        state.blockDepth--;
+        result.push(state.indent());
+        result.push(`end function`);
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //visitor-less walk function to do parent linking
+        walk(this, 'parentClassName', null, options);
+
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walkArray(this.body, visitor, options, this);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const superClass = this.parentClassName?.getType(options) as ClassType;
+
+        const resultType = new ClassType(this.getName(ParseMode.BrighterScript), superClass);
+
+        for (const statement of this.methods) {
+            if (statement.isActive === false) {
+                continue;
+            }
+            const funcType = statement?.func.getType({ ...options, typeChain: undefined }); //no typechain needed
+            let flag = SymbolTypeFlag.runtime;
+            if (statement.accessModifier?.kind === TokenKind.Private) {
+                flag |= SymbolTypeFlag.private;
+            }
+            if (statement.accessModifier?.kind === TokenKind.Protected) {
+                flag |= SymbolTypeFlag.protected;
+            }
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement }, funcType, flag);
+        }
+        for (const statement of this.fields) {
+            if (statement.isActive === false) {
+                continue;
+            }
+            const fieldType = statement.getType({ ...options, typeChain: undefined }); //no typechain needed
+            let flag = SymbolTypeFlag.runtime;
+            if (statement.isOptional) {
+                flag |= SymbolTypeFlag.optional;
+            }
+            if (statement.tokens.accessModifier?.kind === TokenKind.Private) {
+                flag |= SymbolTypeFlag.private;
+            }
+            if (statement.tokens.accessModifier?.kind === TokenKind.Protected) {
+                flag |= SymbolTypeFlag.protected;
+            }
+            resultType.addMember(statement?.tokens.name?.text, { definingNode: statement, isInstance: true }, fieldType, flag);
+        }
+        options.typeChain?.push(new TypeChainEntry({ name: resultType.name, type: resultType, data: options.data, astNode: this }));
+        return resultType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ClassStatement({
+                class: util.cloneToken(this.tokens.class),
+                name: util.cloneToken(this.tokens.name),
+                body: this.body?.map(x => x?.clone()),
+                endClass: util.cloneToken(this.tokens.endClass),
+                extends: util.cloneToken(this.tokens.extends),
+                parentClassName: this.parentClassName?.clone()
+            }),
+            ['body', 'parentClassName']
+        );
+    }
+}
+
+const accessModifiers = [
+    TokenKind.Public,
+    TokenKind.Protected,
+    TokenKind.Private
+];
+export class MethodStatement extends FunctionStatement {
+    constructor(
+        options: {
+            modifiers?: Token | Token[];
+            name: Identifier;
+            func: FunctionExpression;
+            override?: Token;
+        }
+    ) {
+        super(options);
+        if (options.modifiers) {
+            if (Array.isArray(options.modifiers)) {
+                this.modifiers.push(...options.modifiers);
+            } else {
+                this.modifiers.push(options.modifiers);
+            }
+        }
+        this.tokens = {
+            ...this.tokens,
+            override: options.override
+        };
+        util.setBounds(this,
+            ...(this.modifiers),
+            ...Object.values(this.tokens),
+            this.func
+        );
+    }
+
+    public readonly kind = AstNodeKind.MethodStatement as AstNodeKind;
+
+    public readonly modifiers: Token[] = [];
+
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly override?: Token;
+    };
+
+    public get accessModifier() {
+        return this.modifiers.find(x => accessModifiers.includes(x.kind));
+    }
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * Get the name of this method.
+     */
+    public getName(parseMode: ParseMode) {
+        return this.tokens.name.text;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.func.leadingTrivia;
+    }
+
+    transpile(state: BrsTranspileState, name?: Identifier) {
+        if (this.tokens.name.text.toLowerCase() === 'new') {
+            this.ensureSuperConstructorCall(state);
+            //TODO we need to undo this at the bottom of this method
+            this.injectFieldInitializersForConstructor(state);
+        }
+        //TODO - remove type information from these methods because that doesn't work
+        //convert the `super` calls into the proper methods
+        const parentClassIndex = state.classStatement.getParentClassIndex(state);
+        const visitor = createVisitor({
+            VariableExpression: e => {
+                if (e.tokens.name.text.toLocaleLowerCase() === 'super') {
+                    state.editor.setProperty(e.tokens.name, 'text', `m.super${parentClassIndex}_new`);
+                }
+            },
+            DottedGetExpression: e => {
+                const beginningVariable = util.findBeginningVariableExpression(e);
+                const lowerName = beginningVariable?.getName(ParseMode.BrighterScript).toLowerCase();
+                if (lowerName === 'super') {
+                    state.editor.setProperty(beginningVariable.tokens.name, 'text', 'm');
+                    state.editor.setProperty(e.tokens.name, 'text', `super${parentClassIndex}_${e.tokens.name.text}`);
+                }
+            }
+        });
+        const walkOptions: WalkOptions = { walkMode: WalkMode.visitExpressions };
+        for (const statement of this.func.body.statements) {
+            visitor(statement, undefined);
+            statement.walk(visitor, walkOptions);
+        }
+        return this.func.transpile(state, name);
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        if (this.accessModifier) {
+            result.push(
+                this.accessModifier.text,
+                ' '
+            );
+        }
+        if (this.tokens.override) {
+            result.push('override ');
+        }
+        result.push(
+            ...this.func.getTypedef(state)
+        );
+        return result;
+    }
+
+    /**
+     * All child classes must call the parent constructor. The type checker will warn users when they don't call it in their own class,
+     * but we still need to call it even if they have omitted it. This injects the super call if it's missing
+     */
+    private ensureSuperConstructorCall(state: BrsTranspileState) {
+        //if this class doesn't extend another class, quit here
+        if (state.classStatement!.getAncestors(state).length === 0) {
+            return;
+        }
+
+        //if a call to super exists, quit here
+        if (this.findSuperCallIndex() !== -1) {
+            return;
+        }
+
+        //this is a child class, and the constructor doesn't contain a call to super. Inject one
+        const superCall = new ExpressionStatement({
+            expression: new CallExpression({
+                callee: new VariableExpression({
+                    name: createIdentifier('super', state.classStatement.tokens.name)
+                }),
+                openingParen: createToken(TokenKind.LeftParen, '(', state.classStatement.tokens.name),
+                closingParen: createToken(TokenKind.RightParen, ')', state.classStatement.tokens.name),
+                args: []
+            })
+        });
+        state.editor.arrayUnshift(this.func.body.statements, superCall);
+    }
+
+    /**
+     * Find the index of the `super()` call within this function's body, or -1 if there isn't one.
+     * The call is usually the first statement, but plugins are free to insert statements ahead of it,
+     * so we locate it rather than assuming a fixed position.
+     */
+    private findSuperCallIndex() {
+        return this.func.body.statements.findIndex((x) => {
+            //is a call statement
+            return isExpressionStatement(x) && isCallExpression(x.expression) &&
+                //is a call to super
+                util.findBeginningVariableExpression(x.expression.callee)?.name.text.toLowerCase() === 'super';
+        });
+    }
+
+    /**
+     * Inject field initializers at the top of the `new` function (after any present `super()` call).
+     * Fields declared inside conditional compile blocks have their initializers wrapped in an equivalent
+     * conditional compile statement.
+     */
+    private injectFieldInitializersForConstructor(state: BrsTranspileState) {
+        //field initializers must run after the `super()` call. `ensureSuperConstructorCall` has already
+        //guaranteed a super call exists for derived classes, but it isn't necessarily at index 0 -- a plugin
+        //may have inserted statements before it -- so find it instead of assuming its position.
+        const superCallIndex = state.classStatement!.hasParentClass() ? this.findSuperCallIndex() : -1;
+        let startingIndex = superCallIndex + 1;
+
+        const buildFieldAssignment = (field: FieldStatement) => {
+            let thisQualifiedName = { ...field.tokens.name };
+            thisQualifiedName.text = 'm.' + field.tokens.name?.text;
+            const fieldAssignment = field.initialValue
+                ? new AssignmentStatement({
+                    equals: field.tokens.equals,
+                    name: thisQualifiedName,
+                    value: field.initialValue
+                })
+                : new AssignmentStatement({
+                    equals: createToken(TokenKind.Equal, '=', field.tokens.name),
+                    name: thisQualifiedName,
+                    //if there is no initial value, set the initial value to `invalid`
+                    value: createInvalidLiteral('invalid', field.tokens.name)
+                });
+            // Add parent so namespace lookups work
+            fieldAssignment.parent = state.classStatement;
+            return fieldAssignment;
+        };
+
+        //build a conditional compile statement containing the field initializers of the original's branches,
+        //or undefined if there are no fields in any branch
+        const buildConditionalCompile = (statement: ConditionalCompileStatement): ConditionalCompileStatement | undefined => {
+            //fold branches back-to-front so an empty branch ahead of one with content still gets a wrapper,
+            //keeping the `#if`/`#else if`/`#else` structure intact
+            const branches: Array<{ branch: ConditionalCompileStatement | undefined; statements: Statement[] }> = [];
+            forEachConditionalCompileBranch(statement, (branchStatements, branch) => {
+                branches.push({ branch: branch, statements: buildInitializers(branchStatements) });
+            });
+
+            let elseBranch: ConditionalCompileStatement | Block | undefined;
+            for (let i = branches.length - 1; i >= 0; i--) {
+                const { branch, statements } = branches[i];
+                if (!branch) {
+                    //the trailing plain `#else` block
+                    if (statements.length > 0) {
+                        elseBranch = new Block({ statements: statements });
+                    }
+                    continue;
+                }
+                if (statements.length === 0 && !elseBranch) {
+                    //no fields in this branch, and nothing further down the chain either - skip it
+                    continue;
+                }
+                const conditionalCompile = new ConditionalCompileStatement({
+                    hashIf: util.cloneToken(branch.tokens.hashIf),
+                    not: util.cloneToken(branch.tokens.not),
+                    condition: util.cloneToken(branch.tokens.condition),
+                    hashElse: elseBranch ? util.cloneToken(branch.tokens.hashElse) : undefined,
+                    hashEndIf: util.cloneToken(branch.tokens.hashEndIf),
+                    thenBranch: new Block({ statements: statements }),
+                    elseBranch: elseBranch
+                });
+                conditionalCompile.parent = state.classStatement;
+                elseBranch = conditionalCompile;
+            }
+            return elseBranch as ConditionalCompileStatement | undefined;
+        };
+
+        const buildInitializers = (statements: Statement[]): Statement[] => {
+            const result = [] as Statement[];
+            for (const statement of statements) {
+                if (isFieldStatement(statement)) {
+                    result.push(buildFieldAssignment(statement));
+                } else if (isConditionalCompileStatement(statement)) {
+                    const conditionalCompile = buildConditionalCompile(statement);
+                    if (conditionalCompile) {
+                        result.push(conditionalCompile);
+                    }
+                }
+            }
+            return result;
+        };
+
+        //insert the field initializers in order
+        let newStatements = buildInitializers(state.classStatement!.body);
+        state.editor.arraySplice(this.func.body.statements, startingIndex, 0, ...newStatements);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'func', visitor, options);
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new MethodStatement({
+                modifiers: this.modifiers?.map(m => util.cloneToken(m)),
+                name: util.cloneToken(this.tokens.name),
+                func: this.func?.clone(),
+                override: util.cloneToken(this.tokens.override)
+            }),
+            ['func']
+        );
+    }
+}
+
+export class FieldStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        accessModifier?: Token;
+        name: Identifier;
+        as?: Token;
+        typeExpression?: TypeExpression;
+        equals?: Token;
+        initialValue?: Expression;
+        optional?: Token;
+    }) {
+        super();
+        this.tokens = {
+            accessModifier: options.accessModifier,
+            name: options.name,
+            as: options.as,
+            equals: options.equals,
+            optional: options.optional
+        };
+        this.typeExpression = options.typeExpression;
+        this.initialValue = options.initialValue;
+
+        util.setBounds(this,
+            ...Object.values(this.tokens),
+            this.typeExpression,
+            this.initialValue
+        );
+    }
+
+    public readonly tokens: {
+        readonly accessModifier?: Token;
+        readonly name: Identifier;
+        readonly as?: Token;
+        readonly equals?: Token;
+        readonly optional?: Token;
+    };
+
+    public readonly typeExpression?: TypeExpression;
+    public readonly initialValue?: Expression;
+
+    public readonly kind = AstNodeKind.FieldStatement;
+
+    /**
+     * Derive a ValueKind from the type token, or the initial value.
+     * Defaults to `DynamicType`
+     */
+    getType(options: GetTypeOptions) {
+        let initialValueType = this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime });
+
+        if (isInvalidType(initialValueType) || isVoidType(initialValueType) || isUninitializedType(initialValueType)) {
+            initialValueType = undefined;
+        }
+
+        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
+            util.getDefaultTypeFromValueType(initialValueType) ??
+            DynamicType.instance;
+    }
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.accessModifier?.leadingTrivia ?? this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
+    }
+
+    public get isOptional() {
+        return !!this.tokens.optional;
+    }
+
+    transpile(state: BrsTranspileState): TranspileResult {
+        throw new Error('transpile not implemented for ' + Object.getPrototypeOf(this).constructor.name);
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [];
+        if (this.tokens.name) {
+            for (let comment of util.getLeadingComments(this) ?? []) {
+                result.push(
+                    comment.text,
+                    state.newline,
+                    state.indent()
+                );
+            }
+            for (let annotation of this.annotations ?? []) {
+                result.push(
+                    ...annotation.getTypedef(state),
+                    state.newline,
+                    state.indent()
+                );
+            }
+
+            let type = this.getType({ flags: SymbolTypeFlag.typetime });
+            if (isInvalidType(type) || isVoidType(type) || isUninitializedType(type)) {
+                type = DynamicType.instance;
+            }
+
+            result.push(
+                this.tokens.accessModifier?.text ?? 'public',
+                ' '
+            );
+            if (this.isOptional) {
+                result.push(this.tokens.optional.text, ' ');
+            }
+            result.push(this.tokens.name?.text,
+                ' as ',
+                type.toTypeString()
+            );
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typeExpression', visitor, options);
+            walk(this, 'initialValue', visitor, options);
+        }
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new FieldStatement({
+                accessModifier: util.cloneToken(this.tokens.accessModifier),
+                name: util.cloneToken(this.tokens.name),
+                as: util.cloneToken(this.tokens.as),
+                typeExpression: this.typeExpression?.clone(),
+                equals: util.cloneToken(this.tokens.equals),
+                initialValue: this.initialValue?.clone(),
+                optional: util.cloneToken(this.tokens.optional)
+            }),
+            ['initialValue']
+        );
+    }
+}
+
+export type MemberStatement = FieldStatement | MethodStatement;
+
+export class TryCatchStatement extends Statement {
+    constructor(options?: {
+        try?: Token;
+        endTry?: Token;
+        tryBranch?: Block;
+        catchStatement?: CatchStatement;
+    }) {
+        super();
+        this.tokens = {
+            try: options.try,
+            endTry: options.endTry
+        };
+        this.tryBranch = options.tryBranch;
+        this.catchStatement = options.catchStatement;
+        this.tryBranch?.setBoundsBetween(
+            this.tokens.try,
+            util.setBounds({} as Locatable, this.tokens.endTry, this.catchStatement)
+        );
+        //the catch statement doesn't know where the `end try` is, so the try/catch sets the bounds of its (empty) branch
+        this.catchStatement?.catchBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.catchStatement.tokens.catch, this.catchStatement.exceptionVariableExpression),
+            this.tokens.endTry
+        );
+        util.setBounds(this,
+            this.tokens.try,
+            this.tryBranch,
+            this.catchStatement,
+            this.tokens.endTry
+        );
+    }
+
+    public readonly tokens: {
+        readonly try?: Token;
+        readonly endTry?: Token;
+    };
+
+    public readonly tryBranch: Block;
+    public readonly catchStatement: CatchStatement;
+
+    public readonly kind = AstNodeKind.TryCatchStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [
+            state.transpileToken(this.tokens.try, 'try'),
+            ...this.tryBranch.transpile(state),
+            state.newline,
+            state.indent(),
+            ...(this.catchStatement?.transpile(state) ?? ['catch']),
+            state.newline,
+            state.indent(),
+            state.transpileToken(this.tokens.endTry!, 'end try')
+        ];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.tryBranch && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'tryBranch', visitor, options);
+            walk(this, 'catchStatement', visitor, options);
+        }
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.try?.leadingTrivia ?? [];
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endTry?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TryCatchStatement({
+                try: util.cloneToken(this.tokens.try),
+                endTry: util.cloneToken(this.tokens.endTry),
+                tryBranch: this.tryBranch?.clone(),
+                catchStatement: this.catchStatement?.clone()
+            }),
+            ['tryBranch', 'catchStatement']
+        );
+    }
+}
+
+export class CatchStatement extends Statement {
+    constructor(options?: {
+        catch?: Token;
+        exceptionVariableExpression?: Expression;
+        catchBranch?: Block;
+    }) {
+        super();
+        this.tokens = {
+            catch: options?.catch
+        };
+        this.exceptionVariableExpression = options?.exceptionVariableExpression;
+        this.catchBranch = options?.catchBranch;
+        util.setBounds(this,
+            this.tokens.catch,
+            this.exceptionVariableExpression,
+            this.catchBranch
+        );
+    }
+
+    public readonly tokens: {
+        readonly catch?: Token;
+    };
+
+    public readonly exceptionVariableExpression?: Expression;
+
+    public readonly catchBranch?: Block;
+
+    public readonly kind = AstNodeKind.CatchStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [
+            state.transpileToken(this.tokens.catch, 'catch'),
+            ' ',
+            this.exceptionVariableExpression?.transpile(state) ?? [
+                //use the variable named `e` if it doesn't exist in this function body. otherwise use '__bsc_error' just to make sure we're out of the way
+                this.getSymbolTable()?.hasSymbol('e', SymbolTypeFlag.runtime)
+                    ? '__bsc_error'
+                    : 'e'
+            ],
+            ...(this.catchBranch?.transpile(state) ?? [])
+        ];
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.catchBranch && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'catchBranch', visitor, options);
+        }
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.catch?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new CatchStatement({
+                catch: util.cloneToken(this.tokens.catch),
+                exceptionVariableExpression: this.exceptionVariableExpression?.clone(),
+                catchBranch: this.catchBranch?.clone()
+            }),
+            ['catchBranch']
+        );
+    }
+}
+
+export class ThrowStatement extends Statement {
+    constructor(options?: {
+        throw?: Token;
+        expression?: Expression;
+    }) {
+        super();
+        this.tokens = {
+            throw: options.throw
+        };
+        this.expression = options.expression;
+        util.setBounds(this,
+            this.tokens.throw,
+            this.expression
+        );
+    }
+
+    public readonly tokens: {
+        readonly throw?: Token;
+    };
+    public readonly expression?: Expression;
+
+    public readonly kind = AstNodeKind.ThrowStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public transpile(state: BrsTranspileState) {
+        const result = [
+            state.transpileToken(this.tokens.throw, 'throw'),
+            ' '
+        ] as TranspileResult;
+
+        //if we have an expression, transpile it
+        if (this.expression) {
+            result.push(
+                ...this.expression.transpile(state)
+            );
+
+            //no expression found. Rather than emit syntax errors, provide a generic error message
+        } else {
+            result.push('"User-specified exception"');
+        }
+        return result;
+    }
+
+    public walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.expression && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.throw?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ThrowStatement({
+                throw: util.cloneToken(this.tokens.throw),
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
+    }
+}
+
+
+export class EnumStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        enum?: Token;
+        name: Identifier;
+        endEnum?: Token;
+        body: Array<EnumMemberStatement>;
+    }) {
+        super();
+        this.tokens = {
+            enum: options.enum,
+            name: options.name,
+            endEnum: options.endEnum
+        };
+        this.symbolTable = new SymbolTable('Enum');
+        this.body = options.body ?? [];
+        util.setBounds(this,
+            this.tokens.enum,
+            this.tokens.name,
+            ...this.body,
+            this.tokens.endEnum
+        );
+    }
+
+    public readonly tokens: {
+        readonly enum?: Token;
+        readonly name: Identifier;
+        readonly endEnum?: Token;
+    };
+    public readonly body: Array<EnumMemberStatement>;
+
+    public readonly kind = AstNodeKind.EnumStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public getMembers() {
+        const result = [] as EnumMemberStatement[];
+        for (const statement of this.body) {
+            if (isEnumMemberStatement(statement)) {
+                result.push(statement);
+            }
+        }
+        return result;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.enum?.leadingTrivia;
+    }
+
+    public get endTrivia(): Token[] {
+        return this.tokens.endEnum?.leadingTrivia ?? [];
+    }
+
+    /**
+     * Get a map of member names and their values.
+     * All values are stored as their AST LiteralExpression representation (i.e. string enum values include the wrapping quotes)
+     */
+    public getMemberValueMap() {
+        const result = new Map<string, string>();
+        const members = this.getMembers();
+        let currentIntValue = 0;
+        for (const member of members) {
+            //if there is no value, assume an integer and increment the int counter
+            if (!member.value) {
+                result.set(member.name?.toLowerCase(), currentIntValue.toString());
+                currentIntValue++;
+
+                //if explicit integer value, use it and increment the int counter
+            } else if (isLiteralExpression(member.value) && member.value.tokens.value.kind === TokenKind.IntegerLiteral) {
+                //try parsing as integer literal, then as hex integer literal.
+                let tokenIntValue = util.parseInt(member.value.tokens.value.text) ?? util.parseInt(member.value.tokens.value.text.replace(/&h/i, '0x'));
+                if (tokenIntValue !== undefined) {
+                    currentIntValue = tokenIntValue;
+                    currentIntValue++;
+                }
+                result.set(member.name?.toLowerCase(), member.value.tokens.value.text);
+
+                //simple unary expressions (like `-1`)
+            } else if (isUnaryExpression(member.value) && isLiteralExpression(member.value.right)) {
+                result.set(member.name?.toLowerCase(), member.value.tokens.operator.text + member.value.right.tokens.value.text);
+
+                //all other values
+            } else {
+                result.set(member.name?.toLowerCase(), (member.value as LiteralExpression)?.tokens?.value?.text ?? 'invalid');
+            }
+        }
+        return result;
+    }
+
+    public getMemberValue(name: string) {
+        return this.getMemberValueMap().get(name.toLowerCase());
+    }
+
+    /**
+     * The name of the enum (without the namespace prefix)
+     */
+    public get name() {
+        return this.tokens.name?.text;
+    }
+
+    /**
+     * The name of the enum WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            const namespace = this.findAncestor(isNamespaceStatement);
+
+            if (namespace) {
+                let namespaceName = namespace.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    transpile(state: BrsTranspileState) {
+        //enum declarations don't exist at runtime, so just transpile comments and trivia
+        return [
+            state.transpileAnnotations(this),
+            state.transpileLeadingComments(this.tokens.enum)
+        ];
+    }
+
+    getTypedef(state: BrsTranspileState) {
+        const result = [] as TranspileResult;
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        for (let annotation of this.annotations ?? []) {
+            result.push(
+                ...annotation.getTypedef(state),
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.enum?.text ?? 'enum',
+            ' ',
+            this.tokens.name.text
+        );
+        result.push(state.newline);
+        state.blockDepth++;
+        for (const member of this.body) {
+            if (isTypedefProvider(member)) {
+                result.push(
+                    state.indent(),
+                    ...member.getTypedef(state),
+                    state.newline
+                );
+            }
+        }
+        state.blockDepth--;
+        result.push(
+            state.indent(),
+            this.tokens.endEnum?.text ?? 'end enum'
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            walkArray(this.body, visitor, options, this);
+
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        const members = this.getMembers();
+
+        const resultType = new EnumType(
+            this.fullName,
+            members[0]?.getType(options).underlyingType
+        );
+        resultType.pushMemberProvider(() => this.getSymbolTable());
+        for (const statement of members) {
+            const memberType = statement.getType({ ...options, typeChain: undefined });
+            memberType.parentEnumType = resultType;
+            resultType.addMember(statement?.tokens?.name?.text, { definingNode: statement }, memberType, SymbolTypeFlag.runtime);
+        }
+        return resultType;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new EnumStatement({
+                enum: util.cloneToken(this.tokens.enum),
+                name: util.cloneToken(this.tokens.name),
+                endEnum: util.cloneToken(this.tokens.endEnum),
+                body: this.body?.map(x => x?.clone())
+            }),
+            ['body']
+        );
+    }
+}
+
+export class EnumMemberStatement extends Statement implements TypedefProvider {
+    public constructor(options: {
+        name: Identifier;
+        equals?: Token;
+        value?: Expression;
+    }) {
+        super();
+        this.tokens = {
+            name: options.name,
+            equals: options.equals
+        };
+        this.value = options.value;
+        util.setBounds(this,
+            this.tokens.name,
+            this.tokens.equals,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly name: Identifier;
+        readonly equals?: Token;
+    };
+    public readonly value?: Expression;
+
+    public readonly kind = AstNodeKind.EnumMemberStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * The name of the member
+     */
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.name.leadingTrivia;
+    }
+
+    /**
+     * Get the value of this enum. Requires that `.parent` is set
+     */
+    public getValue() {
+        if (isEnumStatement(this.parent)) {
+            return (this.parent as EnumStatement)?.getMemberValue(this.name);
+        }
+        return undefined;
+    }
+
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(this.tokens.name.text);
+        if (this.tokens.equals) {
+            result.push(' ', this.tokens.equals.text, ' ');
+            if (this.value) {
+                result.push(
+                    ...this.value.transpile(state)
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        return new EnumMemberType(
+            (this.parent as EnumStatement)?.fullName,
+            this.tokens?.name?.text,
+            this.value?.getType(options)
+        );
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new EnumMemberStatement({
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
+}
+
+export class ConstStatement extends Statement implements TypedefProvider {
+    public constructor(options: {
+        const?: Token;
+        name: Identifier;
+        equals?: Token;
+        value: Expression;
+    }) {
+        super();
+        this.tokens = {
+            const: options.const,
+            name: options.name,
+            equals: options.equals
+        };
+        this.value = options.value;
+        util.setBounds(this, this.tokens.const, this.tokens.name, this.tokens.equals, this.value);
+    }
+
+    public readonly tokens: {
+        readonly const: Token;
+        readonly name: Identifier;
+        readonly equals: Token;
+    };
+    public readonly value: Expression;
+
+    public readonly kind = AstNodeKind.ConstStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public get name() {
+        return this.tokens.name.text;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.const?.leadingTrivia;
+    }
+
+    /**
+     * The name of the statement WITH its leading namespace (if applicable)
+     */
+    public get fullName() {
+        const name = this.tokens.name?.text;
+        if (name) {
+            const namespace = this.findAncestor(isNamespaceStatement);
+            if (namespace) {
+                let namespaceName = namespace.getName(ParseMode.BrighterScript);
+                return `${namespaceName}.${name}`;
+            } else {
+                return name;
+            }
+        } else {
+            //return undefined which will allow outside callers to know that this doesn't have a name
+            return undefined;
+        }
+    }
+
+    public transpile(state: BrsTranspileState): TranspileResult {
+        //const declarations don't exist at runtime, so just transpile comments and trivia
+        return [
+            state.transpileAnnotations(this),
+            state.transpileLeadingComments(this.tokens.const)
+        ];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.const ? state.tokenToSourceNode(this.tokens.const) : 'const',
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
+            ' ',
+            ...this.value.transpile(state)
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.value && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions) {
+        return this.value.getType(options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConstStatement({
+                const: util.cloneToken(this.tokens.const),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
+}
+
+export class ContinueStatement extends Statement {
+    constructor(options: {
+        continue?: Token;
+        loopType: Token;
+    }
+    ) {
+        super();
+        this.tokens = {
+            continue: options.continue,
+            loopType: options.loopType
+        };
+        util.setBounds(this,
+            this.tokens.continue,
+            this.tokens.loopType
+        );
+    }
+
+    public readonly tokens: {
+        readonly continue?: Token;
+        readonly loopType: Token;
+    };
+
+    public readonly kind = AstNodeKind.ContinueStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        //when targeting firmware without native `continue` support, rewrite into a jump to the
+        //label at the end of the enclosing loop body
+        //`false` means the target firmware lacks native `continue`. `undefined` means `state` came
+        //from an older brighterscript (i.e. a plugin bundling a newer brighterscript than the
+        //host) which has no back-transpile support at all, so emit `continue` as-is
+        if (state.firmwareCapabilities?.continueStatement === false) {
+            const label = state.getLoopLabel?.();
+            //no enclosing loop means this is a `continue` outside a loop, which validation already
+            //flags as an error. fall through to the passthrough emit rather than producing a
+            //`goto undefined`
+            if (label) {
+                return [
+                    state.sourceNode(this.tokens.continue, `goto ${label}`)
+                ];
+            }
+        }
+        return [
+            state.sourceNode(this.tokens.continue, this.tokens.continue?.text ?? 'continue'),
+            (this.tokens.loopType ? util.getLeadingWhitespace(this.tokens.loopType) : ' '),
+            state.sourceNode(this.tokens.continue, this.tokens.loopType?.text)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        //nothing to walk
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.continue?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ContinueStatement({
+                continue: util.cloneToken(this.tokens.continue),
+                loopType: util.cloneToken(this.tokens.loopType)
+            })
+        );
+    }
+}
+
+export class TypecastStatement extends Statement {
+    constructor(options: {
+        typecast?: Token;
+        typecastExpression: TypecastExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            typecast: options.typecast
+        };
+        this.typecastExpression = options.typecastExpression;
+        util.setBounds(this,
+            this.tokens.typecast,
+            this.typecastExpression
+        );
+    }
+
+    public readonly tokens: {
+        readonly typecast?: Token;
+    };
+
+    public readonly typecastExpression: TypecastExpression;
+
+    public readonly kind = AstNodeKind.TypecastStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        //the typecast statement is a comment just for debugging purposes
+        return [
+            state.transpileToken(this.tokens.typecast, 'typecast', true),
+            ' ',
+            this.typecastExpression.obj.transpile(state),
+            ' ',
+            state.transpileToken(this.typecastExpression.tokens.as, 'as'),
+            ' ',
+            this.typecastExpression.typeExpression.getName(ParseMode.BrighterScript)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'typecastExpression', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.typecast?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.typecastExpression.getType(options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypecastStatement({
+                typecast: util.cloneToken(this.tokens.typecast),
+                typecastExpression: this.typecastExpression?.clone()
+            }),
+            ['typecastExpression']
+        );
+    }
+}
+
+export class ConditionalCompileErrorStatement extends Statement {
+    constructor(options: {
+        hashError?: Token;
+        message: Token;
+    }) {
+        super();
+        this.tokens = {
+            hashError: options.hashError,
+            message: options.message
+        };
+        util.setBounds(this, ...Object.values(this.tokens));
+    }
+
+    public readonly tokens: {
+        readonly hashError?: Token;
+        readonly message: Token;
+    };
+
+
+    public readonly kind = AstNodeKind.ConditionalCompileErrorStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.hashError, '#error'),
+            ' ',
+            state.transpileToken(this.tokens.message)
+
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // nothing to walk
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.hashError.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConditionalCompileErrorStatement({
+                hashError: util.cloneToken(this.tokens.hashError),
+                message: util.cloneToken(this.tokens.message)
+            })
+        );
+    }
+}
+
+export class AliasStatement extends Statement {
+    constructor(options: {
+        alias?: Token;
+        name: Token;
+        equals?: Token;
+        value: VariableExpression | DottedGetExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            alias: options.alias,
+            name: options.name,
+            equals: options.equals
+        };
+        this.value = options.value;
+        util.setBounds(this,
+            this.tokens.alias,
+            this.tokens.name,
+            this.tokens.equals,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly alias?: Token;
+        readonly name: Token;
+        readonly equals?: Token;
+    };
+
+    //the constructor only accepts these two shapes, so keep the field just as narrow. `clone()`
+    //feeds this value straight back into the constructor, which requires the narrow type.
+    public readonly value: VariableExpression | DottedGetExpression;
+
+    public readonly kind = AstNodeKind.AliasStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        //transpile to a comment just for debugging purposes
+        return [
+            state.transpileToken(this.tokens.alias, 'alias', true),
+            ' ',
+            state.transpileToken(this.tokens.name),
+            ' ',
+            state.transpileToken(this.tokens.equals, '='),
+            ' ',
+            this.value.transpile(state)
+        ];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.alias?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AliasStatement({
+                alias: util.cloneToken(this.tokens.alias),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
+}
+
+export class ConditionalCompileStatement extends Statement {
+    constructor(options: {
+        hashIf?: Token;
+        not?: Token;
+        condition: Token;
+        hashElse?: Token;
+        hashEndIf?: Token;
+        thenBranch: Block;
+        elseBranch?: ConditionalCompileStatement | Block;
+    }) {
+        super();
+        this.thenBranch = options.thenBranch;
+        this.elseBranch = options.elseBranch;
+
+        this.tokens = {
+            hashIf: options.hashIf,
+            not: options.not,
+            condition: options.condition,
+            hashElse: options.hashElse,
+            hashEndIf: options.hashEndIf
+        };
+
+        //a branch always spans the gap between its directives (even when it has statements), so it covers blank lines, comments and code that did not parse too.
+        //the else branch goes first, since the then branch ends where it starts
+        if (isBlock(this.elseBranch)) {
+            this.elseBranch.setBoundsBetween(this.tokens.hashElse, this.tokens.hashEndIf, { evenIfNotEmpty: true });
+        }
+        this.thenBranch?.setBoundsBetween(
+            util.setBounds({} as Locatable, this.tokens.condition, this.tokens.not, this.tokens.hashIf),
+            util.setBounds({} as Locatable, this.tokens.hashElse, this.elseBranch, this.tokens.hashEndIf),
+            { evenIfNotEmpty: true }
+        );
+
+        util.setBounds(this,
+            ...Object.values(this.tokens),
+            this.thenBranch,
+            this.elseBranch
+        );
+    }
+
+    readonly tokens: {
+        readonly hashIf?: Token;
+        readonly not?: Token;
+        readonly condition: Token;
+        readonly hashElse?: Token;
+        readonly hashEndIf?: Token;
+    };
+    public readonly thenBranch: Block;
+    public readonly elseBranch?: ConditionalCompileStatement | Block;
+
+    public readonly kind = AstNodeKind.ConditionalCompileStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        let results = [] as TranspileResult;
+        //if   (already indented by block)
+        if (!state.conditionalCompileStatement) {
+            // only transpile the #if in the case when we're not in a conditionalCompileStatement already
+            results.push(state.transpileToken(this.tokens.hashIf ?? createToken(TokenKind.HashIf)));
+        }
+
+        results.push(' ');
+        //conditions
+        if (this.tokens.not) {
+            results.push('not');
+            results.push(' ');
+        }
+        results.push(state.transpileToken(this.tokens.condition));
+        state.lineage.unshift(this);
+
+        //if statement body
+        let thenNodes = this.thenBranch.transpile(state);
+        state.lineage.shift();
+        if (thenNodes.length > 0) {
+            results.push(thenNodes);
+        }
+        //else branch
+        if (this.elseBranch) {
+            const elseIsCC = isConditionalCompileStatement(this.elseBranch);
+            const endBlockToken = elseIsCC ? (this.elseBranch as ConditionalCompileStatement).tokens.hashIf ?? createToken(TokenKind.HashElseIf) : this.tokens.hashElse;
+            //else
+
+            results.push(...state.transpileEndBlockToken(this.thenBranch, endBlockToken, createToken(TokenKind.HashElse).text));
+
+            if (elseIsCC) {
+                //chained else if
+                state.lineage.unshift(this.elseBranch);
+
+                // transpile following #if with knowledge of current
+                const existingCCStmt = state.conditionalCompileStatement;
+                state.conditionalCompileStatement = this;
+                let body = this.elseBranch.transpile(state);
+                state.conditionalCompileStatement = existingCCStmt;
+
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    //zero or more spaces between the `else` and the `if`
+                    util.pushAll(results, body);
+
+                    // stop here because chained if will transpile the rest
+                    return results;
+                } else {
+                    results.push('\n');
+                }
+
+            } else {
+                //else body
+                state.lineage.unshift(this.tokens.hashElse!);
+                let body = this.elseBranch.transpile(state);
+                state.lineage.shift();
+
+                if (body.length > 0) {
+                    util.pushAll(results, body);
+                }
+            }
+        }
+
+        //end if
+        results.push(...state.transpileEndBlockToken(this.elseBranch ?? this.thenBranch, this.tokens.hashEndIf, '#end if'));
+
+        return results;
+    }
+
+    /**
+     * Is the condition (including `not`) true, using the constants in effect at this statement? Set by full walks from the root of the tree. Undefined until walked.
+     */
+    public isConditionTrue?: boolean;
+
+    /**
+     * Does the condition name a declared constant (or is it `true` / `false`)? Set like `isConditionTrue`.
+     */
+    public isConditionDeclared?: boolean;
+
+    /**
+     * Evaluate the condition against the constants in effect at this statement. Called by the walk as it reaches this statement.
+     * @internal
+     */
+    public resolve(bsConsts: Map<string, boolean>) {
+        const condition = this.tokens.condition;
+        let value: boolean;
+        this.isConditionDeclared = true;
+        if (condition?.kind === TokenKind.True) {
+            value = true;
+        } else if (condition?.kind === TokenKind.False) {
+            value = false;
+        } else {
+            const constNameLower = condition?.text.toLowerCase();
+            this.isConditionDeclared = bsConsts.has(constNameLower);
+            //an undeclared constant is false
+            value = bsConsts.get(constNameLower) === true;
+        }
+        this.isConditionTrue = this.tokens.not ? !value : value;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            if (options.walkMode & InternalWalkMode.visitFalseConditionalCompilationBlocks) {
+                walk(this, 'thenBranch', visitor, options);
+                if (this.elseBranch) {
+                    walk(this, 'elseBranch', visitor, options);
+                }
+                return;
+            }
+            walk(this, this.isConditionTrue ? 'thenBranch' : 'elseBranch', visitor, options);
+            //the visitor never sees the inactive branch, but a walk that resolves the tree still marks its nodes inactive
+            if (options.bsConsts) {
+                walk(this, this.isConditionTrue ? 'elseBranch' : 'thenBranch', undefined, {
+                    walkMode: WalkMode.visitAllRecursive | InternalWalkMode.visitFalseConditionalCompilationBlocks
+                });
+            }
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.hashIf?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConditionalCompileStatement({
+                hashIf: util.cloneToken(this.tokens.hashIf),
+                not: util.cloneToken(this.tokens.not),
+                condition: util.cloneToken(this.tokens.condition),
+                hashElse: util.cloneToken(this.tokens.hashElse),
+                hashEndIf: util.cloneToken(this.tokens.hashEndIf),
+                thenBranch: this.thenBranch?.clone(),
+                elseBranch: this.elseBranch?.clone()
+            }),
+            ['thenBranch', 'elseBranch']
+        );
+    }
+
+    public getBranchStatementIndex(stmt: Statement) {
+        if (this.thenBranch === stmt) {
+            return 0;
+        } else if (this.elseBranch === stmt) {
+            return 1;
+        }
+        return -1;
+    }
+}
+
+
+export class ConditionalCompileConstStatement extends Statement {
+    constructor(options: {
+        hashConst?: Token;
+        assignment: AssignmentStatement;
+    }) {
+        super();
+        this.tokens = {
+            hashConst: options.hashConst
+        };
+        this.assignment = options.assignment;
+        util.setBounds(this, ...Object.values(this.tokens), this.assignment);
+    }
+
+    public readonly tokens: {
+        readonly hashConst?: Token;
+    };
+
+    public readonly assignment: AssignmentStatement;
+
+    public readonly kind = AstNodeKind.ConditionalCompileConstStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [
+            state.transpileToken(this.tokens.hashConst, '#const'),
+            ' ',
+            state.transpileToken(this.assignment.tokens.name),
+            ' ',
+            state.transpileToken(this.assignment.tokens.equals, '='),
+            ' ',
+            ...this.assignment.value.transpile(state)
+        ];
+
+    }
+
+    /**
+     * Does this `#const` redeclare a constant that is already in effect? The first declaration keeps its value.
+     * Resolved by full walks from the root of the tree, and only meaningful while this statement is active.
+     */
+    public isDuplicate = false;
+
+    /**
+     * Declare this constant in the constants in effect, when this statement is active. Called by the walk as it reaches this statement.
+     * An invalid value declares nothing, and a redeclaration keeps the first value.
+     * @internal
+     */
+    public resolve(bsConsts: Map<string, boolean>) {
+        this.isDuplicate = false;
+        const value = this.assignment.value;
+        if (!this.isActive || !isLiteralBoolean(value)) {
+            return;
+        }
+        const constNameLower = this.assignment.tokens.name.text.toLowerCase();
+        this.isDuplicate = bsConsts.has(constNameLower);
+        if (!this.isDuplicate) {
+            bsConsts.set(constNameLower, value.tokens.value.text.toLowerCase() === 'true');
+        }
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        // nothing to walk
+    }
+
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.hashConst.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new ConditionalCompileConstStatement({
+                hashConst: util.cloneToken(this.tokens.hashConst),
+                assignment: this.assignment?.clone()
+            }),
+            ['assignment']
+        );
+    }
+}
+
+
+export class TypeStatement extends Statement implements TypedefProvider {
+    constructor(options: {
+        type?: Token;
+        name: Token;
+        equals?: Token;
+        value: TypeExpression;
+    }
+    ) {
+        super();
+        this.tokens = {
+            type: options.type,
+            name: options.name,
+            equals: options.equals
+        };
+        this.value = options.value;
+        util.setBounds(this,
+            this.tokens.type,
+            this.tokens.name,
+            this.tokens.equals,
+            this.value
+        );
+    }
+
+    public readonly tokens: {
+        readonly type?: Token;
+        readonly name: Token;
+        readonly equals?: Token;
+    };
+
+    public readonly value: TypeExpression;
+
+    public readonly kind = AstNodeKind.TypeStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        //type statements have no runtime representation, so they're stripped entirely
+        return [];
+    }
+
+    getTypedef(state: BrsTranspileState): TranspileResult {
+        const result: TranspileResult = [];
+        for (let comment of util.getLeadingComments(this) ?? []) {
+            result.push(
+                comment.text,
+                state.newline,
+                state.indent()
+            );
+        }
+        result.push(
+            this.tokens.type ? state.tokenToSourceNode(this.tokens.type) : 'type',
+            ' ',
+            state.tokenToSourceNode(this.tokens.name),
+            ' ',
+            this.tokens.equals ? state.tokenToSourceNode(this.tokens.equals) : '=',
+            ' ',
+            ...this.value.getTypedef(state)
+        );
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'value', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.type?.leadingTrivia ?? [];
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.value.getType(options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new TypeStatement({
+                type: util.cloneToken(this.tokens.type),
+                name: util.cloneToken(this.tokens.name),
+                equals: util.cloneToken(this.tokens.equals),
+                value: this.value?.clone()
+            }),
+            ['value']
+        );
+    }
+}
+
+/**
+ * The name of the temporary variable used to hold the `select case` subject when it must be evaluated exactly once
+ * (i.e. `select case getValue()`). A single name is safe to reuse, even for nested `select case` statements, because
+ * once a case body starts running, the enclosing `select case` never reads its subject again.
+ */
+export const SELECT_CASE_SUBJECT_VARIABLE = '__bsSelectCaseSubject';
+
+/**
+ * A `select case` statement.
+ *
+ * ```brighterscript
+ * select case value
+ *     case 1
+ *         print "one"
+ *     case 2, 3
+ *         print "two or three"
+ *     case else
+ *         print "something else"
+ * end select
+ * ```
+ */
+export class SelectCaseStatement extends Statement {
+    constructor(options: {
+        select: Token;
+        /**
+         * The `case` keyword that follows `select`. It is optional, so this will be undefined for `select value`
+         */
+        case?: Token;
+        endSelect?: Token;
+        /**
+         * The value being compared against each case. Undefined when missing (i.e. while the user is still typing)
+         */
+        subject?: Expression;
+        /**
+         * Any statements found between the `select case` line and the first `case`. These are invalid, but are kept so
+         * that partially-written code still produces a useful AST
+         */
+        leadingStatements?: Block;
+        cases?: CaseStatement[];
+    }) {
+        super();
+        this.tokens = {
+            select: options.select,
+            case: options.case,
+            endSelect: options.endSelect
+        };
+        this.subject = options.subject;
+        this.leadingStatements = options.leadingStatements;
+        this.cases = options.cases ?? [];
+        //a case doesn't know where the next case (or `end select`) is, so the select sets the bounds of its (empty) body
+        for (let i = 0; i < this.cases.length; i++) {
+            const caseStatement = this.cases[i];
+            caseStatement?.body?.setBoundsBetween(
+                caseStatement.headerBounds,
+                this.cases[i + 1]?.tokens.case ?? this.tokens.endSelect
+            );
+        }
+        util.setBounds(this,
+            this.tokens.select,
+            this.tokens.case,
+            this.subject,
+            this.leadingStatements,
+            ...this.cases,
+            this.tokens.endSelect
+        );
+    }
+
+    public readonly tokens: {
+        readonly select: Token;
+        readonly case?: Token;
+        readonly endSelect?: Token;
+    };
+
+    public readonly subject?: Expression;
+
+    public readonly leadingStatements?: Block;
+
+    public readonly cases: CaseStatement[];
+
+    public readonly kind = AstNodeKind.SelectCaseStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * The `case else` branch, if there is one
+     */
+    public get elseCase() {
+        return this.cases.find(x => x.isElse);
+    }
+
+    transpile(state: BrsTranspileState) {
+        const lines = [] as TranspileResult[];
+
+        //any (invalid) statements found before the first case go ahead of the generated code
+        for (const statement of this.leadingStatements?.statements ?? []) {
+            lines.push(statement.transpile(state));
+        }
+
+        //literals and local variables can be referenced repeatedly without changing behavior (a local variable can't be
+        //modified by a call inside a case value). Everything else gets evaluated exactly once into a temp variable
+        let getSubject: () => TranspileResult;
+        if (!this.subject) {
+            getSubject = () => ['invalid'];
+        } else if (isLiteralExpression(this.subject) || isVariableExpression(this.subject)) {
+            getSubject = () => this.subject.transpile(state);
+        } else {
+            lines.push([
+                state.sourceNode(this.subject, SELECT_CASE_SUBJECT_VARIABLE),
+                ' = ',
+                ...this.subject.transpile(state)
+            ]);
+            getSubject = () => [state.sourceNode(this.subject, SELECT_CASE_SUBJECT_VARIABLE)];
+        }
+        //`select case true` is the idiom for "run the first case whose condition is true", so use the conditions directly
+        const isSelectTrue = isLiteralExpression(this.subject) && this.subject.tokens.value.kind === TokenKind.True;
+
+        const cases = this.cases.filter(x => !x.isElse);
+        //validation flags misplaced or duplicate `case else` branches. Here we just use the first one as the final `else`
+        const elseCase = this.elseCase;
+
+        const chain = [] as TranspileResult;
+        let previousCase: CaseStatement;
+        for (const caseStatement of [...cases, elseCase]) {
+            if (!caseStatement) {
+                continue;
+            }
+            let keyword: string;
+            if (caseStatement.isElse) {
+                //when there are no cases to chain off of, the `case else` body always runs
+                keyword = previousCase ? 'else' : 'if true then';
+            } else {
+                keyword = previousCase ? 'else if' : 'if';
+            }
+            if (previousCase) {
+                //comments above the `case` belong at the end of the previous case's body
+                chain.push(
+                    ...state.transpileEndBlockToken(previousCase, withTrailingExitSelectTrivia(previousCase, { ...caseStatement.tokens.case, text: keyword }), keyword)
+                );
+            } else {
+                chain.push(
+                    state.transpileToken({ ...caseStatement.tokens.case, text: keyword })
+                );
+            }
+            if (!caseStatement.isElse) {
+                chain.push(
+                    ' ',
+                    ...caseStatement.transpileCondition(state, getSubject, isSelectTrue),
+                    ' then'
+                );
+            }
+            util.pushAll(chain, caseStatement.transpileBody(state));
+            previousCase = caseStatement;
+        }
+        if (previousCase) {
+            chain.push(
+                ...state.transpileEndBlockToken(
+                    previousCase,
+                    withTrailingExitSelectTrivia(previousCase, this.tokens.endSelect ? { ...this.tokens.endSelect, text: 'end if' } : createToken(TokenKind.EndIf, 'end if')),
+                    'end if'
+                )
+            );
+            lines.push(chain);
+        }
+
+        //an `exit select` in the middle of a case jumps here
+        const exitLabel = state.peekExitSelectLabel?.(this);
+        if (exitLabel) {
+            lines.push([`${exitLabel}:`]);
+        }
+
+        //comments above the `select case` go ahead of everything else
+        const result = [...state.transpileLeadingComments(this.tokens.select)] as TranspileResult;
+        for (let i = 0; i < lines.length; i++) {
+            if (i > 0) {
+                result.push(state.newline, state.indent());
+            }
+            util.pushAll(result, lines[i]);
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (this.subject && options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'subject', visitor, options);
+        }
+        if (options.walkMode & InternalWalkMode.walkStatements) {
+            if (this.leadingStatements) {
+                walk(this, 'leadingStatements', visitor, options);
+            }
+            walkArray(this.cases, visitor, options, this);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.select?.leadingTrivia ?? [];
+    }
+
+    get endTrivia(): Token[] {
+        return this.tokens.endSelect?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new SelectCaseStatement({
+                select: util.cloneToken(this.tokens.select),
+                case: util.cloneToken(this.tokens.case),
+                endSelect: util.cloneToken(this.tokens.endSelect),
+                subject: this.subject?.clone(),
+                leadingStatements: this.leadingStatements?.clone(),
+                cases: this.cases?.map(x => x?.clone())
+            }),
+            ['subject', 'leadingStatements', 'cases']
+        );
+    }
+}
+
+/**
+ * A single `case` (or `case else`) branch within a `select case` statement
+ */
+export class CaseStatement extends Statement {
+    constructor(options: {
+        case: Token;
+        /**
+         * The `else` keyword for a `case else` branch
+         */
+        else?: Token;
+        /**
+         * The comma-separated list of values for this case. Always empty for `case else`
+         */
+        values?: Expression[];
+        body?: Block;
+    }) {
+        super();
+        this.tokens = {
+            case: options.case,
+            else: options.else
+        };
+        this.values = options.values ?? [];
+        this.body = options.body;
+        util.setBounds(this,
+            this.tokens.case,
+            this.tokens.else,
+            ...this.values,
+            this.body
+        );
+    }
+
+    public readonly tokens: {
+        readonly case: Token;
+        readonly else?: Token;
+    };
+
+    public readonly values: Expression[];
+
+    public readonly body?: Block;
+
+    public readonly kind = AstNodeKind.CaseStatement;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * Is this the `case else` branch
+     */
+    public get isElse() {
+        return !!this.tokens.else;
+    }
+
+    /**
+     * The bounds of just the `case ...` line (the keyword and its values), excluding the body
+     */
+    public get headerBounds(): Locatable {
+        return util.setBounds({} as Locatable, this.tokens.case, this.tokens.else, ...this.values);
+    }
+
+    /**
+     * A case is normally transpiled by its parent `SelectCaseStatement`. On its own, the best we can do is emit its body
+     */
+    transpile(state: BrsTranspileState) {
+        return this.transpileBody(state);
+    }
+
+    /**
+     * The `exit select` at the very end of this case's body, if there is one. It doesn't need to do anything, since the
+     * case ends right after it anyway
+     */
+    public get trailingExitSelect(): ExitStatement | undefined {
+        const lastStatement = this.body?.statements[this.body.statements.length - 1];
+        if (isExitSelectStatement(lastStatement)) {
+            return lastStatement;
+        }
+    }
+
+    /**
+     * Can this case be left with an `exit select` before the end of its body? (ie. `if done then exit select`). If so,
+     * the statements after it might not run. `exit select` statements that belong to a nested `select case` don't count
+     */
+    public get canExitEarly(): boolean {
+        const trailingExitSelect = this.trailingExitSelect;
+        return !!this.body?.findChild((node) => {
+            return isExitSelectStatement(node) && node !== trailingExitSelect && getExitSelectTarget(node)?.selectCase === this.parent;
+        }, { walkMode: WalkMode.visitStatementsRecursive });
+    }
+
+    /**
+     * Transpile the body of this case. Starts with a newline (unless empty) and does not include a trailing newline
+     */
+    public transpileBody(state: BrsTranspileState) {
+        if (!this.body) {
+            return [];
+        }
+        //only the `case ...` line itself counts as the parent line, so that only a trailing comment on that line stays attached to it
+        state.lineage.unshift(this.headerBounds as AstNode);
+        let result: TranspileResult;
+        if (this.trailingExitSelect) {
+            //leave out the trailing `exit select`. (Its comments get emitted by the parent `select case`)
+            result = new Block({ statements: this.body.statements.slice(0, -1) }).transpile(state);
+        } else {
+            result = this.body.transpile(state);
+        }
+        state.lineage.shift();
+        return result;
+    }
+
+    /**
+     * Transpile the condition for this case, i.e. `subject = 1 or subject = 2`
+     * @param state the transpile state
+     * @param getSubject returns a freshly transpiled copy of the `select case` subject
+     * @param isSelectTrue when true, the values are boolean conditions that are used directly (i.e. `select case true`)
+     */
+    public transpileCondition(state: BrsTranspileState, getSubject: () => TranspileResult, isSelectTrue: boolean) {
+        //a case without any values (a syntax error) can never match
+        if (this.values.length === 0) {
+            return ['false'];
+        }
+        const result = [] as TranspileResult;
+        for (let i = 0; i < this.values.length; i++) {
+            const value = this.values[i];
+            if (i > 0) {
+                result.push(' or ');
+            }
+            if (isSelectTrue) {
+                //`and` and `or` share the same precedence, so group them to keep each value as its own condition
+                const needsParens = this.values.length > 1 && isLogicalExpression(value);
+                result.push(...wrapInParens(value.transpile(state), needsParens));
+            } else {
+                //group anything that would bind looser than the `=` we're about to put in front of it
+                const needsParens = isLogicalExpression(value) || isComparisonExpression(value);
+                result.push(
+                    ...getSubject(),
+                    ' = ',
+                    ...wrapInParens(value.transpile(state), needsParens)
+                );
+            }
+        }
+        return result;
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walkArray(this.values, visitor, options, this);
+        }
+        if (this.body && options.walkMode & InternalWalkMode.walkStatements) {
+            walk(this, 'body', visitor, options);
+        }
+    }
+
+    get leadingTrivia(): Token[] {
+        return this.tokens.case?.leadingTrivia ?? [];
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new CaseStatement({
+                case: util.cloneToken(this.tokens.case),
+                else: util.cloneToken(this.tokens.else),
+                values: this.values?.map(x => x?.clone()),
+                body: this.body?.clone()
+            }),
+            ['values', 'body']
+        );
+    }
+}
+
+/**
+ * Is this an `exit select` statement
+ */
+export function isExitSelectStatement(node: AstNode | undefined): node is ExitStatement {
+    return isExitStatement(node) && node.tokens.loopType?.kind === TokenKind.Select;
+}
+
+/**
+ * Find the `select case` that an `exit select` would exit (the nearest enclosing one, without leaving the current function).
+ * `isInLoop` is true when there's a loop between the `exit select` and its case
+ */
+export function getExitSelectTarget(exitStatement: ExitStatement): { selectCase: SelectCaseStatement; isInLoop: boolean } | undefined {
+    let isInLoop = false;
+    let node = exitStatement.parent;
+    while (node && !isFunctionExpression(node)) {
+        if (isCaseStatement(node) && isSelectCaseStatement(node.parent)) {
+            return { selectCase: node.parent, isInLoop: isInLoop };
+        }
+        if (isForStatement(node) || isForEachStatement(node) || isWhileStatement(node)) {
+            isInLoop = true;
+        }
+        node = node.parent;
+    }
+}
+
+/**
+ * A trailing `exit select` is left out of the output, so move any comments above it onto the keyword that comes next
+ */
+function withTrailingExitSelectTrivia(previousCase: CaseStatement, token: Token): Token {
+    const exitToken = previousCase.trailingExitSelect?.tokens.exit;
+    if (!util.hasLeadingComments(exitToken)) {
+        return token;
+    }
+    //the newline after the last comment is already part of the next keyword's trivia
+    const lastCommentIndex = exitToken.leadingTrivia.map(x => x.kind).lastIndexOf(TokenKind.Comment);
+    return { ...token, leadingTrivia: [...exitToken.leadingTrivia.slice(0, lastCommentIndex + 1), ...(token.leadingTrivia ?? [])] };
+}
+
+function wrapInParens(transpiled: TranspileResult, wrap: boolean): TranspileResult {
+    return wrap ? ['(', ...transpiled, ')'] : transpiled;
+}
+
+/**
+ * Unwrap any type casts (which transpile to just their inner expression)
+ */
+function unwrapTypecast(expression: Expression) {
+    while (isTypecastExpression(expression)) {
+        expression = expression.obj;
+    }
+    return expression;
+}
+
+/**
+ * Is this an `and`, `or`, or `not` expression
+ */
+function isLogicalExpression(expression: Expression) {
+    expression = unwrapTypecast(expression);
+    return (isBinaryExpression(expression) && (expression.tokens.operator.kind === TokenKind.And || expression.tokens.operator.kind === TokenKind.Or)) ||
+        (isUnaryExpression(expression) && expression.tokens.operator.kind === TokenKind.Not);
+}
+
+/**
+ * Is this a comparison expression like `a = b` or `a < b`
+ */
+function isComparisonExpression(expression: Expression) {
+    expression = unwrapTypecast(expression);
+    return isBinaryExpression(expression) && [
+        TokenKind.Equal,
+        TokenKind.LessGreater,
+        TokenKind.Less,
+        TokenKind.LessEqual,
+        TokenKind.Greater,
+        TokenKind.GreaterEqual
+    ].includes(expression.tokens.operator.kind);
+}
