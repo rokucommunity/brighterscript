@@ -1,5 +1,5 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, ValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
+import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, ValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, ValidateFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -21,7 +21,7 @@ import { BslibManager } from './serialize/BslibManager';
 import { FileSerializer } from './serialize/FileSerializer';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
-import { BrsFileAfterValidator } from './validation/BrsFileAfterValidator';
+import { BrsFileLinker } from './linking/BrsFileLinker';
 import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
 import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
 
@@ -82,10 +82,19 @@ export class BscPlugin implements Plugin {
         }
     }
 
+    /**
+     * Uses `validateFile` instead of `afterValidateFile`. BscPlugin is registered before every other plugin, so it runs first in `validateFile`.
+     * Linking here ensures every other plugin's `validateFile` handler can look up the file's symbols and types
+     */
+    public validateFile(event: ValidateFileEvent) {
+        if (isBrsFile(event.file)) {
+            new BrsFileLinker(event as ValidateFileEvent<BrsFile>).process();
+        }
+    }
+
     public afterValidateFile(event: AfterValidateFileEvent) {
         if (isBrsFile(event.file)) {
             new BrsFileValidator(event as AfterValidateFileEvent<BrsFile>).process();
-            new BrsFileAfterValidator(event as AfterValidateFileEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
             new XmlFileValidator(event as AfterValidateFileEvent<XmlFile>).process();
         }
