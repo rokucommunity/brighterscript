@@ -108,7 +108,8 @@ export class Lexer {
 
         let eofTrivia: Token[] | undefined;
         if (this.leadingTrivia.length > 0) {
-            eofTrivia = this.leadingTrivia;
+            eofTrivia = this.leadingTrivia.slice();
+            this.leadingTrivia.length = 0;
         } else if (this.hasPendingWhitespace) {
             eofTrivia = WhitespaceOnlyTrivia;
         }
@@ -1211,9 +1212,10 @@ export class Lexer {
             this.pushTrivia(token);
         } else {
             if (this.leadingTrivia.length > 0) {
-                //hand over the array rather than copying it, since we start a new one anyway
-                token.leadingTrivia = this.leadingTrivia;
-                this.leadingTrivia = [];
+                //copy rather than hand over the array: `push` leaves spare capacity in the backing store,
+                //and the copy is sized exactly. Then reuse the scratch array instead of allocating a new one
+                token.leadingTrivia = this.leadingTrivia.slice();
+                this.leadingTrivia.length = 0;
             } else if (this.hasPendingWhitespace) {
                 token.leadingTrivia = WhitespaceOnlyTrivia;
             }
