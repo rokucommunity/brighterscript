@@ -43,6 +43,7 @@ end function
 - In the `else` branch, the guarded type is removed from the argument's type.
 - `not`, `and` and `or` are supported, as well as `else if` branches and nested `if` statements.
 - The right side of `and` and `or` is narrowed too, i.e. `isNode(value) and value.id = "main"`.
+- Ternary expressions are narrowed too, i.e. `isNode(value) ? value.id : ""`.
 - Narrowing stops once the variable is assigned a new value inside the branch.
 
 ```brighterscript
@@ -51,6 +52,34 @@ sub example(a as string or roSGNode, b as string or roSGNode)
         print a.id ' a is roSGNode
         print b ' b is string
     end if
+end sub
+```
+
+## Loops and select case
+
+The body of a `while` loop is narrowed by its condition. After the loop, the condition is known to be false, unless the loop has an `exit while`:
+
+```brighterscript
+sub waitForNode(value)
+    while not isNode(value)
+        value = getNextValue()
+    end while
+    print value.id ' value is known to be roSGNode
+end sub
+```
+
+In a `select case true` (or `select case false`), each case is narrowed by its values, and by the earlier cases not matching. A case with several values is narrowed to any of their types:
+
+```brighterscript
+sub describe(value as string or roSGNode or roArray)
+    select case true
+        case isNode(value)
+            print value.id ' roSGNode
+        case isArray(value)
+            print value.count() ' roArray
+        case else
+            print value ' string
+    end select
 end sub
 ```
 
@@ -66,6 +95,7 @@ sub render()
 end sub
 ```
 
+- Literal indexes work like members: `m.top["content"]` is the same as `m.top.content`, and `items[0]` is narrowed by `isNode(items[0])`. Indexes that aren't literals (`items[i]`) are not narrowed.
 - Narrowing of a member stops when it, or an object it belongs to, is assigned. i.e. `m.top = other` or `m.top["content"] = other` stop the narrowing of `m.top.content`. Assigning a member of the narrowed member (`m.top.content.id = "main"`) does not.
 - Like in TypeScript, calling a function does not stop the narrowing, even though the function could change the member.
 

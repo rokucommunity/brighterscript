@@ -1,7 +1,7 @@
-import { isAnyReferenceType, isAssignmentStatement, isAugmentedAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isContinueStatement, isDottedGetExpression, isDottedSetStatement, isDynamicType, isEndStatement, isExitStatement, isForEachStatement, isForStatement, isFunctionExpression, isGotoStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedSetStatement, isInvalidType, isInvalidTypeLike, isObjectType, isReturnStatement, isThrowStatement, isTryCatchStatement, isTypedFunctionType, isUnaryExpression, isUnionType, isVariableExpression, isWhileStatement } from '../astUtils/reflection';
+import { isAnyReferenceType, isAssignmentStatement, isAugmentedAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isContinueStatement, isDottedGetExpression, isDottedSetStatement, isDynamicType, isEndStatement, isExitStatement, isForEachStatement, isForStatement, isFunctionExpression, isGotoStatement, isGroupingExpression, isCaseStatement, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isLiteralBoolean, isLiteralInteger, isLiteralString, isSelectCaseStatement, isTernaryExpression, isInvalidType, isInvalidTypeLike, isObjectType, isReturnStatement, isThrowStatement, isTryCatchStatement, isTypedFunctionType, isUnaryExpression, isUnionType, isVariableExpression, isWhileStatement } from '../astUtils/reflection';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
 import type { FunctionExpression } from '../parser/Expression';
-import type { Block, IfStatement } from '../parser/Statement';
+import type { Block, CaseStatement, IfStatement, SelectCaseStatement, WhileStatement } from '../parser/Statement';
 import type { GetTypeOptions } from '../interfaces';
 import { TokenKind } from '../lexer/TokenKind';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -131,6 +131,85 @@ function getConditionNarrowings(condition: Expression, path: string, assumeTrue:
 }
 
 /**
+ * What is known about some conditions where a node runs
+ */
+interface ConditionFact {
+    conditions: Expression[];
+    /**
+     * The value the conditions are known to have
+     */
+    assumeTrue: boolean;
+    /**
+     * Is only one of the conditions known to have that value (instead of every one of them)?
+     */
+    any?: boolean;
+}
+
+/**
+ * Get what is known about conditions for `child` to run, from its parent.
+ * i.e. the then branch of an if statement only runs when the condition is true
+ */
+function getParentFacts(parent: AstNode, child: AstNode): ConditionFact[] {
+    if (isIfStatement(parent) && child !== parent.condition) {
+        return [{ conditions: [parent.condition], assumeTrue: child === parent.thenBranch }];
+    } else if (isBinaryExpression(parent) && child === parent.right) {
+        //the right side of `a and b` only runs when `a` is true, and the right side of `a or b` only runs when `a` is false
+        const operatorKind = parent.tokens.operator?.kind;
+        if (operatorKind === TokenKind.And || operatorKind === TokenKind.Or) {
+            return [{ conditions: [parent.left], assumeTrue: operatorKind === TokenKind.And }];
+        }
+    } else if (isWhileStatement(parent) && child === parent.body) {
+        return [{ conditions: [parent.condition], assumeTrue: true }];
+    } else if (isTernaryExpression(parent) && (child === parent.consequent || child === parent.alternate)) {
+        return [{ conditions: [parent.test], assumeTrue: child === parent.consequent }];
+    } else if (isCaseStatement(parent) && child === parent.body && isSelectCaseStatement(parent.parent)) {
+        return getCaseFacts(parent.parent, parent);
+    }
+    return [];
+}
+
+/**
+ * Get what is known in a case of a `select case true` (or `select case false`): no earlier case matched, and one of this case's values did
+ */
+function getCaseFacts(selectCase: SelectCaseStatement, caseStatement: CaseStatement): ConditionFact[] {
+    if (!isLiteralBoolean(selectCase.subject)) {
+        return [];
+    }
+    const subjectValue = selectCase.subject.tokens.value?.text?.toLowerCase() === 'true';
+    const facts: ConditionFact[] = [];
+    for (const otherCase of selectCase.cases) {
+        if (otherCase === caseStatement) {
+            if (!otherCase.tokens.else && otherCase.values?.length > 0) {
+                facts.push({ conditions: otherCase.values, assumeTrue: subjectValue, any: true });
+            }
+            break;
+        }
+        facts.push({ conditions: otherCase.values ?? [], assumeTrue: !subjectValue });
+    }
+    return facts;
+}
+
+function getFactNarrowings(facts: ConditionFact[], path: string, options: GetTypeOptions): Narrowing[] {
+    const narrowings: Narrowing[] = [];
+    for (const fact of facts) {
+        if (!fact.any || fact.conditions.length === 1) {
+            narrowings.push(...fact.conditions.flatMap(condition => getConditionNarrowings(condition, path, fact.assumeTrue, options)));
+            continue;
+        }
+        //only one of the conditions is known, so the type is one of the types each of them narrows to
+        const conditionNarrowings = fact.conditions.map(condition => getConditionNarrowings(condition, path, fact.assumeTrue, options));
+        if (conditionNarrowings.every(x => x.length > 0)) {
+            narrowings.push((type) => getUniqueType(conditionNarrowings.map(x => applyNarrowings(type, x)), unionTypeFactory));
+        }
+    }
+    return narrowings;
+}
+
+function canFactsNarrow(facts: ConditionFact[], path: string) {
+    return facts.some(fact => fact.conditions.some(condition => canConditionNarrow(condition, path)));
+}
+
+/**
  * Get the narrowing from a call to a type guard (i.e. `isFoo(x)` or `isFoo(m.x)`) on the reference `path`
  */
 function getTypeGuardCallNarrowings(call: Expression & { callee: Expression; args: Expression[] }, path: string, assumeTrue: boolean, options: GetTypeOptions): Narrowing[] {
@@ -172,6 +251,24 @@ export function getReferencePath(expression: AstNode): string {
         if (objPath && name) {
             return `${objPath}.${name.toLowerCase()}`;
         }
+    } else if (isIndexedGetExpression(expression) && expression.indexes?.length === 1) {
+        const objPath = getReferencePath(expression.obj);
+        const key = getIndexKey(expression.indexes[0]);
+        if (objPath && key) {
+            return `${objPath}.${key}`;
+        }
+    }
+}
+
+/**
+ * Get the path part for a literal index, i.e. `["name"]` is the same as `.name`, and `[0]` is `[0]`
+ */
+function getIndexKey(index: Expression) {
+    if (isLiteralString(index)) {
+        //strip the quotes. Associative array keys are case insensitive
+        return index.tokens.value.text.slice(1, -1).toLowerCase();
+    } else if (isLiteralInteger(index)) {
+        return `[${index.tokens.value.text}]`;
     }
 }
 
@@ -186,9 +283,14 @@ function assignsPath(node: AstNode, path: string): boolean {
         const objPath = getReferencePath(node.obj);
         assignedPath = objPath && `${objPath}.${node.tokens.name?.text?.toLowerCase()}`;
     } else if (isIndexedSetStatement(node)) {
-        //any member of the object could have changed
         const objPath = getReferencePath(node.obj);
-        return !!objPath && path.startsWith(`${objPath}.`);
+        const key = node.indexes?.length === 1 ? getIndexKey(node.indexes[0]) : undefined;
+        if (objPath && key) {
+            assignedPath = `${objPath}.${key}`;
+        } else {
+            //any member of the object could have changed
+            return !!objPath && path.startsWith(`${objPath}.`);
+        }
     } else if (isAugmentedAssignmentStatement(node)) {
         assignedPath = getReferencePath(node.item);
     } else if (isIncrementStatement(node)) {
@@ -246,9 +348,19 @@ function hasExitingBranch(ifStatement: IfStatement) {
 }
 
 /**
- * Could an earlier if statement in the block narrow the variable for the statements after it?
+ * Does the while loop have an `exit while` (so it can end while its condition is still true)?
  */
-function canEarlyExitNarrow(ifStatement: IfStatement, path: string) {
+function hasExitWhile(whileStatement: WhileStatement) {
+    return !!whileStatement.body?.findChild(node => isExitStatement(node) && node.tokens.loopType?.kind === TokenKind.While, { walkMode: WalkMode.visitStatements });
+}
+
+/**
+ * Could an earlier if statement (or while loop) in the block narrow the variable for the statements after it?
+ */
+function canEarlyExitNarrow(ifStatement: IfStatement | WhileStatement, path: string) {
+    if (isWhileStatement(ifStatement)) {
+        return canConditionNarrow(ifStatement.condition, path) && !hasExitWhile(ifStatement);
+    }
     let branch: IfStatement | Block = ifStatement;
     let canNarrow = false;
     while (isIfStatement(branch) && !canNarrow) {
@@ -264,7 +376,7 @@ function canEarlyExitNarrow(ifStatement: IfStatement, path: string) {
  */
 const earlyExitCache = new WeakMap<Block, {
     cacheKey: string;
-    ifStatements: Array<{ index: number; ifStatement: IfStatement }>;
+    ifStatements: Array<{ index: number; ifStatement: IfStatement | WhileStatement }>;
     firstIndexByPath: Map<string, number>;
 }>();
 
@@ -276,10 +388,10 @@ function getFirstEarlyExitIndex(block: Block, path: string) {
     const cacheKey = getCacheKey();
     let cached = earlyExitCache.get(block);
     if (!cached || cached.cacheKey !== cacheKey) {
-        const ifStatements = [] as Array<{ index: number; ifStatement: IfStatement }>;
+        const ifStatements = [] as Array<{ index: number; ifStatement: IfStatement | WhileStatement }>;
         for (let i = 0; i < block.statements.length; i++) {
             const statement = block.statements[i];
-            if (isIfStatement(statement) && hasExitingBranch(statement)) {
+            if ((isIfStatement(statement) && hasExitingBranch(statement)) || (isWhileStatement(statement) && !hasExitWhile(statement))) {
                 ifStatements.push({ index: i, ifStatement: statement });
             }
         }
@@ -306,14 +418,8 @@ function hasNarrowingCandidate(node: AstNode, path: string, func: AstNode) {
             if (firstIndex >= 0 && firstIndex < parent.statements.indexOf(child as Statement)) {
                 return true;
             }
-        } else if (isIfStatement(parent) && child !== parent.condition) {
-            if (canConditionNarrow(parent.condition, path)) {
-                return true;
-            }
-        } else if (isBinaryExpression(parent) && child === parent.right) {
-            if (canConditionNarrow(parent.left, path)) {
-                return true;
-            }
+        } else if (canFactsNarrow(getParentFacts(parent, child), path)) {
+            return true;
         }
         child = parent;
         parent = parent.parent;
@@ -419,7 +525,7 @@ function getCacheKey() {
 /**
  * Get the type of a variable at an early exit if statement, narrowed by the conditions before it
  */
-function getEntryType(ifStatement: IfStatement, path: string, type: BscType, options: GetTypeOptions, func: FunctionExpression) {
+function getEntryType(ifStatement: IfStatement | WhileStatement, path: string, type: BscType, options: GetTypeOptions, func: FunctionExpression) {
     const cacheKey = getCacheKey();
     if (!cacheKey) {
         return narrowFrom(ifStatement, path, type, options, func);
@@ -453,6 +559,16 @@ function narrowFrom(start: AstNode, path: string, type: BscType, options: GetTyp
             const statements = parent.statements;
             for (let i = statements.indexOf(child as Statement) - 1; i >= 0; i--) {
                 const statement = statements[i];
+                if (isWhileStatement(statement) && canEarlyExitNarrow(statement, path) && !hasGoto(func)) {
+                    //the loop only ends once its condition is false. That is checked after any assignment in the loop body
+                    narrowings.push(getConditionNarrowings(statement.condition, path, false, options));
+                    if (isAssignedIn(statement, path)) {
+                        break walk;
+                    }
+                    //everything before the loop is already known on entry to it
+                    type = getEntryType(statement, path, type, options, func);
+                    break walk;
+                }
                 if (isAssignedIn(statement, path)) {
                     //the variable has a new value, so earlier conditions are not about it anymore
                     break walk;
@@ -464,18 +580,14 @@ function narrowFrom(start: AstNode, path: string, type: BscType, options: GetTyp
                     break walk;
                 }
             }
-        } else if (isIfStatement(parent) && child !== parent.condition) {
-            narrowings.push(getConditionNarrowings(parent.condition, path, child === parent.thenBranch, options));
-        } else if (isBinaryExpression(parent) && child === parent.right) {
-            //the right side of `a and b` only runs when `a` is true, and the right side of `a or b` only runs when `a` is false
-            const operatorKind = parent.tokens.operator?.kind;
-            if (operatorKind === TokenKind.And || operatorKind === TokenKind.Or) {
-                narrowings.push(getConditionNarrowings(parent.left, path, operatorKind === TokenKind.And, options));
+        } else {
+            narrowings.push(getFactNarrowings(getParentFacts(parent, child), path, options));
+            if (isLoop(parent) && isAssignedIn(parent, path)) {
+                //a later iteration could run after the variable gets a new value further down the loop,
+                //so conditions from outside the loop are not about it anymore.
+                //(a while loop's own condition is checked again on every iteration, so it still applies)
+                break;
             }
-        } else if (isLoop(parent) && isAssignedIn(parent, path)) {
-            //a later iteration could run after the variable gets a new value further down the loop,
-            //so conditions from outside the loop are not about it anymore
-            break;
         }
         child = parent;
         parent = parent.parent;

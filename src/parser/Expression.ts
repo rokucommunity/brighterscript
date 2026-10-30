@@ -970,9 +970,9 @@ export class IndexedGetExpression extends Expression {
         const objType = this.obj.getType(options);
         if (isArrayType(objType)) {
             // This is used on an array. What is the default type of that array?
-            return objType.defaultType;
+            return getNarrowedType(this, objType.defaultType, options);
         }
-        return super.getType(options);
+        return getNarrowedType(this, super.getType(options), options);
     }
 
     get leadingTrivia(): Token[] {

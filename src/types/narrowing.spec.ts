@@ -1043,4 +1043,158 @@ describe('type narrowing', () => {
             `)).to.eql(['string or Foo']);
         });
     });
+
+    describe('other statements', () => {
+        const wrapper = `
+            class Wrapper
+                value as string or Foo
+                other as string or Foo
+            end class
+            function getValue() as string or Foo
+                return "text"
+            end function
+        `;
+
+        function getTypes(params: string, body: string) {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                ${classes}
+                ${wrapper}
+                sub main(${params})
+                    ${body}
+                end sub
+            `);
+            program.validate();
+            return getPrintedTypes(file);
+        }
+
+        it('narrows in while loop bodies', () => {
+            expect(getTypes('value as string or Foo', `
+                while isFoo(value)
+                    print value
+                    value = getValue()
+                    print value
+                end while
+            `)).to.eql(['Foo', 'string or Foo']);
+        });
+
+        it('narrows after while loops', () => {
+            expect(getTypes('value as string or Foo', `
+                while not isFoo(value)
+                    value = getValue()
+                end while
+                print value
+            `)).to.eql(['Foo']);
+            expect(getTypes('value as string or Foo, flag as boolean', `
+                while isFoo(value) and flag
+                    flag = not flag
+                end while
+                print value
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('does not narrow after while loops with exit while', () => {
+            expect(getTypes('value as string or Foo, flag as boolean', `
+                while not isFoo(value)
+                    if flag then exit while
+                    value = getValue()
+                end while
+                print value
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('narrows in ternary expressions', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                ${classes}
+                sub main(value as string or Foo)
+                    print isFoo(value) ? value : value
+                    print isFoo(value) ? value.name : "none"
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            const ternary = file.ast.findChildren<PrintStatement>(isPrintStatement, { walkMode: WalkMode.visitStatementsRecursive })[0].expressions[0] as any;
+            expect([
+                ternary.consequent.getType({ flags: SymbolTypeFlag.runtime }).toString(),
+                ternary.alternate.getType({ flags: SymbolTypeFlag.runtime }).toString()
+            ]).to.eql(['Foo', 'string']);
+        });
+
+        it('narrows in select case true', () => {
+            expect(getTypes('value as string or Foo or Bar', `
+                select case true
+                    case isFoo(value)
+                        print value
+                    case isBar(value)
+                        print value
+                    case else
+                        print value
+                end select
+            `)).to.eql(['Foo', 'Bar', 'string']);
+        });
+
+        it('narrows to any of the values of a case', () => {
+            expect(getTypes('value as string or Foo or Bar', `
+                select case true
+                    case isFoo(value), isBar(value)
+                        print value
+                    case else
+                        print value
+                end select
+            `)).to.eql(['Foo or Bar', 'string']);
+        });
+
+        it('narrows in select case false', () => {
+            expect(getTypes('value as string or Foo', `
+                select case false
+                    case isFoo(value)
+                        print value
+                    case else
+                        print value
+                end select
+            `)).to.eql(['string', 'Foo']);
+        });
+
+        it('does not narrow in select case on other values', () => {
+            expect(getTypes('value as string or Foo, flag as boolean', `
+                select case flag
+                    case isFoo(value)
+                        print value
+                end select
+            `)).to.eql(['string or Foo']);
+        });
+
+        it('narrows literal indexes', () => {
+            expect(getTypes('data as Wrapper, items', `
+                if isFoo(data["value"])
+                    print data.value
+                    print data["VALUE"]
+                end if
+                if isFoo(data.other)
+                    print data["other"]
+                end if
+                if isFoo(items[0])
+                    print items[0]
+                    print items[1]
+                end if
+            `)).to.eql(['Foo', 'Foo', 'Foo', 'Foo', 'dynamic']);
+        });
+
+        it('does not narrow non-literal indexes', () => {
+            expect(getTypes('items, i as integer', `
+                if isFoo(items[i])
+                    print items[i]
+                end if
+            `)).to.eql(['dynamic']);
+        });
+
+        it('does not narrow after an assignment to the same literal index', () => {
+            expect(getTypes('data as Wrapper', `
+                if not isFoo(data.value) then return
+                data["other"] = "text"
+                print data.value
+                data["Value"] = "text"
+                print data.value
+            `)).to.eql(['Foo', 'string or Foo']);
+        });
+    });
 });
