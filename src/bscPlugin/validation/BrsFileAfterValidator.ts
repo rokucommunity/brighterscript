@@ -1,4 +1,5 @@
 import type { AfterValidateFileEvent } from '../../interfaces';
+import util from '../../util';
 
 
 export class BrsFileAfterValidator {
@@ -8,7 +9,7 @@ export class BrsFileAfterValidator {
     }
 
     public process() {
-        const codeSegments = this.event.file.codeSegments ?? [];
+        const codeSegments = util.getCodeSegments(this.event.file);
         //link all of the file's code segments to the global symbol table as a group, so the links (and the type caches
         //they invalidate) happen once for the file rather than once per code segment
         const unlinkGlobalSymbolTables = codeSegments.map(codeSegment => {

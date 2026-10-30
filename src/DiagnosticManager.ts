@@ -245,7 +245,7 @@ export class DiagnosticManager {
                 const file = this.program?.getFile(uri);
                 inactiveRanges = [];
                 //every piece of BrightScript in the file (a file can provide several, i.e. the `<script>` blocks of an xml file)
-                for (const codeSegment of file?.codeSegments ?? []) {
+                for (const codeSegment of util.getCodeSegments(file)) {
                     if (!isBrsCodeSegment(codeSegment)) {
                         continue;
                     }
@@ -307,7 +307,7 @@ export class DiagnosticManager {
         }
         const flags = isXmlFile(file) ? [...file.commentFlags] : [] as CommentFlag[];
         const codeSegmentAtLocation = this.program.getCodeSegmentAt(file, location.range?.start);
-        for (const codeSegment of file.codeSegments ?? []) {
+        for (const codeSegment of util.getCodeSegments(file)) {
             if (codeSegment === codeSegmentAtLocation || !codeSegment.range) {
                 flags.push(...codeSegment.commentFlags);
             }

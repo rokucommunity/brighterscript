@@ -2,6 +2,7 @@ import { isBrsCodeSegment } from '../../astUtils/reflection';
 import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideWorkspaceSymbolsEvent } from '../../interfaces';
 import { getWorkspaceSymbolsFromBrsCodeSegment } from './symbolUtils';
+import util from '../../util';
 
 export class WorkspaceSymbolProcessor {
     public constructor(
@@ -12,7 +13,7 @@ export class WorkspaceSymbolProcessor {
 
     public process() {
         const results = Object.values(this.event.program.files).map(file => {
-            return (file.codeSegments ?? []).map(codeSegment => {
+            return util.getCodeSegments(file).map(codeSegment => {
                 if (isBrsCodeSegment(codeSegment)) {
                     return this.getBrsCodeSegmentWorkspaceSymbols(codeSegment);
                 }

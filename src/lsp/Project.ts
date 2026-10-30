@@ -466,7 +466,7 @@ export class Project implements LspProject {
         const result: FileRenameTextEdit[] = [];
         for (const file of Object.values(this.builder.program.files)) {
             //`import` statements can live in any brightscript code, including an xml file's `<script>` blocks
-            for (const codeSegment of (file.codeSegments ?? []).filter(isBrsCodeSegment)) {
+            for (const codeSegment of util.getCodeSegments(file).filter(isBrsCodeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (const importStatement of codeSegment['_cachedLookups']?.importStatements ?? []) {
                     if (!importStatement.tokens.path || !importStatement.filePath) {

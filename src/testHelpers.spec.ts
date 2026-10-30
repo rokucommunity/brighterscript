@@ -8,7 +8,7 @@ import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
-import { standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
@@ -559,7 +559,7 @@ export async function once<T = any>(
  * Get the brightscript code a file provides: a brs/bs file's code, or the code in an xml file's `<script>` blocks, in order
  */
 export function getBrsCodeSegments(file: BscFile): BrsCodeSegment[] {
-    return (file?.codeSegments ?? []).filter(isBrsCodeSegment);
+    return util.getCodeSegments(file).filter(isBrsCodeSegment);
 }
 
 /**

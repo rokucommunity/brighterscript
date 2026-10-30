@@ -198,7 +198,7 @@ Files hold the paths, contents, dependencies and output (`BrsFile`, `XmlFile`, `
 - A `.brs` or `.bs` file provides one `BrsCodeSegment`.
 - A component's `.xml` file provides one for each `<script>` block with its code inline in a `<![CDATA[ ... ]]>` section. The component itself (its name, parent, interface, script tags and xml AST) is on the `XmlFile`, as before. It doesn't have a proper AST currently but it can be "patched".
 
-A code segment's AST can be modified by a plugin. `file.codeSegments` lists the code segments a file provides, and is the way to get at them: don't assume how many a file provides. Use `codeSegment.document` to get from a code segment back to the file it lives in.
+A code segment's AST can be modified by a plugin. `BrsFile` and `XmlFile` list the code segments they provide in `file.codeSegments`. For any other `BscFile` (i.e. the `file` on an event), use `util.getCodeSegments(file)`, which checks the file type and returns an empty list for files that provide no code segments. Don't assume how many a file provides. Use `codeSegment.document` to get from a code segment back to the file it lives in.
 
 The code segment events (`validateBrsCodeSegment`, `prepareBrsCodeSegment` and their before/after events) carry the `codeSegment` and the `file` it lives in. They're sent for every piece of BrightScript, including the `<script>` blocks of an `.xml` file, so handle BrightScript there rather than by checking the kind of file.
 
@@ -938,7 +938,7 @@ Everything about the component itself (its xml, name, parent, interface and scri
 | BrightScript checks in `validateFile` (and before/after) with `event.file` | `validateBrsCodeSegment` (and before/after) with `event.codeSegment`. Keep `validateFile` for checks about the file itself, including xml |
 | BrightScript changes in `prepareFile` (and before/after) with `event.file` | `prepareBrsCodeSegment` (and before/after) with `event.codeSegment` and `event.editor`. Keep `prepareFile` for changes to the file itself, including xml |
 | `isBrsFile(event.file)` on editor events (`provideHover`, `provideCompletions`, etc.) | `event.codeSegment` for the BrightScript the request is about. `isXmlFile(event.file)` with no `codeSegment` for the xml of a component |
-| `brsFile.ast`, `brsFile.parser`, `brsFile.callables`, `brsFile.getTokenAt()`, ... | `codeSegment.ast`, `codeSegment.parser`, ... on the event's code segment, or on each of `file.codeSegments` |
+| `brsFile.ast`, `brsFile.parser`, `brsFile.callables`, `brsFile.getTokenAt()`, ... | `codeSegment.ast`, `codeSegment.parser`, ... on the event's code segment, or on each of `util.getCodeSegments(file)` |
 | `callable.file`, `fileLink.file`, `namespaceContainer.file` | `callable.codeSegment`, `fileLink.codeSegment`, ... (`.codeSegment.document` for the file) |
 | `scope.enumerateBrsFiles()` | `scope.enumerateBrsCodeSegments()` |
 | `program.getFileSymbolInfo(file)` | `program.getCodeSegmentSymbolInfo(codeSegment)` |
@@ -952,7 +952,7 @@ Validation runs all of one file's phases together before moving to the next file
 Building runs each phase across all files instead. Every file gets its `before` event (followed by its code segments') before any file gets its main event, and every file gets its main event before any file gets its `after` event. This applies to prepare (`beforePrepareFile`/`beforePrepareBrsCodeSegment`, then `prepareFile`/`prepareBrsCodeSegment`, then `afterPrepareFile`/`afterPrepareBrsCodeSegment`), serialize (`beforeSerializeFile`, `serializeFile`, `afterSerializeFile`) and write (`beforeWriteFile`, `writeFile`, `afterWriteFile`). So a plugin that keeps state between a file's events needs to key it by file. A file that a plugin adds to the build while files are being prepared gets a full round of the prepare phases of its own, after the current round.
 
 ### Things not to assume about code segments
-- **A file doesn't provide a fixed number of code segments.** A `.brs` file has one today and an `.xml` file has one per CDATA block (or none), but new syntax can change that. Iterate `file.codeSegments`.
+- **A file doesn't provide a fixed number of code segments.** A `.brs` file has one today and an `.xml` file has one per CDATA block (or none), but new syntax can change that. Iterate `util.getCodeSegments(file)`.
 - **A code segment doesn't always start at the top of its file.** An embedded code segment starts partway into the xml file, often partway through a line, and every location is in the coordinates of the file it lives in. To insert something at the top of a code segment, use `codeSegment.startPosition`, never `0:0`.
 - **The file's contents are not the code segment's text.** Use `codeSegment.getText()`, or `codeSegment.getText(range)` for part of it (ranges are in the file's coordinates).
 - **Keep edits inside `codeSegment.range`.** A code segment that covers its whole file has no range.

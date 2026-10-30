@@ -646,7 +646,7 @@ export class Scope {
      * Get the code provided by every file in this scope, including files from ancestor scopes
      */
     public getAllCodeSegments(): BrsCodeSegment[] {
-        return this.getAllFiles().flatMap(file => file.codeSegments ?? []);
+        return this.getAllFiles().flatMap(file => util.getCodeSegments(file));
     }
 
     /**
@@ -778,7 +778,7 @@ export class Scope {
      */
     public enumerateBrsCodeSegments(callback: (codeSegment: BrsCodeSegment) => void) {
         for (const file of this.getSymbolFiles()) {
-            for (const codeSegment of file.codeSegments ?? []) {
+            for (const codeSegment of util.getCodeSegments(file)) {
                 if (isBrsCodeSegment(codeSegment)) {
                     callback(codeSegment);
                 }
@@ -792,7 +792,7 @@ export class Scope {
      */
     public enumerateBrsCodeSegmentsWithBreak(callback: (codeSegment: BrsCodeSegment) => boolean) {
         for (const file of this.getSymbolFiles()) {
-            for (const codeSegment of file.codeSegments ?? []) {
+            for (const codeSegment of util.getCodeSegments(file)) {
                 if (isBrsCodeSegment(codeSegment) && callback(codeSegment)) {
                     return;
                 }
@@ -805,7 +805,7 @@ export class Scope {
      */
     public enumerateOwnBrsCodeSegments(callback: (codeSegment: BrsCodeSegment) => void) {
         for (const file of this.getOwnSymbolFiles()) {
-            for (const codeSegment of file.codeSegments ?? []) {
+            for (const codeSegment of util.getCodeSegments(file)) {
                 callback(codeSegment);
             }
         }
@@ -950,7 +950,7 @@ export class Scope {
             const result = new SymbolTable(`Scope: '${this.name}'`, () => this.getParentScope()?.symbolTable);
             result.addSymbol('m', undefined, new AssociativeArrayType(), SymbolTypeFlag.runtime);
             for (let file of this.getOwnFiles()) {
-                for (const codeSegment of file.codeSegments ?? []) {
+                for (const codeSegment of util.getCodeSegments(file)) {
                     if (isBrsCodeSegment(codeSegment)) {
                         result.mergeSymbolTable(codeSegment.parser?.symbolTable);
                     }

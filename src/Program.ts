@@ -397,7 +397,7 @@ export class Program {
 
     private buildNamespaceContributors(): Map<string, Set<BrsCodeSegment>> {
         const contributors = new Map<string, Set<BrsCodeSegment>>();
-        for (const codeSegment of Object.values(this.files).flatMap(file => file.codeSegments ?? [])) {
+        for (const codeSegment of Object.values(this.files).flatMap(file => util.getCodeSegments(file))) {
             if (isBrsCodeSegment(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
                 for (const nameLower of codeSegment['getNamespaceContributions']().keys()) {
@@ -1202,7 +1202,7 @@ export class Program {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
             if (!keepSymbolInformation) {
-                for (const codeSegment of file.codeSegments ?? []) {
+                for (const codeSegment of util.getCodeSegments(file)) {
                     if (isBrsCodeSegment(codeSegment)) {
                         this.logger.debug('Removing code symbol info', codeSegment.key);
                         //the symbols this code provided are gone, so anything that required them needs to be revalidated
@@ -1211,7 +1211,7 @@ export class Program {
                     }
                 }
             }
-            for (const codeSegment of file.codeSegments ?? []) {
+            for (const codeSegment of util.getCodeSegments(file)) {
                 this.crossScopeValidation.clearResolutionsForCodeSegment(codeSegment);
             }
 
@@ -1401,7 +1401,7 @@ export class Program {
                 //each phase runs the file's event, then the event for each code segment it provides: every `before`, then
                 //every main event, then every `after`. Code segments are validated in their events; the file events are
                 //for checks about the file itself (including xml). All of a file's events run here, in one action
-                const codeSegments = file.codeSegments ?? [];
+                const codeSegments = util.getCodeSegments(file);
                 const fileEvent = {
                     program: this,
                     file: file
@@ -1571,7 +1571,7 @@ export class Program {
                 this.validationDetails.changedComponentTypes = [];
             })
             .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
-                const brsCodeSegments = (file.codeSegments ?? []).filter(codeSegment => isBrsCodeSegment(codeSegment)) as BrsCodeSegment[];
+                const brsCodeSegments = util.getCodeSegments(file).filter(codeSegment => isBrsCodeSegment(codeSegment)) as BrsCodeSegment[];
                 for (const codeSegment of brsCodeSegments) {
                     codeSegment.validationSegmenter.unValidateAllSegments();
                 }
@@ -1875,7 +1875,7 @@ export class Program {
      */
     public getCodeSegmentAt(file: BscFile, position: Position): BrsCodeSegment | undefined {
         let result: BrsCodeSegment;
-        for (const codeSegment of file?.codeSegments ?? []) {
+        for (const codeSegment of util.getCodeSegments(file)) {
             if (!codeSegment.range) {
                 //code that covers the whole document is the fallback when no more specific code contains the position
                 result ??= codeSegment;
@@ -1892,7 +1892,7 @@ export class Program {
      * Get what a file-wide request should be emitted for: the file itself (`undefined`), then each of its code segments
      */
     private getCodeSegmentsForRequest(file: BscFile): Array<BrsCodeSegment | undefined> {
-        return [undefined, ...file.codeSegments ?? []];
+        return [undefined, ...util.getCodeSegments(file)];
     }
 
     /**
@@ -1984,7 +1984,7 @@ export class Program {
         }
 
         //look through all files in scope for matches
-        for (const codeSegment of scope.getOwnFiles().flatMap(file => file.codeSegments ?? [])) {
+        for (const codeSegment of scope.getOwnFiles().flatMap(file => util.getCodeSegments(file))) {
             //skip non-brs code, or code we've already processed
             if (!isBrsCodeSegment(codeSegment) || codeSegmentsSearched.has(codeSegment)) {
                 continue;
@@ -2234,7 +2234,7 @@ export class Program {
             //one event for each code segment the range touches, plus one for the file itself when part of the range is
             //outside of its code segments (i.e. in the xml of a component). Each event only gets the diagnostics that
             //belong to it, the same as source fix-all. A range inside a single code segment (like a cursor) gets one event
-            const codeSegments = file.codeSegments ?? [];
+            const codeSegments = util.getCodeSegments(file);
             const isRangeInOneCodeSegment = codeSegments.some(codeSegment => {
                 return !codeSegment.range || (util.rangeContains(codeSegment.range, range.start) && util.rangeContains(codeSegment.range, range.end));
             });
@@ -2527,7 +2527,7 @@ export class Program {
                 scope: scope,
                 outputPath: this.getOutputPath(file, outDir)
             } as PrepareFileEvent & { outputPath: string };
-            const codeEvents = (file.codeSegments ?? []).map((codeSegment): PrepareBrsCodeSegmentEvent => ({
+            const codeEvents = util.getCodeSegments(file).map((codeSegment): PrepareBrsCodeSegmentEvent => ({
                 program: this,
                 file: file,
                 codeSegment: codeSegment,
@@ -2710,7 +2710,7 @@ export class Program {
                 //a file added by a plugin very late in the flow might not have an editor at all
                 file.editor?.undoAll();
                 //code can have an editor of its own (i.e. code embedded in an xml file)
-                for (const codeSegment of file.codeSegments ?? []) {
+                for (const codeSegment of util.getCodeSegments(file)) {
                     if (codeSegment.editor && codeSegment.editor !== file.editor) {
                         codeSegment.editor.undoAll();
                     }

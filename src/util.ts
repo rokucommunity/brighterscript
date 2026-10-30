@@ -34,6 +34,7 @@ import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { BrsCodeSegment } from './files/BrsCodeSegment';
+import type { BscFile } from './files/BscFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
 import { AstNodeKind } from './parser/AstNode';
@@ -2400,6 +2401,16 @@ export class Util {
      */
     public rangeToString(range: Range) {
         return `${range?.start?.line}:${range?.start?.character}-${range?.end?.line}:${range?.end?.character}`;
+    }
+
+    /**
+     * Get the BrightScript code segments a file provides. Only brs/bs and xml files provide code segments, so every other file provides none
+     */
+    public getCodeSegments(file: BscFile): readonly BrsCodeSegment[] {
+        if (isBrsFile(file) || isXmlFile(file)) {
+            return file.codeSegments;
+        }
+        return [];
     }
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {

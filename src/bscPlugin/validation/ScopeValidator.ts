@@ -1910,7 +1910,7 @@ export class ScopeValidator {
             return functionNames;
         };
 
-        for (const codeSegment of scope.getOwnFiles().flatMap(file => file.codeSegments ?? [])) {
+        for (const codeSegment of scope.getOwnFiles().flatMap(file => util.getCodeSegments(file))) {
             if (!isBrsCodeSegment(codeSegment)) {
                 continue;
             }
