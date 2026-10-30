@@ -1,5 +1,5 @@
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isDynamicType, isEnumMemberType, isEnumType, isObjectType, isTypeStatementType } from '../astUtils/reflection';
+import { isDynamicType, isNeverType, isEnumMemberType, isEnumType, isObjectType, isTypeStatementType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -24,6 +24,7 @@ export class EnumType extends BscType {
             targetType = targetType.wrappedType;
         }
         return (
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             this.isEqual(targetType) ||
@@ -104,6 +105,7 @@ export class EnumMemberType extends BscType {
 
         return (
             this.isEqual(targetType) ||
+            isNeverType(targetType) ||
             isDynamicType(targetType)
         );
     }

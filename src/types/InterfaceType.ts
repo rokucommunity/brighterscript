@@ -1,6 +1,6 @@
 import type { TypeCompatibilityData } from '../interfaces';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isArrayTypeLike, isAssociativeArrayTypeLike, isCallFuncableTypeLike, isDynamicType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
+import { isArrayTypeLike, isAssociativeArrayTypeLike, isCallFuncableTypeLike, isDynamicType, isNeverType, isInterfaceType, isInvalidType, isObjectType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
@@ -19,6 +19,7 @@ export class InterfaceType extends CallFuncableType {
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (isInvalidType(targetType) ||
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data)) {

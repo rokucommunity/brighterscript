@@ -20,3 +20,4 @@ export * from './StringType';
 export * from './UninitializedType';
 export * from './UnionType';
 export * from './VoidType';
+export * from './NeverType';

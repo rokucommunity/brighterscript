@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isDynamicType, isIntersectionType, isObjectType, isTypedFunctionType, isTypeStatementType } from '../astUtils/reflection';
+import { isDynamicType, isNeverType, isIntersectionType, isObjectType, isTypedFunctionType, isTypeStatementType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { ReferenceTypeWithDefault, ReferenceType } from './ReferenceType';
 import { addAssociatedTypesTableAsSiblingToMemberTable, getAllTypesFromCompoundType, isEnumTypeCompatible, isTypeWithPotentialDefaultDynamicMember, joinTypesString, reduceTypesForIntersectionType } from './helpers';
@@ -161,7 +161,7 @@ export class IntersectionType extends BscType {
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
-        if (isDynamicType(targetType) || isObjectType(targetType) || this === targetType) {
+        if (isDynamicType(targetType) || isNeverType(targetType) || isObjectType(targetType) || this === targetType) {
             return true;
         }
         if (isEnumTypeCompatible(this, targetType, data)) {

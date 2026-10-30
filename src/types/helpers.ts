@@ -1,5 +1,5 @@
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isComponentType, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isAssociativeArrayTypeLike, isComponentType, isCompoundType, isDynamicType, isEnumMemberType, isEnumType, isInheritableType, isInterfaceType, isIntersectionType, isNeverType, isObjectType, isReferenceType, isTypePropertyReferenceType, isTypeStatementType, isUnionType, isUnionTypeOf, isVoidType } from '../astUtils/reflection';
 import type { BscType } from './BscType';
 import type { UnionType } from './UnionType';
 import type { SymbolTable } from '../SymbolTable';
@@ -150,6 +150,11 @@ export function reduceTypesForIntersectionType(types: BscType[], allowNameEquali
     if (!types || types?.length === 0) {
         return undefined;
     }
+    //nothing can be both `never` and something else
+    const neverType = types.find(type => !isAnyReferenceType(type) && isNeverType(type));
+    if (neverType) {
+        return [neverType];
+    }
 
     if (types.length === 1) {
         // only one type
@@ -240,6 +245,12 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
         }
         return type;
     }).flat();
+    //`never` adds nothing to a union, unless every type is `never`
+    const nonNeverTypes = types.filter(type => isAnyReferenceType(type) || !isNeverType(type));
+    if (nonNeverTypes.length === 0) {
+        return types[0];
+    }
+    types = nonNeverTypes;
     const generalizedTypes = reduceTypesToMostGeneric(types, allowNameEquality);
     if (!generalizedTypes || generalizedTypes.length === 0) {
         return undefined;

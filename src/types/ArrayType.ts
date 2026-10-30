@@ -1,6 +1,6 @@
 
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isArrayType, isDynamicType, isEnumMemberType, isInvalidType, isObjectType, isTypeStatementType } from '../astUtils/reflection';
+import { isArrayType, isDynamicType, isNeverType, isEnumMemberType, isInvalidType, isObjectType, isTypeStatementType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -51,7 +51,7 @@ export class ArrayType extends BscType {
         while (isTypeStatementType(targetType)) {
             targetType = targetType.wrappedType;
         }
-        if (isDynamicType(targetType)) {
+        if (isDynamicType(targetType) || isNeverType(targetType)) {
             return true;
         } else if (isObjectType(targetType)) {
             return true;

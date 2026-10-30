@@ -1,6 +1,6 @@
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
-import { isComponentType, isDynamicType, isInvalidType, isObjectType, isReferenceType, isTypeStatementType } from '../astUtils/reflection';
+import { isComponentType, isDynamicType, isNeverType, isInvalidType, isObjectType, isReferenceType, isTypeStatementType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -28,6 +28,7 @@ export class ComponentType extends CallFuncableType {
         if (this.isEqual(targetType)) {
             return true;
         } else if (isInvalidType(targetType) ||
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data)) {

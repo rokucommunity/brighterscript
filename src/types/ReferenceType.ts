@@ -2,7 +2,7 @@ import type { GetTypeOptions, TypeChainEntry, TypeCircularReferenceInfo, TypeCom
 import type { GetSymbolTypeOptions, SymbolTableProvider, SymbolTypeGetter, SymbolTypeGetterProvider } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import type { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isNeverType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { DynamicType } from './DynamicType';
 import { BscTypeKind } from './BscTypeKind';
@@ -99,7 +99,7 @@ export class ReferenceType extends BscType {
                     if (!targetType) {
                         return false;
                     }
-                    if (isDynamicType(targetType)) {
+                    if (isDynamicType(targetType) || isNeverType(targetType)) {
                         return true;
                     }
                     const resolvedType = target.resolve();

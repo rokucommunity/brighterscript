@@ -1,5 +1,5 @@
 import { SymbolTable } from '../SymbolTable';
-import { isClassType, isDynamicType, isInvalidType, isObjectType, isTypeStatementType } from '../astUtils/reflection';
+import { isClassType, isDynamicType, isNeverType, isInvalidType, isObjectType, isTypeStatementType } from '../astUtils/reflection';
 import type { TypeCompatibilityData } from '../interfaces';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -24,6 +24,7 @@ export class ClassType extends InheritableType {
             return true;
         } else if (
             isInvalidType(targetType) ||
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data)) {

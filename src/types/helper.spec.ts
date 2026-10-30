@@ -7,7 +7,8 @@ import { FloatType } from './FloatType';
 import { IntegerType } from './IntegerType';
 import { StringType } from './StringType';
 import { UnionType, unionTypeFactory } from './UnionType';
-import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray, reduceTypesToMostGeneric } from './helpers';
+import { findTypeIntersection, findTypeUnion, getUniqueType, getUniqueTypesFromArray, reduceTypesForIntersectionType, reduceTypesToMostGeneric } from './helpers';
+import { NeverType } from './NeverType';
 import { InterfaceType } from './InterfaceType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { DoubleType } from './DoubleType';
@@ -116,6 +117,21 @@ describe('getUniqueType', () => {
         expectTypeToBe(getUniqueType([IntegerType.instance, DynamicType.instance, StringType.instance], unionTypeFactory), DynamicType);
     });
 
+    it('should drop never from the union', () => {
+        expectTypeToBe(getUniqueType([IntegerType.instance, NeverType.instance], unionTypeFactory), IntegerType);
+        const result = getUniqueType([NeverType.instance, IntegerType.instance, StringType.instance], unionTypeFactory);
+        expectTypeToBe(result, UnionType);
+        expect((result as UnionType).types).to.not.include(NeverType.instance);
+    });
+
+    it('should drop never from inner union types', () => {
+        expectTypeToBe(getUniqueType([new UnionType([IntegerType.instance, NeverType.instance])], unionTypeFactory), IntegerType);
+    });
+
+    it('should return never if every type is never', () => {
+        expectTypeToBe(getUniqueType([NeverType.instance, NeverType.instance], unionTypeFactory), NeverType);
+    });
+
     it('should return the most general type of all types inputed', () => {
         const superKlassType = new ClassType('Super');
         const subKlassType = new ClassType('Sub', superKlassType);
@@ -204,5 +220,12 @@ describe('reduceTypesToMostGeneric', () => {
         expect(genericTypes.length).to.eq(2);
         expect(genericTypes).to.include(union1);
         expect(genericTypes).to.include(union2);
+    });
+});
+
+describe('reduceTypesForIntersectionType', () => {
+    it('should return only never if never is included', () => {
+        const result = reduceTypesForIntersectionType([IntegerType.instance, NeverType.instance, StringType.instance]);
+        expect(result).to.eql([NeverType.instance]);
     });
 });

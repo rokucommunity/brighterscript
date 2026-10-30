@@ -17,6 +17,7 @@ export enum BscTypeKind {
     InvalidType = 'InvalidType',
     LongIntegerType = 'LongIntegerType',
     NamespaceType = 'NamespaceType',
+    NeverType = 'NeverType',
     ObjectType = 'ObjectType',
     ReferenceType = 'ReferenceType',
     RoFunctionType = 'RoFunctionType',

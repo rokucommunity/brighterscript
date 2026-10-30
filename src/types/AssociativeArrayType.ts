@@ -1,6 +1,6 @@
 import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import { isAssociativeArrayType, isAssociativeArrayTypeLike, isClassType, isDynamicType, isObjectType } from '../astUtils/reflection';
+import { isAssociativeArrayType, isAssociativeArrayTypeLike, isClassType, isDynamicType, isNeverType, isObjectType } from '../astUtils/reflection';
 import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -15,7 +15,7 @@ export class AssociativeArrayType extends BscType {
     public isBuiltIn = true;
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
-        if (isDynamicType(targetType)) {
+        if (isDynamicType(targetType) || isNeverType(targetType)) {
             return true;
         } else if (isObjectType(targetType)) {
             return true;

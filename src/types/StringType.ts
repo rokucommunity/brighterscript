@@ -1,4 +1,4 @@
-import { isDynamicType, isObjectType, isStringTypeLike } from '../astUtils/reflection';
+import { isDynamicType, isNeverType, isObjectType, isStringTypeLike } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isEnumTypeCompatible, isNativeInterfaceCompatible, isUnionTypeCompatible } from './helpers';
@@ -18,6 +18,7 @@ export class StringType extends BscType {
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
             isStringTypeLike(targetType) ||
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data) ||

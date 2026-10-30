@@ -1,4 +1,4 @@
-import { isDynamicType, isFloatTypeLike, isNumberTypeLike, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isNeverType, isFloatTypeLike, isNumberTypeLike, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
@@ -15,6 +15,7 @@ export class FloatType extends BscType {
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isNumberTypeLike(targetType) ||

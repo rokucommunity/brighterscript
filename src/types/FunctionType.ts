@@ -1,4 +1,4 @@
-import { isCallableType, isDynamicType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
+import { isCallableType, isDynamicType, isNeverType, isFunctionTypeLike, isObjectType } from '../astUtils/reflection';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -13,6 +13,7 @@ export class FunctionType extends BaseFunctionType {
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         if (
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isCallableType(targetType) ||
             isFunctionTypeLike(targetType) ||

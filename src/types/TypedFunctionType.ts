@@ -1,4 +1,4 @@
-import { isDynamicType, isObjectType, isTypedFunctionType, isTypeStatementType } from '../astUtils/reflection';
+import { isDynamicType, isNeverType, isObjectType, isTypedFunctionType, isTypeStatementType } from '../astUtils/reflection';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
@@ -60,6 +60,7 @@ export class TypedFunctionType extends BaseFunctionType {
             targetType = targetType.wrappedType;
         }
         if (
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isUnionTypeCompatible(this, targetType, data)

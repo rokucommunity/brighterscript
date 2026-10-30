@@ -1,4 +1,4 @@
-import { isDynamicType, isLongIntegerTypeLike, isNumberTypeLike, isObjectType } from '../astUtils/reflection';
+import { isDynamicType, isNeverType, isLongIntegerTypeLike, isNumberTypeLike, isObjectType } from '../astUtils/reflection';
 import { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isEnumTypeCompatible, isNativeInterfaceCompatibleNumber, isUnionTypeCompatible } from './helpers';
@@ -14,6 +14,7 @@ export class LongIntegerType extends BscType {
 
     public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
         return (
+            isNeverType(targetType) ||
             isDynamicType(targetType) ||
             isObjectType(targetType) ||
             isNumberTypeLike(targetType) ||

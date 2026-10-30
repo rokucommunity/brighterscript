@@ -5,6 +5,7 @@ import type { XmlFile } from '../files/XmlFile';
 import type { BsDiagnostic, TypedefProvider } from '../interfaces';
 import type { InvalidType } from '../types/InvalidType';
 import type { VoidType } from '../types/VoidType';
+import type { NeverType } from '../types/NeverType';
 import { InternalWalkMode } from './visitors';
 import type { TypedFunctionType } from '../types/TypedFunctionType';
 import type { FunctionType } from '../types/FunctionType';
@@ -449,6 +450,9 @@ export function isInvalidTypeLike(value: any): value is InvalidType | InterfaceT
 
 export function isVoidType(value: any): value is VoidType {
     return value?.kind === BscTypeKind.VoidType;
+}
+export function isNeverType(value: any): value is NeverType {
+    return value?.kind === BscTypeKind.NeverType;
 }
 export function isClassType(value: any): value is ClassType {
     return value?.kind === BscTypeKind.ClassType;
