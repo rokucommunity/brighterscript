@@ -99,11 +99,6 @@ export class BrsFile implements BscFile {
     private codeSegment: BrsCodeSegment;
 
     /**
-     * Indicates whether this file has been validated. Set by the program during validation
-     */
-    public isValidated = false;
-
-    /**
      * The BrightScript code segments this file provides
      */
     public get codeSegments(): readonly BrsCodeSegment[] {
@@ -137,6 +132,12 @@ export class BrsFile implements BscFile {
      * The key used to identify this file in the dependency graph. This is set by the BrighterScript program and should not be set by plugins
      */
     public dependencyGraphKey: string;
+
+    /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
 
     /**
      * The all-lowercase extension for this file (including the leading dot)

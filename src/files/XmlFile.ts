@@ -3,23 +3,23 @@ import type { CodeWithSourceMap } from 'source-map';
 import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
-import type { IToken, TokenType } from 'chevrotain';
 import { diagnosticCodes } from '../DiagnosticMessages';
 import type { FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import { standardizePath as s } from '../util';
+import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
+import type { SGInterfaceField, SGInterfaceFunction, SGScript, SGToken } from '../parser/SGTypes';
+import { CommentFlagProcessor } from '../CommentFlagProcessor';
+import type { IToken, TokenType } from 'chevrotain';
 import { XmlTranspileState } from '../parser/XmlTranspileState';
 import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
 import { BrsCodeSegment } from './BrsCodeSegment';
 import { ParseMode } from '../parser/Parser';
-import SGParser from '../parser/SGParser';
-import type { SGInterfaceField, SGInterfaceFunction, SGScript, SGToken } from '../parser/SGTypes';
-import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 /**
@@ -95,11 +95,6 @@ export class XmlFile implements BscFile {
     public pkgPath: string;
 
     public program: Program;
-
-    /**
-     * Indicates whether this file has been validated. Set by the program during validation
-     */
-    public isValidated = false;
 
     /**
      * The BrightScript embedded in this component's `<script>` blocks (`<![CDATA[ ... ]]>`), in the order they appear
@@ -213,14 +208,34 @@ export class XmlFile implements BscFile {
     private unsubscribeFromDependencyGraph: () => void;
 
     /**
+     * Indicates whether this file needs to be validated.
+     * Files are only ever validated a single time
+     */
+    public isValidated = false;
+
+    /**
      * The extension for this file
      */
     public extension: string;
+
+    public commentFlags = [] as CommentFlag[];
 
     /**
      * Will this file result in only comment or whitespace output? If so, it can be excluded from the output if that bsconfig setting is enabled.
      */
     readonly canBePruned = false;
+
+    /**
+     * The list of script imports delcared in the XML of this file.
+     * This excludes parent imports and auto codebehind imports
+     */
+    public get scriptTagImports(): FileReference[] {
+        return this.parser.references.scriptTagImports
+            .map(tag => ({
+                ...tag,
+                sourceFile: this
+            }));
+    }
 
     /**
      * List of all `destPath` values pointing to scripts that this XmlFile depends on, regardless of whether they are loaded in the program or not.
@@ -277,11 +292,71 @@ export class XmlFile implements BscFile {
         });
     }
 
+    public get requiredSymbols() {
+        return this.cache.getOrAdd(`requiredSymbols`, () => {
+            this.program.logger.debug('Getting required symbols', this.srcPath);
+
+
+            const requiredSymbols: UnresolvedXMLSymbol[] = [];
+
+            const allInterfaceFunctions = this.parser.ast.componentElement?.interfaceElement?.getElementsByTagName<SGInterfaceFunction>('function') ?? [];
+
+            for (const node of allInterfaceFunctions) {
+                if (node.name) {
+                    requiredSymbols.push({
+                        flags: SymbolTypeFlag.runtime,
+                        file: this,
+                        name: node.name.toLowerCase()
+                    });
+                }
+            }
+
+            const allInterfaceFields = this.parser.ast.componentElement?.interfaceElement?.getElementsByTagName<SGInterfaceField>('field') ?? [];
+
+            for (const node of allInterfaceFields) {
+                if (node.onChange) {
+                    requiredSymbols.push({
+                        flags: SymbolTypeFlag.runtime,
+                        file: this,
+                        name: node.onChange.toLowerCase()
+                    });
+                }
+                // TODO: when we can specify proper types in fields, add those types too:
+                //if (node.type && isCustomXmlType(node.type)) {
+                //    requiredSymbols.push({
+                //        flags: SymbolTypeFlag.typetime,
+                //        file: this,
+                //        name: node.type.toLowerCase()
+                //    });
+                //}
+            }
+            return requiredSymbols;
+        });
+    }
+
 
     /**
      * The range of the entire file
      */
     public fileRange: Range;
+
+    public parser = new SGParser();
+
+    /**
+     * The name of the component that this component extends.
+     * Available after `parse()`
+     */
+    public get parentComponentName(): SGToken {
+        return this.parser?.references.extends;
+    }
+
+    /**
+     * The name of the component declared in this xml file
+     * Available after `parse()`
+     */
+    public get componentName(): SGToken {
+        return this.parser?.references.name;
+    }
 
     /**
      * Does this file need to be transpiled?
@@ -303,6 +378,13 @@ export class XmlFile implements BscFile {
         this._needsTranspiled = value;
     }
     public _needsTranspiled: boolean;
+
+    /**
+     * The AST for this file
+     */
+    public get ast() {
+        return this.parser.ast;
+    }
 
     /**
      * The full file contents
@@ -340,6 +422,27 @@ export class XmlFile implements BscFile {
         };
     }
 
+    /**
+     * Collect all bs: comment flags
+     */
+    public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
+        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes);
+
+        this.commentFlags = [];
+        for (let token of tokens) {
+            if (token.tokenType.name === 'Comment') {
+                processor.tryAdd(
+                    //remove the close comment symbol
+                    token.image.replace(/\-\-\>$/, ''),
+                    //technically this range is 3 characters longer due to the removed `-->`, but that probably doesn't matter
+                    this.parser.rangeFromToken(token)
+                );
+            }
+        }
+        processor.finalize();
+        this.commentFlags.push(...processor.commentFlags);
+        this.program?.diagnostics.register(processor.diagnostics);
+    }
 
     private dependencyGraph: DependencyGraph;
 
@@ -458,227 +561,6 @@ export class XmlFile implements BscFile {
                 return false;
             }
             return false;
-        });
-    }
-
-
-    /**
-     * Get the parent component (the component this component extends)
-     */
-    public get parentComponent() {
-        const result = this.cache.getOrAdd('parent', () => {
-            return this.program.getComponent(this.parentComponentName?.text)?.file;
-        });
-        return result;
-    }
-
-    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
-        //TODO implement
-        return null;
-    }
-
-    /**
-     * Walk up the ancestor chain and aggregate all of the script tag imports
-     */
-    public getAncestorScriptTagImports(): FileReference[] {
-        let result = [] as FileReference[];
-        let parent = this.parentComponent;
-        while (parent) {
-            result.push(...parent.scriptTagImports);
-            parent = parent.parentComponent;
-        }
-        return result;
-    }
-
-    /**
-     * Remove this file from the dependency graph as a node
-     */
-    public detachDependencyGraph(dependencyGraph: DependencyGraph) {
-        dependencyGraph.remove(this.dependencyGraphKey);
-
-    }
-
-    /**
-     * Get the list of script imports that this file needs to include.
-     * It compares the list of imports on this file to those of its parent,
-     * and only includes the ones that are not found on the parent.
-     * If no parent is found, all imports are returned
-     */
-    public getMissingImportsForTranspile() {
-        let ownImports = this.getAvailableScriptImports();
-        //add the bslib path to ownImports, it'll get filtered down below
-        ownImports.push(this.program.bslibPkgPath);
-
-        let parentImports = this.parentComponent?.getAvailableScriptImports() ?? [];
-
-        let parentMap = parentImports.reduce((map, destPath) => {
-            map[destPath.toLowerCase()] = true;
-            return map;
-        }, {});
-
-        //if the XML already has this import, skip this one
-        let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
-            map[fileReference.destPath.toLowerCase()] = true;
-            return map;
-        }, {});
-
-        let resultMap = {};
-        let result = [] as string[];
-        for (let ownImport of ownImports) {
-            const ownImportLower = ownImport.toLowerCase();
-            if (
-                //if the parent doesn't have this import
-                !parentMap[ownImportLower] &&
-                //the XML doesn't already have a script reference for this
-                !alreadyThereScriptImportMap[ownImportLower] &&
-                //the result doesn't already have this reference
-                !resultMap[ownImportLower]
-            ) {
-                result.push(ownImport);
-                resultMap[ownImportLower] = true;
-            }
-        }
-        return result;
-    }
-
-    private logDebug(...args: unknown[]) {
-        this.program?.logger?.debug('XmlFile', chalk.green(this.destPath), ...args);
-    }
-
-    /**
-     * Convert the brightscript/brighterscript source code into valid brightscript
-     */
-    public transpile(): CodeWithSourceMap {
-        const state = new XmlTranspileState(this);
-
-        let transpileResult: SourceNode | undefined;
-
-        if (this.needsTranspiled) {
-            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.parser.ast.transpile(state));
-        } else if (this.program.options.sourceMap) {
-            //emit code as-is with a simple map to the original file location
-            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
-        } else {
-            //simple SourceNode wrapping the entire file to simplify the logic below
-            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
-        }
-
-        //add the source map comment if configured to emit sourcemaps
-        if (this.program.options.sourceMap) {
-            util.stripTrailingSourceMappingURLComment(transpileResult);
-            return new SourceNode(null, null, state.srcPath, [
-                transpileResult,
-                //add the sourcemap reference comment
-                `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
-            ]).toStringWithSourceMap();
-        } else {
-            return {
-                code: transpileResult.toString(),
-                map: undefined
-            };
-        }
-    }
-
-    public commentFlags = [] as CommentFlag[];
-
-    public parser = new SGParser();
-
-    /**
-     * The AST for this file
-     */
-    public get ast() {
-        return this.parser.ast;
-    }
-
-    /**
-     * Collect all bs: comment flags
-     */
-    public getCommentFlags(tokens: Array<IToken & { tokenType: TokenType }>) {
-        const processor = new CommentFlagProcessor(this, ['<!--'], diagnosticCodes);
-
-        this.commentFlags = [];
-        for (let token of tokens) {
-            if (token.tokenType.name === 'Comment') {
-                processor.tryAdd(
-                    //remove the close comment symbol
-                    token.image.replace(/\-\-\>$/, ''),
-                    //technically this range is 3 characters longer due to the removed `-->`, but that probably doesn't matter
-                    this.parser.rangeFromToken(token)
-                );
-            }
-        }
-        processor.finalize();
-        this.commentFlags.push(...processor.commentFlags);
-        this.program?.diagnostics.register(processor.diagnostics);
-    }
-
-    /**
-     * The list of script imports delcared in the XML of this component.
-     * This excludes parent imports and auto codebehind imports
-     */
-    public get scriptTagImports(): FileReference[] {
-        return this.parser.references.scriptTagImports
-            .map(tag => ({
-                ...tag,
-                sourceFile: this
-            }));
-    }
-
-    /**
-     * The name of the component that this component extends.
-     * Available after `parse()`
-     */
-    public get parentComponentName(): SGToken {
-        return this.parser?.references.extends;
-    }
-
-    /**
-     * The name of the component declared in this xml
-     * Available after `parse()`
-     */
-    public get componentName(): SGToken {
-        return this.parser?.references.name;
-    }
-
-    public get requiredSymbols() {
-        return this.cache.getOrAdd(`requiredSymbols`, () => {
-            this.program.logger.debug('Getting required symbols', this.srcPath);
-
-
-            const requiredSymbols: UnresolvedXMLSymbol[] = [];
-
-            const allInterfaceFunctions = this.parser.ast.componentElement?.interfaceElement?.getElementsByTagName<SGInterfaceFunction>('function') ?? [];
-
-            for (const node of allInterfaceFunctions) {
-                if (node.name) {
-                    requiredSymbols.push({
-                        flags: SymbolTypeFlag.runtime,
-                        file: this,
-                        name: node.name.toLowerCase()
-                    });
-                }
-            }
-
-            const allInterfaceFields = this.parser.ast.componentElement?.interfaceElement?.getElementsByTagName<SGInterfaceField>('field') ?? [];
-
-            for (const node of allInterfaceFields) {
-                if (node.onChange) {
-                    requiredSymbols.push({
-                        flags: SymbolTypeFlag.runtime,
-                        file: this,
-                        name: node.onChange.toLowerCase()
-                    });
-                }
-                // TODO: when we can specify proper types in fields, add those types too:
-                //if (node.type && isCustomXmlType(node.type)) {
-                //    requiredSymbols.push({
-                //        flags: SymbolTypeFlag.typetime,
-                //        file: this,
-                //        name: node.type.toLowerCase()
-                //    });
-                //}
-            }
-            return requiredSymbols;
         });
     }
 
@@ -937,6 +819,122 @@ export class XmlFile implements BscFile {
         );
     }
 
+    /**
+     * Get the parent component (the component this component extends)
+     */
+    public get parentComponent() {
+        const result = this.cache.getOrAdd('parent', () => {
+            return this.program.getComponent(this.parentComponentName?.text)?.file;
+        });
+        return result;
+    }
+
+    public getReferences(position: Position): Promise<Location[]> { //eslint-disable-line
+        //TODO implement
+        return null;
+    }
+
+    /**
+     * Walk up the ancestor chain and aggregate all of the script tag imports
+     */
+    public getAncestorScriptTagImports(): FileReference[] {
+        let result = [] as FileReference[];
+        let parent = this.parentComponent;
+        while (parent) {
+            result.push(...parent.scriptTagImports);
+            parent = parent.parentComponent;
+        }
+        return result;
+    }
+
+    /**
+     * Remove this file from the dependency graph as a node
+     */
+    public detachDependencyGraph(dependencyGraph: DependencyGraph) {
+        dependencyGraph.remove(this.dependencyGraphKey);
+
+    }
+
+    /**
+     * Get the list of script imports that this file needs to include.
+     * It compares the list of imports on this file to those of its parent,
+     * and only includes the ones that are not found on the parent.
+     * If no parent is found, all imports are returned
+     */
+    public getMissingImportsForTranspile() {
+        let ownImports = this.getAvailableScriptImports();
+        //add the bslib path to ownImports, it'll get filtered down below
+        ownImports.push(this.program.bslibPkgPath);
+
+        let parentImports = this.parentComponent?.getAvailableScriptImports() ?? [];
+
+        let parentMap = parentImports.reduce((map, destPath) => {
+            map[destPath.toLowerCase()] = true;
+            return map;
+        }, {});
+
+        //if the XML already has this import, skip this one
+        let alreadyThereScriptImportMap = this.scriptTagImports.reduce((map, fileReference) => {
+            map[fileReference.destPath.toLowerCase()] = true;
+            return map;
+        }, {});
+
+        let resultMap = {};
+        let result = [] as string[];
+        for (let ownImport of ownImports) {
+            const ownImportLower = ownImport.toLowerCase();
+            if (
+                //if the parent doesn't have this import
+                !parentMap[ownImportLower] &&
+                //the XML doesn't already have a script reference for this
+                !alreadyThereScriptImportMap[ownImportLower] &&
+                //the result doesn't already have this reference
+                !resultMap[ownImportLower]
+            ) {
+                result.push(ownImport);
+                resultMap[ownImportLower] = true;
+            }
+        }
+        return result;
+    }
+
+    private logDebug(...args: unknown[]) {
+        this.program?.logger?.debug('XmlFile', chalk.green(this.destPath), ...args);
+    }
+
+    /**
+     * Convert the brightscript/brighterscript source code into valid brightscript
+     */
+    public transpile(): CodeWithSourceMap {
+        const state = new XmlTranspileState(this);
+
+        let transpileResult: SourceNode | undefined;
+
+        if (this.needsTranspiled) {
+            transpileResult = util.sourceNodeFromTranspileResult(null, null, state.srcPath, this.parser.ast.transpile(state));
+        } else if (this.program.options.sourceMap) {
+            //emit code as-is with a simple map to the original file location
+            transpileResult = util.simpleMap(state.srcPath, this.fileContents);
+        } else {
+            //simple SourceNode wrapping the entire file to simplify the logic below
+            transpileResult = new SourceNode(null, null, state.srcPath, this.fileContents);
+        }
+
+        //add the source map comment if configured to emit sourcemaps
+        if (this.program.options.sourceMap) {
+            util.stripTrailingSourceMappingURLComment(transpileResult);
+            return new SourceNode(null, null, state.srcPath, [
+                transpileResult,
+                //add the sourcemap reference comment
+                `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
+            ]).toStringWithSourceMap();
+        } else {
+            return {
+                code: transpileResult.toString(),
+                map: undefined
+            };
+        }
+    }
 
     public dispose() {
         //unsubscribe from any DependencyGraph subscriptions

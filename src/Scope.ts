@@ -11,7 +11,7 @@ import { CachedLookups } from './astUtils/CachedLookups';
 import { Cache } from './Cache';
 import type { Identifier } from './lexer/Token';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsCodeSegment, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlFile, isXmlScope } from './astUtils/reflection';
+import { isBrsCodeSegment, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
