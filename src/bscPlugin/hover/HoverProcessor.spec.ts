@@ -219,5 +219,20 @@ describe('HoverProcessor', () => {
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
             expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
         });
+
+        it('does not resolve a namespaced const to itself when its initializer references an outer symbol with the same name', () => {
+            const file = program.setFile('source/main.bs', `
+                function chain()
+                end function
+                namespace promises
+                    const chain = chain
+                end namespace
+            `);
+            program.validate();
+            //hover over the right-hand `chain`, which is the global function
+            const hover = program.getHover(file.srcPath, util.createPosition(4, 36))[0];
+            expect(JSON.stringify(hover?.contents)).not.to.include('const promises.chain');
+            expect(hover?.contents).to.eql(fence('function chain() as dynamic'));
+        });
     });
 });
