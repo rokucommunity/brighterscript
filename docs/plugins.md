@@ -59,7 +59,7 @@ BrighterScript's own built-in work (parsing, validation, hovers, completions, tr
 
 The one exception is scope validation: BrighterScript validates scopes first in `validateScope`, so your `validateScope` handler runs after BrighterScript's scope validation.
 
-Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's own work happens):
+Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's own work happens):
 
 - `beforeProvideProgram`
 - `afterProvideProgram`
@@ -67,7 +67,7 @@ Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's ow
     - For each physical file:
         - `beforeProvideFile`
         - `onProvideFile`
-        - **BrighterScript runs** (provides the file)
+        - _\<BrighterScript provides the file\>_
         - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
@@ -77,23 +77,23 @@ Full compiler lifecycle (**BrighterScript runs** marks where BrighterScript's ow
     - For each file:
         - `beforeValidateFile`
         - `validateFile`
-        - **BrighterScript runs** (validates the file)
+        - _\<BrighterScript validates the file\>_
         - `afterValidateFile`
     - For each scope:
         - `beforeValidateScope`
-        - **BrighterScript runs** (validates the scope)
+        - _\<BrighterScript validates the scope\>_
         - `validateScope`
         - `afterValidateScope`
-    - **BrighterScript runs** (validates the program)
+    - _\<BrighterScript validates the program\>_
     - `afterValidateProgram`
 - `beforePrepublish`
 - `afterPrepublish`
 - `beforeSerializeProgram`
-    - **BrighterScript runs** (prepares the build)
+    - _\<BrighterScript prepares the build\>_
     - `beforeBuildProgram`
     - For each file:
         - `beforePrepareFile`
-        - **BrighterScript runs** (prepares the file)
+        - _\<BrighterScript prepares the file\>_
         - `afterPrepareFile`
     - `afterBuildProgram`
 - `afterSerializeProgram`
