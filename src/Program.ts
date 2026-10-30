@@ -1518,16 +1518,33 @@ export class Program {
                 const didComponentChange = changedComponentTypes.length > 0;
                 const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.typetime).size > 0;
                 const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
+                const filesToRevalidate = this.isFirstValidation ? new Set<BscFile>() : this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
 
                 this.crossScopeValidation.buildComponentsMap();
                 this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
-                    this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
-                });
-                if (!this.isFirstValidation) {
-                    const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
-                    for (const file of filesToRevalidate) {
-                        filesToBeValidatedInScopeContext.add(file);
+                    if (this.isFirstValidation || didComponentChange) {
+                        if (scopesToCheck.length > 0) {
+                            this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                        }
+                        return;
                     }
+                    //only the changed files, and the files that use a changed symbol, can have different cross-scope results.
+                    //Changing a file clears all of its diagnostics (including cross-scope ones), so it's rechecked in every scope it's in
+                    const filesToCheck = new Set([...filesToBeValidatedInScopeContext, ...filesToRevalidate]);
+                    const scopes = new Set(scopesToCheck);
+                    for (const file of filesToBeValidatedInScopeContext) {
+                        for (const scope of this.getScopesForFile(file)) {
+                            if (scope !== this.globalScope) {
+                                scopes.add(scope);
+                            }
+                        }
+                    }
+                    if (scopes.size > 0) {
+                        this.crossScopeValidation.addDiagnosticsForScopes([...scopes], filesToCheck, didProvidedSymbolChange);
+                    }
+                });
+                for (const file of filesToRevalidate) {
+                    filesToBeValidatedInScopeContext.add(file);
                 }
 
                 this.currentScopeValidationOptions = {
@@ -1645,10 +1662,10 @@ export class Program {
             if (this.globalScope === scope) {
                 continue;
             }
-            if (someComponentTypeChanged) {
-                scopesForCrossScopeValidation.push(scope);
-            }
-            if (didProvidedSymbolChange && !scope.isValidated) {
+            if (
+                someComponentTypeChanged ||
+                (didProvidedSymbolChange && !scope.isValidated)
+            ) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }
