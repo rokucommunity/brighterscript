@@ -162,14 +162,15 @@ export class Util {
     }
 
     /**
-     * Create a new `bsconfig.json` file in the given directory (this powers `bsc --init`).
+     * Create a new `bsconfig.json` file in the given directory or at the given `project` path (this powers `bsc --init`).
      * The file contains recommended defaults, followed by the rest of the supported options commented out.
      * An existing `bsconfig.json` file is never overwritten.
-     * @param cwd the directory where the `bsconfig.json` file should be created
-     * @returns the path to the new file, or `undefined` if a `bsconfig.json` file already exists in that directory
+     * @param cwd the directory where the `bsconfig.json` file should be created (or against which `project` is resolved)
+     * @param project optional path to the config file, resolved relative to `cwd`
+     * @returns the path to the new file, or `undefined` if the target file already exists
      */
-    public createConfigFile(cwd = process.cwd()): string | undefined {
-        const configPath = path.join(cwd, 'bsconfig.json');
+    public createConfigFile(cwd = process.cwd(), project = 'bsconfig.json'): string | undefined {
+        const configPath = path.resolve(cwd, project);
         if (fsExtra.pathExistsSync(configPath)) {
             return undefined;
         }
@@ -218,6 +219,7 @@ export class Util {
             '}',
             ''
         ].join('\n');
+        fsExtra.ensureDirSync(path.dirname(configPath));
         //the `wx` flag guarantees we never overwrite an existing file
         fsExtra.writeFileSync(configPath, contents, { flag: 'wx' });
         return configPath;

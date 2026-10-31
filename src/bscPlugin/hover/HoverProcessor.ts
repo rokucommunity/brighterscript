@@ -1,4 +1,4 @@
-import { isAssignmentStatement, isBrsCodeSegment, isCallfuncExpression, isClassStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
+import { isAssignmentStatement, isBrsCodeSegment, isCallfuncExpression, isClassStatement, isConstStatement, isDottedGetExpression, isEnumMemberStatement, isEnumStatement, isEnumType, isForStatement, isFunctionStatement, isInheritableType, isInterfaceStatement, isMemberField, isMethodStatement, isNamespaceStatement, isNamespaceType, isNewExpression, isTypedFunctionType, isTypeStatement, isTypeStatementType, isXmlFile } from '../../astUtils/reflection';
 import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { XmlFile } from '../../files/XmlFile';
 import type { ExtraSymbolData, Hover, ProvideHoverEvent, TypeChainEntry } from '../../interfaces';
@@ -12,7 +12,7 @@ import type { AstNode, Expression } from '../../parser/AstNode';
 import type { Scope } from '../../Scope';
 import type { FunctionScope } from '../../FunctionScope';
 import type { BscType } from '../../types/BscType';
-import type { ClassStatement, EnumStatement, FieldStatement, InterfaceFieldStatement, InterfaceStatement } from '../../parser/Statement';
+import type { ClassStatement, ConstStatement, EnumStatement, FieldStatement, InterfaceFieldStatement, InterfaceStatement } from '../../parser/Statement';
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
 
@@ -74,7 +74,8 @@ export class HoverProcessor {
         const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
         //find a constant with this name
-        const constant = scope?.getConstFileLink(fullName, containingNamespace);
+        const referencingConst = expression.findAncestor<ConstStatement>(isConstStatement);
+        const constant = scope?.getConstFileLink(fullName, containingNamespace, referencingConst);
         if (constant) {
             const constantValue = util.sourceNodeFromTranspileResult(null, null, null, constant.item.value.transpile(new BrsTranspileState(codeSegment))).toString();
             const constantType = constant.item.getType({ flags: SymbolTypeFlag.runtime });

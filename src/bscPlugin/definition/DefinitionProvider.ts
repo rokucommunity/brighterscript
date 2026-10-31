@@ -2,12 +2,12 @@ import * as path from 'path';
 import * as fsExtra from 'fs-extra';
 import { rokuDeploy } from 'roku-deploy';
 import type { StandardizedFileEntry, FileEntry } from 'roku-deploy';
-import { isBrsCodeSegment, isClassStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isVariableExpression, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isBrsCodeSegment, isClassStatement, isConstStatement, isDottedGetExpression, isImportStatement, isNamespaceStatement, isVariableExpression, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideDefinitionEvent } from '../../interfaces';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { Location, LocationLink, Range } from 'vscode-languageserver-protocol';
-import type { ClassStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
+import type { ClassStatement, ConstStatement, FunctionStatement, NamespaceStatement } from '../../parser/Statement';
 import { ParseMode } from '../../parser/Parser';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
@@ -224,7 +224,8 @@ export class DefinitionProvider {
             const fullName = util.getAllDottedGetParts(expression)?.map(x => x.text).join('.');
 
             //find a constant with this name
-            const constant = scope?.getConstFileLink(fullName, containingNamespace);
+            const referencingConst = expression.findAncestor<ConstStatement>(isConstStatement);
+            const constant = scope?.getConstFileLink(fullName, containingNamespace, referencingConst);
             if (constant) {
                 this.event.definitions.push(
                     util.getLocation(constant.item.tokens.name)
