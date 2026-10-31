@@ -1,10 +1,10 @@
-import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair, BsDiagnosticInput, DiagnosticLocationInput } from './interfaces';
+import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair, BsDiagnosticInput, DiagnosticLocationInput, CommentFlag } from './interfaces';
 import type { Locatable } from './lexer/Token';
 import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isBlock, isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
+import { isBlock, isBrsCodeSegment, isBsDiagnostic, isXmlFile, isXmlScope } from './astUtils/reflection';
 import type { Location, Position, Range } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
@@ -13,7 +13,7 @@ import chalk from 'chalk';
 import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
-import type { BrsFile } from './files/BrsFile';
+import type { BscFile } from './files/BscFile';
 import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
 import * as path from 'path';
 
@@ -287,12 +287,19 @@ export class DiagnosticManager {
             if (!inactiveRanges) {
                 const file = this.program?.getFile(uri);
                 inactiveRanges = [];
-                if (isBrsFile(file)) {
-                    // eslint-disable-next-line @typescript-eslint/dot-notation
-                    for (const statement of file['_cachedLookups'].conditionalCompileStatements) {
-                        for (const branch of [statement.thenBranch, statement.elseBranch]) {
-                            if (isBlock(branch) && branch.isActive === false && branch.sourceInfo) {
-                                inactiveRanges.push(util.getLocation(branch).range);
+                //every piece of BrightScript in the file (a file can provide several, i.e. the `<script>` blocks of an xml file)
+                const codeSegments = util.getCodeSegments(file);
+                if (codeSegments) {
+                    for (const codeSegment of codeSegments) {
+                        if (!isBrsCodeSegment(codeSegment)) {
+                            continue;
+                        }
+                        // eslint-disable-next-line @typescript-eslint/dot-notation
+                        for (const statement of codeSegment['_cachedLookups'].conditionalCompileStatements) {
+                            for (const branch of [statement.thenBranch, statement.elseBranch]) {
+                                if (isBlock(branch) && branch.isActive === false && branch.sourceInfo) {
+                                    inactiveRanges.push(util.getLocation(branch).range);
+                                }
                             }
                         }
                     }
@@ -321,14 +328,15 @@ export class DiagnosticManager {
         }
 
         //only computed if the file actually has comment flags
-        let start: Position | undefined;
-        let isStartComputed = false;
-        for (let flag of file?.commentFlags ?? []) {
-            if (!isStartComputed) {
-                start = this.getStart(location);
-                isStartComputed = true;
-            }
-            if (!start || !util.rangeContains(flag.affectedRange, start)) {
+        if (!file || !this.hasCommentFlags(file)) {
+            return false;
+        }
+        const start = this.getStart(location);
+        if (!start) {
+            return false;
+        }
+        for (let flag of this.getCommentFlagsForPosition(file, start)) {
+            if (!util.rangeContains(flag.affectedRange, start)) {
                 continue;
             }
             //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
@@ -344,6 +352,36 @@ export class DiagnosticManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Does the file have any comment flags (in an xml file's own comments, or in any of its code segments)?
+     */
+    private hasCommentFlags(file: BscFile) {
+        if (isXmlFile(file) && file.commentFlags.length > 0) {
+            return true;
+        }
+        return !!util.getCodeSegments(file)?.some(codeSegment => codeSegment.commentFlags.length > 0);
+    }
+
+    /**
+     * Get the comment flags that apply at a position: the flags in an xml file's own comments, plus the flags of the code
+     * segment at the position, plus the flags of any code segment that covers the whole file.
+     * A `<script>` block's own flags (like `' bs:disable`) stay within that block.
+     */
+    private getCommentFlagsForPosition(file: BscFile, position: Position) {
+        const flags = isXmlFile(file) ? [...file.commentFlags] : [] as CommentFlag[];
+        const codeSegments = util.getCodeSegments(file);
+        if (!codeSegments) {
+            return flags;
+        }
+        const codeSegmentAtLocation = this.program.getCodeSegmentAt(file, position);
+        for (const codeSegment of codeSegments) {
+            if (codeSegment === codeSegmentAtLocation || !codeSegment.range) {
+                flags.push(...codeSegment.commentFlags);
+            }
+        }
+        return flags;
     }
 
     private doesCodeListIncludeCode(codes: (string | number)[] | null, code: string | number | undefined, legacyCode: string | number | undefined) {
@@ -660,7 +698,7 @@ export class DiagnosticManager {
      * If so, we can skip any Scope-based validation on this file at all, which can save a lot of time for large files
      * with many diagnostics that are being ignored
      */
-    public canSkipScopeValidationForFile(file: BrsFile): boolean {
+    public canSkipScopeValidationForFile(file: { srcPath: string; destPath: string }): boolean {
         if (this.diagnosticFilterer.options !== this.options) {
             this.diagnosticFilterer.options = this.options;
         }

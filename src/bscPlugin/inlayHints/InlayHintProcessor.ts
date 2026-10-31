@@ -1,6 +1,6 @@
 import { InlayHintKind } from 'vscode-languageserver-protocol';
 import {
-    isBrsFile,
+    isBrsCodeSegment,
     isClassStatement,
     isDottedGetExpression,
     isFunctionStatement,
@@ -11,7 +11,7 @@ import {
     isXmlScope
 } from '../../astUtils/reflection';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideInlayHintsEvent } from '../../interfaces';
 import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression } from '../../parser/Expression';
 import type { Expression } from '../../parser/AstNode';
@@ -26,41 +26,41 @@ export class InlayHintProcessor {
     ) { }
 
     public process() {
-        if (!isBrsFile(this.event.file)) {
+        if (!isBrsCodeSegment(this.event.codeSegment)) {
             return;
         }
-        this.collectParameterNameHints(this.event.file);
+        this.collectParameterNameHints(this.event.codeSegment);
     }
 
-    private collectParameterNameHints(file: BrsFile) {
+    private collectParameterNameHints(codeSegment: BrsCodeSegment) {
         const range = this.event.range;
 
-        file.ast.walk(createVisitor({
+        codeSegment.ast.walk(createVisitor({
             CallExpression: (call) => {
                 const callRange = util.getLocation(call)?.range;
                 if (!callRange || !util.rangesIntersectOrTouch(callRange, range)) {
                     return;
                 }
-                this.emitParameterNameHints(file, call);
+                this.emitParameterNameHints(codeSegment, call);
             },
             CallfuncExpression: (call) => {
                 const callRange = util.getLocation(call)?.range;
                 if (!callRange || !util.rangesIntersectOrTouch(callRange, range)) {
                     return;
                 }
-                this.emitParameterNameHintsForCallfunc(file, call);
+                this.emitParameterNameHintsForCallfunc(codeSegment, call);
             }
         }), {
             walkMode: WalkMode.visitAllRecursive
         });
     }
 
-    private emitParameterNameHints(file: BrsFile, call: CallExpression) {
+    private emitParameterNameHints(codeSegment: BrsCodeSegment, call: CallExpression) {
         if (!call.args || call.args.length === 0) {
             return;
         }
 
-        const params = this.resolveCallParameters(file, call);
+        const params = this.resolveCallParameters(codeSegment, call);
         if (!params) {
             return;
         }
@@ -68,7 +68,7 @@ export class InlayHintProcessor {
         this.pushHintsForArgs(call.args, params);
     }
 
-    private emitParameterNameHintsForCallfunc(file: BrsFile, call: CallfuncExpression) {
+    private emitParameterNameHintsForCallfunc(codeSegment: BrsCodeSegment, call: CallfuncExpression) {
         if (!call.args || call.args.length === 0) {
             return;
         }
@@ -76,7 +76,7 @@ export class InlayHintProcessor {
         if (!name) {
             return;
         }
-        const params = this.resolveCallfuncParameters(file, name);
+        const params = this.resolveCallfuncParameters(codeSegment, name);
         if (!params) {
             return;
         }
@@ -87,15 +87,15 @@ export class InlayHintProcessor {
      * For a CallExpression, find the function/method being called and return its parameter list,
      * or undefined if the target cannot be uniquely resolved.
      */
-    private resolveCallParameters(file: BrsFile, call: CallExpression): FunctionParameterExpression[] | undefined {
+    private resolveCallParameters(codeSegment: BrsCodeSegment, call: CallExpression): FunctionParameterExpression[] | undefined {
         //constructor: `new Foo(...)`
         if (isNewExpression(call.parent)) {
             const className = call.parent.className.getName(ParseMode.BrighterScript);
-            const classLink = file.getClassFileLink(className);
+            const classLink = codeSegment.getClassFileLink(className);
             if (!classLink) {
                 return undefined;
             }
-            const ctor = file.getClassMethod(classLink.item, 'new');
+            const ctor = codeSegment.getClassMethod(classLink.item, 'new');
             return ctor?.func?.parameters;
         }
 
@@ -105,7 +105,7 @@ export class InlayHintProcessor {
         if (isVariableExpression(callee)) {
             const name = callee.tokens.name.text;
             const containingNamespace = callee.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
-            return this.lookupFunctionParameters(file, name, containingNamespace);
+            return this.lookupFunctionParameters(codeSegment, name, containingNamespace);
         }
 
         //namespace call or method call: `ns.foo(...)` / `m.foo(...)` / `instance.foo(...)`
@@ -119,21 +119,21 @@ export class InlayHintProcessor {
             const dotPart = parts.slice(0, parts.length - 1).map(x => x.text).join('.');
 
             //prefer namespace lookup when the dotPart is a known namespace
-            const scope = file.program.getFirstScopeForFile(file);
+            const scope = codeSegment.program.getFirstScopeForCodeSegment(codeSegment);
             const namespace = scope?.namespaceLookup?.get(dotPart.toLowerCase());
             if (namespace) {
-                return this.lookupFunctionParameters(file, name, dotPart);
+                return this.lookupFunctionParameters(codeSegment, name, dotPart);
             }
 
             //otherwise, treat as method call on m or another receiver - look across class methods
-            return this.lookupClassMethodParameters(file, callee, name);
+            return this.lookupClassMethodParameters(codeSegment, callee, name);
         }
 
         return undefined;
     }
 
-    private lookupFunctionParameters(file: BrsFile, name: string, namespaceName?: string): FunctionParameterExpression[] | undefined {
-        const matches = file.program.getStatementsByName(name, file, namespaceName);
+    private lookupFunctionParameters(codeSegment: BrsCodeSegment, name: string, namespaceName?: string): FunctionParameterExpression[] | undefined {
+        const matches = codeSegment.program.getStatementsByName(name, codeSegment, namespaceName);
         if (matches.length !== 1) {
             return undefined;
         }
@@ -149,11 +149,11 @@ export class InlayHintProcessor {
      * If the receiver is `m`, prefer the enclosing class. Otherwise fall back to a name search
      * across all classes (only used when there's exactly one match).
      */
-    private lookupClassMethodParameters(file: BrsFile, callee: DottedGetExpression, name: string): FunctionParameterExpression[] | undefined {
+    private lookupClassMethodParameters(codeSegment: BrsCodeSegment, callee: DottedGetExpression, name: string): FunctionParameterExpression[] | undefined {
         if (isVariableExpression(callee.obj) && callee.obj.tokens.name.text === 'm') {
             const enclosingClass = callee.obj.findAncestor<ClassStatement>(isClassStatement);
             if (enclosingClass) {
-                const method = file.getClassMethod(enclosingClass, name, true);
+                const method = codeSegment.getClassMethod(enclosingClass, name, true);
                 if (method) {
                     return method.func?.parameters;
                 }
@@ -161,7 +161,7 @@ export class InlayHintProcessor {
         }
 
         //fallback: search all classes for a single matching method name
-        const matches = file.program.getStatementsByName(name, file).filter(link => isClassStatement(link.item.parent));
+        const matches = codeSegment.program.getStatementsByName(name, codeSegment).filter(link => isClassStatement(link.item.parent));
         if (matches.length !== 1) {
             return undefined;
         }
@@ -172,11 +172,11 @@ export class InlayHintProcessor {
         return undefined;
     }
 
-    private resolveCallfuncParameters(file: BrsFile, name: string): FunctionParameterExpression[] | undefined {
+    private resolveCallfuncParameters(codeSegment: BrsCodeSegment, name: string): FunctionParameterExpression[] | undefined {
         //callfunc invocations are dispatched through XML components - look across xml scopes for a function with this name
-        const matches = file.program.getScopes()
+        const matches = codeSegment.program.getScopes()
             .filter(scope => isXmlScope(scope))
-            .flatMap(scope => file.program.getStatementsForXmlFile(scope as XmlScope, name));
+            .flatMap(scope => codeSegment.program.getStatementsForXmlFile(scope as XmlScope, name));
 
         if (matches.length !== 1) {
             return undefined;

@@ -3,13 +3,13 @@ import { codeActionUtil } from '../../CodeActionUtil';
 import type { DeleteChange, InsertChange, ReplaceChange } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap, isDiagnosticOfType } from '../../DiagnosticMessages';
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { BscFile } from '../../files/BscFile';
 import type { XmlFile } from '../../files/XmlFile';
 import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
-import { isBrsFile, isFunctionExpression, isMethodStatement, isVoidType, isXmlFile } from '../../astUtils/reflection';
+import { isBrsCodeSegment, isFunctionExpression, isMethodStatement, isVoidType, isXmlFile } from '../../astUtils/reflection';
 import type { FunctionExpression } from '../../parser/Expression';
 import type { MethodStatement } from '../../parser/Statement';
 import { WalkMode } from '../../astUtils/visitors';
@@ -121,8 +121,9 @@ export class CodeActionsProcessor {
         if (code === undefined || code === null || code === DiagnosticCodeMap.inactiveConditionalCompileBranch) {
             return;
         }
-        const file = this.event.file;
-        if (!isBrsFile(file) && !isXmlFile(file)) {
+        //the BrightScript the diagnostic is in, or the xml file when it's in a component's xml
+        const file: BrsCodeSegment | XmlFile = this.event.codeSegment ?? (isXmlFile(this.event.file) ? this.event.file : undefined);
+        if (!file) {
             return;
         }
         const codeStr = String(code);
@@ -185,7 +186,8 @@ export class CodeActionsProcessor {
         if (fileAction) {
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
-                    title: `Disable ${code} for this file: ${diagnostic.message}`,
+                    //a block's `bs:disable` only covers that block, so say so for code embedded in a file
+                    title: `Disable ${code} for this ${isBrsCodeSegment(file) && file.isEmbedded ? 'script block' : 'file'}: ${diagnostic.message}`,
                     diagnostics: [diagnostic],
                     kind: CodeActionKind.QuickFix,
                     changes: [fileAction]
@@ -241,9 +243,9 @@ export class CodeActionsProcessor {
      * `bs:disable` directives that would cover the diagnostic on `diagLine`. Used so the suppression
      * quick fixes can extend an existing directive instead of stacking new ones.
      */
-    private findExistingDisableDirectives(file: BscFile, diagLine: number): { forLine: ExistingDirective | null; forFile: ExistingDirective | null } {
-        const isXml = isXmlFile(file);
-        const tokens: any[] = (file as any).parser?.tokens ?? [];
+    private findExistingDisableDirectives(code: BrsCodeSegment | XmlFile, diagLine: number): { forLine: ExistingDirective | null; forFile: ExistingDirective | null } {
+        const isXml = isXmlFile(code);
+        const tokens: any[] = (code as any).parser?.tokens ?? [];
         let inHeader = true;
         let forLine: ExistingDirective | null = null;
         let forFile: ExistingDirective | null = null;
@@ -289,10 +291,10 @@ export class CodeActionsProcessor {
      * the position plus any prefix/suffix needed so the directive lands on its own line in
      * the header (before the first executable statement / root XML element).
      */
-    private getDisableFileInsertion(file: BscFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
-        if (isXmlFile(file)) {
+    private getDisableFileInsertion(code: BrsCodeSegment | XmlFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
+        if (isXmlFile(code)) {
             //insert after the `<?xml ?>` declaration if present, otherwise at the very top
-            const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
+            const declCloseToken = code.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
             if (declCloseToken) {
                 //xml declaration tokens carry chevrotain's positional fields, which aren't on the brs Token type
                 const endLine: number = (declCloseToken as any).endLine - 1;
@@ -305,7 +307,8 @@ export class CodeActionsProcessor {
             }
         }
         return {
-            position: util.createPosition(0, 0),
+            //the top of the code, which is not always the top of the document
+            position: isBrsCodeSegment(code) ? code.startPosition : util.createPosition(0, 0),
             prefix: '',
             suffix: '\n'
         };
@@ -351,9 +354,9 @@ export class CodeActionsProcessor {
 
         this.suggestedImports.add(key);
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        const importStatements = (this.event.file as BrsFile)['_cachedLookups'].importStatements;
+        const importStatements = (this.event.codeSegment as BrsCodeSegment)['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
 
         //find all files that reference this function
         for (const file of files) {
@@ -380,7 +383,7 @@ export class CodeActionsProcessor {
      */
     private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
-        if (!isBrsFile(this.event.file) || (this.event.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+        if (!isBrsCodeSegment(this.event.codeSegment) || (this.event.codeSegment as BrsCodeSegment).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
@@ -404,13 +407,13 @@ export class CodeActionsProcessor {
      * automatically choose one.
      */
     private suggestMissingImportsFixAllQuickFix() {
-        if (!isBrsFile(this.event.file) || this.event.file.parseMode !== ParseMode.BrighterScript) {
+        if (!isBrsCodeSegment(this.event.codeSegment) || this.event.codeSegment.parseMode !== ParseMode.BrighterScript) {
             return;
         }
-        const file = this.event.file;
+        const file = this.event.codeSegment;
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = file['_cachedLookups'].importStatements;
-        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? (this.event.codeSegment as BrsCodeSegment).startPosition;
 
         const changes: InsertChange[] = [];
         const addedPaths = new Set<string>();
@@ -522,15 +525,15 @@ export class CodeActionsProcessor {
         this.emitOrFixAll(`Remove return value`, `Fix all: Remove void return values`, changes, diagnostics[0]);
 
         //contextual BrsFile actions only apply to the individual (single-violation) case
-        if (changes.length === 1 && isBrsFile(this.event.file)) {
+        if (changes.length === 1 && isBrsCodeSegment(this.event.codeSegment)) {
             const diagnostic = diagnostics[0];
-            const expression = this.event.file.getClosestExpression(diagnostic.location.range.start);
+            const expression = this.event.codeSegment.getClosestExpression(diagnostic.location.range.start);
             const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
 
             //if we're in a sub and we do not have a return type, suggest converting to a function
             if (func.tokens.functionType.kind === TokenKind.Sub && !func.returnTypeExpression) {
                 //find the first function in a file that uses the `function` keyword
-                const referenceFunction = this.event.file.parser.ast.findChild<FunctionExpression>((node) => {
+                const referenceFunction = this.event.codeSegment.parser.ast.findChild<FunctionExpression>((node) => {
                     return isFunctionExpression(node) && node.tokens.functionType.kind === TokenKind.Function;
                 });
                 const functionTypeText = referenceFunction?.tokens.functionType.text ?? 'function';
@@ -569,10 +572,10 @@ export class CodeActionsProcessor {
      * Offers removing the return type from a sub, adding `as void` to a function, or converting function→sub.
      */
     private suggestNonVoidFunctionReturnQuickFixes(diagnostics: BsDiagnostic[]) {
-        if (!isBrsFile(this.event.file)) {
+        if (!isBrsCodeSegment(this.event.codeSegment)) {
             return;
         }
-        const file = this.event.file;
+        const file = this.event.codeSegment;
 
         //find tokens for `as`, `void`, `sub`, `end sub` in the file if possible
         let asText: string;
@@ -712,10 +715,10 @@ export class CodeActionsProcessor {
      * Adds code actions to insert the missing `override` keyword before a method declaration.
      */
     private suggestMissingOverrideQuickFixes(diagnostics: BsDiagnostic[]) {
-        if (!isBrsFile(this.event.file)) {
+        if (!isBrsCodeSegment(this.event.codeSegment)) {
             return;
         }
-        const file = this.event.file;
+        const file = this.event.codeSegment;
         const changes: InsertChange[] = [];
 
         for (const diagnostic of diagnostics) {

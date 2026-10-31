@@ -12,7 +12,6 @@ export class XmlFileValidator {
     }
 
     public process() {
-        util.validateTooDeepFile(this.event.file);
         if (this.event.file.parser.ast.rootElement) {
             this.validateComponent(this.event.file.parser.ast);
             this.validateTagClosings(this.event.file.parser.ast.rootElement);

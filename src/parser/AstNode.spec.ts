@@ -5,7 +5,7 @@ import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
 import { expect } from '../chai-config.spec';
 import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression, ArrayLiteralExpression, BinaryExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, GroupingExpression, IndexedGetExpression, LiteralExpression, NewExpression, NullCoalescingExpression, TaggedTemplateStringExpression, TemplateStringExpression, TemplateStringQuasiExpression, TernaryExpression, TypecastExpression, UnaryExpression, VariableExpression, XmlAttributeGetExpression } from './Expression';
-import { expectZeroDiagnostics } from '../testHelpers.spec';
+import { expectZeroDiagnostics, getBrsCodeSegment } from '../testHelpers.spec';
 import { tempDir, rootDir, outDir } from '../testHelpers.spec';
 import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAnnotationExpression, isArrayLiteralExpression, isAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isCallfuncExpression, isCatchStatement, isClassStatement, isConstStatement, isDimStatement, isDottedGetExpression, isDottedSetStatement, isEnumMemberStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceFieldStatement, isInterfaceMethodStatement, isInterfaceStatement, isMethodStatement, isNamespaceStatement, isNewExpression, isNullCoalescingExpression, isPrintStatement, isReturnStatement, isTaggedTemplateStringExpression, isTemplateStringExpression, isTemplateStringQuasiExpression, isTernaryExpression, isThrowStatement, isTryCatchStatement, isTypecastExpression, isUnaryExpression, isVariableExpression, isLiteralExpression, isWhileStatement, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { ImportStatement, ConditionalCompileStatement, ClassStatement, FunctionStatement, InterfaceFieldStatement, InterfaceMethodStatement, MethodStatement, InterfaceStatement, CatchStatement, ThrowStatement, EnumStatement, EnumMemberStatement, ConstStatement, Block, PrintStatement, DimStatement, ForStatement, WhileStatement, IndexedSetStatement, NamespaceStatement, TryCatchStatement, DottedSetStatement, ExpressionStatement } from './Statement';
@@ -65,7 +65,7 @@ describe('AstNode', () => {
             expectZeroDiagnostics(program);
             //NOTE: must match by name; a bare isVariableExpression matches the
             //namespace's own name expression, which has no class in its chain
-            const node = file.ast.findChild<VariableExpression>(
+            const node = getBrsCodeSegment(file).ast.findChild<VariableExpression>(
                 (x) => isVariableExpression(x) && x.name.text.toLowerCase() === 'delta'
             );
             expect(node).to.exist;
@@ -214,10 +214,10 @@ describe('AstNode', () => {
                 `);
             program.validate();
             expectZeroDiagnostics(program);
-            const delta = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
+            const delta = getBrsCodeSegment(file).ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 52))!;
             expect(delta.tokens.name.text).to.eql('delta');
 
-            const foxtrot = file.ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
+            const foxtrot = getBrsCodeSegment(file).ast.findChildAtPosition<DottedGetExpression>(util.createPosition(3, 71))!;
             expect(foxtrot.tokens.name.text).to.eql('foxtrot');
         });
 
@@ -229,16 +229,16 @@ describe('AstNode', () => {
                 'end sub'
             ].join(newline));
             //start of the literal
-            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 12)).tokens.value.text).to.eql('1');
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 12)).tokens.value.text).to.eql('1');
             //just after the end of the literal (range end is inclusive)
-            expect(file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 13)).tokens.value.text).to.eql('1');
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 13)).tokens.value.text).to.eql('1');
             //column 0 of the next line is not inside the previous statement
-            expect(isBlock(file.ast.findChildAtPosition(util.createPosition(2, 0)))).to.be.true;
+            expect(isBlock(getBrsCodeSegment(file).ast.findChildAtPosition(util.createPosition(2, 0)))).to.be.true;
             //after a surrogate pair on the same line
-            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 15)).tokens.name.text).to.eql('alpha');
-            expect(file.ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 20)).tokens.name.text).to.eql('alpha');
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 15)).tokens.name.text).to.eql('alpha');
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition<VariableExpression>(util.createPosition(2, 20)).tokens.name.text).to.eql('alpha');
             //past the end of the last line
-            expect(file.ast.findChildAtPosition(util.createPosition(9, 0))).to.be.undefined;
+            expect(getBrsCodeSegment(file).ast.findChildAtPosition(util.createPosition(9, 0))).to.be.undefined;
         }
 
         it('handles position boundaries with LF line endings', () => {
@@ -257,7 +257,7 @@ describe('AstNode', () => {
                 'end sub'
             ].join('\n'));
             //line 1 is only 9 characters long, so this must not land on `bb` in line 2
-            const node = file.ast.findChildAtPosition(util.createPosition(1, 12));
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition(util.createPosition(1, 12));
             expect(isVariableExpression(node) && node.tokens.name.text === 'bb').to.be.false;
         });
 
@@ -268,13 +268,13 @@ describe('AstNode', () => {
                 'end sub'
             ].join('\n'));
             //wrap `a = b` in a synthetic `if cond then ... end if`
-            const block = file.ast.findChild<Block>(isBlock);
+            const block = getBrsCodeSegment(file).ast.findChild<Block>(isBlock);
             const assignment = block.statements[0];
             block.statements[0] = createIfStatement({
                 condition: createVariableExpression('cond'),
                 thenBranch: createBlock({ statements: [assignment] })
             });
-            const node = file.ast.findChildAtPosition<VariableExpression>(util.createPosition(1, 8));
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition<VariableExpression>(util.createPosition(1, 8));
             expect(isVariableExpression(node) && node.tokens.name.text).to.eql('b');
         });
 
@@ -284,10 +284,10 @@ describe('AstNode', () => {
                 '    a = 1',
                 'end sub'
             ].join('\n'));
-            const block = file.ast.findChild<Block>(isBlock);
+            const block = getBrsCodeSegment(file).ast.findChild<Block>(isBlock);
             //a synthetic statement before the real one would be visited first
             block.statements.unshift(createAssignmentStatement({ name: 'x', value: createVariableExpression('y') }));
-            const node = file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
             expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
         });
 
@@ -297,11 +297,11 @@ describe('AstNode', () => {
                 '    a = 1',
                 'end sub'
             ].join('\n'));
-            const block = file.ast.findChild<Block>(isBlock);
+            const block = getBrsCodeSegment(file).ast.findChild<Block>(isBlock);
             //the snippet's `zz = 2` is on line 1 too, but of a different source
             const snippet = Parser.parse('sub snippet()\n    zz = 2\nend sub').ast.findChild<AssignmentStatement>(isAssignmentStatement);
             block.statements.unshift(snippet);
-            const node = file.ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
+            const node = getBrsCodeSegment(file).ast.findChildAtPosition<LiteralExpression>(util.createPosition(1, 8));
             expect(isLiteralExpression(node) && node.tokens.value.text).to.eql('1');
         });
     });
@@ -424,7 +424,7 @@ describe('AstNode', () => {
                 end sub
             `);
             expect(
-                file.ast.findChild((node) => {
+                getBrsCodeSegment(file).ast.findChild((node) => {
                     return isAssignmentStatement(node) && node.tokens.name.text === 'alpha';
                 })
             ).instanceof(AssignmentStatement);
@@ -438,7 +438,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            const instance = file.ast.findChild((node) => {
+            const instance = getBrsCodeSegment(file).ast.findChild((node) => {
                 if (isAssignmentStatement(node)) {
                     count++;
                     if (count === 2) {
@@ -446,7 +446,7 @@ describe('AstNode', () => {
                     }
                 }
             });
-            const expected = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const expected = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
             expect(instance).to.equal(expected);
         });
 
@@ -458,7 +458,7 @@ describe('AstNode', () => {
                 end sub
             `);
             expect(
-                file.ast.findChild((node) => false)
+                getBrsCodeSegment(file).ast.findChild((node) => false)
             ).not.to.exist;
         });
 
@@ -469,9 +469,9 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const secondStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
             expect(
-                file.ast.findChild((node) => secondStatement)
+                getBrsCodeSegment(file).ast.findChild((node) => secondStatement)
             ).to.equal(secondStatement);
         });
 
@@ -483,7 +483,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            file.ast.findChild((node, cancelToken) => {
+            getBrsCodeSegment(file).ast.findChild((node, cancelToken) => {
                 count++;
                 cancelToken.cancel();
             });
@@ -499,8 +499,8 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const secondStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[1];
-            const foxtrot = file.ast.findChild((node) => {
+            const secondStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[1];
+            const foxtrot = getBrsCodeSegment(file).ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -515,7 +515,7 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const foxtrot = file.ast.findChild((node) => {
+            const foxtrot = getBrsCodeSegment(file).ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -530,8 +530,8 @@ describe('AstNode', () => {
                     print alpha.beta.charlie.delta(alpha.echo.foxtrot())
                 end sub
             `);
-            const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
-            const foxtrot = file.ast.findChild((node) => {
+            const firstStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[0];
+            const foxtrot = getBrsCodeSegment(file).ast.findChild((node) => {
                 return isDottedGetExpression(node) && node.tokens.name?.text === 'foxtrot';
             })!;
             expect(
@@ -547,7 +547,7 @@ describe('AstNode', () => {
                 end sub
             `);
             let count = 0;
-            const firstStatement = (file.ast.statements[0] as FunctionStatement).func.body.statements[0];
+            const firstStatement = (getBrsCodeSegment(file).ast.statements[0] as FunctionStatement).func.body.statements[0];
             firstStatement.findAncestor((node, cancel) => {
                 count++;
                 cancel.cancel();

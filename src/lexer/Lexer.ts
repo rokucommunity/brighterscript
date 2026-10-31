@@ -86,9 +86,12 @@ export class Lexer {
         this.current = 0;
         this.tokens = [];
         this.diagnostics = [];
+        //code embedded in a larger file starts partway through it, so every position is shifted to be in that file's coordinates
+        const linePositions = this.getStartingLinePositions();
+        this.positionOffset = linePositions[linePositions.length - 1] + this.options.startCharacter;
         this.leadingTriviaCount = 0;
         this.sourceInfo = this.options.trackLocations
-            ? { uri: util.pathToUri(options?.srcPath), linePositions: [0] }
+            ? { uri: util.pathToUri(options?.srcPath), linePositions: linePositions }
             : undefined;
         while (!this.isAtEnd()) {
             this.scanToken();
@@ -98,14 +101,32 @@ export class Lexer {
             TokenKind.Eof,
             '',
             false,
-            this.current,
-            this.current + 1,
+            this.current + this.positionOffset,
+            this.current + this.positionOffset + 1,
             this.sourceInfo,
             this.takeLeadingTrivia()
         ));
         //don't keep the last file's trivia tokens alive between scans
         this.leadingTrivia.length = 0;
         return this;
+    }
+
+    /**
+     * How far the source being scanned starts into its file (non-zero for code embedded in a larger file). Added to every position
+     */
+    private positionOffset = 0;
+
+    /**
+     * Where each line of the file starts, for the lines up to and including the one this source starts on
+     */
+    private getStartingLinePositions() {
+        const startLine = this.options.startLine;
+        const linePositions = this.options.fileLinePositions?.slice(0, startLine + 1) ?? [];
+        //without the file's line positions, treat every line before the start line as one character long
+        while (linePositions.length <= startLine) {
+            linePositions.push(linePositions.length > 0 ? linePositions[linePositions.length - 1] + 1 : 0);
+        }
+        return linePositions;
     }
 
     /**
@@ -134,6 +155,8 @@ export class Lexer {
         options ??= {};
         options.includeWhitespace ??= false;
         options.trackLocations ??= true;
+        options.startLine ??= 0;
+        options.startCharacter ??= 0;
         return options;
     }
 
@@ -431,7 +454,7 @@ export class Lexer {
 
         this.addToken(TokenKind.Newline);
         this.start = this.current;
-        this.sourceInfo?.linePositions.push(this.current);
+        this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
     }
 
     /**
@@ -547,7 +570,7 @@ export class Lexer {
                 token.charCode = 10;
 
                 //track the start of the next line
-                this.sourceInfo?.linePositions.push(this.current);
+                this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
                 continue;
             } else if (this.check('\r') && this.peekNext() === '\n') {
                 this.templateQuasiString();
@@ -561,7 +584,7 @@ export class Lexer {
                 token.charCode = 10;
 
                 //track the start of the next line
-                this.sourceInfo?.linePositions.push(this.current);
+                this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
                 continue;
 
                 //a lone `\r` is a newline too (the same as everywhere else in the lexer, and in LSP)
@@ -573,7 +596,7 @@ export class Lexer {
                 token.charCode = 13;
 
                 //track the start of the next line
-                this.sourceInfo?.linePositions.push(this.current);
+                this.sourceInfo?.linePositions.push(this.current + this.positionOffset);
                 continue;
 
                 //escaped chars
@@ -1189,8 +1212,8 @@ export class Lexer {
             kind,
             text,
             ReservedTokenKinds.has(kind),
-            this.start,
-            this.current,
+            this.start + this.positionOffset,
+            this.current + this.positionOffset,
             this.sourceInfo,
             undefined
         );
@@ -1219,7 +1242,7 @@ export class Lexer {
      * @returns the locatable of `text`
      */
     private locationOf(): Locatable {
-        return { startPosition: this.start, endPosition: this.current, sourceInfo: this.sourceInfo };
+        return { startPosition: this.start + this.positionOffset, endPosition: this.current + this.positionOffset, sourceInfo: this.sourceInfo };
     }
 }
 
@@ -1238,4 +1261,22 @@ export interface ScanOptions {
      * Path to the file where this source code originated
      */
     srcPath?: string;
+    /**
+     * The zero-indexed line where this source code starts within its file.
+     * Used when scanning code embedded in a larger file (e.g. a CDATA block in an xml file),
+     * so that every token's location is in that file's coordinates.
+     * @default 0
+     */
+    startLine?: number;
+    /**
+     * The zero-indexed character where this source code starts on `startLine`.
+     * Only applies to the first line; every following line starts at character 0.
+     * @default 0
+     */
+    startCharacter?: number;
+    /**
+     * Where each line of the file containing this source code starts, counted from the start of that file (see `SourceInfo.linePositions`).
+     * Only the lines up to and including `startLine` are used. Pass it with `startLine` so every token's position is its real position in that file
+     */
+    fileLinePositions?: number[];
 }

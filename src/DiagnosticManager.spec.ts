@@ -2,7 +2,7 @@ import { Scope } from './Scope';
 import type { BrsFile } from './files/BrsFile';
 import type { BsDiagnostic } from './interfaces';
 import { Program } from './Program';
-import { expectDiagnostics, expectZeroDiagnostics } from './testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, getBrsCodeSegment } from './testHelpers.spec';
 import util, { standardizePath as s } from './util';
 import { expect } from './chai-config.spec';
 import { createSandbox } from 'sinon';
@@ -27,7 +27,7 @@ describe('DiagnosticManager', () => {
                 location: { uri: util.pathToUri(file?.srcPath), range: undefined }
             };
 
-            file.commentFlags.push({
+            getBrsCodeSegment(file).commentFlags.push({
                 affectedRange: util.createRange(1, 2, 3, 4),
                 codes: [1, 2, 3],
                 file: file,
@@ -48,7 +48,7 @@ describe('DiagnosticManager', () => {
                 location: { uri: undefined, range: util.createRange(1, 2, 3, 4) }
             };
 
-            file.commentFlags.push({
+            getBrsCodeSegment(file).commentFlags.push({
                 affectedRange: util.createRange(1, 2, 3, 4),
                 codes: [1, 2, 3],
                 file: file,
@@ -75,7 +75,7 @@ describe('DiagnosticManager', () => {
         ].join('\n');
 
         function setFeature(file: BrsFile, isEnabled: boolean) {
-            file.ast.bsConsts = new Map([['feature', isEnabled]]);
+            getBrsCodeSegment(file).ast.bsConsts = new Map([['feature', isEnabled]]);
             file.isValidated = false;
             program.validate();
         }
@@ -409,7 +409,7 @@ describe('DiagnosticManager', () => {
 
         function getTokens(code: string) {
             const file = program.setFile('source/main.brs', code) as BrsFile;
-            return { file: file, tokens: file.parser.tokens };
+            return { file: file, tokens: getBrsCodeSegment(file).parser.tokens };
         }
 
         it('resolves a locatable location in getDiagnostics', () => {

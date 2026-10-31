@@ -2883,7 +2883,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
             if (stmt.parentClassName) {
                 const namespace = stmt.findAncestor(isNamespaceStatement);
                 //find the parent class
-                stmt = state.file.getClassFileLink(
+                stmt = state.codeSegment.getClassFileLink(
                     stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;
@@ -2914,7 +2914,7 @@ export class ClassStatement extends Statement implements TypedefProvider {
         while (stmt) {
             if (stmt.parentClassName) {
                 const namespace = stmt.findAncestor(isNamespaceStatement);
-                stmt = state.file.getClassFileLink(
+                stmt = state.codeSegment.getClassFileLink(
                     stmt.parentClassName.getName(),
                     namespace?.getName(ParseMode.BrighterScript)
                 )?.item;

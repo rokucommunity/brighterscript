@@ -1549,6 +1549,65 @@ describe('lexer', () => {
                 Range.create(2, 7, 2, 8) // EOF
             ]);
         });
+
+        it('offsets locations by startLine and startCharacter', () => {
+            //simulates code embedded in a larger file, starting at line 5, character 10 (i.e. right after `<![CDATA[`)
+            let { tokens } = Lexer.scan(`\nsub foo()\nend sub`, {
+                includeWhitespace: false,
+                startLine: 5,
+                startCharacter: 10
+            });
+            expect(tokens.map(t => t.location?.range)).to.eql([
+                Range.create(5, 10, 5, 11), // \n
+                Range.create(6, 0, 6, 3), // sub
+                Range.create(6, 4, 6, 7), // foo
+                Range.create(6, 7, 6, 8), // (
+                Range.create(6, 8, 6, 9), // )
+                Range.create(6, 9, 6, 10), // \n
+                Range.create(7, 0, 7, 7), // end sub
+                Range.create(7, 7, 7, 8) // EOF
+            ]);
+        });
+
+        it('only offsets the first line by startCharacter', () => {
+            let { tokens } = Lexer.scan(`sub foo()\nend sub`, {
+                includeWhitespace: false,
+                startLine: 2,
+                startCharacter: 4
+            });
+            expect(tokens.map(t => t.location?.range)).to.eql([
+                Range.create(2, 4, 2, 7), // sub
+                Range.create(2, 8, 2, 11), // foo
+                Range.create(2, 11, 2, 12), // (
+                Range.create(2, 12, 2, 13), // )
+                Range.create(2, 13, 2, 14), // \n
+                Range.create(3, 0, 3, 7), // end sub
+                Range.create(3, 7, 3, 8) // EOF
+            ]);
+        });
+
+        it('uses the real positions in the file when given its line positions', () => {
+            //the file is `<a>\n  <![CDATA[sub foo()]]>`, so the code starts at line 1, character 11 (position 15)
+            let { tokens } = Lexer.scan(`sub foo()`, {
+                startLine: 1,
+                startCharacter: 11,
+                fileLinePositions: [0, 4]
+            });
+            expect(tokens[0].startPosition).to.eql(15);
+            expect(tokens[0].endPosition).to.eql(18);
+            expect(util.getLocation(tokens[0]).range).to.eql(Range.create(1, 11, 1, 14));
+        });
+
+        it('uses the uri from srcPath alongside the offsets', () => {
+            let { tokens } = Lexer.scan(`sub foo()`, {
+                srcPath: s`${rootDir}/components/Widget.xml`,
+                startLine: 3,
+                startCharacter: 0
+            });
+            expect(tokens[0].location).to.eql(
+                util.createLocation(3, 0, 3, 3, util.pathToUri(s`${rootDir}/components/Widget.xml`))
+            );
+        });
     });
 
     describe('two word keywords', () => {

@@ -9,6 +9,7 @@ import { tempDir } from '../../testHelpers.spec';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import type { Location, LocationLink, Range } from 'vscode-languageserver-protocol';
+import type { XmlFile } from '../../files/XmlFile';
 const sinon = createSandbox();
 
 /**
@@ -46,6 +47,7 @@ describe('DefinitionProvider', () => {
         const result = new DefinitionProvider({
             program: program,
             file: undefined,
+            codeSegment: undefined,
             position: util.createPosition(1, 2),
             definitions: []
         }).process();
@@ -437,13 +439,13 @@ describe('DefinitionProvider', () => {
     });
 
     it('handles mangled XML AST without throwing', () => {
-        const xmlFile = program.setFile('components/MainScene.xml', `
+        const xmlFile = program.setFile<XmlFile>('components/MainScene.xml', `
             <component name="MainScene" extends="Scene">
                 <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
             </component>
         `);
         // Corrupt the XML parser's AST to simulate a mangled parse result
-        const parserRef = (xmlFile as any).parser;
+        const parserRef = xmlFile.parser;
         const originalAst = parserRef?.ast;
         if (parserRef) {
             parserRef.ast = null;

@@ -1,7 +1,7 @@
 import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { createSandbox } from 'sinon';
-import { rootDir } from '../../testHelpers.spec';
+import { rootDir, getBrsCodeSegment } from '../../testHelpers.spec';
 import type { DocumentSymbol } from 'vscode-languageserver-types';
 import { SymbolKind } from 'vscode-languageserver-types';
 import type { BrsFile } from '../../files/BrsFile';
@@ -41,7 +41,7 @@ describe('DocumentSymbolProcessor', () => {
         program.plugins['suppressErrors'] = false;
         function testMissingToken(source: string, nameTokenPath: string[], expected: SymbolTree = {}) {
             const file = program.setFile<BrsFile>('source/main.brs', source);
-            let node = file.ast.statements[0];
+            let node = getBrsCodeSegment(file).ast.statements[0];
             //delete the token at the given path
             for (let i = 0; i < nameTokenPath.length - 1; i++) {
                 node = node[nameTokenPath[i]];

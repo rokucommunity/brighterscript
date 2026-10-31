@@ -4,7 +4,7 @@ import { SourceNode } from 'source-map';
 import type { CompletionItem, Location, Position, Range } from 'vscode-languageserver';
 import { CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import { diagnosticCodes } from '../DiagnosticMessages';
-import type { Callable, FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
+import type { FileReference, CommentFlag, SerializedCodeFile } from '../interfaces';
 import type { Program } from '../Program';
 import util from '../util';
 import { standardizePath as s } from '../util';
@@ -12,13 +12,14 @@ import SGParser from '../parser/SGParser';
 import chalk from 'chalk';
 import { Cache } from '../Cache';
 import type { DependencyChangedEvent, DependencyGraph } from '../DependencyGraph';
-import type { SGInterfaceField, SGInterfaceFunction, SGToken } from '../parser/SGTypes';
+import type { SGInterfaceField, SGInterfaceFunction, SGScript, SGToken } from '../parser/SGTypes';
 import { CommentFlagProcessor } from '../CommentFlagProcessor';
 import type { IToken, TokenType } from 'chevrotain';
-import { TranspileState } from '../parser/TranspileState';
+import { XmlTranspileState } from '../parser/XmlTranspileState';
 import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
-import type { FunctionScope } from '../FunctionScope';
+import { BrsCodeSegment } from './BrsCodeSegment';
+import { ParseMode } from '../parser/Parser';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 /**
@@ -94,6 +95,98 @@ export class XmlFile implements BscFile {
     public pkgPath: string;
 
     public program: Program;
+
+    /**
+     * The BrightScript embedded in this component's `<script>` blocks (`<![CDATA[ ... ]]>`), in the order they appear.
+     * Undefined when the component has no CDATA blocks
+     */
+    private scriptCodeSegments: BrsCodeSegment[] | undefined;
+
+    /**
+     * The `<script>` element each of `scriptCodeSegments` came from (same order). Undefined when the component has no CDATA blocks
+     */
+    private scriptElementsWithCode: SGScript[] | undefined;
+
+    /**
+     * The BrightScript code segments this file provides: the code in its `<script>` blocks, in the order they appear.
+     * Undefined when the component has no CDATA blocks
+     */
+    public get codeSegments(): readonly BrsCodeSegment[] | undefined {
+        return this.scriptCodeSegments;
+    }
+
+    /**
+     * Get the code embedded in a `<script>` element, if it has any
+     */
+    public getCodeSegmentForScript(script: SGScript): BrsCodeSegment | undefined {
+        const index = this.scriptElementsWithCode?.indexOf(script) ?? -1;
+        return index >= 0 ? this.scriptCodeSegments[index] : undefined;
+    }
+
+    /**
+     * Create a piece of BrightScript code for every `<script>` element that has its code inline in a CDATA block
+     */
+    private createScriptCodeSegments() {
+        this.disposeScriptCodeSegments();
+
+        const cdataOpen = '<![CDATA[';
+        const cdataClose = ']]>';
+        let fileLinePositions: number[];
+        for (const script of this.ast.componentElement?.scriptElements ?? []) {
+            const cdata = script.cdata;
+            const range = cdata?.location?.range;
+            if (!range) {
+                continue;
+            }
+            const isBrighterScript = script.type?.toLowerCase() === 'text/brighterscript' || this.program?.options?.allowBrighterScriptInBrightScript;
+            const codeSegment = new BrsCodeSegment({
+                document: this,
+                program: this.program,
+                parseMode: isBrighterScript ? ParseMode.BrighterScript : ParseMode.BrightScript,
+                isEmbedded: true
+            });
+            codeSegment.key = `${this.pkgPath}#script-${this.scriptCodeSegments?.length ?? 0}`;
+            //the code is everything between `<![CDATA[` and `]]>`
+            const hasClose = cdata.text.endsWith(cdataClose);
+            const startCharacter = range.start.character + cdataOpen.length;
+            codeSegment.range = util.createRange(
+                range.start.line,
+                startCharacter,
+                range.end.line,
+                hasClose ? range.end.character - cdataClose.length : range.end.character
+            );
+            codeSegment.parse(
+                cdata.text.substring(cdataOpen.length, hasClose ? cdata.text.length - cdataClose.length : cdata.text.length),
+                { startLine: range.start.line, startCharacter: startCharacter, fileLinePositions: fileLinePositions ??= this.getLinePositions() }
+            );
+            (this.scriptCodeSegments ??= []).push(codeSegment);
+            (this.scriptElementsWithCode ??= []).push(script);
+        }
+    }
+
+    /**
+     * Where each line of this file starts, counted from the start of the file (see `SourceInfo.linePositions`). A line ends at `\n`, `\r\n` or `\r`
+     */
+    private getLinePositions() {
+        const linePositions = [0];
+        const text = this.fileContents ?? '';
+        for (let i = 0; i < text.length; i++) {
+            const charCode = text.charCodeAt(i);
+            //`\n`, or a `\r` that isn't the start of `\r\n`
+            if (charCode === 10 || (charCode === 13 && text.charCodeAt(i + 1) !== 10)) {
+                linePositions.push(i + 1);
+            }
+        }
+        return linePositions;
+    }
+
+    private disposeScriptCodeSegments() {
+        for (const codeSegment of this.scriptCodeSegments ?? []) {
+            codeSegment.dispose();
+        }
+        this.scriptCodeSegments = undefined;
+        this.scriptElementsWithCode = undefined;
+    }
 
     /**
      * An editor assigned during the build flow that manages edits that will be undone once the build process is complete.
@@ -269,11 +362,6 @@ export class XmlFile implements BscFile {
 
     public parser = new SGParser();
 
-    //TODO implement the xml CDATA parsing, which would populate this list
-    public callables = [] as Callable[];
-
-    public functionScopes = [] as FunctionScope[];
-
     /**
      * The name of the component that this component extends.
      * Available after `parse()`
@@ -301,7 +389,9 @@ export class XmlFile implements BscFile {
         return !!(
             this.editor?.hasChanges || this.ast.componentElement?.scriptElements?.some(
                 script => script.type?.indexOf('brighterscript') > 0 || script.uri?.endsWith('.bs')
-            )
+            ) ||
+            //embedded code that needs transpiling has to be written back into this file
+            this.scriptCodeSegments?.some(codeSegment => codeSegment.needsTranspiled)
         );
     }
     public set needsTranspiled(value) {
@@ -327,6 +417,7 @@ export class XmlFile implements BscFile {
      */
     public parse(fileContents: string) {
         this.fileContents = fileContents;
+        this.cache.clear();
 
         this.parser.parse(fileContents, {
             srcPath: this.srcPath,
@@ -337,6 +428,7 @@ export class XmlFile implements BscFile {
         //SGParser's `IToken` comes from @xml-tools/parser, which is structurally the same as chevrotain's
         //but a distinct nominal type; the same cast is used elsewhere in this file for the same reason
         this.getCommentFlags(this.parser.tokens as unknown as Array<IToken & { tokenType: TokenType }>);
+        this.createScriptCodeSegments();
     }
 
     /**
@@ -395,6 +487,14 @@ export class XmlFile implements BscFile {
         const dependencies = [
             ...this.scriptTagImports.map(x => x.destPath.toLowerCase())
         ];
+        //`import` statements in the code embedded in `<script>` blocks
+        for (const codeSegment of this.scriptCodeSegments ?? []) {
+            for (const scriptImport of codeSegment.ownScriptImports) {
+                if (scriptImport.destPath) {
+                    dependencies.push(scriptImport.destPath.toLowerCase());
+                }
+            }
+        }
         //if autoImportComponentScript is enabled, add the .bs and .brs files with the same name
         if (this.program?.options?.autoImportComponentScript) {
             dependencies.push(
@@ -760,11 +860,6 @@ export class XmlFile implements BscFile {
         return null;
     }
 
-    public getFunctionScopeAtPosition(position: Position, functionScopes?: FunctionScope[]): FunctionScope { //eslint-disable-line
-        //TODO implement
-        return null;
-    }
-
     /**
      * Walk up the ancestor chain and aggregate all of the script tag imports
      */
@@ -837,7 +932,7 @@ export class XmlFile implements BscFile {
      * Convert the brightscript/brighterscript source code into valid brightscript
      */
     public transpile(): CodeWithSourceMap {
-        const state = new TranspileState(this.srcPath, this.program.options);
+        const state = new XmlTranspileState(this);
 
         let transpileResult: SourceNode | undefined;
 
@@ -870,5 +965,6 @@ export class XmlFile implements BscFile {
     public dispose() {
         //unsubscribe from any DependencyGraph subscriptions
         this.unsubscribeFromDependencyGraph?.();
+        this.disposeScriptCodeSegments();
     }
 }

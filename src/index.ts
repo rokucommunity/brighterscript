@@ -3,6 +3,7 @@ export * from './Program';
 export * from './Scope';
 export * from './files/BrsFile';
 export * from './files/XmlFile';
+export * from './files/BrsCodeSegment';
 export * from './util';
 export * from './Watcher';
 export * from './interfaces';
