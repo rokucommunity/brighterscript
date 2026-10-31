@@ -917,6 +917,10 @@ export class Util {
         options = options ?? { prettyPrint: true };
         options.commentTokens = options.commentTokens ?? [];
         const nodeTrivia = node.leadingTrivia ?? [];
+        //most nodes have no comments at all (whitespace and newlines are trivia too), so bail out before building anything
+        if (!this.hasCommentTrivia(nodeTrivia) && !(isStatement(node) && node.annotations?.some(anno => this.hasCommentTrivia(anno.leadingTrivia)))) {
+            return '';
+        }
         const leadingTrivia = isStatement(node)
             ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
             : nodeTrivia;
@@ -978,6 +982,17 @@ export class Util {
                 }
                 return line;
             }).join('\n');
+    }
+
+    private hasCommentTrivia(trivia: Token[] | undefined) {
+        if (trivia) {
+            for (const token of trivia) {
+                if (token.kind === TokenKind.Comment) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

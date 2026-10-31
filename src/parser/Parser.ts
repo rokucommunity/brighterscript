@@ -1,4 +1,4 @@
-import type { Token, Identifier, Locatable } from '../lexer/Token';
+import type { Token, Identifier, Locatable, SourceInfo } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
 import type { BlockTerminator, PrintSeparatorToken } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
@@ -106,9 +106,10 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { brsDocParser } from './BrightScriptDocParser';
+import { isAnnotationExpression, isAssignmentStatement, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
-import type { Expression, Statement } from './AstNode';
+import type { AstNode, Expression, Statement } from './AstNode';
 import type { BsDiagnosticInput, DeepWriteable } from '../interfaces';
 import { getFirmwareCapabilities } from '../RokuConstants';
 import { TokenObject } from '../lexer/TokenObject';
@@ -243,12 +244,94 @@ export class Parser {
         this.namespaceAndFunctionDepth = 0;
         this.selectCaseDepth = 0;
         this.pendingAnnotations = [];
+        this.docCommentCandidates = [];
 
         this.ast = this.body();
         this.ast.bsConsts = options.bsConsts;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
+        this.attachDocCommentTypes();
         return this;
+    }
+
+    /**
+     * Declarations whose doc comments can provide types: functions and methods (`@param`, `@return`) and assignments (`@type`).
+     * Their doc comments are parsed once, after the whole file is parsed (so annotations are attached), by `attachDocCommentTypes`
+     */
+    private docCommentCandidates: Array<FunctionStatement | MethodStatement | AssignmentStatement> = [];
+
+    /**
+     * Parse the doc comments of the candidate declarations, and attach the types they declare to the AST, the same way
+     * `as` types are: `@param` types on the parameters, `@return` on the function, `@type` on the assignment
+     */
+    private attachDocCommentTypes() {
+        for (const node of this.docCommentCandidates) {
+            //a method's function is first parsed as a function statement, which is then discarded
+            if (!isAssignmentStatement(node) && node.func?.parent !== node) {
+                continue;
+            }
+            const doc = brsDocParser.parseNode(node, { createTypeExpression: createDocCommentTypeExpression });
+            if (doc.tags.length === 0) {
+                continue;
+            }
+            if (isAssignmentStatement(node)) {
+                node.docTypeExpression = attachDocCommentType(doc.getTypeTag()?.typeExpression as TypeExpression, node);
+            } else {
+                const func = node.func;
+                func.docReturnTypeExpression = attachDocCommentType(doc.getReturn()?.typeExpression as TypeExpression, func);
+                for (const param of func.parameters) {
+                    const paramTag = doc.getParam(param.tokens.name.text);
+                    if (paramTag) {
+                        param.docTypeExpression = attachDocCommentType(paramTag.typeExpression as TypeExpression, param);
+                        param.docDescription = paramTag.description || undefined;
+                    }
+                }
+            }
+        }
+        this.docCommentCandidates = [];
+    }
+
+    /**
+     * Parse a type, the same way the type after `as` is parsed.
+     * @param typeString the type, eg. `string`, `Alpha.Beta or integer`, `string[]`
+     * @param options where `typeString` is in its source (eg. inside a doc comment), so the result has real locations
+     * @param options.startPosition the offset of `typeString` in its source
+     * @param options.sourceInfo the source's info (uri, line positions)
+     * @returns the type expression, or undefined if `typeString` isn't exactly one valid type
+     */
+    public static parseTypeExpression(typeString: string, options?: { startPosition?: number; sourceInfo?: SourceInfo }): TypeExpression | undefined {
+        const tokens = Lexer.scan(typeString).tokens;
+        const offset = options?.startPosition ?? 0;
+        for (const token of tokens) {
+            token.startPosition += offset;
+            token.endPosition += offset;
+            token.sourceInfo = options?.sourceInfo;
+            for (const trivia of token.leadingTrivia ?? []) {
+                trivia.startPosition += offset;
+                trivia.endPosition += offset;
+                trivia.sourceInfo = options?.sourceInfo;
+            }
+        }
+        const parser = new Parser();
+        parser.options = parser.sanitizeParseOptions({ mode: ParseMode.BrighterScript, srcPath: undefined });
+        parser.logger = createLogger();
+        //types are parsed right after an `as` token (and the parser refers back to it), so start with a zero-width one
+        const asToken = createToken(TokenKind.As, '', { startPosition: offset, endPosition: offset, sourceInfo: options?.sourceInfo });
+        parser.tokens = [asToken, ...tokens];
+        parser.allowedLocalIdentifiers = AllowedLocalIdentifiers;
+        parser.current = 1;
+        parser.diagnostics = [];
+        parser.pendingAnnotations = [];
+        try {
+            const result = parser.typeExpression();
+            if (!result || !parser.isAtEnd() || parser.diagnostics.length > 0) {
+                return undefined;
+            }
+            result.link();
+            return result;
+        } catch (e) {
+            return undefined;
+        }
     }
 
     private logger: Logger;
@@ -786,6 +869,7 @@ export class Parser {
                 func: funcDeclaration.func,
                 override: overrideKeyword
             });
+            this.docCommentCandidates.push(decl as MethodStatement);
 
             //fields
         } else if (this.checkAny(TokenKind.Identifier, ...AllowedProperties)) {
@@ -1063,6 +1147,7 @@ export class Parser {
                 return func;
             } else {
                 let result = new FunctionStatement({ name: name, func: func });
+                this.docCommentCandidates.push(result);
                 return result;
             }
         } finally {
@@ -1144,7 +1229,7 @@ export class Parser {
         let value = this.expression();
 
         let result = new AssignmentStatement({ equals: operator, name: name, value: value, as: asToken, typeExpression: typeExpression });
-
+        this.docCommentCandidates.push(result);
         return result;
     }
 
@@ -4227,4 +4312,25 @@ class CancelStatementError extends Error {
     constructor() {
         super('CancelStatement');
     }
+}
+
+/**
+ * Builds a doc comment tag's type expression where the type actually is in the comment, so it has a real location
+ */
+function createDocCommentTypeExpression(typeString: string, commentToken: Token | undefined) {
+    const typeIndex = commentToken ? commentToken.text.indexOf(typeString, commentToken.text.indexOf('{') + 1) : -1;
+    if (typeIndex < 0) {
+        return Parser.parseTypeExpression(typeString);
+    }
+    return Parser.parseTypeExpression(typeString, {
+        startPosition: commentToken.startPosition + typeIndex,
+        sourceInfo: commentToken.sourceInfo
+    });
+}
+
+function attachDocCommentType(typeExpression: TypeExpression | undefined, owner: AstNode) {
+    if (typeExpression) {
+        typeExpression.parent = owner;
+    }
+    return typeExpression;
 }
