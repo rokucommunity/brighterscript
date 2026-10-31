@@ -246,11 +246,13 @@ export function getUniqueType(types: BscType[], unionTypeFactory: (types: BscTyp
         return type;
     }).flat();
     //`never` adds nothing to a union, unless every type is `never`
-    const nonNeverTypes = types.filter(type => isAnyReferenceType(type) || !isNeverType(type));
-    if (nonNeverTypes.length === 0) {
-        return types[0];
+    if (types.some(type => !isAnyReferenceType(type) && isNeverType(type))) {
+        const nonNeverTypes = types.filter(type => isAnyReferenceType(type) || !isNeverType(type));
+        if (nonNeverTypes.length === 0) {
+            return types[0];
+        }
+        types = nonNeverTypes;
     }
-    types = nonNeverTypes;
     const generalizedTypes = reduceTypesToMostGeneric(types, allowNameEquality);
     if (!generalizedTypes || generalizedTypes.length === 0) {
         return undefined;
