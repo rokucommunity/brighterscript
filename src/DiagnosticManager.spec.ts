@@ -155,6 +155,52 @@ describe('DiagnosticManager', () => {
         });
     });
 
+    describe('clearForSegment', () => {
+        it('forgets the segment', () => {
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            const segment = {} as any;
+            program.diagnostics.register({ message: 'test', location: location, code: 1 }, { segment: segment });
+
+            program.diagnostics.clearForSegment(segment);
+            expectZeroDiagnostics(program.getDiagnostics());
+            expect(program.diagnostics['segmentMap'].has(segment)).to.be.false;
+        });
+    });
+
+    describe('segment memory', () => {
+        it('does not keep segments from replaced files', () => {
+            const brsFile = program.setFile<BrsFile>('source/main.brs', `
+                sub main()
+                    doesNotExist()
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program.getDiagnostics(), [
+                DiagnosticMessages.cannotFindFunction('doesNotExist')
+            ]);
+            const oldAsts = [brsFile.ast];
+            const segmentCount = program.diagnostics['segmentMap'].size;
+
+            //replace the file a few times, alternating between contents with and without the error
+            for (let i = 0; i < 4; i++) {
+                const file = program.setFile<BrsFile>('source/main.brs', `
+                    sub main()
+                        ${i % 2 === 0 ? 'print "fixed"' : 'doesNotExist()'}
+                    end sub
+                `);
+                program.validate();
+                oldAsts.push(file.ast);
+            }
+            const currentAst = oldAsts.pop();
+
+            for (const segment of program.diagnostics['segmentMap'].keys()) {
+                expect(oldAsts.includes(segment.getRoot() as any)).to.be.false;
+                expect(segment.getRoot()).to.equal(currentAst);
+            }
+            expect(program.diagnostics['segmentMap'].size).to.equal(segmentCount);
+        });
+    });
+
     describe('clearForScope', () => {
 
         it('removes diagnostic contexts with the scope specified', () => {
@@ -359,6 +405,22 @@ describe('DiagnosticManager', () => {
             expectDiagnostics(program.getDiagnostics(), [
                 { code: 2 }
             ]);
+        });
+
+        it('forgets a segment once its last diagnostic is cleared', () => {
+            const location = { uri: 'source/main.brs', range: util.createRange(1, 2, 3, 4) };
+            const segment1 = {} as any;
+            const segment2 = {} as any;
+
+            program.diagnostics.register([
+                { diagnostic: { message: 'test', location: location, code: 1 }, context: { segment: segment1 } },
+                { diagnostic: { message: 'test', location: location, code: 2 }, context: { segment: segment2 } }
+            ]);
+
+            program.diagnostics.clearByFilter({ segment: segment1 });
+            //segments are AST nodes, so a leftover entry would keep the node's whole AST alive
+            expect(program.diagnostics['segmentMap'].has(segment1)).to.be.false;
+            expect(program.diagnostics['segmentMap'].has(segment2)).to.be.true;
         });
 
         it('does nothing when the filter matches no known tag, scope, fileUri, or segment', () => {
