@@ -12,6 +12,11 @@ import type { UninitializedType } from './types/UninitializedType';
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
  */
+/**
+ * Shared by every table that has no pocket tables (see `SymbolTable.pocketTables`)
+ */
+const NoPocketTables: PocketTable[] = Object.freeze([]) as unknown as PocketTable[];
+
 export class SymbolTable implements SymbolTypeGetter {
     constructor(
         public name: string,
@@ -95,8 +100,7 @@ export class SymbolTable implements SymbolTypeGetter {
         this.siblings ??= new Set();
         this.siblings.add(sibling);
         return () => {
-            SymbolTable.mutationCount++;
-            this.siblings.delete(sibling);
+            this.removeSibling(sibling);
         };
     }
 
@@ -106,6 +110,10 @@ export class SymbolTable implements SymbolTypeGetter {
     public removeSibling(sibling: SymbolTable) {
         SymbolTable.mutationCount++;
         this.siblings?.delete(sibling);
+        //most tables have no siblings, so don't keep an empty Set around once the last one is removed
+        if (this.siblings?.size === 0) {
+            this.siblings = undefined;
+        }
     }
 
     /**
@@ -121,11 +129,18 @@ export class SymbolTable implements SymbolTypeGetter {
     }
     private _isOrdered = false;
 
-    public pocketTables = new Array<PocketTable>();
+    /**
+     * Most tables never get a pocket table, so they all share one frozen empty array until the first one is added.
+     * Use `addPocketTable` rather than pushing into this directly
+     */
+    public pocketTables: PocketTable[] = NoPocketTables;
 
     public addPocketTable(pocketTable: PocketTable) {
         SymbolTable.mutationCount++;
         pocketTable.table.isPocketTable = true;
+        if (this.pocketTables === NoPocketTables) {
+            this.pocketTables = [];
+        }
         this.pocketTables.push(pocketTable);
         return () => {
             SymbolTable.mutationCount++;
@@ -669,19 +684,24 @@ export class SymbolTable implements SymbolTypeGetter {
             // no cache verifier
             return;
         }
-        this.typeCache ??= [
-            undefined,
-            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.runtime
-            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.typetime
-            new Map<string, TypeCacheEntry>() // SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
-        ];
+        //only runtime (1), typetime (2) and both (3) are cached
+        if (!(options.flags >= 1 && options.flags <= 3)) {
+            return;
+        }
+        //one map per flag value, each created on first use: most tables only ever cache for one of them
+        this.typeCache ??= [undefined, undefined, undefined, undefined];
+        let cache = this.typeCache[options.flags];
         const cacheKey = this.getCacheKey(name, options);
-        let existingCachedValue = this.typeCache[options.flags]?.get(cacheKey);
+        let existingCachedValue = cache?.get(cacheKey);
         if (isReferenceType(cacheEntry.type) && !isReferenceType(existingCachedValue)) {
             // No need to overwrite a non-referenceType with a referenceType
             return;
         }
-        return this.typeCache[options.flags]?.set(cacheKey, cacheEntry);
+        if (!cache) {
+            cache = new Map<string, TypeCacheEntry>();
+            this.typeCache[options.flags] = cache;
+        }
+        return cache.set(cacheKey, cacheEntry);
     }
 
     private getCacheKey(name: string, options?: { statementIndex?: number | 'end' }) {

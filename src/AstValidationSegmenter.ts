@@ -272,7 +272,12 @@ export class AstValidationSegmenter {
             walkMode: InsideSegmentWalkMode,
             skipChildren: skipper
         });
-        this.assignedTokensInSegment.set(segment, assignedSymbols);
+        //most segments assign nothing, so only keep the ones that do (an empty Set costs ~150 bytes)
+        if (assignedSymbols.size > 0) {
+            this.assignedTokensInSegment.set(segment, assignedSymbols);
+        } else {
+            this.assignedTokensInSegment.delete(segment);
+        }
         if (!foundUnresolvedInSegment) {
             this.singleValidationSegments.add(segment);
         }
