@@ -624,29 +624,17 @@ export function getNarrowedType(node: Expression, type: BscType, options: GetTyp
     if (!hasTypePredicates || !type || !(options.flags & SymbolTypeFlag.runtime) || options.skipNarrowing) {
         return type;
     }
-    //nodes are looked up many times (i.e. once per scope their file is in, and again for hover and completions),
-    //and most can't be narrowed, so remember the ones that can't
-    const cacheKey = getCacheKey();
-    if (cacheKey && notNarrowableCache.get(node) === cacheKey) {
+    const path = getReferencePath(node);
+    if (!path) {
         return type;
     }
-    const path = getReferencePath(node);
-    const func = path ? node.findAncestor<FunctionExpression>(isFunctionExpression) : undefined;
+    const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
     //most functions call no type guards at all, so this is the common way out
     if (!func || !getGuardedPaths(func).has(path) || !hasNarrowingCandidate(node, path, func)) {
-        if (cacheKey) {
-            notNarrowableCache.set(node, cacheKey);
-        }
         return type;
     }
     return narrowFrom(node, path, type, options, func);
 }
-
-/**
- * The nodes that can't be narrowed, and the `cacheVerifier` token they were found with.
- * That only depends on the AST and on which functions are type guards, so it holds until the scopes are linked again
- */
-const notNarrowableCache = new WeakMap<AstNode, string>();
 
 /**
  * For each function, the reference paths passed to type guards in conditions
