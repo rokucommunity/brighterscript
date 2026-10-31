@@ -68,8 +68,18 @@ export class TranspileState {
 
     public newline = '\n';
 
+    /**
+     * The last uri `getSource` converted, and its result. Nearly every token in a file has the same uri, and converting it is slow
+     */
+    private lastSourceUri: string | undefined = undefined;
+    private lastSource: string | undefined = undefined;
+
     private getSource(locatable: RangeLike) {
-        let srcPath = (locatable as Locatable)?.sourceInfo?.uri ?? (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        const uri = (locatable as Locatable)?.sourceInfo?.uri ?? (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        if (uri && uri === this.lastSourceUri) {
+            return this.lastSource;
+        }
+        let srcPath = uri;
         if (srcPath) {
             srcPath = util.uriToPath(srcPath);
             //if a sourceRoot is specified, use that instead of the rootDir
@@ -79,6 +89,8 @@ export class TranspileState {
                     this.options.sourceRoot
                 );
             }
+            this.lastSourceUri = uri;
+            this.lastSource = srcPath;
             return srcPath;
         } else {
             return this.srcPath;

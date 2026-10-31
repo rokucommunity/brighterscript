@@ -959,6 +959,13 @@ export class Scope {
      */
     private linkSymbolTableDisposables = [];
 
+    /**
+     * Whether this scope's symbol tables are currently linked (between `linkSymbolTable` and `unlinkSymbolTable`)
+     */
+    public get isSymbolTableLinked() {
+        return this.linkSymbolTableDisposables.length > 0;
+    }
+
     private symbolsAddedDuringLinking: { symbolTable: SymbolTable; name: string; flags: number }[] = [];
 
     public get allNamespaceTypeTable() {
