@@ -3994,6 +3994,74 @@ describe('Program', () => {
     });
 
     describe('build', () => {
+        it('keeps a scope linked between consecutive files that share it', async () => {
+            program.setFile('source/a.brs', `sub a()\nend sub`);
+            program.setFile('source/b.brs', `sub b()\nend sub`);
+            program.validate();
+            const scope = program.getScopeByName('source');
+            const linkSpy = sinon.spy(scope, 'linkSymbolTable');
+            //the link count when each event for a.brs and b.brs fires
+            const linkCounts = {} as Record<string, number>;
+            const track = (eventName: string, file: BscFile) => {
+                //pkgPath uses the OS path separator
+                const pkgPath = file.pkgPath.replace(/\\/g, '/');
+                if (['source/a.brs', 'source/b.brs'].includes(pkgPath)) {
+                    expect(scope.isSymbolTableLinked).to.be.true;
+                    linkCounts[`${eventName} ${pkgPath}`] = linkSpy.callCount;
+                }
+            };
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforePrepareFile: (event) => track('prepare', event.file),
+                beforeSerializeFile: (event) => track('serialize', event.file)
+            });
+            await program.build();
+
+            expect(Object.keys(linkCounts).sort()).to.eql([
+                'prepare source/a.brs',
+                'prepare source/b.brs',
+                'serialize source/a.brs',
+                'serialize source/b.brs'
+            ]);
+            //a.brs and b.brs are consecutive, so the scope wasn't relinked between them
+            expect(linkCounts['prepare source/b.brs']).to.eql(linkCounts['prepare source/a.brs']);
+            expect(linkCounts['serialize source/b.brs']).to.eql(linkCounts['serialize source/a.brs']);
+            expect(scope.isSymbolTableLinked).to.be.false;
+        });
+
+        it('relinks the scope for the next file when a plugin unlinks it', async () => {
+            program.setFile('source/a.brs', `sub a()\nend sub`);
+            program.setFile('source/b.brs', `sub b()\nend sub`);
+            program.validate();
+            const linkedDuringEvents = [] as string[];
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforePrepareFile: (event) => {
+                    if (event.scope) {
+                        linkedDuringEvents.push(`prepare ${event.file.pkgPath.replace(/\\/g, '/')} ${event.scope.isSymbolTableLinked}`);
+                    }
+                },
+                prepareFile: (event) => {
+                    event.scope?.unlinkSymbolTable();
+                },
+                beforeSerializeFile: (event) => {
+                    if (event.scope?.name === 'source') {
+                        linkedDuringEvents.push(`serialize ${event.file.pkgPath.replace(/\\/g, '/')} ${event.scope.isSymbolTableLinked}`);
+                    }
+                },
+                serializeFile: (event) => {
+                    event.scope?.unlinkSymbolTable();
+                }
+            });
+            await program.build();
+            expect(linkedDuringEvents).to.eql([
+                'prepare source/a.brs true',
+                'prepare source/b.brs true',
+                'serialize source/a.brs true',
+                'serialize source/b.brs true'
+            ]);
+        });
+
         it('copies AssetFile contents', async () => {
             const file = program.setFile('locale/en_US/translations.xml', Buffer.from(''));
             program.validate();

@@ -68,10 +68,19 @@ export class TranspileState {
 
     public newline = '\n';
 
+    /**
+     * The source path for each uri `getSource` has converted. Nearly every token in a file has the same uri, and converting it is slow
+     */
+    private sourcesByUri = new Map<string, string>();
+
     private getSource(locatable: RangeLike) {
-        let srcPath = (locatable as Locatable)?.sourceInfo?.uri ?? (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
-        if (srcPath) {
-            srcPath = util.uriToPath(srcPath);
+        const uri = (locatable as Locatable)?.sourceInfo?.uri ?? (locatable as { location: Location })?.location?.uri ?? (locatable as Location).uri;
+        if (!uri) {
+            return this.srcPath;
+        }
+        let srcPath = this.sourcesByUri.get(uri);
+        if (srcPath === undefined) {
+            srcPath = util.uriToPath(uri);
             //if a sourceRoot is specified, use that instead of the rootDir
             if (this.options.sourceRoot) {
                 srcPath = srcPath.replace(
@@ -79,10 +88,9 @@ export class TranspileState {
                     this.options.sourceRoot
                 );
             }
-            return srcPath;
-        } else {
-            return this.srcPath;
+            this.sourcesByUri.set(uri, srcPath);
         }
+        return srcPath;
     }
 
     /**
