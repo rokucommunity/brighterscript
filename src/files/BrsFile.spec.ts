@@ -5152,6 +5152,34 @@ describe('BrsFile', () => {
                 `);
             });
 
+            it('does not inline an enum member when the first part of the expression is shadowed', async () => {
+                await testTranspile(`
+                    sub shadowed()
+                        direction = { up: "north" }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print direction.up
+                    end sub
+
+                    enum Direction
+                        up = "up"
+                    end enum
+                    `, `
+                    sub shadowed()
+                        direction = {
+                            up: "north"
+                        }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print "up"
+                    end sub
+                `);
+            });
+
             it('handles shadowed enum names in namespace', async () => {
                 await testTranspile(`
                     namespace alpha
