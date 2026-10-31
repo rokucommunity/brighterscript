@@ -3,7 +3,7 @@ import { NamespaceStatement, ClassStatement } from './Statement';
 import { AssignmentStatement, Block, Body, CatchStatement, DottedSetStatement, EmptyStatement, EndStatement, ExitStatement, ExpressionStatement, ForEachStatement, ForStatement, FunctionStatement, GotoStatement, IfStatement, ImportStatement, IncrementStatement, IndexedSetStatement, LabelStatement, LibraryStatement, PrintStatement, ReturnStatement, StopStatement, ThrowStatement, TryCatchStatement, WhileStatement } from './Statement';
 import { ParseMode, Parser } from './Parser';
 import { WalkMode } from '../astUtils/visitors';
-import { isClassStatement, isNamespaceStatement } from '../astUtils/reflection';
+import { isClassStatement, isFieldStatement, isNamespaceStatement } from '../astUtils/reflection';
 import { Program } from '../Program';
 import { trim } from '../testHelpers.spec';
 import type { BrsFile } from '../files/BrsFile';
@@ -12,6 +12,9 @@ import { createStringLiteral, createToken, createVariableExpression } from '../a
 import { TokenKind } from '../lexer/TokenKind';
 import { FunctionExpression } from './Expression';
 import type { AstNode } from './AstNode';
+import type { FieldStatement } from './Statement';
+import type { TypeChainEntry } from '../interfaces';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 
 describe('Statement', () => {
     let program: Program;
@@ -93,6 +96,48 @@ describe('Statement', () => {
                 const stmt = file.ast.findChildren<ClassStatement>(isClassStatement)[0];
                 expect(stmt.getName(ParseMode.BrightScript)).to.equal('NameA_Animal');
                 expect(stmt.getName(ParseMode.BrighterScript)).to.equal('NameA.Animal');
+            });
+        });
+    });
+
+    describe('FieldStatement', () => {
+        describe('getType', () => {
+            function getFieldTypeChain(source: string) {
+                const file = program.setFile<BrsFile>('source/lib.bs', source);
+                program.validate();
+                const field = file.ast.findChild<FieldStatement>(isFieldStatement);
+                const typeChain: TypeChainEntry[] = [];
+                field.getType({ flags: SymbolTypeFlag.runtime, typeChain: typeChain });
+                return typeChain.map(x => x.name);
+            }
+
+            it('only adds the type expression to the type chain when there is one', () => {
+                expect(getFieldTypeChain(`
+                    namespace Alpha
+                        interface Vector
+                            x as float
+                        end interface
+                        function create() as Vector
+                            return { x: 0 }
+                        end function
+                    end namespace
+                    class Thing
+                        offset as Alpha.Vector = Alpha.create()
+                    end class
+                `)).to.eql(['Alpha', 'Vector']);
+            });
+
+            it('adds the initial value to the type chain when there is no type expression', () => {
+                expect(getFieldTypeChain(`
+                    namespace Alpha
+                        function create() as integer
+                            return 1
+                        end function
+                    end namespace
+                    class Thing
+                        offset = Alpha.create()
+                    end class
+                `)).to.eql(['Alpha', 'create']);
             });
         });
     });
