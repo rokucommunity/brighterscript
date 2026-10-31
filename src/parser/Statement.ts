@@ -189,7 +189,7 @@ export class AssignmentStatement extends Statement {
 
     /**
      * The type from this assignment's doc comment (`@type {type}`), if it has one. Set by the parser.
-     * Not walked: it lives in a comment, so it isn't part of the code
+     * Walked like the code types, but never transpiled: it lives in a comment
      */
     public docTypeExpression: TypeExpression | undefined = undefined;
 
@@ -212,6 +212,7 @@ export class AssignmentStatement extends Statement {
     walk(visitor: WalkVisitor, options: WalkOptions) {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'typeExpression', visitor, options);
+            walk(this, 'docTypeExpression', visitor, options);
             walk(this, 'value', visitor, options);
         }
     }

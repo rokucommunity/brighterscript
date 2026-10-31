@@ -432,6 +432,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walkArray(this.parameters, visitor, options, this);
             walk(this, 'returnTypeExpression', visitor, options);
+            walk(this, 'docReturnTypeExpression', visitor, options);
             //This is the core of full-program walking...it allows us to step into sub functions
             if (options.walkMode & InternalWalkMode.recurseChildFunctions) {
                 walk(this, 'body', visitor, options);
@@ -519,7 +520,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     /**
      * The return type from the declaring function's doc comment (`@return {type}`), if it has one. Set by the parser.
-     * Not walked: it lives in a comment, so it isn't part of the code
+     * Walked like the code types, but never transpiled: it lives in a comment
      */
     public docReturnTypeExpression: TypeExpression | undefined = undefined;
 
@@ -577,7 +578,7 @@ export class FunctionParameterExpression extends Expression {
 
     /**
      * The type from the function's doc comment (`@param {type} name`), if it has one. Set by the parser.
-     * Not walked: it lives in a comment, so it isn't part of the code
+     * Walked like the code types, but never transpiled: it lives in a comment
      */
     public docTypeExpression: TypeExpression | undefined = undefined;
 
@@ -658,6 +659,7 @@ export class FunctionParameterExpression extends Expression {
         if (options.walkMode & InternalWalkMode.walkExpressions) {
             walk(this, 'defaultValue', visitor, options);
             walk(this, 'typeExpression', visitor, options);
+            walk(this, 'docTypeExpression', visitor, options);
         }
     }
 

@@ -14,7 +14,7 @@ import type { Locatable, Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression, TypeExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -243,7 +243,6 @@ export class ScopeValidator {
                     AssignmentStatement: (assignStmt) => {
                         this.addValidationKindMetric('AssignmentStatement', () => {
                             this.validateAssignmentStatement(file, assignStmt);
-                            this.validateDocCommentType(file, assignStmt.docTypeExpression);
                             // Note: this also includes For statements
                             this.detectShadowedLocalVar(file, {
                                 expr: assignStmt,
@@ -287,13 +286,11 @@ export class ScopeValidator {
                                 type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
                                 nameToken: funcParam.tokens.name
                             });
-                            this.validateDocCommentType(file, funcParam.docTypeExpression);
                         });
                     },
                     FunctionExpression: (func) => {
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
-                            this.validateDocCommentType(file, func.docReturnTypeExpression);
                         });
                     },
                     ForStatement: (forStmt) => {
@@ -1998,22 +1995,6 @@ export class ScopeValidator {
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
             }
-        }
-    }
-
-    /**
-     * Validate a type that came from a doc comment (`@param {type}`, `@return {type}`, `@type {type}`)
-     */
-    private validateDocCommentType(file: BrsFile, docTypeExpression: TypeExpression | undefined) {
-        if (!docTypeExpression) {
-            return;
-        }
-        const foundType = docTypeExpression.getType({ flags: SymbolTypeFlag.typetime });
-        if (!foundType?.isResolvable()) {
-            this.addMultiScopeDiagnostic({
-                ...DiagnosticMessages.cannotFindName(file.fileContents.substring(docTypeExpression.startPosition, docTypeExpression.endPosition)),
-                location: docTypeExpression.location
-            });
         }
     }
 
