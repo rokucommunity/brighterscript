@@ -46,7 +46,12 @@ export class Lexer {
     /**
      * Contains trivia/comments, etc. before this line
      */
+    /**
+     * Scratch space for the trivia in front of the next token. Reused for every token (only the first `leadingTriviaCount` entries are live),
+     * so its backing store isn't reallocated each time. Setting `length = 0` instead would let V8 drop the backing store
+     */
     private leadingTrivia: Token[] = [];
+    private leadingTriviaCount = 0;
 
     /**
      * Info about the source being scanned, shared by every token produced by this scan. `undefined` when locations aren't being tracked
@@ -81,6 +86,7 @@ export class Lexer {
         this.current = 0;
         this.tokens = [];
         this.diagnostics = [];
+        this.leadingTriviaCount = 0;
         this.sourceInfo = this.options.trackLocations
             ? { uri: util.pathToUri(options?.srcPath), linePositions: [0] }
             : undefined;
@@ -95,8 +101,10 @@ export class Lexer {
             this.current,
             this.current + 1,
             this.sourceInfo,
-            this.leadingTrivia.length > 0 ? this.leadingTrivia : undefined
+            this.takeLeadingTrivia()
         ));
+        //don't keep the last file's trivia tokens alive between scans
+        this.leadingTrivia.length = 0;
         return this;
     }
 
@@ -104,7 +112,19 @@ export class Lexer {
      * Pushes a token into the leadingTrivia list
      */
     private pushTrivia(token: Token) {
-        this.leadingTrivia.push(token);
+        this.leadingTrivia[this.leadingTriviaCount++] = token;
+    }
+
+    /**
+     * Get an exactly-sized copy of the pending trivia (or `undefined` if there isn't any), and start collecting again
+     */
+    private takeLeadingTrivia(): Token[] | undefined {
+        if (this.leadingTriviaCount === 0) {
+            return undefined;
+        }
+        const trivia = this.leadingTrivia.slice(0, this.leadingTriviaCount);
+        this.leadingTriviaCount = 0;
+        return trivia;
     }
 
     /**
@@ -1177,9 +1197,8 @@ export class Lexer {
 
         if (this.isTrivia(token)) {
             this.pushTrivia(token);
-        } else if (this.leadingTrivia.length > 0) {
-            token.leadingTrivia = [...this.leadingTrivia];
-            this.leadingTrivia = [];
+        } else if (this.leadingTriviaCount > 0) {
+            token.leadingTrivia = this.takeLeadingTrivia();
         }
         if (kind !== TokenKind.Comment) {
             this.tokens.push(token);
