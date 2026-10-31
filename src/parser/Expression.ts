@@ -37,6 +37,7 @@ import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
 import type { BrsFile } from '../files/BrsFile';
+import { createExtraSymbolData } from '../interfaces';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -448,7 +449,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const docs = getFunctionDocs(this);
 
         // resolve return and param types with their own typeChain and data, so they don't leak into this function's (eg. hover name and description)
-        const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: {} });
+        const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: createExtraSymbolData() });
 
         returnType = util.chooseTypeFromCodeOrDocComment(
             this.returnTypeExpression?.getType(innerOptions()),
@@ -588,7 +589,7 @@ export class FunctionParameterExpression extends Expression {
 
         const docDescription = docs.getParam(paramName)?.description;
         if (docDescription) {
-            options.data = options.data ?? {};
+            options.data = options.data ?? createExtraSymbolData();
             options.data.description = docDescription;
         }
         options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));

@@ -56,6 +56,7 @@ import { TypedFunctionType } from './types';
 import { IntersectionType } from './types/IntersectionType';
 import { TokenObject } from './lexer/TokenObject';
 import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
+import { createExtraSymbolData } from './interfaces';
 
 export class Util {
     public clearConsole() {
@@ -3239,7 +3240,7 @@ export class Util {
                     fullName = 'roSGNode';
                 }
 
-                const data = {};
+                const data = createExtraSymbolData();
                 const symbolTable = callExpr.getSymbolTable();
                 const foundType = symbolTable.getSymbolType(fullName, {
                     flags: SymbolTypeFlag.typetime,
@@ -3260,7 +3261,7 @@ export class Util {
             isComponentType(callExpr.callee.obj?.getType({ flags: SymbolTypeFlag.runtime })) &&
             isLiteralString(callExpr.args?.[0])) {
             const fullName = `roSGNode${callExpr.args?.[0].tokens?.value?.text?.replace(/"/g, '')}`;
-            const data = {};
+            const data = createExtraSymbolData();
             const symbolTable = callExpr.getSymbolTable();
             return symbolTable.getSymbolType(fullName, {
                 flags: SymbolTypeFlag.typetime,
