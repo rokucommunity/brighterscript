@@ -1,31 +1,47 @@
-import type { BscType } from './BscType';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { isObjectType } from '../astUtils/reflection';
+import type { GetTypeOptions, TypeCompatibilityData } from '../interfaces';
+import { BscType } from './BscType';
+import { BscTypeKind } from './BscTypeKind';
+import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import { DynamicType } from './DynamicType';
 
-export class ObjectType implements BscType {
-    constructor(
-        public typeText?: string
-    ) { }
+export class ObjectType extends BscType {
 
-    public isAssignableTo(targetType: BscType) {
-        return (
-            targetType instanceof ObjectType ||
-            targetType instanceof DynamicType
-        );
+    public readonly kind = BscTypeKind.ObjectType;
+
+    public isBuiltIn = true;
+
+    public isTypeCompatible(targetType: BscType, data?: TypeCompatibilityData) {
+        //Brightscript allows anything passed "as object", so as long as a type is provided, this is true
+        return !!targetType;
     }
 
-    public isConvertibleTo(targetType: BscType) {
-        return this.isAssignableTo(targetType);
-    }
+    public static instance = new ObjectType();
 
     public toString() {
-        return this.typeText ?? 'object';
+        return 'object';
     }
 
     public toTypeString(): string {
         return this.toString();
     }
 
-    public clone() {
-        return new ObjectType(this.typeText);
+    getMemberType(name: string, options: GetTypeOptions) {
+        if (options.ignoreDefaultDynamicMembers) {
+            return undefined;
+        }
+        return DynamicType.instance;
+    }
+
+    isEqual(otherType: BscType) {
+        return isObjectType(otherType) && this.checkCompatibilityBasedOnMembers(otherType, SymbolTypeFlag.runtime);
+    }
+
+    get returnType() {
+        return DynamicType.instance;
     }
 }
+
+
+BuiltInInterfaceAdder.primitiveTypeInstanceCache.set('object', ObjectType.instance);

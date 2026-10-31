@@ -9,8 +9,13 @@ interface WorkerEntry {
      * How many projects currently have a MessagePort attached to this worker
      */
     projectCount: number;
+    /**
+     * True once the worker thread has exited. A dead entry is never handed out for new work and never
+     * counts toward `maxWorkers`, but stays tracked until its remaining tenants release their slots,
+     * so `releaseProject()` accounting stays correct for co-tenants of a crashed worker.
+     */
+    isDead?: boolean;
 }
-
 
 export const MEMORY_GB_PER_V8_INSTANCE = 2;
 export const MEMORY_GB_BUFFER = 1;
@@ -24,7 +29,6 @@ export function getDefaultMaxWorkerThreads() {
     const availableMemoryGB = Math.floor(os.totalmem() / (1024 * 1024 * 1024)) - MEMORY_GB_BUFFER;
     return Math.max(1, Math.min(numCpus, Math.floor(availableMemoryGB / MEMORY_GB_PER_V8_INSTANCE)));
 }
-
 
 export class WorkerPool {
     constructor(
@@ -62,14 +66,21 @@ export class WorkerPool {
     }
 
     /**
-     * Stop tracking a worker in this pool. Does NOT terminate the worker (it's assumed to already be gone,
-     * e.g. because it exited/crashed). Safe to call even if the worker is already untracked (e.g. because
-     * `releaseProject()` already removed it as part of an intentional shutdown).
+     * Mark a worker as dead so it can't be reused and doesn't consume a `maxWorkers` slot. Does NOT terminate
+     * the worker (it's assumed to already be gone, e.g. because it exited/crashed). The entry is only fully
+     * untracked once no projects are attached to it, so surviving tenants can still release their slots.
+     * Safe to call even if the worker is already untracked (e.g. because `releaseProject()` already removed
+     * it as part of an intentional shutdown).
      */
     private removeWorker(worker: Worker) {
         const index = this.workers.findIndex(x => x.worker === worker);
         if (index > -1) {
-            this.workers.splice(index, 1);
+            const entry = this.workers[index];
+            entry.isDead = true;
+            //nobody is attached anymore, so we can drop the entry entirely
+            if (entry.projectCount <= 0) {
+                this.workers.splice(index, 1);
+            }
         }
     }
 
@@ -77,10 +88,18 @@ export class WorkerPool {
      * Find the worker entry with the fewest attached projects
      */
     private getLeastLoadedEntry(): WorkerEntry {
-        return this.workers.reduce(
+        const liveWorkers = this.getLiveWorkers();
+        return liveWorkers.reduce(
             (least, current) => (current.projectCount < least.projectCount ? current : least),
-            this.workers[0]
+            liveWorkers[0]
         );
+    }
+
+    /**
+     * All workers that are still alive (i.e. eligible to host new projects)
+     */
+    private getLiveWorkers() {
+        return this.workers.filter(x => !x.isDead);
     }
 
     /**
@@ -88,7 +107,7 @@ export class WorkerPool {
      * @param count the minimum number of workers that should exist when this function exits
      */
     public preload(count: number) {
-        while (this.workers.length < Math.min(count, this.maxWorkers)) {
+        while (this.getLiveWorkers().length < Math.min(count, this.maxWorkers)) {
             this.createWorker();
         }
     }
@@ -102,10 +121,11 @@ export class WorkerPool {
      * @returns the worker thread hosting this project, and the MessagePort dedicated to it
      */
     public assignProject(): { worker: Worker; port: MessagePort } {
-        let entry = this.workers.find(x => x.projectCount === 0);
+        const liveWorkerCount = this.getLiveWorkers().length;
+        let entry = this.workers.find(x => !x.isDead && x.projectCount === 0);
         if (!entry) {
             //the `=== 0` check guards against a nonsensical maxWorkers (0, negative, NaN) stranding the pool at zero workers
-            if (this.workers.length === 0 || this.workers.length < this.maxWorkers) {
+            if (liveWorkerCount === 0 || liveWorkerCount < this.maxWorkers) {
                 this.logger.log('Creating new worker thread');
                 entry = this.createWorker();
             } else {
@@ -136,7 +156,10 @@ export class WorkerPool {
         entry.projectCount--;
         if (entry.projectCount <= 0) {
             this.workers.splice(index, 1);
-            this.terminateWorker(worker);
+            //an already-exited worker needs no termination
+            if (!entry.isDead) {
+                this.terminateWorker(worker);
+            }
         }
     }
 

@@ -1,10 +1,11 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedWords, Keywords, PreceedingRegexTypes, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
-import type { Token } from './Token';
+import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
+import type { Locatable, SourceInfo, Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
-import type { Range, Diagnostic } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
+import { TokenObject } from './TokenObject';
+import type { BsDiagnosticInput } from '../interfaces';
 
 /**
  * Numeric type designators can only be one of these characters
@@ -23,26 +24,6 @@ export class Lexer {
     private current: number;
 
     /**
-     * The zero-indexed begin line number being parsed.
-     */
-    private lineBegin: number;
-
-    /**
-     * The zero-indexed end line number being parsed
-     */
-    private lineEnd: number;
-
-    /**
-     * The zero-indexed begin column number being parsed.
-     */
-    private columnBegin: number;
-
-    /**
-     * The zero-indexed end column number being parsed
-     */
-    private columnEnd: number;
-
-    /**
      * The BrightScript code being converted to an array of `Token`s.
      */
     public source: string;
@@ -55,7 +36,7 @@ export class Lexer {
     /**
      * The errors produced from `source.`
      */
-    public diagnostics: Diagnostic[];
+    public diagnostics: BsDiagnosticInput[];
 
     /**
      * The options used to scan this file
@@ -63,9 +44,19 @@ export class Lexer {
     public options: ScanOptions;
 
     /**
-     * Contains all of the leading whitespace that has not yet been consumed by a token
+     * Contains trivia/comments, etc. before this line
      */
-    private leadingWhitespace = '';
+    /**
+     * Scratch space for the trivia in front of the next token. Reused for every token (only the first `leadingTriviaCount` entries are live),
+     * so its backing store isn't reallocated each time. Setting `length = 0` instead would let V8 drop the backing store
+     */
+    private leadingTrivia: Token[] = [];
+    private leadingTriviaCount = 0;
+
+    /**
+     * Info about the source being scanned, shared by every token produced by this scan. `undefined` when locations aren't being tracked
+     */
+    private sourceInfo: SourceInfo | undefined;
 
     /**
      * A convenience function, equivalent to `new Lexer().scan(toScan)`, that converts a string
@@ -93,27 +84,47 @@ export class Lexer {
         this.options = this.sanitizeOptions(options);
         this.start = 0;
         this.current = 0;
-        this.lineBegin = 0;
-        this.lineEnd = 0;
-        this.columnBegin = 0;
-        this.columnEnd = 0;
         this.tokens = [];
         this.diagnostics = [];
+        this.leadingTriviaCount = 0;
+        this.sourceInfo = this.options.trackLocations
+            ? { uri: util.pathToUri(options?.srcPath), linePositions: [0] }
+            : undefined;
         while (!this.isAtEnd()) {
             this.scanToken();
         }
 
-        this.tokens.push({
-            kind: TokenKind.Eof,
-            text: '',
-            isReserved: false,
-            range: this.options.trackLocations
-                ? util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd + 1)
-                : undefined,
-            leadingWhitespace: this.leadingWhitespace
-        });
-        this.leadingWhitespace = '';
+        this.tokens.push(new TokenObject(
+            TokenKind.Eof,
+            '',
+            false,
+            this.current,
+            this.current + 1,
+            this.sourceInfo,
+            this.takeLeadingTrivia()
+        ));
+        //don't keep the last file's trivia tokens alive between scans
+        this.leadingTrivia.length = 0;
         return this;
+    }
+
+    /**
+     * Pushes a token into the leadingTrivia list
+     */
+    private pushTrivia(token: Token) {
+        this.leadingTrivia[this.leadingTriviaCount++] = token;
+    }
+
+    /**
+     * Get an exactly-sized copy of the pending trivia (or `undefined` if there isn't any), and start collecting again
+     */
+    private takeLeadingTrivia(): Token[] | undefined {
+        if (this.leadingTriviaCount === 0) {
+            return undefined;
+        }
+        const trivia = this.leadingTrivia.slice(0, this.leadingTriviaCount);
+        this.leadingTriviaCount = 0;
+        return trivia;
     }
 
     /**
@@ -379,7 +390,7 @@ export class Lexer {
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedCharacter(c),
-                range: this.rangeOf()
+                location: this.locationOf()
             });
         }
     }
@@ -396,29 +407,19 @@ export class Lexer {
         while (this.peek() === ' ' || this.peek() === '\t') {
             this.advance();
         }
+        //NOTE: master's version of this method skipped `addToken` entirely on the
+        //`includeWhitespace === false` path to avoid allocating a Token it would immediately
+        //discard. That optimization isn't safe here: `addToken` is also what routes the token into
+        //`leadingTrivia` (see `isTrivia`), and this branch reconstructs spacing and comments from
+        //trivia. Skipping it silently drops all whitespace trivia. `addToken` interns the text for
+        //us, so the memory half of that optimization still applies.
+        this.addToken(TokenKind.Whitespace);
+        //if we aren't keeping the whitespace tokens, then remove this one from the token output.
+        //it stays referenced by `leadingTrivia`, which is why it must be created above.
         if (this.options.includeWhitespace === false) {
-            //This is the default path, so it is worth keeping cheap. The caller does not
-            //want Whitespace tokens in the output at all -- we only need the text, so the
-            //next token can record it as its `leadingWhitespace`. Calling `addToken` here
-            //would allocate a Token plus a Range (which is itself 3 objects: the range and
-            //its two Position endpoints) only for us to immediately discard the Token, so
-            //take the text directly instead. `internText` hands back a single shared string
-            //instance per distinct indent, so N occurrences of the same indent reference
-            //one string rather than N copies of it.
-            this.leadingWhitespace = this.internText(
-                this.source.slice(this.start, this.current)
-            );
-            //`addToken` would have called `sync()` on our behalf; since we skipped it,
-            //advance the same three fields by hand so the *next* token's range starts
-            //after this whitespace run instead of at the start of it.
-            this.start = this.current;
-            this.lineBegin = this.lineEnd;
-            this.columnBegin = this.columnEnd;
-        } else {
-            const whitespaceToken = this.addToken(TokenKind.Whitespace);
-            this.leadingWhitespace = whitespaceToken.text;
-            this.start = this.current;
+            this.tokens.pop();
         }
+        this.start = this.current;
     }
 
     private newline() {
@@ -430,12 +431,7 @@ export class Lexer {
 
         this.addToken(TokenKind.Newline);
         this.start = this.current;
-        // advance the line counter
-        this.lineBegin++;
-        this.lineEnd = this.lineBegin;
-        // and always reset the column counter
-        this.columnBegin = 0;
-        this.columnEnd = 0;
+        this.sourceInfo?.linePositions.push(this.current);
     }
 
     /**
@@ -443,20 +439,14 @@ export class Lexer {
      */
     private advance(): void {
         this.current++;
-        this.columnEnd++;
     }
 
-    private lookaheadStack = [] as Array<{ current: number; columnEnd: number }>;
+    private lookaheadStack = [] as number[];
     private pushLookahead() {
-        this.lookaheadStack.push({
-            current: this.current,
-            columnEnd: this.columnEnd
-        });
+        this.lookaheadStack.push(this.current);
     }
     private popLookahead() {
-        const { current, columnEnd } = this.lookaheadStack.pop();
-        this.current = current;
-        this.columnEnd = columnEnd;
+        this.current = this.lookaheadStack.pop();
     }
 
     /**
@@ -508,8 +498,8 @@ export class Lexer {
             if (this.peekNext() === '\n' || this.peekNext() === '\r') {
                 // BrightScript doesn't support multi-line strings
                 this.diagnostics.push({
-                    ...DiagnosticMessages.unterminatedStringAtEndOfLine(),
-                    range: this.rangeOf()
+                    ...DiagnosticMessages.unterminatedString(),
+                    location: this.locationOf()
                 });
                 isUnterminated = true;
                 break;
@@ -521,8 +511,8 @@ export class Lexer {
         if (this.isAtEnd()) {
             // terminating a string with EOF is also not allowed
             this.diagnostics.push({
-                ...DiagnosticMessages.unterminatedStringAtEndOfFile(),
-                range: this.rangeOf()
+                ...DiagnosticMessages.unterminatedString(),
+                location: this.locationOf()
             });
             isUnterminated = true;
         }
@@ -556,11 +546,8 @@ export class Lexer {
                 //store the char code
                 token.charCode = 10;
 
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current);
                 continue;
             } else if (this.check('\r') && this.peekNext() === '\n') {
                 this.templateQuasiString();
@@ -573,11 +560,20 @@ export class Lexer {
                 token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
                 token.charCode = 10;
 
-                //move the location tracking to the next line
-                this.lineEnd++;
-                this.lineBegin = this.lineEnd;
-                this.columnEnd = 0;
-                this.columnBegin = this.columnEnd;
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current);
+                continue;
+
+                //a lone `\r` is a newline too (the same as everywhere else in the lexer, and in LSP)
+            } else if (this.check('\r')) {
+                this.templateQuasiString();
+
+                this.advance();
+                let token = this.addToken(TokenKind.EscapedCharCodeLiteral) as Token & { charCode: number };
+                token.charCode = 13;
+
+                //track the start of the next line
+                this.sourceInfo?.linePositions.push(this.current);
                 continue;
 
                 //escaped chars
@@ -683,7 +679,7 @@ export class Lexer {
         //we hit the end of the file before finding the closing `}`
         this.diagnostics.push({
             ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-            range: this.rangeOf()
+            location: this.locationOf()
         });
         this.start = this.current;
     }
@@ -811,16 +807,6 @@ export class Lexer {
             this.advance();
         }
 
-        // fractional hex literals aren't valid
-        if (this.peek() === '.' && isHexDigit(this.peekNext())) {
-            this.advance(); // consume the "."
-            this.diagnostics.push({
-                ...DiagnosticMessages.fractionalHexLiteralsAreNotSupported(),
-                range: this.rangeOf()
-            });
-            return;
-        }
-
         if (this.peek() === '&') {
             // literals ending with "&" are forced to LongIntegers
             this.advance();
@@ -848,7 +834,6 @@ export class Lexer {
             (this.peek() === ' ' || this.peek() === '\t')
         ) {
             let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
 
             // skip past any whitespace
             let whitespace = '';
@@ -871,22 +856,17 @@ export class Lexer {
             } else {
                 // reset if the last word and the current word didn't form a multi-word TokenKind
                 this.current = savedCurrent;
-                this.columnEnd = savedColumnEnd;
             }
         }
 
         // split `elseif` into `else` and `if` tokens
         if (lowerText === 'elseif' && !this.checkPreviousToken(TokenKind.Dot)) {
             let savedCurrent = this.current;
-            let savedColumnEnd = this.columnEnd;
             this.current -= 2;
-            this.columnEnd -= 2;
             this.addToken(TokenKind.Else);
 
             this.start = savedCurrent - 2;
             this.current = savedCurrent;
-            this.columnBegin = savedColumnEnd - 2;
-            this.columnEnd = savedColumnEnd;
             this.addToken(TokenKind.If);
             return;
         }
@@ -1032,7 +1012,7 @@ export class Lexer {
             default:
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedConditionalCompilationString(),
-                    range: this.rangeOf()
+                    location: this.locationOf()
                 });
         }
     }
@@ -1093,6 +1073,13 @@ export class Lexer {
         }
         this.popLookahead();
         return false;
+    }
+
+    /**
+     * Determine if this token is a trivia token
+     */
+    private isTrivia(token: Token) {
+        return AllowedTriviaTokens.includes(token.kind);
     }
 
     /**
@@ -1176,9 +1163,10 @@ export class Lexer {
                 text = ':';
                 break;
 
-            //`Whitespace` only reaches here when `includeWhitespace` is true (the default
-            //path pops it in `whitespace()` without ever building a Token). Indent strings
-            //are unbounded in principle, so this one still uses the capped intern table.
+            //`Whitespace` always reaches here, because the Token has to exist to be recorded as
+            //leading trivia even when `includeWhitespace` is false (`whitespace()` pops it from
+            //the token list afterward). Indent strings are unbounded in principle, so this one
+            //uses the capped intern table to collapse repeat indents onto one shared string.
             case TokenKind.Whitespace:
                 text = this.internText(
                     this.source.slice(this.start, this.current)
@@ -1197,38 +1185,41 @@ export class Lexer {
         //this is the canonical Token field order. Every other place that synthesizes a
         //Token should use this same order (and set every field) so all tokens share a
         //single V8 hidden class instead of forcing megamorphic property access downstream
-        let token: Token = {
-            kind: kind,
-            text: text,
-            isReserved: ReservedWords.has(text.toLowerCase()),
-            range: this.rangeOf(),
-            leadingWhitespace: this.leadingWhitespace
-        };
-        this.leadingWhitespace = '';
-        this.tokens.push(token);
+        let token: Token = new TokenObject(
+            kind,
+            text,
+            ReservedTokenKinds.has(kind),
+            this.start,
+            this.current,
+            this.sourceInfo,
+            undefined
+        );
+
+        if (this.isTrivia(token)) {
+            this.pushTrivia(token);
+        } else if (this.leadingTriviaCount > 0) {
+            token.leadingTrivia = this.takeLeadingTrivia();
+        }
+        if (kind !== TokenKind.Comment) {
+            this.tokens.push(token);
+        }
         this.sync();
         return token;
     }
 
     /**
-     * Move all location and char pointers to current position. Normally called after adding a token.
+     * Move the start pointer to the current position. Normally called after adding a token.
      */
     private sync() {
         this.start = this.current;
-        this.lineBegin = this.lineEnd;
-        this.columnBegin = this.columnEnd;
     }
 
     /**
-     * Creates a `Range` at the lexer's current position
-     * @returns the range of `text`
+     * Creates a `Locatable` at the lexer's current position
+     * @returns the locatable of `text`
      */
-    private rangeOf(): Range {
-        if (this.options.trackLocations) {
-            return util.createRange(this.lineBegin, this.columnBegin, this.lineEnd, this.columnEnd);
-        } else {
-            return undefined;
-        }
+    private locationOf(): Locatable {
+        return { startPosition: this.start, endPosition: this.current, sourceInfo: this.sourceInfo };
     }
 }
 
@@ -1243,4 +1234,8 @@ export interface ScanOptions {
      * @default true
      */
     trackLocations?: boolean;
+    /**
+     * Path to the file where this source code originated
+     */
+    srcPath?: string;
 }

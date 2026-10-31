@@ -1,9 +1,10 @@
-import type { Range } from 'vscode-languageserver';
-import { AstEditor } from '../astUtils/AstEditor';
+import type { Locatable } from '../lexer/Token';
+import { Editor } from '../astUtils/Editor';
 import type { BrsFile } from '../files/BrsFile';
 import type { FirmwareCapabilities } from '../RokuConstants';
-import type { ClassStatement } from './Statement';
+import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
+import type { AstNode, Statement } from './AstNode';
 
 export class BrsTranspileState extends TranspileState {
     public constructor(
@@ -23,9 +24,7 @@ export class BrsTranspileState extends TranspileState {
      * the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor.
      * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
      */
-    lineage = [] as Array<{
-        range?: Range;
-    }>;
+    lineage = [] as Array<Locatable>;
 
     /**
      * Used by ClassMethodStatements to determine information about their enclosing class
@@ -34,9 +33,28 @@ export class BrsTranspileState extends TranspileState {
 
     /**
      * An AST editor that can be used by the AST nodes to do various transformations to the AST which will be reverted at the end of the transpile cycle
+     * TODO remove this before file_api is merged
      */
-    public editor = new AstEditor();
+    public editor = new Editor();
 
+    /**
+     * Used by ConditionalCompileStatement to determine if there's already an conditional compile going on
+     */
+    public conditionalCompileStatement?: ConditionalCompileStatement;
+
+    /**
+     * Do not transpile leading comments
+     */
+    public skipLeadingComments = false;
+
+    /**
+     * Transpile all leading trivia for a given statement, including comments mixed between annotations
+     */
+    public transpileAnnotations(node: Statement) {
+        return (node?.annotations ?? []).map(x => {
+            return x.transpile(this);
+        });
+    }
     /**
      * What the target firmware natively understands. Captured once when the state is created —
      * capabilities are derived from config and cannot change partway through a transpile.
@@ -51,6 +69,33 @@ export class BrsTranspileState extends TranspileState {
     private loopLabels = [] as Array<{ label: string; wasAccessed: boolean; blockDepth: number }>;
 
     private loopLabelSequence = 0;
+
+    /**
+     * Labels for the end of each `select case` that has an `exit select` which must be rewritten as a `goto`
+     */
+    private exitSelectLabels = new Map<AstNode, string>();
+
+    private exitSelectLabelSequence = 0;
+
+    /**
+     * Get the label that marks the end of the given `select case` (allocating it on first request). The `select case` emits
+     * the label after its generated `end if` whenever one was requested while transpiling its cases
+     */
+    public getExitSelectLabel(selectCase: AstNode) {
+        let label = this.exitSelectLabels.get(selectCase);
+        if (!label) {
+            label = `BRIGHTERSCRIPT_EXIT_SELECT_${this.exitSelectLabelSequence++}`;
+            this.exitSelectLabels.set(selectCase, label);
+        }
+        return label;
+    }
+
+    /**
+     * Get the end label for the given `select case`, but only if something already asked for it
+     */
+    public peekExitSelectLabel(selectCase: AstNode) {
+        return this.exitSelectLabels.get(selectCase);
+    }
 
     /**
      * Begin tracking a loop label for the loop about to be transpiled. The label is allocated

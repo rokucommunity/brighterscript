@@ -1,45 +1,44 @@
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { XmlFile } from '../../files/XmlFile';
-import type { OnFileValidateEvent } from '../../interfaces';
-import type { SGAst, SGTag } from '../../parser/SGTypes';
+import type { ValidateFileEvent } from '../../interfaces';
+import type { SGAst, SGElement } from '../../parser/SGTypes';
 import { isSGInterface } from '../../astUtils/xml';
 import util from '../../util';
 
 export class XmlFileValidator {
     constructor(
-        public event: OnFileValidateEvent<XmlFile>
+        public event: ValidateFileEvent<XmlFile>
     ) {
     }
 
     public process() {
         util.validateTooDeepFile(this.event.file);
-        if (this.event.file.parser.ast.root) {
+        if (this.event.file.parser.ast.rootElement) {
             this.validateComponent(this.event.file.parser.ast);
-            this.validateTagClosings(this.event.file.parser.ast.root);
-            this.validateTagCasing(this.event.file.parser.ast.root);
+            this.validateTagClosings(this.event.file.parser.ast.rootElement);
+            this.validateTagCasing(this.event.file.parser.ast.rootElement);
         } else {
             //skip empty XML
         }
     }
 
     /**
-     * Walk the SG tag tree and report any tag whose closing tag name does not
-     * match its opening tag name (e.g. `<Group></LayoutGroup>`). This runs at
-     * validation time (rather than parse time) so it also catches mismatches in
-     * AST injected by plugins, not just AST produced by the parser.
+     * Walk the element tree and report any element whose closing tag name doesn't match its
+     * opening tag name (i.e. `<Group></LayoutGroup>`), which is a compile error on device.
+     * This runs at validation time (rather than parse time) so it also catches AST injected
+     * or mutated by plugins.
      */
-    private validateTagClosings(tag: SGTag) {
-        const closingTagText = tag.closingTag?.text;
-        //only validate when a closing tag was actually present (self-closing and
-        //programmatically-built tags omit it, and must remain valid)
-        if (closingTagText !== undefined && closingTagText !== tag.tag.text) {
-            this.event.file.diagnostics.push({
-                ...DiagnosticMessages.xmlTagMismatch(tag.tag.text, closingTagText),
-                range: tag.closingTag.range,
-                file: this.event.file
+    private validateTagClosings(element: SGElement) {
+        const endTagName = element.tokens.endTagName;
+        //only validate when a closing tag is actually present. Self-closing tags and
+        //programmatically-built elements omit it, and must remain valid.
+        if (endTagName && endTagName.text !== element.tokens.startTagName?.text) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.xmlTagMismatch(element.tokens.startTagName?.text, endTagName.text),
+                location: endTagName.location
             });
         }
-        for (const child of tag.getChildren()) {
+        for (const child of element.elements) {
             this.validateTagClosings(child);
         }
     }
@@ -54,25 +53,25 @@ export class XmlFileValidator {
      * members of `<interface>`). Tags inside `<children>` are node/component names (like
      * `<Label>`) whose casing is author-defined, so they're intentionally not validated.
      */
-    private validateTagCasing(root: SGTag) {
-        const validate = (tag: SGTag) => {
-            const tagText = tag.tag.text;
-            if (tagText !== tagText.toLowerCase()) {
-                this.event.file.diagnostics.push({
+    private validateTagCasing(rootElement: SGElement) {
+        const validate = (element: SGElement) => {
+            const startTagName = element.tokens.startTagName;
+            const tagText = startTagName?.text;
+            if (tagText && tagText !== tagText.toLowerCase()) {
+                this.event.program.diagnostics.register({
                     ...DiagnosticMessages.xmlTagWrongCase(tagText, tagText.toLowerCase()),
-                    range: tag.tag.range,
-                    file: this.event.file
+                    location: startTagName.location
                 });
             }
         };
 
-        validate(root);
+        validate(rootElement);
         //`<children>` holds author-cased node names, so validate the tag itself but not its contents
-        for (const child of root.getChildren()) {
+        for (const child of rootElement.elements) {
             validate(child);
             if (isSGInterface(child)) {
                 //`<field>` and `<function>` members are structural too
-                for (const member of child.getChildren()) {
+                for (const member of child.elements) {
                     validate(member);
                 }
             }
@@ -80,46 +79,45 @@ export class XmlFileValidator {
     }
 
     private validateComponent(ast: SGAst) {
-        const { root, component } = ast;
-        if (!component) {
+        const { rootElement, componentElement } = ast;
+        if (!componentElement) {
             //not a SG component
-            this.event.file.diagnostics.push({
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingComponentDeclaration(),
-                range: root.range,
-                file: this.event.file
+                location: rootElement.location
             });
             return;
         }
 
         //component name/extends
-        if (!component.name) {
-            this.event.file.diagnostics.push({
+        if (!componentElement.name) {
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                range: component.tag.range,
-                file: this.event.file
+                location: componentElement.tokens.startTagName.location
             });
         }
-        if (!component.extends) {
-            this.event.file.diagnostics.push({
+        if (!componentElement.extends) {
+            this.event.program.diagnostics.register({
                 ...DiagnosticMessages.xmlComponentMissingExtendsAttribute(),
-                range: component.tag.range,
-                file: this.event.file
+                location: componentElement.tokens.startTagName.location
             });
         }
 
-
-        //catch script imports with same path as the auto-imported codebehind file
-        const scriptTagImports = this.event.file.parser.references.scriptTagImports;
-        let explicitCodebehindScriptTag = this.event.file.program.options.autoImportComponentScript === true
-            ? scriptTagImports.find(x => this.event.file.possibleCodebehindPkgPaths.includes(x.pkgPath))
-            : undefined;
-        if (explicitCodebehindScriptTag) {
-            this.event.file.diagnostics.push({
-                ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
-                file: this.event.file,
-                range: explicitCodebehindScriptTag.filePathRange
-            });
+        //flag explicit script imports that match the auto-imported codebehind file
+        const file = this.event.file;
+        if (file.program?.options?.autoImportComponentScript === true) {
+            const codebehindPaths = file.possibleCodebehindDestPaths ?? [];
+            for (const scriptImport of file.parser.references.scriptTagImports) {
+                if (!scriptImport.destPath || !scriptImport.filePathRange) {
+                    continue;
+                }
+                if (codebehindPaths.includes(scriptImport.destPath)) {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.unnecessaryCodebehindScriptImport(),
+                        location: util.createLocationFromFileRange(file, scriptImport.filePathRange)
+                    });
+                }
+            }
         }
     }
-
 }

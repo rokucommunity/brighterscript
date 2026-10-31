@@ -17,8 +17,8 @@ describe('ForStatement', () => {
         program.dispose();
     });
 
-    it('transpiles a simple loop', () => {
-        testTranspile(`
+    it('transpiles a simple loop', async () => {
+        await testTranspile(`
             sub main()
                 for i = 0 to 10
                     print i
@@ -27,8 +27,8 @@ describe('ForStatement', () => {
         `);
     });
 
-    it('transpiles with a for loop with a step value', () => {
-        testTranspile(`
+    it('transpiles with a for loop with a step value', async () => {
+        await testTranspile(`
             sub main()
                 for i = 0 to 10 step 2
                     print i
@@ -37,8 +37,8 @@ describe('ForStatement', () => {
         `);
     });
 
-    it('adds newline to end of empty loop declaration', () => {
-        testTranspile(`
+    it('adds newline to end of empty loop declaration', async () => {
+        await testTranspile(`
             sub main()
                 for i = 0 to 10
                 end for

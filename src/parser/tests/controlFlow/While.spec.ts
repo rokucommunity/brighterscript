@@ -1,16 +1,20 @@
+import { testLocatable } from '../../../testHelpers.spec';
 import { expect } from '../../../chai-config.spec';
 
 import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { FunctionStatement } from '../../Statement';
+import { isFunctionStatement } from '../../../astUtils/reflection';
+import util from '../../../util';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import type { WhileStatement } from '../../Statement';
 
 describe('parser while statements', () => {
 
     it('while without exit', () => {
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
@@ -22,11 +26,11 @@ describe('parser while statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('while with exit', () => {
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             token(TokenKind.While, 'while'),
             token(TokenKind.True, 'true'),
             token(TokenKind.Newline, '\n'),
@@ -40,7 +44,7 @@ describe('parser while statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.length.greaterThan(0);
+        expect(ast.statements).to.be.length.greaterThan(0);
     });
 
     it('supports trailing colon at end of condition', () => {
@@ -60,8 +64,9 @@ describe('parser while statements', () => {
             end function
         `);
         expect(parser.diagnostics).to.be.lengthOf(1);
-        expect(parser.statements).to.be.lengthOf(1);
-        expect(parser.references.functionStatements[0].func.body.statements).to.be.lengthOf(1);
+        expect(parser.ast.statements).to.be.lengthOf(1);
+        const functionStatements = parser.ast.findChildren<FunctionStatement>(isFunctionStatement);
+        expect(functionStatements[0].func.body.statements).to.be.lengthOf(1);
     });
 
     it('location tracking', () => {
@@ -73,24 +78,27 @@ describe('parser while statements', () => {
          * 1|   Rnd(0)
          * 2| end while
          */
-        const { statements, diagnostics } = Parser.parse([
+        const { ast, diagnostics } = Parser.parse([
             {
                 kind: TokenKind.While,
                 text: 'while',
                 isReserved: true,
-                range: Range.create(0, 0, 0, 5)
+                ...testLocatable(0, 0, 0, 5),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
                 isReserved: true,
-                range: Range.create(0, 6, 0, 10)
+                ...testLocatable(0, 6, 0, 10),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                range: Range.create(0, 10, 0, 11)
+                ...testLocatable(0, 10, 0, 11),
+                leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
             identifier('Rnd'),
@@ -102,14 +110,15 @@ describe('parser while statements', () => {
                 kind: TokenKind.EndWhile,
                 text: 'end while',
                 isReserved: false,
-                range: Range.create(2, 0, 2, 9)
+                ...testLocatable(2, 0, 2, 9),
+                leadingTrivia: []
             },
             EOF
         ]);
 
         expect(diagnostics[0]?.message).not.to.exist;
-        expect(statements).to.be.lengthOf(1);
-        expect(statements[0].range).deep.include(
+        expect(ast.statements).to.be.lengthOf(1);
+        expect(util.getLocation(ast.statements[0]).range).deep.include(
             Range.create(0, 0, 2, 9)
         );
     });
@@ -136,7 +145,7 @@ describe('parser while statements', () => {
                     next
                 end sub
             `);
-            const fn = parser.references.functionStatements[0];
+            const fn = parser.ast.findChild<FunctionStatement>(isFunctionStatement);
             const whileStmt = fn.func.body.statements[0] as WhileStatement;
             expect(whileStmt.tokens.endWhile.kind).to.equal(TokenKind.Next);
             expect(whileStmt.tokens.endWhile.text).to.equal('next');

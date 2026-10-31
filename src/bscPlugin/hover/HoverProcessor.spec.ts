@@ -2,10 +2,16 @@ import { expect } from '../../chai-config.spec';
 import { Program } from '../../Program';
 import { util } from '../../util';
 import { createSandbox } from 'sinon';
-import { rootDir } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics, rootDir, trim } from '../../testHelpers.spec';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
+import { HoverProcessor } from './HoverProcessor';
+import { createIdentifier, createIntegerLiteral } from '../../astUtils/creators';
+import type { BrsFile } from '../../files/BrsFile';
 let sinon = createSandbox();
 
 const fence = (code: string) => util.mdFence(code, 'brightscript');
+const commentSep = `\n***\n`;
+
 
 describe('HoverProcessor', () => {
     let program: Program;
@@ -28,13 +34,76 @@ describe('HoverProcessor', () => {
             end sub
         `);
         //get the hover
-        program.getHover(file.pathAbsolute, util.createPosition(1, 20));
+        program.getHover(file.srcPath, util.createPosition(1, 20));
         //the onGetHover function from `test-plugin` should always get called because
         //BscPlugin should never short-circuit the event
         expect(mock.called).to.be.true;
     });
 
     describe('BrsFile', () => {
+        it('getConstHover does not crash on expression with missing range', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', ``);
+
+            const processor = new HoverProcessor({} as any);
+            const expression = createIntegerLiteral('1');
+            expect(
+                processor['getConstHover'](createIdentifier('hello'), file, program.getScopeByName('source'), expression)
+            ).to.eql(undefined);
+        });
+
+        it('does not crash when hovering an assignment in an inactive conditional compile branch', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', `
+                #const LOGGING = true
+                sub main()
+                #if LOGGING
+                    activeVar = 1
+                    print activeVar
+                #else
+                    inactiveVar = 2
+                    print inactiveVar
+                #end if
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(7, 0, 9, 0) } }
+            ]);
+            expect(
+                program.getHover(file.srcPath, util.createPosition(7, 22))[0]?.contents
+            ).to.eql([fence('inactiveVar as dynamic')]);
+            expect(
+                program.getHover(file.srcPath, util.createPosition(4, 22))[0]?.contents
+            ).to.eql([fence('activeVar as integer')]);
+        });
+
+        it('shows the member of the active branch and not a member that only an inactive branch declares', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                #const DEBUG = true
+                class Foo
+                    #if DEBUG
+                        name as string
+                    #else
+                        name as integer
+                        releaseOnly as integer
+                    #end if
+                end class
+                sub main()
+                    f = new Foo()
+                    print f.name
+                    print f.releaseOnly
+                end sub
+            `);
+            program.validate();
+            //print f.na|me
+            expect(
+                program.getHover(file.srcPath, util.createPosition(12, 30))[0]?.contents
+            ).to.eql([fence('Foo.name as string')]);
+            //print f.release|Only
+            expect(
+                program.getHover(file.srcPath, util.createPosition(13, 34))[0]?.contents
+            ).to.eql([fence('Foo.releaseOnly as invalid')]);
+        });
+
         it('works for param types', () => {
             const file = program.setFile('source/main.brs', `
                 sub DoSomething(name as string)
@@ -43,14 +112,15 @@ describe('HoverProcessor', () => {
                     end function
                 end sub
             `);
+            program.validate();
 
             //hover over the `name = 1` line
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 24))[0];
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 24))[0];
             expect(hover).to.exist;
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 24));
 
             //hover over the `name` parameter declaration
-            hover = program.getHover(file.pathAbsolute, util.createPosition(1, 34))[0];
+            hover = program.getHover(file.srcPath, util.createPosition(1, 34))[0];
             expect(hover).to.exist;
             expect(hover.range).to.eql(util.createRange(1, 32, 1, 36));
         });
@@ -64,9 +134,9 @@ describe('HoverProcessor', () => {
                 end sub
             `);
             //hover over the `as`
-            expect(program.getHover(file.pathAbsolute, util.createPosition(1, 31))).to.be.empty;
+            expect(program.getHover(file.srcPath, util.createPosition(1, 31))).to.be.empty;
             //hover over the `string`
-            expect(program.getHover(file.pathAbsolute, util.createPosition(1, 36))).to.be.empty;
+            expect(program.getHover(file.srcPath, util.createPosition(1, 36))).to.be.empty;
         });
 
         it('finds declared function', () => {
@@ -78,11 +148,29 @@ describe('HoverProcessor', () => {
                 end function
             `);
 
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(1, 28))[0];
+            let hover = program.getHover(file.srcPath, util.createPosition(1, 28))[0];
             expect(hover).to.exist;
 
             expect(hover.range).to.eql(util.createRange(1, 25, 1, 29));
-            expect(hover.contents).to.eql(fence('function Main(count? as dynamic) as dynamic'));
+            expect(hover.contents).to.eql([fence('function Main(count? as integer) as dynamic')]);
+        });
+
+        it('finds declared namespace function', () => {
+            let file = program.setFile('source/main.brs', `
+            namespace mySpace
+                function Main(count = 1)
+                    firstName = "bob"
+                    age = 21
+                    shoeSize = 10
+                end function
+            end namespace
+            `);
+
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 28))[0];
+            expect(hover).to.exist;
+
+            expect(hover.range).to.eql(util.createRange(2, 25, 2, 29));
+            expect(hover.contents).to.eql([fence('function mySpace.Main(count? as integer) as dynamic')]);
         });
 
         it('finds variable function hover in same scope', () => {
@@ -94,11 +182,43 @@ describe('HoverProcessor', () => {
                     sayMyName()
                 end sub
             `);
-
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(5, 24))[0];
+            program.validate();
+            let hover = program.getHover(file.srcPath, util.createPosition(5, 24))[0];
 
             expect(hover.range).to.eql(util.createRange(5, 20, 5, 29));
-            expect(hover.contents).to.eql(fence('sub sayMyName(name as string) as void'));
+            expect(hover.contents).to.eql([fence('sub sayMyName(name as string) as void')]);
+        });
+
+        it('does not crash when hovering on built-in functions', () => {
+            let file = program.setFile('source/main.brs', `
+                function doUcase(text)
+                    return ucase(text)
+                end function
+            `);
+            let commentSep = `\n***\n`;
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 30))[0];
+            expect(hover.contents).to.eql([`${fence('function ucase(s as string) as string')}${commentSep}Converts the string to all upper case.`]);
+        });
+
+        it('does not crash when hovering on object method call', () => {
+            let file = program.setFile('source/main.brs', `
+                function getInstr(url, text)
+                    return url.instr(text)
+                end function
+
+                function getInstrTyped(urlStr as string, text)
+                    return urlStr.instr(text)
+                end function
+            `);
+            program.validate();
+            // return url.ins|tr(text)
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 35))[0];
+            expect(hover.contents).to.eql(['```brightscript\ninstr as dynamic\n```']);
+
+            // return urlStr.ins|tr(text)
+            hover = program.getHover(file.srcPath, util.createPosition(6, 38))[0];
+            expect(hover.contents[0]).to.include('```brightscript\nfunction string.instr(substringOrStart_index as string or integer, substring? as string) as integer\n```');
+            expect(hover.contents[0]).to.include('OVERLOADED METHOD');
         });
 
         it('finds function hover in file scope', () => {
@@ -108,22 +228,17 @@ describe('HoverProcessor', () => {
                 end sub
 
                 sub sayMyName()
-
                 end sub
             `);
-
-            let hover = program.getHover(file.pathAbsolute, util.createPosition(2, 25))[0];
+            program.validate();
+            //sayM|yName()
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 25))[0];
 
             expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover.contents).to.eql(fence('sub sayMyName() as void'));
+            expect(hover.contents).to.eql([fence('sub sayMyName() as void')]);
         });
 
         it('finds function hover in scope', () => {
-            let rootDir = process.cwd();
-            program = new Program({
-                rootDir: rootDir
-            });
-
             let mainFile = program.setFile('source/main.brs', `
                 sub Main()
                     sayMyName()
@@ -137,9 +252,9 @@ describe('HoverProcessor', () => {
             `);
             program.validate();
 
-            let hover = program.getHover(mainFile.pathAbsolute, util.createPosition(2, 25))[0];
-            expect(hover?.range).to.eql(util.createRange(2, 20, 2, 29));
-            expect(hover?.contents).to.eql(fence('sub sayMyName(name as string) as void'));
+            let hover = program.getHover(mainFile.srcPath, util.createPosition(2, 25))[0];
+            expect(hover.range).to.eql(util.createRange(2, 20, 2, 29));
+            expect(hover.contents).to.eql([fence('sub sayMyName(name as string) as void')]);
         });
 
         it('finds top-level constant value', () => {
@@ -153,7 +268,7 @@ describe('HoverProcessor', () => {
             // print SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 29))[0];
             expect(hover?.range).to.eql(util.createRange(2, 26, 2, 36));
-            expect(hover?.contents).to.eql(fence('const SOME_VALUE = true'));
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = true as boolean')]);
         });
 
         it('finds top-level constant in assignment expression', () => {
@@ -168,7 +283,7 @@ describe('HoverProcessor', () => {
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 33))[0];
             expect(hover?.range).to.eql(util.createRange(3, 29, 3, 39));
-            expect(hover?.contents).to.eql(fence('const SOME_VALUE = "value"'));
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = "value" as string')]);
         });
 
         it('finds namespaced constant in assignment expression', () => {
@@ -185,7 +300,7 @@ describe('HoverProcessor', () => {
             // value += SOME|_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(3, 47))[0];
             expect(hover?.range).to.eql(util.createRange(3, 43, 3, 53));
-            expect(hover?.contents).to.eql(fence('const someNamespace.SOME_VALUE = "value"'));
+            expect(hover?.contents).to.eql([fence('const someNamespace.SOME_VALUE = "value" as string')]);
         });
 
         it('finds namespaced constant value', () => {
@@ -201,7 +316,21 @@ describe('HoverProcessor', () => {
             // print name.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 34))[0];
             expect(hover?.range).to.eql(util.createRange(2, 31, 2, 41));
-            expect(hover?.contents).to.eql(fence('const name.SOME_VALUE = true'));
+            expect(hover?.contents).to.eql([fence('const name.SOME_VALUE = true as boolean')]);
+        });
+
+        it('finds constant value that is an array', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    print SOME_VALUE
+                end sub
+                const SOME_VALUE = [] as function[]
+            `);
+            program.validate();
+            // print SOM|E_VALUE
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 30))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 26, 2, 36));
+            expect(hover?.contents).to.eql([fence('const SOME_VALUE = [] as Array<function>')]);
         });
 
         it('finds deep namespaced constant value', () => {
@@ -217,7 +346,1278 @@ describe('HoverProcessor', () => {
             // print name.sp.a.c.e.SOM|E_VALUE
             let hover = program.getHover('source/main.bs', util.createPosition(2, 43))[0];
             expect(hover?.range).to.eql(util.createRange(2, 40, 2, 50));
-            expect(hover?.contents).to.eql(fence('const name.sp.a.c.e.SOME_VALUE = true'));
+            expect(hover?.contents).to.eql([fence('const name.sp.a.c.e.SOME_VALUE = true as boolean')]);
+        });
+
+        it('finds namespaced class types', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    myKlass = new name.Klass()
+                    runNoop(myKlass)
+                end sub
+
+                sub runNoop(myKlass as name.Klass)
+                    myKlass.noop()
+                end sub
+
+                namespace name
+                    class Klass
+                        sub noop()
+                        end sub
+                    end class
+                end namespace
+            `);
+            program.validate();
+            // run|Noop(myKlass)
+            let hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
+            expect(hover?.range).to.eql(util.createRange(3, 20, 3, 27));
+            expect(hover?.contents).to.eql([fence('sub runNoop(myKlass as name.Klass) as void')]);
+            // myKl|ass.noop()
+            hover = program.getHover('source/main.bs', util.createPosition(7, 25))[0];
+            expect(hover?.range).to.eql(util.createRange(7, 20, 7, 27));
+            expect(hover?.contents).to.eql([fence('myKlass as name.Klass')]);
+            //  sub no|op()
+            hover = program.getHover('source/main.bs', util.createPosition(12, 31))[0];
+            expect(hover?.contents).to.eql([fence('sub name.Klass.noop() as void')]);
+        });
+
+        it('finds local variables that shadow namespaces', () => {
+            program.setFile('source/main.bs', `
+                sub foo1(alpha as string)
+                    print alpha.toStr() ' in foo1()
+                end sub
+
+                sub foo2()
+                    alpha = 123
+                    print alpha.toStr() ' in foo2()
+                end sub
+
+                namespace alpha
+                    function toStr()
+                        return "alpha"
+                    end function
+                end namespace
+            `);
+            program.validate();
+            //  sub foo1(alp|ha as string)
+            let hover = program.getHover('source/main.bs', util.createPosition(1, 29))[0];
+            expect(hover?.contents).to.eql([fence('alpha as string')]);
+            // print alp|ha.toStr() ' in foo1()
+            hover = program.getHover('source/main.bs', util.createPosition(2, 30))[0];
+            expect(hover?.contents).to.eql([fence('alpha as string')]);
+            //  alp|ha = 123
+            hover = program.getHover('source/main.bs', util.createPosition(6, 23))[0];
+            expect(hover?.contents).to.eql([fence('alpha as integer')]);
+            //  print alp|ha.toStr() ' in foo2()
+            hover = program.getHover('source/main.bs', util.createPosition(7, 30))[0];
+            expect(hover?.contents).to.eql([fence('alpha as integer')]);
+        });
+
+        it('finds types properly', () => {
+            program.setFile('source/main.bs', `
+                class Person
+                end class
+
+                sub doWork(age as integer, name as string, guy as Person)
+                end sub
+            `);
+            program.validate();
+            // a|ge as integer
+            let hover = program.getHover('source/main.bs', util.createPosition(4, 29))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 27, 4, 30));
+            expect(hover?.contents).to.eql([fence('age as integer')]);
+            // age as int|eger
+            hover = program.getHover('source/main.bs', util.createPosition(4, 39))[0];
+            // no hover on base types
+            expect(hover).to.be.undefined;
+            // n|ame as string
+            hover = program.getHover('source/main.bs', util.createPosition(4, 46))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 43, 4, 47));
+            expect(hover?.contents).to.eql([fence('name as string')]);
+            // name as st|ring
+            hover = program.getHover('source/main.bs', util.createPosition(4, 54))[0];
+            // no hover on base types
+            expect(hover).to.be.undefined;
+            // gu|y as Person
+            hover = program.getHover('source/main.bs', util.createPosition(4, 60))[0];
+            expect(hover?.range).to.eql(util.createRange(4, 59, 4, 62));
+            expect(hover?.contents).to.eql([fence('guy as Person')]);
+            // guy as Pe|rson
+            hover = program.getHover('source/main.bs', util.createPosition(4, 69))[0];
+            expect(hover?.contents).to.eql([fence('class Person')]);
+        });
+
+        it('finds namespaces properly', () => {
+            program.setFile('source/main.bs', `
+                namespace Name1
+                   namespace Name2
+                      const hi = "hello"
+                   end namespace
+                end namespace
+
+                sub doWork()
+                   print Name1.Name2.hi
+                end sub
+            `);
+            program.validate();
+            // print Name1.Nam|e2.hi
+            let hover = program.getHover('source/main.bs', util.createPosition(8, 36))[0];
+            expect(hover?.contents).to.eql([fence('namespace Name1.Name2')]);
+        });
+
+        it('finds enum properly', () => {
+            program.setFile('source/main.bs', `
+                enum Direction
+                    up
+                    down
+                end enum
+
+                sub doWork()
+                   print Direction.up
+                end sub
+            `);
+            program.validate();
+            // print Dire|ction.up
+            let hover = program.getHover('source/main.bs', util.createPosition(7, 30))[0];
+            expect(hover?.contents).to.eql([fence('enum Direction')]);
+            // print Direction.u|p
+            hover = program.getHover('source/main.bs', util.createPosition(7, 37))[0];
+            expect(hover?.contents).to.eql([fence('Direction.up as Direction')]);
+        });
+
+        it('finds types hover with comment', () => {
+            program.setFile('source/main.bs', `
+                ' this is a class comment
+                ' it is more than one line
+                class Person
+                end class
+
+                ' does some work
+                sub doWork(age as integer, name as string, guy as Person)
+                end sub
+            `);
+            program.validate();
+
+            // gu|y as Person
+            let hover = program.getHover('source/main.bs', util.createPosition(7, 60))[0];
+            expect(hover?.range).to.eql(util.createRange(7, 59, 7, 62));
+            expect(hover?.contents).to.eql([`${fence('guy as Person')}${commentSep}this is a class comment\nit is more than one line`]);
+            // guy as Pe|rson
+            hover = program.getHover('source/main.bs', util.createPosition(7, 69))[0];
+            expect(hover?.contents).to.eql([`${fence('class Person')}${commentSep}this is a class comment\nit is more than one line`]);
+        });
+
+        it('finds types from assignments defined in different file', () => {
+            program.setFile(`source/main.bs`, `
+                sub main()
+                    thing = new MyKlass()
+                    useKlass(thing)
+                    someVal = getValue()
+                    print someVal
+                end sub
+
+                sub useKlass(thing as MyKlass)
+                    print thing
+                end sub
+            `);
+            program.setFile(`source/MyKlass.bs`, `
+                class MyKlass
+                end class
+            `);
+
+            program.setFile(`source/util.bs`, `
+                function getValue() as string
+                    return "hello"
+                end function
+            `);
+            program.validate();
+            //th|ing = new MyKlass()
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 20, 2, 25));
+            expect(hover?.contents).to.eql([fence('thing as MyKlass')]);
+            //print some|Val
+            hover = program.getHover('source/main.bs', util.createPosition(5, 31))[0];
+            expect(hover?.range).to.eql(util.createRange(5, 26, 5, 33));
+            expect(hover?.contents).to.eql([fence('someVal as string')]);
+        });
+
+        it('hovers of functions include comments', () => {
+            program.setFile(`source/main.bs`, `
+                sub main()
+                    thing = new MyKlass()
+                    useKlass(thing)
+                end sub
+
+                ' Prints a MyKlass.name
+                sub useKlass(thing as MyKlass)
+                    print thing.getName()
+                end sub
+
+                ' A sample class
+                class MyKlass
+                    name as string
+
+                    ' Gets the name of this thing
+                    function getName() as string
+                        return m.name
+                    end function
+
+                    ' Wraps another function
+                    function getNameWrap() as string
+                        return m.getName()
+                    end function
+                end class
+            `);
+            program.validate();
+            let commentSep = `\n***\n`;
+            //th|ing = new MyKlass()
+            let hover = program.getHover('source/main.bs', util.createPosition(2, 24))[0];
+            expect(hover?.contents).to.eql([`${fence('thing as MyKlass')}`]);
+            //thing = new MyK|lass()
+            hover = program.getHover('source/main.bs', util.createPosition(2, 37))[0];
+            expect(hover?.contents).to.eql([`${fence('class MyKlass')}${commentSep}A sample class`]);
+            //use|Klass(thing)
+            hover = program.getHover('source/main.bs', util.createPosition(3, 24))[0];
+            expect(hover?.contents).to.eql([`${fence('sub useKlass(thing as MyKlass) as void')}${commentSep}Prints a MyKlass.name`]);
+            //print thing.getN|ame()
+            hover = program.getHover('source/main.bs', util.createPosition(8, 37))[0];
+            expect(hover?.contents).to.eql([`${fence('function MyKlass.getName() as string')}${commentSep}Gets the name of this thing`]);
+        });
+
+        it('finds globalCallables with documentation', () => {
+            let mainFile = program.setFile('source/main.brs', `
+                sub Main()
+                    print lcase("HELLO")
+                end sub
+            `);
+            program.validate();
+            //    print lc|ase("HELLO")
+            let hover = program.getHover(mainFile.srcPath, util.createPosition(2, 29))[0];
+            expect(hover.contents).to.eql([`${fence('function lcase(s as string) as string')}${commentSep}Converts the string to all lower case.`]);
+        });
+
+        it('finds functions as params', () => {
+            program.setFile('source/main.brs', `
+                function getStrLength(name as string) as integer
+                    return len(name)
+                end function
+
+                sub tryManyParams(someFunc as function)
+                    print someFunc(1, 2, "hello", "world")
+                end sub
+
+                sub test()
+                    tryManyParams(getStrLength)
+                end sub
+            `);
+            program.validate();
+            // print some|Func(1, 2, "hello", "world")
+            let hover = program.getHover('source/main.brs', util.createPosition(6, 31))[0];
+            expect(hover?.range).to.eql(util.createRange(6, 26, 6, 34));
+            expect(hover?.contents).to.eql([fence('someFunc as function')]);
+        });
+
+        it('keeps unresolved types as type names', () => {
+            const file = program.setFile('source/main.bs', `
+                sub doSomething(thing as UnknownType)
+                    print thing
+                end sub
+            `);
+            program.validate();
+            // print thi|ng
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 30))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 26, 2, 31));
+            expect(hover?.contents).eql([fence('thing as UnknownType')]);
+        });
+
+        it('says members on dynamic are dynamic', () => {
+            const file = program.setFile('source/main.bs', `
+                sub doSomething(thing)
+                    print thing.member
+                end sub
+            `);
+            program.validate();
+
+            // print thing.mem|ber
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 36))[0];
+            expect(hover?.range).to.eql(util.createRange(2, 32, 2, 38));
+            expect(hover?.contents).eql([fence('member as dynamic')]);
+        });
+
+        it('should recognize consistent type after function call in binary op', () => {
+            let file = program.setFile('source/main.bs', `
+                function arrayToString(items as object) as string
+                    description = "["
+                    for each item in items
+                        description += utils.toString(item) + ", "
+                    end for
+                    description += "]"
+                    return description
+                end function
+            `);
+            program.setFile('source/utils.bs', `
+                namespace utils
+                    function toString(thing as dynamic) as string
+                        return "hello"
+                    end function
+                end namespace
+            `);
+            program.validate();
+            // return myS|tring
+            let hover = program.getHover(file.srcPath, util.createPosition(7, 31))[0];
+            expect(hover?.contents).eql([fence('description as string')]);
+        });
+
+
+        it('should provide correct hover for LHS of assignment', () => {
+            let file = program.setFile('source/main.bs', `
+                function getFloat() as float
+                    return 123
+                end function
+
+                sub doStuff()
+                    myFloat = getFloat()
+                end sub
+            `);
+            program.validate();
+            //     myF|loat = getFloat()
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 24))[0];
+            expect(hover?.contents).eql([fence('myFloat as float')]);
+
+        });
+
+        it('should provide correct hover for members of classes', () => {
+            let file = program.setFile('source/main.bs', `
+                class SomeKlass
+                    name as string
+                    other as OtherKlass
+                    myLabel as roSGNodeLabel
+                end class
+
+                class OtherKlass
+                    size as integer
+                end class
+            `);
+            program.validate();
+            //     na|me as string
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 24))[0];
+            expect(hover?.contents).eql([fence('SomeKlass.name as string')]);
+            //    ot|her as OtherKlass
+            hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
+            expect(hover?.contents).eql([fence('SomeKlass.other as OtherKlass')]);
+            //     my|Label as RoSGNodeLabel
+            hover = program.getHover(file.srcPath, util.createPosition(4, 24))[0];
+            expect(hover?.contents).eql([fence('SomeKlass.myLabel as roSGNodeLabel')]);
+        });
+
+        it('should provide correct hover for members of interfaces', () => {
+            let file = program.setFile('source/main.bs', `
+                interface SomeIFace
+                    name as string
+                    other as OtherIFace
+                    myLabel as roSGNodeLabel
+                end interface
+
+                interface OtherIFace
+                    size as integer
+                end interface
+            `);
+            program.validate();
+            //     na|me as string
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 24))[0];
+            expect(hover?.contents).eql([fence('SomeIFace.name as string')]);
+            //    ot|her as OtherIFace
+            hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
+            expect(hover?.contents).eql([fence('SomeIFace.other as OtherIFace')]);
+            //     my|Label as RoSGNodeLabel
+            hover = program.getHover(file.srcPath, util.createPosition(4, 24))[0];
+            expect(hover?.contents).eql([fence('SomeIFace.myLabel as roSGNodeLabel')]);
+        });
+
+        it('should include leading trivia of member field hover', () => {
+            let file = program.setFile('source/main.bs', `
+                interface SomeIFace
+                    ' Some description
+                    name as string
+                    other as OtherIFace
+                    myLabel as roSGNodeLabel
+                end interface
+            `);
+            program.validate();
+
+            //     na|me as string
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 24))[0];
+            expect(hover?.contents).to.eql([`${fence('SomeIFace.name as string')}${commentSep}Some description`]);
+        });
+
+        it('should include leading trivia of enum member field hover', () => {
+            let file = program.setFile('source/main.bs', `
+                enum Direction
+                    ' Go Up
+                    up  = "up"
+                    down =  "down"
+                end enum
+            `);
+            program.validate();
+            //    u|p  = "up"
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 22))[0];
+            expect(hover?.contents).to.eql([`${fence('Direction.up as Direction')}${commentSep}Go Up`]);
+        });
+
+        it('should have correct hovers for loop-items of for-loops', () => {
+            let file = program.setFile('source/main.bs', `
+                sub test()
+                    for index = 0 to 10
+                        print index
+                    end for
+                end sub
+            `);
+            program.validate();
+            //    for in|dex = 0 to 10
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 27))[0];
+            expect(hover?.contents).to.eql([fence('index as integer')]);
+        });
+
+        it('should have correct hovers for loop-items of for-each-loops', () => {
+            let file = program.setFile('source/main.bs', `
+                sub test()
+                    numbers = [1,2,3]
+                    for each number in numbers
+                        print number
+                    end for
+                end sub
+            `);
+            program.validate();
+            //    for each number in num|bers
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 43))[0];
+            expect(hover?.contents).to.eql([fence('numbers as Array<integer>')]);
+            //    for each num|ber in numbers
+            hover = program.getHover(file.srcPath, util.createPosition(3, 33))[0];
+            expect(hover?.contents).to.eql([fence('number as integer')]);
+            //    for each number i|n numbers
+            hover = program.getHover(file.srcPath, util.createPosition(3, 38))[0];
+            expect(hover?.contents).to.be.undefined;
+        });
+
+        it('should have correct hovers for loop-items of for-each-loops', () => {
+            let file = program.setFile('source/main.bs', `
+                sub test(strArray)
+                    for each thing as string in strArray
+                        print thing
+                    end for
+                end sub
+            `);
+            program.validate();
+            //    for each thing as string in str|Array
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 52))[0];
+            expect(hover?.contents).to.eql([fence('strArray as dynamic')]);
+            //    print th|ing
+            hover = program.getHover(file.srcPath, util.createPosition(3, 33))[0];
+            expect(hover?.contents).to.eql([fence('thing as string')]);
+        });
+
+        it('should show unresolved members as invalid', () => {
+            const file = program.setFile('source/main.bs', `
+                    interface MyIFace
+                        name as string
+                    end interface
+
+                    sub doSomething(thing as MyIFace)
+                        print thing.member
+                    end sub
+                `);
+            program.validate();
+
+            // print thing.mem|ber
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 40))[0];
+            expect(hover?.contents).eql([fence('MyIFace.member as invalid')]);
+        });
+
+        it('has m as an AA in inline function', () => {
+            const file = program.setFile('source/main.bs', `
+                class Test
+                    sub method()
+                        stub = function()
+                            m.whatever = false
+                        end function
+                    end sub
+                end class
+            `);
+            program.validate();
+
+            // |m.whatever = false
+            let hover = program.getHover(file.srcPath, util.createPosition(4, 29))[0];
+            expect(hover?.contents).eql([fence('m as roAssociativeArray')]);
+            // m.what|ever = false
+            hover = program.getHover(file.srcPath, util.createPosition(4, 35))[0];
+            expect(hover?.contents).eql([fence('whatever as dynamic')]);
+        });
+
+        it('should include leading Trivia of inline interface members', () => {
+            const file = program.setFile('source/main.bs', `
+                ' @param input from doc comment
+                sub fooFunc(input as {
+                    ' description of name prop
+                    name as string
+                })
+                    print input.name
+                end sub
+            `);
+            program.validate();
+
+            // print input.na|me
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 35))[0];
+            expect(hover?.contents).to.eql([`${fence('{name as string}.name as string')}${commentSep}description of name prop`]);
+            // print in|put.name
+            hover = program.getHover(file.srcPath, util.createPosition(6, 29))[0];
+            expect(hover?.contents).to.eql([`${fence('input as {name as string}')}${commentSep}from doc comment`]);
+        });
+
+        it('should show the expansion of a type statement type', () => {
+            const file = program.setFile('source/main.bs', `
+                type MyType = {
+                    name as string
+                    age as integer
+                }
+
+                sub fooFunc(input as MyType)
+                    print input.name
+                end sub
+            `);
+            program.validate();
+
+            // print input.na|me
+            let hover = program.getHover(file.srcPath, util.createPosition(7, 35))[0];
+            expect(hover?.contents).to.eql([fence('MyType.name as string')]);
+            // print in|put.name
+            hover = program.getHover(file.srcPath, util.createPosition(7, 29))[0];
+            expect(hover?.contents).to.eql([fence('input as MyType')]);
+        });
+
+        it('should show type statement type when hovering on the type name in the parameter list', () => {
+            const file = program.setFile('source/main.bs', `
+                type MyType = {
+                    name as string
+                    age as integer
+                }
+
+                sub fooFunc(input as MyType)
+                    print input.name
+                end sub
+            `);
+            program.validate();
+
+            // sub fooFunc(input as MyT|ype)
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 41))[0];
+            expect(hover?.contents).to.eql([fence('type MyType')]);
+        });
+
+        it('should show a hover on a typed function type parameter', () => {
+            const file = program.setFile('source/main.bs', `
+                sub fooFunc(callback as function(name as string) as integer)
+                    callback("hello")
+                end sub
+            `);
+            program.validate();
+
+            // callback as func|tion(name as string) as integer
+            let hover = program.getHover(file.srcPath, util.createPosition(1, 45))[0];
+            expect(hover?.contents).to.eql([fence('function (name as string) as integer')]);
+            // call|back as function(name as string) as integer
+            hover = program.getHover(file.srcPath, util.createPosition(1, 33))[0];
+            expect(hover?.contents).to.eql([fence('function callback(name as string) as integer')]);
+        });
+
+        it('should show a proper hover on inline anon functions', () => {
+            const file = program.setFile('source/main.bs', `
+                sub fooFunc()
+                    callback = function(arg as string) as integer
+                        return arg.len()
+                    end function
+                    print callback("hello")
+                end sub
+            `);
+            program.validate();
+
+            // callback = fun|ction(arg as string) as integer
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 34))[0];
+            expect(hover?.contents).to.eql([fence('function (arg as string) as integer')]);
+            // print call|back("hello")
+            hover = program.getHover(file.srcPath, util.createPosition(5, 30))[0];
+            expect(hover?.contents).to.eql([fence('function callback(arg as string) as integer')]);
+        });
+
+        it('should show a proper hover on inline anon functions', () => {
+            const file = program.setFile('source/main.bs', `
+                sub useFunc(myFunc as function(num as integer) as string)
+                    print myFunc(123)
+                end sub
+
+                sub otherFunc()
+                    useFunc(function(a, b = invalid) as string
+                        print a
+                        print b
+                        return ""
+                    end function)
+                end sub
+            `);
+            program.validate();
+
+            //  useFunc(fun|ction(a, b = invalid) as string
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 34))[0];
+            expect(hover?.contents).to.eql([fence('function (a as dynamic, b? as dynamic) as string')]);
+        });
+    });
+
+    describe('callFunc', () => {
+
+        it('should get hovers on @callfunc invocations', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            const file = program.setFile('components/Widget.bs', `
+                sub foo()
+                    top = m.top as roSgNodeWidget
+                    print top@.someFunc("3.14")
+                end sub
+
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print top@.some|Func("3.14")
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 35))[0];
+            expect(hover?.contents).eql([fence('function roSGNodeWidget@.someFunc(input as string) as float')]);
+        });
+
+        it('should include documentation on @callfunc hovers', () => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                     <script uri="Widget.bs"/>
+                    <interface>
+                        <function name="someFunc" />
+                    </interface>
+                </component>
+            `);
+            const file = program.setFile('components/Widget.bs', `
+                sub foo()
+                    top = m.top as roSgNodeWidget
+                    print top@.someFunc("3.14")
+                end sub
+
+                ' Some Cool function
+                function someFunc(input as string) as float
+                    return input.toFloat()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print top@.some|Func("3.14")
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 35))[0];
+            expect(hover?.contents[0]).include('Some Cool function');
+        });
+
+    });
+
+    describe('multiple definition locations', () => {
+
+        it('gets hover on assignment node', () => {
+            const file = program.setFile('source/util.bs', `
+                sub test(obj as Data)
+                    myVar = obj.name ' setting type to string
+                end sub
+
+                interface Data
+                    name as string
+                end interface
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //  my|Var = obj.name
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 22))[0];
+            expect(hover?.contents).eql([fence(`myVar as string`)]);
+        });
+
+        it('shows correct type in all locations', () => {
+            const file = program.setFile('source/util.bs', `
+                sub test()
+                    myVar = "hello" ' setting type to string
+                    print 1; myVar
+                    myVar = "hello".len()  ' setting type to integer
+                    print 2; myVar
+                    myVar = sqr(33)  ' setting type to float
+                    print 3; myVar
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print 1; my|Var
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 31))[0];
+            expect(hover?.contents).eql([fence(`myVar as string`)]);
+
+            // my|Var = "hello".len()
+            hover = program.getHover(file.srcPath, util.createPosition(4, 23))[0];
+            expect(hover?.contents).eql([fence(`myVar as integer`)]);
+
+            // print 2; my|Var
+            hover = program.getHover(file.srcPath, util.createPosition(7, 31))[0];
+            expect(hover?.contents).eql([fence(`myVar as float`)]);
+        });
+
+        it('reusing same variable for multiple types', () => {
+            const file = program.setFile('source/util.bs', `
+                namespace stringUtil
+                    function pad(x as string or integer) as string
+                        return "0"+x.toStr()
+                    end function
+                end namespace
+
+                ' Formats a timestamp into a user friendly string.
+                ' @param {Integer} time - The unix time stamp to format.
+                ' @param {String} meridiemStyle - A style key to be wrapped around the meridiem for MultiStyleLabels.
+                ' @return {String} - The formatted time
+                function formatTime(time as integer, meridiemStyle = "" as string) as string
+                    dateObj = createObject("roDateTime")
+                    deviceInfo = createObject("roDeviceInfo")
+                    dateObj.fromSeconds(time)
+                    hour = dateObj.getHours()
+                    minutes = dateObj.getMinutes()
+
+                    ' Get the Meridiem value
+                    if hour > 11 then
+                        meridiem = "pm"
+                    else
+                        meridiem = "am"
+                    end if
+
+                    if meridiemStyle <> "" then
+                        meridiem = "<" + meridiemStyle + ">" + meridiem + "</" + meridiemStyle + ">"
+                    end if
+
+                    minutes = stringUtil.pad(minutes)
+
+                    if deviceInfo.getClockFormat() = "24h" then
+                        hour = stringUtil.pad(hour)
+                        ' "22:01" | "01:01"
+                        return substitute("{0}:{1}", hour as string, minutes as string)
+                    else
+                        hour = hour mod 12
+                        if hour = 0 then hour = 12
+                        ' "10:01 AM" | "1:01 AM"
+                        return substitute("{0}:{1} {2}", hour.toStr(), minutes as string, meridiem)
+                    end if
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // ho|ur = stringUtil.pad(hour)
+            let hover = program.getHover(file.srcPath, util.createPosition(32, 27))[0];
+            expect(hover?.contents).eql([fence(`hour as string`)]);
+
+            // ho|ur = hour mod 12
+            hover = program.getHover(file.srcPath, util.createPosition(36, 27))[0];
+            expect(hover?.contents).eql([fence(`hour as integer`)]);
+        });
+
+        it('reusing same variable for multiple types - multiple hovers', () => {
+            const file = program.setFile('source/util.bs', `
+                function foo(toggle as boolean) as string
+                    someVar = "hello"
+                    print someVar; 1
+                    if toggle
+                        print someVar; 2
+                        someVar = 1
+                        print someVar; 3
+                    else
+                        print someVar; 4
+                        someVar = 0
+                        print someVar; 5
+                    end if
+                    print someVar; 6
+                    return someVar.toStr()
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            // some|Var = "hello"
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 25))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+
+            // print some|Var; 1
+            hover = program.getHover(file.srcPath, util.createPosition(3, 31))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+            // print some|Var; 2
+            hover = program.getHover(file.srcPath, util.createPosition(5, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+            // some|Var = 1
+            hover = program.getHover(file.srcPath, util.createPosition(6, 29))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 3
+            hover = program.getHover(file.srcPath, util.createPosition(7, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 4
+            hover = program.getHover(file.srcPath, util.createPosition(9, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as string`)]);
+            // some|Var = 0
+            hover = program.getHover(file.srcPath, util.createPosition(10, 29))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 5
+            hover = program.getHover(file.srcPath, util.createPosition(11, 35))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // print some|Var; 6
+            hover = program.getHover(file.srcPath, util.createPosition(13, 31))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+            // return some|Var.toStr()
+            hover = program.getHover(file.srcPath, util.createPosition(14, 32))[0];
+            expect(hover?.contents).eql([fence(`someVar as integer`)]);
+        });
+
+    });
+
+    describe('doc type definitions', () => {
+
+        it('should show correct hover for params', () => {
+            const file = program.setFile('source/test.bs', `
+                namespace alpha
+                    '@param {DataType} data
+                    sub printName(data)
+                        print data.name
+                    end sub
+
+                    interface DataType
+                        name as string
+                    end interface
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // sub printName(da|ta)
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 37))[0];
+            expect(hover?.contents).eql([fence('data as alpha.DataType')]);
+        });
+
+
+        it('should include doc comment descriptions in hover for params', () => {
+            const file = program.setFile('source/test.bs', `
+                '@param {string} data A cool JSON string of data
+                sub printName(data)
+                    print data
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // sub printName(da|ta)
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 33))[0];
+            expect(hover?.contents).eql([`${fence('data as string')}${commentSep}A cool JSON string of data`]);
+        });
+
+        it('uses the function doc comment when hovering a function declaration with doc comment types', () => {
+            const file = program.setFile('source/test.bs', `
+                namespace gif
+                    ' Skips sub-blocks.
+                    ' @param {roByteArray} bytes the bytes
+                    ' @param {integer} index the start index
+                    ' @return {integer} the index past the terminator
+                    function skipSubBlocks(bytes, index)
+                        return index
+                    end function
+                end namespace
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // function skipSub|Blocks(bytes, index)
+            let hover = program.getHover(file.srcPath, util.createPosition(6, 37))[0];
+            expect(hover?.contents).eql([
+                fence('function gif.skipSubBlocks(bytes as roByteArray, index as integer) as integer') +
+                commentSep +
+                [
+                    'Skips sub-blocks.',
+                    '',
+                    '_@param_ {roByteArray} bytes the bytes',
+                    '',
+                    '_@param_ {integer} index the start index',
+                    '',
+                    '_@return_ {integer} the index past the terminator'
+                ].join('\n')
+            ]);
+        });
+
+        it('does not use a param description when hovering a function declaration', () => {
+            const file = program.setFile('source/test.bs', `
+                ' Prints the name.
+                ' @param name the name to print
+                sub printName(name as string)
+                    print name
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // sub printN|ame(name as string)
+            let hover = program.getHover(file.srcPath, util.createPosition(3, 26))[0];
+            expect(hover?.contents).eql([`${fence('sub printName(name as string) as void')}${commentSep}Prints the name.\n\n_@param_ name the name to print`]);
+        });
+
+        it('uses the doc comment types and description when hovering a method declaration', () => {
+            const file = program.setFile('source/test.bs', `
+                class Reader
+                    ' Skips sub-blocks.
+                    ' @param {roByteArray} bytes the bytes
+                    ' @return {integer} the index past the terminator
+                    function skipSubBlocks(bytes)
+                        return 0
+                    end function
+                end class
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // function skipSub|Blocks(bytes)
+            let hover = program.getHover(file.srcPath, util.createPosition(5, 37))[0];
+            expect(hover?.contents).eql([
+                fence('function Reader.skipSubBlocks(bytes as roByteArray) as integer') +
+                commentSep +
+                [
+                    'Skips sub-blocks.',
+                    '',
+                    '_@param_ {roByteArray} bytes the bytes',
+                    '',
+                    '_@return_ {integer} the index past the terminator'
+                ].join('\n')
+            ]);
+        });
+
+        it('does not apply an enclosing function doc comment to an anonymous function', () => {
+            const file = program.setFile('source/test.bs', `
+                ' @param {roByteArray} bytes the bytes
+                ' @return {integer} the result
+                function outer(bytes)
+                    inner = function(bytes)
+                        return bytes
+                    end function
+                    print inner
+                    return 0
+                end function
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // print in|ner
+            let hover = program.getHover(file.srcPath, util.createPosition(7, 30))[0];
+            expect(hover?.contents).eql([fence('function inner(bytes as dynamic) as dynamic')]);
+        });
+
+        it('does not use a param type description when hovering an anonymous function', () => {
+            const file = program.setFile('source/test.bs', `
+                sub main()
+                    read = function(bytes as roByteArray) as integer
+                        return 0
+                    end function
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            // read = func|tion(bytes as roByteArray) as integer
+            let hover = program.getHover(file.srcPath, util.createPosition(2, 32))[0];
+            expect(hover?.contents).eql([fence('function (bytes as roByteArray) as integer')]);
+        });
+    });
+
+    describe('location boundaries', () => {
+        //NOTE: these tests intentionally only use public `Program` APIs (Position in, Range out) so they
+        //can be run against any implementation of token/node locations. All expected values are hand-counted.
+
+        /**
+         * Join lines with the given line ending. No trailing newline is added
+         */
+        function lines(eol: string, ...items: string[]) {
+            return items.join(eol);
+        }
+
+        function hoverAt(srcPath: string, line: number, character: number) {
+            return program.getHover(srcPath, util.createPosition(line, character));
+        }
+
+        it('finds the identifier at its first character, middle, and immediately after its last character', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    alpha = 1',
+                '    print alpha',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [{
+                range: util.createRange(2, 10, 2, 15),
+                contents: [fence('alpha as integer')]
+            }];
+            //print |alpha
+            expect(hoverAt(file.srcPath, 2, 10)).to.eql(expected);
+            //print al|pha
+            expect(hoverAt(file.srcPath, 2, 12)).to.eql(expected);
+            //print alpha|  (the end of a range is inclusive)
+            expect(hoverAt(file.srcPath, 2, 15)).to.eql(expected);
+
+            //alpha| = 1  (immediately after the declaration, which is followed by whitespace)
+            expect(hoverAt(file.srcPath, 1, 9)).to.eql([{
+                range: util.createRange(1, 4, 1, 9),
+                contents: [fence('alpha as integer')]
+            }]);
+
+            //print| alpha  (immediately after `print`, which is not hoverable)
+            expect(hoverAt(file.srcPath, 2, 9)).to.eql([]);
+            //pri|nt
+            expect(hoverAt(file.srcPath, 2, 6)).to.eql([]);
+            //leading whitespace
+            expect(hoverAt(file.srcPath, 2, 2)).to.eql([]);
+        });
+
+        it('finds identifiers at column 0 of a line and at the end of a line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                'beta = 1',
+                'print beta',
+                'end sub'
+            ));
+            program.validate();
+            //|beta = 1
+            expect(hoverAt(file.srcPath, 1, 0)).to.eql([{
+                range: util.createRange(1, 0, 1, 4),
+                contents: [fence('beta as integer')]
+            }]);
+            //print beta|
+            expect(hoverAt(file.srcPath, 2, 10)).to.eql([{
+                range: util.createRange(2, 6, 2, 10),
+                contents: [fence('beta as integer')]
+            }]);
+            //|end sub
+            expect(hoverAt(file.srcPath, 3, 0)).to.eql([{
+                range: util.createRange(3, 0, 3, 7),
+                contents: [fence('sub main() as void')]
+            }]);
+        });
+
+        it('handles CRLF line endings', () => {
+            const file = program.setFile('source/main.brs', lines('\r\n',
+                'sub main()',
+                '    gamma = 1',
+                '    print gamma',
+                '    print gamma + 1',
+                'delta = gamma',
+                'end sub'
+            ));
+            program.validate();
+            const gammaLine3 = [{
+                range: util.createRange(3, 10, 3, 15),
+                contents: [fence('gamma as integer')]
+            }];
+            expect(hoverAt(file.srcPath, 3, 10)).to.eql(gammaLine3);
+            expect(hoverAt(file.srcPath, 3, 13)).to.eql(gammaLine3);
+            expect(hoverAt(file.srcPath, 3, 15)).to.eql(gammaLine3);
+
+            //end of the line, right before the `\r\n`
+            expect(hoverAt(file.srcPath, 2, 15)).to.eql([{
+                range: util.createRange(2, 10, 2, 15),
+                contents: [fence('gamma as integer')]
+            }]);
+
+            //column 0 after a `\r\n`
+            expect(hoverAt(file.srcPath, 4, 0)).to.eql([{
+                range: util.createRange(4, 0, 4, 5),
+                contents: [fence('delta as integer')]
+            }]);
+            //last identifier on the line before the `\r\n`
+            expect(hoverAt(file.srcPath, 4, 13)).to.eql([{
+                range: util.createRange(4, 8, 4, 13),
+                contents: [fence('gamma as integer')]
+            }]);
+            expect(hoverAt(file.srcPath, 5, 0)).to.eql([{
+                range: util.createRange(5, 0, 5, 7),
+                contents: [fence('sub main() as void')]
+            }]);
+        });
+
+        it('uses utf-16 code units for characters after a surrogate pair emoji on the same line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    name = "x"',
+                '    print "😀😀" + name',
+                `    ' 😀 comment`,
+                '    print name',
+                'end sub'
+            ));
+            program.validate();
+            //each emoji is 2 utf-16 code units, so `name` starts at 19 (not 17)
+            const expected = [{
+                range: util.createRange(2, 19, 2, 23),
+                contents: [fence('name as string')]
+            }];
+            expect(hoverAt(file.srcPath, 2, 19)).to.eql(expected);
+            expect(hoverAt(file.srcPath, 2, 21)).to.eql(expected);
+            expect(hoverAt(file.srcPath, 2, 23)).to.eql(expected);
+
+            //the line after the emoji comment is unaffected
+            expect(hoverAt(file.srcPath, 4, 10)).to.eql([{
+                range: util.createRange(4, 10, 4, 14),
+                contents: [fence('name as string')]
+            }]);
+        });
+
+        it('counts lines through multi-line template strings', () => {
+            const file = program.setFile('source/main.bs', lines('\n',
+                'sub main()',
+                '    name = "bob"',
+                /* eslint-disable no-template-curly-in-string */
+                '    msg = `hello ${name}',
+                'line two ${name}',
+                'and ${name} three`',
+                /* eslint-enable no-template-curly-in-string */
+                '    print msg + name',
+                'end sub'
+            ));
+            program.validate();
+            //after the template string
+            const nameAfter = [{
+                range: util.createRange(5, 16, 5, 20),
+                contents: [fence('name as string')]
+            }];
+            expect(hoverAt(file.srcPath, 5, 16)).to.eql(nameAfter);
+            expect(hoverAt(file.srcPath, 5, 18)).to.eql(nameAfter);
+            expect(hoverAt(file.srcPath, 5, 20)).to.eql(nameAfter);
+
+            expect(hoverAt(file.srcPath, 5, 10)).to.eql([{
+                range: util.createRange(5, 10, 5, 13),
+                contents: [fence('msg as string')]
+            }]);
+
+            //the first character of an identifier directly after `${` is also the (inclusive) end of the `${`
+            //token, which is found first and is not hoverable
+            expect(hoverAt(file.srcPath, 2, 19)).to.eql([]);
+            expect(hoverAt(file.srcPath, 3, 11)).to.eql([]);
+            expect(hoverAt(file.srcPath, 4, 6)).to.eql([]);
+
+            //inside `${}` on the first line of the template string
+            expect(hoverAt(file.srcPath, 2, 20)).to.eql([{
+                range: util.createRange(2, 19, 2, 23),
+                contents: [fence('name as string')]
+            }]);
+            //inside `${}` on the second line of the template string
+            expect(hoverAt(file.srcPath, 3, 12)).to.eql([{
+                range: util.createRange(3, 11, 3, 15),
+                contents: [fence('name as string')]
+            }]);
+            expect(hoverAt(file.srcPath, 3, 15)).to.eql([{
+                range: util.createRange(3, 11, 3, 15),
+                contents: [fence('name as string')]
+            }]);
+            //inside `${}` on the third line of the template string
+            expect(hoverAt(file.srcPath, 4, 8)).to.eql([{
+                range: util.createRange(4, 6, 4, 10),
+                contents: [fence('name as string')]
+            }]);
+            expect(hoverAt(file.srcPath, 4, 10)).to.eql([{
+                range: util.createRange(4, 6, 4, 10),
+                contents: [fence('name as string')]
+            }]);
+        });
+
+        it('finds items on the last line of a file with no trailing newline', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                'end sub',
+                'sub last(): value = 1: print value: end sub'
+            ));
+            program.validate();
+            //sub |last()
+            expect(hoverAt(file.srcPath, 2, 4)).to.eql([{
+                range: util.createRange(2, 4, 2, 8),
+                contents: [fence('sub last() as void')]
+            }]);
+            //value| = 1
+            expect(hoverAt(file.srcPath, 2, 17)).to.eql([{
+                range: util.createRange(2, 12, 2, 17),
+                contents: [fence('value as integer')]
+            }]);
+            //print value|:
+            expect(hoverAt(file.srcPath, 2, 34)).to.eql([{
+                range: util.createRange(2, 29, 2, 34),
+                contents: [fence('value as integer')]
+            }]);
+            //end sub|<EOF>
+            expect(hoverAt(file.srcPath, 2, 43)).to.eql([{
+                range: util.createRange(2, 36, 2, 43),
+                contents: [fence('sub last() as void')]
+            }]);
+        });
+
+        it('finds symbols in namespaces, classes, and empty function bodies', () => {
+            const file = program.setFile('source/main.bs', lines('\n',
+                'namespace alpha.beta',
+                '    function noop()',
+                '    end function',
+                '    class Widget',
+                '        sub render()',
+                '        end sub',
+                '    end class',
+                'end namespace',
+                'sub main()',
+                '    alpha.beta.noop()',
+                '    w = new alpha.beta.Widget()',
+                '    w.render()',
+                'end sub'
+            ));
+            program.validate();
+            //function |noop()  (a function with an empty body)
+            const noopDeclaration = [{
+                range: util.createRange(1, 13, 1, 17),
+                contents: [fence('function alpha.beta.noop() as dynamic')]
+            }];
+            expect(hoverAt(file.srcPath, 1, 13)).to.eql(noopDeclaration);
+            expect(hoverAt(file.srcPath, 1, 15)).to.eql(noopDeclaration);
+            expect(hoverAt(file.srcPath, 1, 17)).to.eql(noopDeclaration);
+
+            //alpha.beta.|noop()  (the inclusive end of the `.` token wins, and `.` is not hoverable)
+            expect(hoverAt(file.srcPath, 9, 15)).to.eql([]);
+            //alpha.beta.n|oop()
+            expect(hoverAt(file.srcPath, 9, 16)).to.eql([{
+                range: util.createRange(9, 15, 9, 19),
+                contents: [fence('function alpha.beta.noop() as dynamic')]
+            }]);
+            //alpha.beta.noop|()
+            expect(hoverAt(file.srcPath, 9, 19)).to.eql([{
+                range: util.createRange(9, 15, 9, 19),
+                contents: [fence('function alpha.beta.noop() as dynamic')]
+            }]);
+
+            //sub |render()  (a method with an empty body)
+            expect(hoverAt(file.srcPath, 4, 12)).to.eql([{
+                range: util.createRange(4, 12, 4, 18),
+                contents: [fence('sub alpha.beta.Widget.render() as void')]
+            }]);
+
+            //w.render|()
+            expect(hoverAt(file.srcPath, 11, 12)).to.eql([{
+                range: util.createRange(11, 6, 11, 12),
+                contents: [fence('sub alpha.beta.Widget.render() as void')]
+            }]);
+
+            //new alpha.beta.Widget|()
+            expect(hoverAt(file.srcPath, 10, 29)[0]?.range).to.eql(util.createRange(10, 23, 10, 29));
+            //class |Widget
+            expect(hoverAt(file.srcPath, 3, 10)[0]?.range).to.eql(util.createRange(3, 10, 3, 16));
         });
 
         it('does not resolve a namespaced const to itself when its initializer references an outer symbol with the same name', () => {
@@ -232,7 +1632,7 @@ describe('HoverProcessor', () => {
             //hover over the right-hand `chain`, which is the global function
             const hover = program.getHover(file.srcPath, util.createPosition(4, 36))[0];
             expect(JSON.stringify(hover?.contents)).not.to.include('const promises.chain');
-            expect(hover?.contents).to.eql(fence('function chain() as dynamic'));
+            expect(hover?.contents).to.eql([fence('function chain() as dynamic')]);
         });
     });
 });

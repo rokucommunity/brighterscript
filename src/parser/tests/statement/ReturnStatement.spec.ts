@@ -1,3 +1,4 @@
+import { testLocatable } from '../../../testHelpers.spec';
 import { expect } from '../../../chai-config.spec';
 
 import { Parser } from '../../Parser';
@@ -5,10 +6,11 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import type { FunctionStatement } from '../../Statement';
 import { Range } from 'vscode-languageserver';
+import util from '../../../util';
 
 describe('parser return statements', () => {
     it('parses void returns', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -21,11 +23,11 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.ok;
+        expect(ast.statements).to.ok;
     });
 
     it('parses literal returns', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -39,11 +41,11 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.ok;
+        expect(ast.statements).to.be.ok;
     });
 
     it('parses expression returns', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -51,7 +53,7 @@ describe('parser return statements', () => {
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.Return, 'return'),
             identifier('RebootSystem'),
-            { kind: TokenKind.LeftParen, text: '(', range: null as any },
+            token(TokenKind.LeftParen, '('),
             token(TokenKind.RightParen, ')'),
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
@@ -59,7 +61,7 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements).to.be.ok;
+        expect(ast.statements).to.be.ok;
     });
 
     it('location tracking', () => {
@@ -71,7 +73,7 @@ describe('parser return statements', () => {
          * 1|   return 5
          * 2| end function
          */
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Function, 'function'),
             identifier('foo'),
             token(TokenKind.LeftParen, '('),
@@ -81,13 +83,15 @@ describe('parser return statements', () => {
                 kind: TokenKind.Return,
                 text: 'return',
                 isReserved: true,
-                range: Range.create(1, 2, 1, 8)
+                ...testLocatable(1, 2, 1, 8),
+                leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 isReserved: false,
-                range: Range.create(1, 9, 1, 10)
+                ...testLocatable(1, 9, 1, 10),
+                leadingTrivia: []
             },
             token(TokenKind.Newline, '\\n'),
             token(TokenKind.EndFunction, 'end function'),
@@ -95,7 +99,7 @@ describe('parser return statements', () => {
         ]);
 
         expect(diagnostics).to.be.lengthOf(0);
-        expect((statements[0] as FunctionStatement).func.body.statements[0]?.range).to.exist.and.to.deep.include(
+        expect(util.getLocation((ast.statements[0] as FunctionStatement).func.body.statements[0])?.range).to.exist.and.to.deep.include(
             Range.create(1, 2, 1, 10)
         );
     });

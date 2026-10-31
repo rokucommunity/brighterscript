@@ -1,0 +1,824 @@
+import type { GetTypeOptions, TypeChainEntry, TypeCircularReferenceInfo, TypeCompatibilityData } from '../interfaces';
+import type { GetSymbolTypeOptions, SymbolTableProvider, SymbolTypeGetter, SymbolTypeGetterProvider } from '../SymbolTable';
+import { SymbolTable } from '../SymbolTable';
+import type { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { isAnyReferenceType, isArrayDefaultTypeReferenceType, isBinaryOperatorReferenceType, isComponentType, isDynamicType, isParamTypeFromValueReferenceType, isReferenceType, isTypePropertyReferenceType } from '../astUtils/reflection';
+import { BscType } from './BscType';
+import { DynamicType } from './DynamicType';
+import { BscTypeKind } from './BscTypeKind';
+import type { Token } from '../lexer/Token';
+import { util } from '../util';
+
+export type AnyReferenceType = ReferenceType | TypePropertyReferenceType | BinaryOperatorReferenceType | ArrayDefaultTypeReferenceType;
+
+export function referenceTypeFactory(memberKey: string, fullName: string, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) {
+    return new ReferenceType(memberKey, fullName, flags, tableProvider);
+}
+
+export class ReferenceType extends BscType {
+
+
+    /**
+     * ReferenceTypes are used when the actual type may be resolved later from a Symbol table
+     * @param memberKey which key do we use to look up this type in the given table?
+     * @param fullName the full/display name for this type
+     * @param flags is this type available at typetime, runtime, etc.
+     * @param tableProvider function that returns a SymbolTable that we use for the lookup.
+     */
+    constructor(public memberKey: string, public fullName: string, public flags: SymbolTypeFlag, public tableProvider: SymbolTypeGetterProvider) {
+        super(memberKey);
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, ReferenceType.proxyHandler);
+    }
+
+    /**
+     * Shared by every ReferenceType. It only ever uses `target` (the real instance behind the proxy), so one
+     * handler can serve all of them instead of allocating a new handler and closures per instance
+     */
+    private static proxyHandler: ProxyHandler<ReferenceType> = {
+        get: (target, propName, receiver) => {
+
+            if (propName === '__reflection') {
+                // Cheeky way to get `isReferenceType` reflection to work
+                return target.__reflection;
+            }
+            if (propName === '__identifier') {
+                // Cheeky way to get `isReferenceType` reflection to work
+                return target.__identifier;
+            }
+            if (propName === 'fullName') {
+                return target.fullName;
+            }
+            if (propName === 'isResolvable') {
+                return () => {
+                    let resultSoFar = target.resolve();
+                    while (resultSoFar && isReferenceType(resultSoFar)) {
+                        resultSoFar = (resultSoFar as any).getTarget?.();
+                    }
+                    return !!resultSoFar;
+                };
+            }
+            if (propName === 'getCircularReferenceInfo') {
+                return (stopAtTypes: ReferenceType[] = []) => {
+                    return target.getCircularReferenceInfo(stopAtTypes);
+                };
+            }
+            if (propName === 'getTarget') {
+                return () => {
+                    return target.resolve();
+                };
+            }
+            if (propName === 'tableProvider') {
+                return target.tableProvider;
+            }
+            if (propName === 'isEqual') {
+                //Need to be able to check equality without resolution, because resolution need to check equality
+                //To see if you need to make a UnionType
+                return (targetType: BscType, data?: TypeCompatibilityData) => {
+                    if (!targetType) {
+                        return false;
+                    }
+                    const resolvedType = target.resolve();
+                    let equal = false;
+                    if (resolvedType && !isReferenceType(resolvedType)) {
+                        equal = resolvedType.isEqual(targetType, data);
+                    } else if (isReferenceType(targetType)) {
+                        equal = target.fullName.toLowerCase() === targetType.fullName.toLowerCase() &&
+                            (target.tableProvider === targetType.tableProvider ||
+                                target.tableProvider().name === targetType.tableProvider().name);
+                    } else {
+                        equal = targetType.isEqual(target, data);
+                    }
+                    return equal;
+                };
+            }
+            if (propName === 'isTypeCompatible') {
+                //Need to be able to check equality without resolution, because resolution need to check equality
+                //To see if you need to make a UnionType
+                return (targetType: BscType, data?: TypeCompatibilityData) => {
+                    if (!targetType) {
+                        return false;
+                    }
+                    if (isDynamicType(targetType)) {
+                        return true;
+                    }
+                    const resolvedType = target.resolve();
+                    if (resolvedType && !isReferenceType(resolvedType)) {
+                        return resolvedType.isTypeCompatible(targetType, data);
+                    } else if (isReferenceType(targetType)) {
+                        if (target.fullName.toLowerCase() !== targetType.fullName.toLowerCase()) {
+                            // different named references -- definitely not a match
+                            return false;
+                        }
+                        if (target.tableProvider === targetType.tableProvider) {
+                            // exact same reference source -- trivially compatible
+                            return true;
+                        }
+                        //Same name, but resolved via a different scope's symbol table -- e.g. the same
+                        //.bs `interface` imported into two different component scopes. tableProvider
+                        //identity can't tell these apart (each scope builds its own closure), and we
+                        //can't resolve `target` to compare structurally either. A same-named reference is
+                        //our best signal here, so assume compatible rather than falsely rejecting it.
+                        return true;
+                    }
+                    return targetType.isTypeCompatible(target, data);
+                };
+            }
+
+            //There may be some need to specifically get members on ReferenceType in the future
+            // eg: if (Reflect.has(target, name)) {
+            //   return Reflect.get(target, propName, receiver);
+
+            let innerType = target.resolve();
+
+            if (!innerType) {
+                // No real BscType found - we may need to handle some specific cases
+
+                if (propName === 'getMemberType') {
+                    // We're looking for a member of a reference type
+                    // Since we don't know what type target is, yet, return ReferenceType
+                    return (memberName: string, options: GetTypeOptions) => {
+                        const resolvedType = target.resolve();
+                        if (resolvedType) {
+                            return resolvedType.getMemberType(memberName, options);
+                        }
+                        const refLookUp = `${memberName.toLowerCase()}-${options?.flags}`;
+                        let memberTypeReference = target.memberTypeReferences?.get(refLookUp);
+                        if (memberTypeReference) {
+                            return memberTypeReference;
+
+                        }
+                        memberTypeReference = new ReferenceType(memberName, target.makeMemberFullName(memberName), options.flags, target.futureMemberTableProvider);
+                        (target.memberTypeReferences ??= new Map()).set(refLookUp, memberTypeReference);
+                        return memberTypeReference;
+                    };
+                } else if (propName === 'getCallFuncType') {
+                    // We're looking for a callfunc member of a reference type
+                    // Since we don't know what type target is, yet, return ReferenceType
+                    return (memberName: string, options: GetTypeOptions) => {
+                        const resolvedType = target.resolve();
+                        if (isComponentType(resolvedType)) {
+                            return resolvedType.getCallFuncType(memberName, options);
+                        }
+                        const refLookUp = `${memberName.toLowerCase()}-${options.flags}-callfunc`;
+                        let callFuncMemberTypeReference = target.callFuncMemberTypeReferences?.get(refLookUp);
+                        if (callFuncMemberTypeReference) {
+                            return callFuncMemberTypeReference;
+
+                        }
+                        callFuncMemberTypeReference = new ReferenceType(memberName, target.makeMemberFullName(memberName), options.flags, target.futureCallFuncMemberTableProvider);
+                        (target.callFuncMemberTypeReferences ??= new Map()).set(refLookUp, callFuncMemberTypeReference);
+                        return callFuncMemberTypeReference;
+                    };
+                } else if (propName === 'toString') {
+                    // This type was never found
+                    // For diagnostics, we should return the expected name of of the type
+                    return () => target.fullName;
+                } else if (propName === 'toTypeString') {
+                    // For transpilation, we should 'dynamic'
+                    return () => 'dynamic';
+                } else if (propName === 'returnType') {
+                    let propRefType = target.propertyTypeReference?.get(propName);
+                    if (!propRefType) {
+                        propRefType = new TypePropertyReferenceType(target, propName);
+                        (target.propertyTypeReference ??= new Map()).set(propName, propRefType);
+                    }
+                    return propRefType;
+                } else if (propName === 'memberTable') {
+                    return target.memberTable;
+                } else if (propName === 'getMemberTable') {
+                    return () => {
+                        return target.memberTable;
+                    };
+                } else if (propName === 'callFuncTable') {
+                    return (target as any).callFuncMemberTable;
+                } else if (propName === 'getCallFuncTable') {
+                    return () => {
+                        return (target as any).callFuncMemberTable;
+                    };
+                } else if (propName === 'isTypeCompatible') {
+                    return (targetType: BscType) => {
+                        return isDynamicType(targetType);
+                    };
+                } else if (propName === 'isEqual') {
+                    return (targetType: BscType) => {
+                        if (isReferenceType(targetType)) {
+                            return target.fullName.toLowerCase() === targetType.toString().toLowerCase() &&
+                                target.tableProvider() === targetType.tableProvider();
+                        }
+                        return false;
+                    };
+                } else if (propName === 'addBuiltInInterfaces') {
+                    // target is an unknown type. There is no use in adding built in interfaces
+                    // return no-op function
+                    return () => { };
+                } else if (propName === 'hasAddedBuiltInInterfaces') {
+                    // target is an unknown type. There is no use in adding built in interfaces
+                    return true;
+                } else if (propName === 'isBuiltIn') {
+                    return false;
+                }
+            }
+
+            if (!innerType) {
+                innerType = DynamicType.instance;
+            }
+            const result = Reflect.get(innerType, propName, innerType);
+            return result;
+        },
+        set: (target, name, value, receiver) => {
+            //There may be some need to specifically set members on ReferenceType in the future
+            // eg: if (Reflect.has(target, name)) {
+            //   return Reflect.set(target, name, value, receiver);
+
+            let innerType = target.resolve();
+
+            // Look for circular references
+            if (!innerType || target.referenceChain?.has(innerType)) {
+                if (name === 'hasAddedBuiltInInterfaces') {
+                    // ignore target
+                    return true;
+                }
+                console.log(`Proxy set error`, name, value, innerType);
+                const error = new Error(`Reference Type Proxy set error: ${{ memberKey: target.memberKey, name: name, value: value }}`);
+                console.log(error.stack);
+                return false;
+            }
+            const result = Reflect.set(innerType, name, value, innerType);
+            target.referenceChain = undefined;
+            return result;
+        }
+    };
+
+    public readonly kind = BscTypeKind.ReferenceType;
+
+    getTarget() {
+        return this.resolve();
+    }
+
+    /**
+     * Resolves the type based on the original name and the table provider
+     */
+    private resolve(): BscType {
+        //the result (found or not) stays the same until a scope gets linked (new cache token) or any symbol table changes.
+        //Without this, every property access on the proxy does the full symbol table lookup again
+        const cacheToken = SymbolTable.cacheVerifier?.getToken();
+        if (this.hasCachedResolvedType &&
+            this.cachedResolvedTypeToken === cacheToken &&
+            this.cachedResolvedTypeMutationCount === SymbolTable.mutationCount
+        ) {
+            return this.cachedResolvedType;
+        }
+        const symbolTable = this.tableProvider();
+        const resolvedType = symbolTable ? this.resolveFromTable(symbolTable) : undefined;
+        //cache misses too (they get looked up over and over while walking a file), but not when there's no table to look in yet
+        if (cacheToken && symbolTable && !isAnyReferenceType(resolvedType)) {
+            this.hasCachedResolvedType = true;
+            this.cachedResolvedType = resolvedType;
+            this.cachedResolvedTypeToken = cacheToken;
+            //read after resolving, since resolving can itself add symbols (eg. built-in interfaces)
+            this.cachedResolvedTypeMutationCount = SymbolTable.mutationCount;
+        } else {
+            this.hasCachedResolvedType = false;
+            this.cachedResolvedType = undefined;
+        }
+        return resolvedType;
+    }
+
+    private hasCachedResolvedType = false;
+    private cachedResolvedType: BscType;
+    private cachedResolvedTypeToken: string;
+    private cachedResolvedTypeMutationCount: number;
+
+    private resolveFromTable(symbolTable: SymbolTypeGetter): BscType {
+        // Look for circular references
+        let resolvedType = symbolTable.getSymbolType(this.memberKey, { flags: this.flags, onlyCacheResolvedTypes: true });
+        if (!resolvedType) {
+            // could not find this member
+            return;
+        }
+
+        if (isAnyReferenceType(resolvedType)) {
+            // If this is a referenceType, keep digging down until we have a non reference Type.
+            while (resolvedType && isAnyReferenceType(resolvedType)) {
+                if (this.referenceChain?.has(resolvedType)) {
+                    // this is a circular reference
+                    this.circRefCount++;
+                }
+                if (this.circRefCount > 1) {
+                    //It is possible that we could properly resolve the case that one reference points to itself
+                    //see test: '[Scope][symbolTable lookups with enhanced typing][finds correct class field type with default value enums are used]
+                    return;
+                }
+                (this.referenceChain ??= new Set()).add(resolvedType);
+                resolvedType = (resolvedType as any)?.getTarget?.();
+            }
+            symbolTable.setCachedType(this.memberKey, { type: resolvedType }, { flags: this.flags });
+        }
+
+        if (resolvedType && !isAnyReferenceType(resolvedType)) {
+            this.circRefCount = 0;
+            this.referenceChain = undefined;
+        }
+        return resolvedType;
+    }
+
+    get __reflection() {
+        return { name: 'ReferenceType' };
+    }
+
+    makeMemberFullName(memberName: string) {
+        return this.fullName + '.' + memberName;
+    }
+
+    getCircularReferenceInfo(stopAtTypes: ReferenceType[] = []): TypeCircularReferenceInfo {
+        this.resolve();
+        const isCircRef = this.circRefCount > 1;
+
+        const referenceChainNames: string[] = [];
+        stopAtTypes.push(this);
+        if (isCircRef) {
+            referenceChainNames.push(this.fullName);
+            for (const chainItem of this.referenceChain ?? []) {
+                if (!isReferenceType(chainItem) || chainItem === this) {
+                    continue;
+                }
+                if (stopAtTypes.map(t => t.fullName).includes(chainItem.fullName)) {
+                    break;
+                }
+                const chainItemCircInfo = chainItem.getCircularReferenceInfo(stopAtTypes);
+                referenceChainNames.push(...chainItemCircInfo.referenceChainNames);
+            }
+        }
+
+        return { isCircularReference: isCircRef, referenceChainNames: referenceChainNames };
+    }
+
+    private circRefCount = 0;
+
+    //these are all lazy -- most ReferenceTypes resolve directly and never need any of them
+
+    private referenceChain: Set<BscType> | undefined;
+
+    private propertyTypeReference: Map<string, TypePropertyReferenceType> | undefined;
+
+    private memberTypeReferences: Map<string, ReferenceType> | undefined;
+    private callFuncMemberTypeReferences: Map<string, ReferenceType> | undefined;
+
+    /**
+     * Cached so every member reference created from this type shares the same provider (`tableProvider` is compared by identity)
+     */
+    private get futureMemberTableProvider() {
+        this._futureMemberTableProvider ??= this.createFutureMemberTableProvider();
+        return this._futureMemberTableProvider;
+    }
+    private _futureMemberTableProvider: SymbolTypeGetterProvider;
+
+    private get futureCallFuncMemberTableProvider() {
+        this._futureCallFuncMemberTableProvider ??= this.createFutureCallFuncMemberTableProvider();
+        return this._futureCallFuncMemberTableProvider;
+    }
+    private _futureCallFuncMemberTableProvider: SymbolTypeGetterProvider;
+
+    private createFutureMemberTableProvider(): SymbolTypeGetterProvider {
+        return () => ({
+            name: `FutureMemberTableProvider: '${this.__identifier}'`,
+            getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
+                const resolvedType = this.resolve();
+                if (resolvedType) {
+                    return resolvedType.getMemberType(innerName, innerOptions);
+                }
+            },
+            setCachedType: (innerName: string, innerResolvedTypeCacheEntry: TypeChainEntry, options: GetSymbolTypeOptions) => {
+                const resolvedType = this.resolve();
+                if (resolvedType) {
+                    resolvedType.memberTable.setCachedType(innerName, innerResolvedTypeCacheEntry, options);
+                }
+            },
+            addSibling: (symbolTable: SymbolTable) => {
+                const resolvedType = this.resolve();
+                if (resolvedType) {
+                    resolvedType.memberTable?.addSibling?.(symbolTable);
+                }
+            }
+        });
+    }
+
+    private createFutureCallFuncMemberTableProvider(): SymbolTypeGetterProvider {
+        return () => ({
+            name: `FutureCallFuncMemberTableProvider: '${this.__identifier}'`,
+            getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
+                const resolvedType = this.resolve();
+                if (isComponentType(resolvedType)) {
+                    return resolvedType.getCallFuncType(innerName, innerOptions);
+                }
+            },
+            setCachedType: (innerName: string, innerResolvedTypeCacheEntry: TypeChainEntry, options: GetSymbolTypeOptions) => {
+                const resolvedType = this.resolve();
+                if (isComponentType(resolvedType)) {
+                    resolvedType.getCallFuncTable().setCachedType(innerName, innerResolvedTypeCacheEntry, options);
+                }
+            },
+            addSibling: (symbolTable: SymbolTable) => {
+                const resolvedType = this.resolve();
+                if (isComponentType(resolvedType)) {
+                    resolvedType.getCallFuncTable()?.addSibling?.(symbolTable);
+                }
+            }
+        });
+    }
+}
+
+/**
+ * Use this class for when you need to reference a property of a BscType, and that property is also a BscType,
+ * Especially when the instance with the property may not have been instantiated/discovered yet
+ *
+ * For Example, FunctionType.returnType --- if the FunctionExpression has not been walked yet, it will be a ReferenceType
+ * if we just access .returnType on a ReferenceType that doesn't have access to an actual FunctionType yet, .returnType will be undefined
+ * So when we use this class, it maintains that reference to a potential ReferenceType, and this class will change from
+ * returning undefined to the ACTUAL .returnType when the ReferenceType can be resolved.
+ *
+ * This is really cool. It's like programming with time-travel.
+ */
+export class TypePropertyReferenceType extends BscType {
+    constructor(public outerType: BscType, public propertyName: string) {
+        super(propertyName);
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `isTypePropertyReferenceType` reflection to work
+                    return { name: 'TypePropertyReferenceType' };
+                }
+
+                if (propName === 'outerType') {
+                    return outerType;
+                }
+
+                if (propName === 'getTarget') {
+                    return () => {
+                        return this.getTarget();
+                    };
+                }
+
+                if (propName === 'isResolvable') {
+                    return () => {
+                        return !!(isAnyReferenceType(this.outerType) ? (this.outerType as any).getTarget() : this.outerType?.isResolvable());
+                    };
+                }
+
+                if (isAnyReferenceType(this.outerType) && !this.outerType.isResolvable()) {
+                    if (propName === 'getMemberType') {
+                        //If we're calling `getMemberType()`, we need it to proxy to using the actual symbol table
+                        //So if that symbol is ever populated, the correct type is passed through
+                        return (memberName: string, options: GetSymbolTypeOptions) => {
+                            const fullMemberName = this.outerType.toString() + '.' + memberName;
+                            return new ReferenceType(memberName, fullMemberName, options.flags, () => {
+                                return {
+                                    name: `TypePropertyReferenceType : '${fullMemberName}'`,
+                                    getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
+                                        return this.outerType?.[this.propertyName]?.getMemberType(innerName, innerOptions);
+                                    },
+                                    setCachedType: (innerName: string, innerTypeCacheEntry: TypeChainEntry, innerOptions: GetTypeOptions) => {
+                                        return this.outerType?.[this.propertyName]?.memberTable.setCachedType(innerName, innerTypeCacheEntry, innerOptions);
+                                    },
+                                    addSibling: (symbolTable: SymbolTable) => {
+                                        return this.outerType?.[this.propertyName]?.memberTable?.addSibling?.(symbolTable);
+                                    }
+                                };
+                            });
+                        };
+                    }
+                    if (propName === 'isResolvable') {
+                        return () => false;
+                    }
+                }
+                let inner = this.getTarget();
+
+                if (!inner) {
+                    inner = DynamicType.instance;
+                }
+
+                if (inner) {
+                    const result = Reflect.get(inner, propName, inner);
+                    return result;
+                }
+            },
+            set: (target, name, value, receiver) => {
+                //There may be some need to specifically set members on ReferenceType in the future
+                // eg: if (Reflect.has(target, name)) {
+                //   return Reflect.set(target, name, value, receiver);
+
+                let inner = this.outerType[this.propertyName] as object;
+
+                if (inner) {
+                    const result = Reflect.set(inner, name, value, inner);
+                    return result;
+                }
+            }
+        });
+    }
+
+    getTarget(): BscType {
+        let actualOuterType = this.outerType;
+        if (isAnyReferenceType(this.outerType)) {
+            if ((this.outerType as ReferenceType).isResolvable()) {
+                actualOuterType = (this.outerType as ReferenceType)?.getTarget();
+            }
+        }
+        return actualOuterType?.[this.propertyName];
+    }
+
+    tableProvider: SymbolTableProvider;
+}
+
+/**
+ * Use this class for when there is a binary operator and either the left hand side and/or the right hand side
+ * are ReferenceTypes
+ */
+export class BinaryOperatorReferenceType extends BscType {
+    cachedType: BscType;
+
+    constructor(public leftType: BscType, public operator: Token, public rightType: BscType, binaryOpResolver: (lType: BscType, operator: Token, rType: BscType) => BscType) {
+        super(operator.text);
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `BinaryOperatorReferenceType` reflection to work
+                    return { name: 'BinaryOperatorReferenceType' };
+                }
+
+                if (propName === 'leftType') {
+                    return leftType;
+                }
+
+                if (propName === 'rightType') {
+                    return rightType;
+                }
+
+                let resultType: BscType = this.cachedType ?? DynamicType.instance;
+                if (!this.cachedType) {
+                    if ((isAnyReferenceType(this.leftType) && !this.leftType.isResolvable()) ||
+                        (isAnyReferenceType(this.rightType) && !this.rightType.isResolvable())
+                    ) {
+                        if (propName === 'isResolvable') {
+                            return () => false;
+                        }
+                        if (propName === 'getTarget') {
+                            return () => undefined;
+                        }
+                    } else {
+                        resultType = binaryOpResolver(this.leftType, this.operator, this.rightType) ?? DynamicType.instance;
+                        this.cachedType = resultType;
+                    }
+
+                }
+                if (resultType) {
+                    const result = Reflect.get(resultType, propName, resultType);
+                    return result;
+                }
+            }
+        });
+    }
+
+    getTarget: () => BscType;
+
+    tableProvider: SymbolTableProvider;
+}
+
+
+/**
+ * Use this class for when there is a presumable array type that is a referenceType
+ */
+export class ArrayDefaultTypeReferenceType extends BscType {
+    constructor(public objType: BscType) {
+        super('ArrayDefaultType');
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `ArrayDefaultTypeReferenceType` reflection to work
+                    return { name: 'ArrayDefaultTypeReferenceType' };
+                }
+
+                if (propName === 'objType') {
+                    return objType;
+                }
+
+                if (propName === 'getTarget') {
+                    return () => {
+                        if (isReferenceType(this.objType)) {
+                            (this.objType as any).getTarget();
+                        }
+                        return this.objType;
+                    };
+                }
+
+                let resultType: BscType = DynamicType.instance;
+                if ((isAnyReferenceType(this.objType) && !this.objType.isResolvable())
+                ) {
+                    if (propName === 'isResolvable') {
+                        return () => false;
+                    }
+                    if (propName === 'getTarget') {
+                        return () => undefined;
+                    }
+                } else {
+                    resultType = util.getIteratorDefaultType(this.objType);
+                }
+
+                if (resultType) {
+                    const result = Reflect.get(resultType, propName, resultType);
+                    return result;
+                }
+            }
+        });
+    }
+
+    getTarget: () => BscType;
+
+    tableProvider: SymbolTableProvider;
+}
+
+/**
+ * Used for when a Param's initial value is unresolved
+ * Generally, this will be resolved later *except* for Enum
+ * Enum Types will have an initial value of an EnumMemberType, but the param
+ * should be an EnumType
+ */
+export class ParamTypeFromValueReferenceType extends BscType {
+    cachedType: BscType;
+
+    constructor(public objType: BscType) {
+        super('ParamInitialValueType');
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+                if (propName === '__reflection') {
+                    // Cheeky way to get reflection to work
+                    return { name: 'ParamTypeFromValueReferenceType' };
+                }
+
+                if (propName === 'objType') {
+                    return objType;
+                }
+
+                if (propName === 'getTarget') {
+                    return () => {
+                        if (this.cachedType) {
+                            return this.cachedType;
+                        }
+                        if (isReferenceType(this.objType)) {
+                            (this.objType as any).getTarget();
+                        }
+                        return this.objType;
+                    };
+                }
+
+                let resultType: BscType = this.cachedType ?? DynamicType.instance;
+                if (!this.cachedType) {
+                    if ((isAnyReferenceType(this.objType) && !this.objType.isResolvable())
+                    ) {
+                        if (propName === 'isResolvable') {
+                            return () => false;
+                        }
+                        if (propName === 'getTarget') {
+                            return () => undefined;
+                        }
+                    } else {
+                        resultType = util.getDefaultTypeFromValueType(this.objType);
+                        //if the default-type lookup just hands back another wrapper of the same
+                        //objType (e.g. an unresolvable IntersectionType keeps re-wrapping), the
+                        //proxy chain would loop forever via Reflect.get. Bail to DynamicType.
+                        if (isParamTypeFromValueReferenceType(resultType) && (resultType as ParamTypeFromValueReferenceType).objType === this.objType) {
+                            resultType = DynamicType.instance;
+                        }
+                        this.cachedType = resultType;
+                    }
+
+                }
+                if (resultType) {
+                    const result = Reflect.get(resultType, propName, resultType);
+                    return result;
+                }
+            }
+        });
+    }
+}
+
+/**
+ * Used when an IntersectionType has at least one member that may have default dynamic members.
+ * If the inner type is not resolvable, this type will resolve to the given type instead.
+ * @example
+ * ```brighterscript
+ *   interface HasAge
+ *       age as integer
+ *   end interface
+ *
+ *   type foo = HasAge and roAssociativeArray
+ *
+ *   sub useFoo(f as foo)
+ *       print f.age ' f.age is an integer
+ *       print f.doesExist("key") ' will result in a boolean, from roAssociativeArray
+ *       print f.someKey ' no idea - so this is dynamic, and will not cause a validation error
+ *   end sub
+ * ```
+ */
+export class ReferenceTypeWithDefault extends BscType {
+    constructor(public baseType: BscType, public defaultType: BscType) {
+        super('ReferenceTypeWithDefault');
+        // eslint-disable-next-line no-constructor-return
+        return new Proxy(this, {
+            get: (target, propName, receiver) => {
+
+                if (propName === '__reflection') {
+                    // Cheeky way to get `isReferenceTypeWithDefault` reflection to work
+                    return { name: 'ReferenceTypeWithDefault' };
+                }
+
+                if (propName === 'isResolvable') {
+                    return () => {
+                        return true;
+                    };
+                }
+                let innerType = this.getTarget();
+
+                if (!innerType) {
+                    innerType = this.defaultType;
+                }
+
+                if (innerType) {
+                    const result = Reflect.get(innerType, propName, innerType);
+                    return result;
+                }
+            }
+        });
+    }
+
+    getTarget(): BscType {
+        if (isAnyReferenceType(this.baseType)) {
+            if (this.baseType.isResolvable()) {
+                return (this.baseType as any)?.getTarget();
+            }
+        }
+        return this.baseType;
+    }
+
+    tableProvider: SymbolTableProvider;
+}
+
+
+/**
+ * Gives an array of all the symbol names that need to be resolved to make the given reference type be resolved
+ */
+export function getAllRequiredSymbolNames(refType: BscType, namespaceLower?: string): Array<{ name: string; namespacedName?: string }> {
+    if (refType.isResolvable()) {
+        return [];
+    }
+    if (isReferenceType(refType)) {
+        return [{ name: refType.fullName, namespacedName: namespaceLower ? `${namespaceLower}.${refType.fullName}` : null }];
+    }
+    if (isTypePropertyReferenceType(refType)) {
+        const outer = refType.outerType;
+        if (isAnyReferenceType(outer)) {
+            return getAllRequiredSymbolNames(outer);
+        } else {
+            return [];
+        }
+
+    }
+    if (isArrayDefaultTypeReferenceType(refType)) {
+        const objType = refType.objType;
+        if (isAnyReferenceType(objType)) {
+            return getAllRequiredSymbolNames(objType);
+        } else {
+            return [];
+        }
+    }
+    if (isBinaryOperatorReferenceType(refType)) {
+        const left = refType.leftType;
+        const right = refType.rightType;
+        const result = [];
+        if (isAnyReferenceType(left)) {
+            result.push(...getAllRequiredSymbolNames(left, namespaceLower));
+        }
+        if (isAnyReferenceType(right)) {
+            result.push(...getAllRequiredSymbolNames(right, namespaceLower));
+
+        }
+        return result;
+    }
+    if (isParamTypeFromValueReferenceType(refType)) {
+        const objType = refType.objType;
+        if (isAnyReferenceType(objType)) {
+            return getAllRequiredSymbolNames(objType);
+        } else {
+            return [];
+        }
+    }
+    return [];
+}

@@ -198,6 +198,15 @@ module.exports = {
     },
     //disable some rules for certain files
     overrides: [{
+        //the reflection type guards intentionally accept `any`: their entire purpose is to take an
+        //arbitrary value and determine what it is. Narrowing their parameters would defeat that, so
+        //passing those `any` values along to the checks that validate them is expected here.
+        files: ['src/astUtils/reflection.ts'],
+        rules: {
+            '@typescript-eslint/no-unsafe-argument': 'off'
+        }
+    },
+    {
         //these files are getting deleted soon, so ingore the eslint warnings for now
         files: ['src/brsTypes/**/*.ts'],
         rules: {

@@ -7,7 +7,7 @@ import { EOF, token } from '../Parser.spec';
 
 describe('stop statement', () => {
     it('cannot be used as a local variable', () => {
-        let { statements, diagnostics } = Parser.parse([
+        let { ast, diagnostics } = Parser.parse([
             token(TokenKind.Stop, 'stop'),
             token(TokenKind.Equal, '='),
             token(TokenKind.True, 'true'),
@@ -16,8 +16,8 @@ describe('stop statement', () => {
 
         //should be an error
         expect(diagnostics).to.be.length.greaterThan(0);
-        expect(statements).to.exist;
-        expect(statements).not.to.be.null;
+        expect(ast.statements).to.exist;
+        expect(ast.statements).not.to.be.null;
     });
 
     it('is valid as a statement', () => {

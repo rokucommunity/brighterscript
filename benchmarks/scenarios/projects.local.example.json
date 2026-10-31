@@ -1,0 +1,15 @@
+[
+    {
+        "name": "my-private-app",
+        "description": "Copy this file to projects.local.json (gitignored) to add projects that can't be shared",
+        "path": "/path/to/my-private-app",
+        "bsconfig": "bsconfig.json",
+        "config": {
+            "plugins": []
+        },
+        "editFiles": {
+            "shared": "source/utils/common.brs",
+            "leaf": "components/MyScreen/MyScreen.bs"
+        }
+    }
+]

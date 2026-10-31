@@ -1,33 +1,35 @@
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig, getTranspiler } from '../helpers';
 
 module.exports = async (options: TargetOptions) => {
-    const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
-    const { ProgramBuilder } = brighterscript;
+    const { suite, fullName, brighterscript, suiteOptions } = options;
+    const { isBrsFile, isXmlFile } = brighterscript;
 
-    const builder = new ProgramBuilder();
+    const builder = createBuilder(options);
     //run the first run outside of the test
-    await builder.run({
-        cwd: projectPath,
-        createPackage: false,
-        copyToStaging: false,
-        //disable diagnostic reporting (they still get collected)
-        diagnosticFilters: ['**/*'],
-        logLevel: 'error'
-    });
-    if (Object.keys(builder.program.files).length === 0) {
+    await builder.run(getConfig(options));
+    if (Object.keys(builder.program!.files).length === 0) {
         throw new Error('No files found in program');
     }
 
-    const files = Object.values(builder.program.files);
+    const transpiler = getTranspiler(builder);
+    const files = Object.values(builder.program!.files).filter((x: any) => (isBrsFile(x) || isXmlFile(x)) && transpiler.canTranspile(x)) as any[];
+    if (files.length === 0) {
+        console.log('[transpile] No brs|bs|xml files found in program');
+        return;
+    }
 
     //force transpile for every file
     for (const file of files) {
         file.needsTranspiled = true;
     }
 
-    suite.add(fullName, () => {
-        for (const file of files) {
-            file.transpile();
-        }
-    }, suiteOptions);
+    suite.add(fullName, (deferred) => {
+        Promise.all(
+            files.map(file => transpiler.transpile(file))
+        ).finally(() => deferred.resolve());
+    }, {
+        ...suiteOptions,
+        'defer': true
+    });
 };

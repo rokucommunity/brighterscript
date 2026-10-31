@@ -7,7 +7,7 @@ import { EOF, identifier, token } from '../Parser.spec';
 describe('parser', () => {
     describe('exponential expressions', () => {
         it('parses exponential operators', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '2'),
@@ -17,11 +17,11 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
 
         it('parses repeated exponential operators as left-associative', () => {
-            let { statements, diagnostics } = Parser.parse([
+            let { ast, diagnostics } = Parser.parse([
                 identifier('_'),
                 token(TokenKind.Equal, '='),
                 token(TokenKind.IntegerLiteral, '2'),
@@ -33,7 +33,7 @@ describe('parser', () => {
             ]);
 
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements).to.be.length.greaterThan(0);
+            expect(ast.statements).to.be.length.greaterThan(0);
         });
     });
 });

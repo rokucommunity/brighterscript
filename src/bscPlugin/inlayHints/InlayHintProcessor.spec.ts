@@ -21,7 +21,7 @@ describe('InlayHintProcessor', () => {
         program.validate();
         const lines = code.split('\n');
         const range = util.createRange(0, 0, lines.length, 0);
-        return program.getInlayHints(file.pathAbsolute, range);
+        return program.getInlayHints(file.srcPath, range);
     }
 
     it('returns empty array when no calls exist', () => {
@@ -85,7 +85,7 @@ describe('InlayHintProcessor', () => {
         program.validate();
         //range only covers line 1 (the first call)
         const range = util.createRange(1, 0, 1, 100);
-        const hints = program.getInlayHints(file.pathAbsolute, range);
+        const hints = program.getInlayHints(file.srcPath, range);
         expect(hints.map(h => h.label)).to.eql(['name:', 'age:']);
         expect(hints.every(h => h.position.line === 1)).to.be.true;
     });
