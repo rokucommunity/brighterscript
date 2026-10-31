@@ -4003,9 +4003,11 @@ describe('Program', () => {
             //the link count when each event for a.brs and b.brs fires
             const linkCounts = {} as Record<string, number>;
             const track = (eventName: string, file: BscFile) => {
-                if (['source/a.brs', 'source/b.brs'].includes(file.pkgPath)) {
+                //pkgPath uses the OS path separator
+                const pkgPath = file.pkgPath.replace(/\\/g, '/');
+                if (['source/a.brs', 'source/b.brs'].includes(pkgPath)) {
                     expect(scope.isSymbolTableLinked).to.be.true;
-                    linkCounts[`${eventName} ${file.pkgPath}`] = linkSpy.callCount;
+                    linkCounts[`${eventName} ${pkgPath}`] = linkSpy.callCount;
                 }
             };
             program.plugins.add({
@@ -4015,6 +4017,12 @@ describe('Program', () => {
             });
             await program.build();
 
+            expect(Object.keys(linkCounts).sort()).to.eql([
+                'prepare source/a.brs',
+                'prepare source/b.brs',
+                'serialize source/a.brs',
+                'serialize source/b.brs'
+            ]);
             //a.brs and b.brs are consecutive, so the scope wasn't relinked between them
             expect(linkCounts['prepare source/b.brs']).to.eql(linkCounts['prepare source/a.brs']);
             expect(linkCounts['serialize source/b.brs']).to.eql(linkCounts['serialize source/a.brs']);
@@ -4030,7 +4038,7 @@ describe('Program', () => {
                 name: 'TestPlugin',
                 beforePrepareFile: (event) => {
                     if (event.scope) {
-                        linkedDuringEvents.push(`prepare ${event.file.pkgPath} ${event.scope.isSymbolTableLinked}`);
+                        linkedDuringEvents.push(`prepare ${event.file.pkgPath.replace(/\\/g, '/')} ${event.scope.isSymbolTableLinked}`);
                     }
                 },
                 prepareFile: (event) => {
@@ -4038,7 +4046,7 @@ describe('Program', () => {
                 },
                 beforeSerializeFile: (event) => {
                     if (event.scope?.name === 'source') {
-                        linkedDuringEvents.push(`serialize ${event.file.pkgPath} ${event.scope.isSymbolTableLinked}`);
+                        linkedDuringEvents.push(`serialize ${event.file.pkgPath.replace(/\\/g, '/')} ${event.scope.isSymbolTableLinked}`);
                     }
                 },
                 serializeFile: (event) => {
