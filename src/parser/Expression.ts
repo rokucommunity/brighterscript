@@ -29,7 +29,7 @@ import { AssociativeArrayType } from '../types/AssociativeArrayType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import type { TypePredicate } from '../types/TypedFunctionType';
 import { BooleanType } from '../types/BooleanType';
-import { getNarrowedType } from '../types/narrowing';
+import { getNarrowedType, registerTypePredicate } from '../types/narrowing';
 import { InvalidType } from '../types/InvalidType';
 import { UninitializedType } from '../types/UninitializedType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -3021,6 +3021,7 @@ export class TypePredicateExpression extends Expression {
         };
         this.typeExpression = options.typeExpression;
         util.setBounds(this, this.tokens.parameterName, this.tokens.is, this.typeExpression);
+        registerTypePredicate();
     }
 
     public readonly kind = AstNodeKind.TypePredicateExpression;

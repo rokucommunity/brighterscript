@@ -1,6 +1,6 @@
 import { isAnyReferenceType, isAssignmentStatement, isAugmentedAssignmentStatement, isBinaryExpression, isBlock, isCallExpression, isContinueStatement, isDottedGetExpression, isDottedSetStatement, isDynamicType, isEndStatement, isExitStatement, isForEachStatement, isForStatement, isFunctionExpression, isGotoStatement, isGroupingExpression, isCaseStatement, isIfStatement, isIncrementStatement, isIndexedGetExpression, isIndexedSetStatement, isLiteralBoolean, isLiteralInteger, isLiteralString, isSelectCaseStatement, isTernaryExpression, isInvalidType, isInvalidTypeLike, isObjectType, isReturnStatement, isThrowStatement, isTryCatchStatement, isTypedFunctionType, isUnaryExpression, isUnionType, isVariableExpression, isWhileStatement } from '../astUtils/reflection';
 import type { AstNode, Expression, Statement } from '../parser/AstNode';
-import type { FunctionExpression } from '../parser/Expression';
+import type { CallExpression, FunctionExpression } from '../parser/Expression';
 import type { Block, CaseStatement, IfStatement, SelectCaseStatement, WhileStatement } from '../parser/Statement';
 import type { GetTypeOptions } from '../interfaces';
 import { TokenKind } from '../lexer/TokenKind';
@@ -600,6 +600,19 @@ function narrowFrom(start: AstNode, path: string, type: BscType, options: GetTyp
 }
 
 /**
+ * Has any type predicate (i.e. `as x is Foo`) been parsed? Until one has, nothing can be narrowed,
+ * so projects that don't use type guards skip narrowing entirely
+ */
+let hasTypePredicates = false;
+
+/**
+ * Called whenever a type predicate is created, so narrowing knows it has something to do
+ */
+export function registerTypePredicate() {
+    hasTypePredicates = true;
+}
+
+/**
  * Get the type of a variable (or a dotted path on one, like `m.top.content`), narrowed by the conditions it is known to have passed:
  * the if statements it is inside of, earlier if statements in its block whose branches always exit,
  * and the left side of `and`/`or` expressions it is on the right side of
@@ -608,7 +621,7 @@ function narrowFrom(start: AstNode, path: string, type: BscType, options: GetTyp
  */
 export function getNarrowedType(node: Expression, type: BscType, options: GetTypeOptions): BscType {
     // eslint-disable-next-line no-bitwise
-    if (!type || !(options.flags & SymbolTypeFlag.runtime) || options.skipNarrowing) {
+    if (!hasTypePredicates || !type || !(options.flags & SymbolTypeFlag.runtime) || options.skipNarrowing) {
         return type;
     }
     const path = getReferencePath(node);
@@ -629,6 +642,28 @@ export function getNarrowedType(node: Expression, type: BscType, options: GetTyp
 const guardedPathsCache = new WeakMap<FunctionExpression, { cacheKey: string; paths: Set<string> }>();
 
 /**
+ * For each function, the calls with arguments in its conditions. This only depends on the AST, so unlike the guarded paths,
+ * it doesn't need to be found again for each scope
+ */
+const conditionCallsCache = new WeakMap<FunctionExpression, CallExpression[]>();
+
+function getConditionCalls(func: FunctionExpression) {
+    let calls = conditionCallsCache.get(func);
+    if (!calls) {
+        calls = [];
+        func.body?.walk(createVisitor({
+            CallExpression: (call) => {
+                if (call.args.length > 0 && isInConditionPosition(call)) {
+                    calls.push(call);
+                }
+            }
+        }), { walkMode: WalkMode.visitExpressions });
+        conditionCallsCache.set(func, calls);
+    }
+    return calls;
+}
+
+/**
  * Get the reference paths that are passed to type guards in the conditions in a function (not counting nested functions).
  * Only these paths can be narrowed in the function
  */
@@ -639,21 +674,16 @@ function getGuardedPaths(func: FunctionExpression) {
         return cached.paths;
     }
     const paths = new Set<string>();
-    func.body?.walk(createVisitor({
-        CallExpression: (call) => {
-            if (call.args.length === 0 || !isInConditionPosition(call)) {
-                return;
-            }
-            //the function itself is not narrowed. Narrowing it would mean looking at every condition in the function again
-            const calleeType = call.callee.getType({ flags: SymbolTypeFlag.runtime, skipNarrowing: true });
-            if (isTypedFunctionType(calleeType) && calleeType.typePredicate) {
-                const path = getReferencePath(call.args[calleeType.getTypePredicateParameterIndex()]);
-                if (path) {
-                    paths.add(path);
-                }
+    for (const call of getConditionCalls(func)) {
+        //the function itself is not narrowed. Narrowing it would mean looking at every condition in the function again
+        const calleeType = call.callee.getType({ flags: SymbolTypeFlag.runtime, skipNarrowing: true });
+        if (isTypedFunctionType(calleeType) && calleeType.typePredicate) {
+            const path = getReferencePath(call.args[calleeType.getTypePredicateParameterIndex()]);
+            if (path) {
+                paths.add(path);
             }
         }
-    }), { walkMode: WalkMode.visitExpressions });
+    }
     if (cacheKey) {
         guardedPathsCache.set(func, { cacheKey: cacheKey, paths: paths });
     }
