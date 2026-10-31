@@ -345,11 +345,11 @@ export const Keywords: Record<string, TokenKind> = {
 Keywords.constructor = undefined;
 
 /**
- * The TokenKinds that represent a reserved word. Only these kinds can ever have `Token.isReserved`
- * be true, so the lexer can check kind membership here instead of lowercasing and hashing every
- * token's text against `ReservedWords`.
+ * The TokenKinds that represent a reserved word. To check whether a token is a reserved word, use `ReservedTokenKinds.has(token.kind)`
+ * (tokens don't store it, which saves a field on every token). Checking the kind is also cheaper than lowercasing the token's text and
+ * looking it up in `ReservedWords`
  */
-export const ReservedTokenKinds = new Set<TokenKind>(
+export const ReservedTokenKinds: ReadonlySet<TokenKind> = new Set<TokenKind>(
     Object.entries(Keywords)
         .filter(([text]) => ReservedWords.has(text))
         .map(([, kind]) => kind)

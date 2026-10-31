@@ -90,7 +90,6 @@ export function createToken<T extends TokenKind>(kind: T, text?: string, positio
     return new TokenObject(
         kind,
         text ?? (tokenDefaults[kind as string] as string) ?? kind.toString().toLowerCase(),
-        !text || text === kind.toString(),
         locatable?.startPosition,
         locatable?.endPosition,
         locatable?.sourceInfo,
@@ -103,7 +102,6 @@ export function createIdentifier(name: string, position?: CreatorPosition): Iden
     return new TokenObject(
         TokenKind.Identifier,
         name,
-        false,
         locatable?.startPosition,
         locatable?.endPosition,
         locatable?.sourceInfo,

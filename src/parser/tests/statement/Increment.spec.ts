@@ -105,21 +105,18 @@ describe('parser postfix unary expressions', () => {
             {
                 kind: TokenKind.Identifier,
                 text: 'someNumber',
-                isReserved: false,
                 leadingTrivia: [],
                 ...testLocatable(0, 0, 0, 10)
             },
             {
                 kind: TokenKind.PlusPlus,
                 text: '++',
-                isReserved: false,
                 leadingTrivia: [],
                 ...testLocatable(0, 10, 0, 12)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
-                isReserved: false,
                 leadingTrivia: [],
                 ...testLocatable(0, 12, 0, 13)
             }
