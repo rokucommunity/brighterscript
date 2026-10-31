@@ -218,20 +218,35 @@ export class BrightScriptDocParser {
         };
     }
 
+    /**
+     * Parsed type expressions, by type string. Projects use few distinct doc types but parse them many times, so parse each
+     * string once and hand out clones (each tag gets its own copy, because the expression gets the doc's node's symbol table)
+     */
+    private typeExpressionCache = new Map<string, Expression | undefined>();
+
     private getTypeExpressionFromTypeString(typeString: string) {
         if (!typeString) {
             return undefined;
         }
         let result: Expression;
-        try {
-            let { ast } = Parser.parse(typeString);
-            if (isExpressionStatement(ast?.statements?.[0])) {
-                result = (ast.statements[0] as ExpressionStatement).expression;
+        if (this.typeExpressionCache.has(typeString)) {
+            result = this.typeExpressionCache.get(typeString);
+        } else {
+            try {
+                let { ast } = Parser.parse(typeString);
+                if (isExpressionStatement(ast?.statements?.[0])) {
+                    result = (ast.statements[0] as ExpressionStatement).expression;
+                }
+            } catch (e) {
+                //ignore
             }
-        } catch (e) {
-            //ignore
+            //type strings are typed in by hand, so keep the cache from growing without bound in a long-running language server
+            if (this.typeExpressionCache.size >= 1000) {
+                this.typeExpressionCache.clear();
+            }
+            this.typeExpressionCache.set(typeString, result);
         }
-        return result;
+        return result?.clone();
     }
 }
 

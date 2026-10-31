@@ -177,12 +177,20 @@ export interface FirmwareCapabilities {
  * Prefer `program.firmwareCapabilities` when a `Program` is available; it caches the result.
  */
 export function getFirmwareCapabilities(minFirmwareVersion?: string): FirmwareCapabilities {
-    const coerced = minFirmwareVersion ? semver.coerce(minFirmwareVersion) : undefined;
-    const version = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
-    return {
-        optionalChaining: semver.gte(version, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION),
-        continueStatement: semver.gte(version, CONTINUE_MIN_FIRMWARE_VERSION),
-        lineContinuation: semver.gte(version, LINE_CONTINUATION_MIN_FIRMWARE_VERSION),
-        undeclaredHashConstIsFalse: semver.gte(version, UNDECLARED_HASH_CONST_MIN_FIRMWARE_VERSION)
-    };
+    //every `Parser.parse` calls this (including the many small parses of doc comment types), and semver parsing isn't cheap
+    const cacheKey = minFirmwareVersion ?? '';
+    let result = firmwareCapabilitiesCache.get(cacheKey);
+    if (!result) {
+        const coerced = minFirmwareVersion ? semver.coerce(minFirmwareVersion) : undefined;
+        const version = coerced ? coerced.version : DEFAULT_MIN_FIRMWARE_VERSION;
+        result = Object.freeze({
+            optionalChaining: semver.gte(version, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION),
+            continueStatement: semver.gte(version, CONTINUE_MIN_FIRMWARE_VERSION),
+            lineContinuation: semver.gte(version, LINE_CONTINUATION_MIN_FIRMWARE_VERSION),
+            undeclaredHashConstIsFalse: semver.gte(version, UNDECLARED_HASH_CONST_MIN_FIRMWARE_VERSION)
+        });
+        firmwareCapabilitiesCache.set(cacheKey, result);
+    }
+    return result;
 }
+const firmwareCapabilitiesCache = new Map<string, FirmwareCapabilities>();
