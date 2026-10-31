@@ -6,7 +6,7 @@ import type { GetTypeOptions } from '../interfaces';
 import { TokenKind } from '../lexer/TokenKind';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { SymbolTable } from '../SymbolTable';
-import { WalkMode } from '../astUtils/visitors';
+import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BscType } from './BscType';
 import { NeverType } from './NeverType';
 import { getUniqueType } from './helpers';
@@ -616,8 +616,72 @@ export function getNarrowedType(node: Expression, type: BscType, options: GetTyp
         return type;
     }
     const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
-    if (!hasNarrowingCandidate(node, path, func)) {
+    //most functions call no type guards at all, so this is the common way out
+    if (!func || !getGuardedPaths(func).has(path) || !hasNarrowingCandidate(node, path, func)) {
         return type;
     }
     return narrowFrom(node, path, type, options, func);
+}
+
+/**
+ * For each function, the reference paths passed to type guards in conditions
+ */
+const guardedPathsCache = new WeakMap<FunctionExpression, { cacheKey: string; paths: Set<string> }>();
+
+/**
+ * Get the reference paths that are passed to type guards in the conditions in a function (not counting nested functions).
+ * Only these paths can be narrowed in the function
+ */
+function getGuardedPaths(func: FunctionExpression) {
+    const cacheKey = getCacheKey();
+    const cached = guardedPathsCache.get(func);
+    if (cached && cached.cacheKey === cacheKey) {
+        return cached.paths;
+    }
+    const paths = new Set<string>();
+    func.body?.walk(createVisitor({
+        CallExpression: (call) => {
+            if (call.args.length === 0 || !isInConditionPosition(call)) {
+                return;
+            }
+            //the function itself is not narrowed. Narrowing it would mean looking at every condition in the function again
+            const calleeType = call.callee.getType({ flags: SymbolTypeFlag.runtime, skipNarrowing: true });
+            if (isTypedFunctionType(calleeType) && calleeType.typePredicate) {
+                const path = getReferencePath(call.args[calleeType.getTypePredicateParameterIndex()]);
+                if (path) {
+                    paths.add(path);
+                }
+            }
+        }
+    }), { walkMode: WalkMode.visitExpressions });
+    if (cacheKey) {
+        guardedPathsCache.set(func, { cacheKey: cacheKey, paths: paths });
+    }
+    return paths;
+}
+
+/**
+ * Is the call somewhere a type guard narrows from? That is, (part of) the condition of an if statement, while loop, ternary expression or case,
+ * or on the left side of `and`/`or`
+ */
+function isInConditionPosition(call: Expression) {
+    let child: AstNode = call;
+    let parent = call.parent;
+    while (
+        isGroupingExpression(parent) ||
+        (isUnaryExpression(parent) && parent.tokens.operator?.kind === TokenKind.Not) ||
+        (isBinaryExpression(parent) && (parent.tokens.operator?.kind === TokenKind.And || parent.tokens.operator?.kind === TokenKind.Or))
+    ) {
+        if (isBinaryExpression(parent) && child === parent.left) {
+            return true;
+        }
+        child = parent;
+        parent = parent.parent;
+    }
+    return (
+        (isIfStatement(parent) && parent.condition === child) ||
+        (isWhileStatement(parent) && parent.condition === child) ||
+        (isTernaryExpression(parent) && parent.test === child) ||
+        (isCaseStatement(parent) && parent.values?.includes(child as Expression))
+    );
 }
