@@ -13,6 +13,19 @@ const paramRegex = /(?:{([^}]*)}\s+)?(?:(\[?\w+\]?))\s*(.*)/;
 const returnRegex = /(?:{([^}]*)})?\s*(.*)/;
 const typeTagRegex = /(?:{([^}]*)})?/;
 
+/**
+ * Builds the type expression for a doc tag's `{type}`. `token` is the comment token the tag came from, when known
+ */
+export type DocTypeExpressionFactory = (typeString: string, token: Token | undefined) => Expression | undefined;
+
+export interface BrightScriptDocParseOptions {
+    /**
+     * Builds each tag's `typeExpression`. Defaults to parsing the type string on its own (no location, not attached to the AST).
+     * The parser passes a factory that builds positioned type expressions, which it then attaches to the nodes they describe
+     */
+    createTypeExpression?: DocTypeExpressionFactory;
+}
+
 export enum BrsDocTagKind {
     Description = 'description',
     Param = 'param',
@@ -22,23 +35,27 @@ export enum BrsDocTagKind {
 
 export class BrightScriptDocParser {
 
-    public parseNode(node: AstNode) {
+    public parseNode(node: AstNode, options?: BrightScriptDocParseOptions) {
         const commentTokens: Token[] = [];
         const result = this.parse(
             util.getNodeDocumentation(node, {
                 prettyPrint: false,
                 commentTokens: commentTokens
             }),
-            commentTokens);
+            commentTokens,
+            options);
         for (const tag of result.tags) {
-            if ((tag as BrsDocWithType).typeExpression) {
-                (tag as BrsDocWithType).typeExpression.symbolTable = node.getSymbolTable();
+            const typeExpression = (tag as BrsDocWithType).typeExpression;
+            //type expressions parsed from just the type string aren't in the AST, so they need to be told which symbol table to resolve against
+            if (typeExpression && !options?.createTypeExpression) {
+                typeExpression.symbolTable = node.getSymbolTable();
             }
         }
         return result;
     }
 
-    public parse(documentation: string, matchingTokens: Token[] = []) {
+    public parse(documentation: string, matchingTokens: Token[] = [], options?: BrightScriptDocParseOptions) {
+        const createTypeExpression = options?.createTypeExpression ?? ((typeString: string) => this.getTypeExpressionFromTypeString(typeString));
         const brsDoc = new BrightScriptDoc(documentation);
         if (!documentation) {
             return brsDoc;
@@ -86,7 +103,7 @@ export class BrightScriptDocParser {
                 }
             } else {
                 augmentLastTagWithBlockLines();
-                const newTag = this.parseLine(line, token);
+                const newTag = this.parseLine(line, token, createTypeExpression);
                 lastTag = newTag;
                 if (newTag) {
                     brsDoc.tags.push(newTag);
@@ -124,7 +141,7 @@ export class BrightScriptDocParser {
         };
     }
 
-    private parseLine(line: string, token?: Token) {
+    private parseLine(line: string, token: Token | undefined, createTypeExpression: DocTypeExpressionFactory) {
         line = line.trim();
         const match = tagRegex.exec(line);
         if (!match) {
@@ -140,14 +157,14 @@ export class BrightScriptDocParser {
 
         switch (tagName) {
             case BrsDocTagKind.Param:
-                result = this.parseParam(detail);
+                result = this.parseParam(detail, token, createTypeExpression);
                 break;
             case BrsDocTagKind.Return:
             case 'returns':
-                result = this.parseReturn(detail);
+                result = this.parseReturn(detail, token, createTypeExpression);
                 break;
             case BrsDocTagKind.Type:
-                result = this.parseType(detail);
+                result = this.parseType(detail, token, createTypeExpression);
                 break;
         }
         return {
@@ -157,7 +174,7 @@ export class BrightScriptDocParser {
         };
     }
 
-    private parseParam(detail: string): BrsDocParamTag {
+    private parseParam(detail: string, token: Token | undefined, createTypeExpression: DocTypeExpressionFactory): BrsDocParamTag {
         let type = '';
         let description = '';
         let optional = false;
@@ -178,14 +195,14 @@ export class BrightScriptDocParser {
             tagName: BrsDocTagKind.Param,
             name: paramName,
             typeString: type,
-            typeExpression: this.getTypeExpressionFromTypeString(type),
+            typeExpression: type ? createTypeExpression(type, token) : undefined,
             description: description,
             optional: optional,
             detail: detail
         };
     }
 
-    private parseReturn(detail: string): BrsDocWithDescription {
+    private parseReturn(detail: string, token: Token | undefined, createTypeExpression: DocTypeExpressionFactory): BrsDocWithDescription {
         let match = returnRegex.exec(detail);
         let type = '';
         let description = '';
@@ -196,13 +213,13 @@ export class BrightScriptDocParser {
         return {
             tagName: BrsDocTagKind.Return,
             typeString: type,
-            typeExpression: this.getTypeExpressionFromTypeString(type),
+            typeExpression: type ? createTypeExpression(type, token) : undefined,
             description: description,
             detail: detail
         };
     }
 
-    private parseType(detail: string): BrsDocWithType {
+    private parseType(detail: string, token: Token | undefined, createTypeExpression: DocTypeExpressionFactory): BrsDocWithType {
         let match = typeTagRegex.exec(detail);
         let type = '';
         if (match) {
@@ -213,7 +230,7 @@ export class BrightScriptDocParser {
         return {
             tagName: BrsDocTagKind.Type,
             typeString: type,
-            typeExpression: this.getTypeExpressionFromTypeString(type),
+            typeExpression: type ? createTypeExpression(type, token) : undefined,
             detail: detail
         };
     }

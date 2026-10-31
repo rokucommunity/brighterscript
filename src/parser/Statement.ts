@@ -27,7 +27,6 @@ import { VoidType } from '../types/VoidType';
 import { TypedFunctionType } from '../types/TypedFunctionType';
 import { ArrayType } from '../types/ArrayType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
-import brsDocParser from './BrightScriptDocParser';
 import { ArrayDefaultTypeReferenceType } from '../types/ReferenceType';
 export class EmptyStatement extends Statement {
     constructor(options?: { range?: Location }
@@ -188,6 +187,12 @@ export class AssignmentStatement extends Statement {
 
     public readonly typeExpression?: TypeExpression;
 
+    /**
+     * The type from this assignment's doc comment (`@type {type}`), if it has one. Set by the parser.
+     * Not walked: it lives in a comment, so it isn't part of the code
+     */
+    public docTypeExpression: TypeExpression | undefined = undefined;
+
     public readonly kind = AstNodeKind.AssignmentStatement;
 
     public readonly startPosition: number;
@@ -213,8 +218,7 @@ export class AssignmentStatement extends Statement {
 
     getType(options: GetTypeOptions) {
         const variableTypeFromCode = this.typeExpression?.getType({ ...options, typeChain: undefined });
-        const docs = brsDocParser.parseNode(this);
-        const variableTypeFromDocs = docs?.getTypeTagBscType(options);
+        const variableTypeFromDocs = this.docTypeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime });
         const variableType = util.chooseTypeFromCodeOrDocComment(variableTypeFromCode, variableTypeFromDocs, options) ?? this.value.getType({ ...options, typeChain: undefined });
 
         // Note: compound assignments (eg. +=) are internally dealt with via the RHS being a BinaryExpression
@@ -228,16 +232,15 @@ export class AssignmentStatement extends Statement {
     }
 
     public clone() {
-        return this.finalizeClone(
-            new AssignmentStatement({
-                name: util.cloneToken(this.tokens.name),
-                value: this.value?.clone(),
-                as: util.cloneToken(this.tokens.as),
-                equals: util.cloneToken(this.tokens.equals),
-                typeExpression: this.typeExpression?.clone()
-            }),
-            ['value', 'typeExpression']
-        );
+        const clone = new AssignmentStatement({
+            name: util.cloneToken(this.tokens.name),
+            value: this.value?.clone(),
+            as: util.cloneToken(this.tokens.as),
+            equals: util.cloneToken(this.tokens.equals),
+            typeExpression: this.typeExpression?.clone()
+        });
+        clone.docTypeExpression = this.docTypeExpression?.clone();
+        return this.finalizeClone(clone, ['value', 'typeExpression', 'docTypeExpression']);
     }
 }
 

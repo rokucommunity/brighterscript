@@ -14,7 +14,7 @@ import type { Locatable, Token } from '../../lexer/Token';
 import { AstNodeKind } from '../../parser/AstNode';
 import type { AstNode } from '../../parser/AstNode';
 import type { Expression } from '../../parser/AstNode';
-import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression } from '../../parser/Expression';
+import type { VariableExpression, DottedGetExpression, BinaryExpression, UnaryExpression, NewExpression, LiteralExpression, FunctionExpression, CallfuncExpression, AAIndexedMemberExpression, SpreadExpression, TypeExpression } from '../../parser/Expression';
 import { CallExpression } from '../../parser/Expression';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BscType } from '../../types/BscType';
@@ -31,8 +31,6 @@ import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
 import { getAllTypesFromCompoundType } from '../../types/helpers';
 import { BscTypeKind } from '../../types/BscTypeKind';
-import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
-import brsDocParser from '../../parser/BrightScriptDocParser';
 import { InvalidType } from '../../types/InvalidType';
 import { VoidType } from '../../types/VoidType';
 import { LogLevel } from '../../Logger';
@@ -245,6 +243,7 @@ export class ScopeValidator {
                     AssignmentStatement: (assignStmt) => {
                         this.addValidationKindMetric('AssignmentStatement', () => {
                             this.validateAssignmentStatement(file, assignStmt);
+                            this.validateDocCommentType(file, assignStmt.docTypeExpression);
                             // Note: this also includes For statements
                             this.detectShadowedLocalVar(file, {
                                 expr: assignStmt,
@@ -288,11 +287,13 @@ export class ScopeValidator {
                                 type: this.getNodeTypeWrapper(file, funcParam, { flags: SymbolTypeFlag.runtime }),
                                 nameToken: funcParam.tokens.name
                             });
+                            this.validateDocCommentType(file, funcParam.docTypeExpression);
                         });
                     },
                     FunctionExpression: (func) => {
                         this.addValidationKindMetric('FunctionExpression', () => {
                             this.validateFunctionExpressionForReturn(func);
+                            this.validateDocCommentType(file, func.docReturnTypeExpression);
                         });
                     },
                     ForStatement: (forStmt) => {
@@ -308,15 +309,6 @@ export class ScopeValidator {
                     AAIndexedMemberExpression: (member) => {
                         this.addValidationKindMetric('AAIndexedMemberExpression', () => {
                             this.validateAAIndexedMemberExpression(file, member);
-                        });
-                    },
-                    AstNode: (node) => {
-                        //check for doc comments
-                        if (!node.leadingTrivia || node.leadingTrivia.filter(triviaToken => triviaToken.kind === TokenKind.Comment).length === 0) {
-                            return;
-                        }
-                        this.addValidationKindMetric('AstNode', () => {
-                            this.validateDocComments(node);
                         });
                     }
                 });
@@ -2009,20 +2001,19 @@ export class ScopeValidator {
         }
     }
 
-    private validateDocComments(node: AstNode) {
-        const doc = brsDocParser.parseNode(node);
-        for (const docTag of doc.tags) {
-            const docTypeTag = docTag as BrsDocWithType;
-            if (!docTypeTag.typeExpression || !docTypeTag.location) {
-                continue;
-            }
-            const foundType = docTypeTag.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
-            if (!foundType?.isResolvable()) {
-                this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.cannotFindName(docTypeTag.typeString),
-                    location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
-                });
-            }
+    /**
+     * Validate a type that came from a doc comment (`@param {type}`, `@return {type}`, `@type {type}`)
+     */
+    private validateDocCommentType(file: BrsFile, docTypeExpression: TypeExpression | undefined) {
+        if (!docTypeExpression) {
+            return;
+        }
+        const foundType = docTypeExpression.getType({ flags: SymbolTypeFlag.typetime });
+        if (!foundType?.isResolvable()) {
+            this.addMultiScopeDiagnostic({
+                ...DiagnosticMessages.cannotFindName(file.fileContents.substring(docTypeExpression.startPosition, docTypeExpression.endPosition)),
+                location: docTypeExpression.location
+            });
         }
     }
 

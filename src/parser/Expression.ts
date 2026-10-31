@@ -32,8 +32,6 @@ import { UninitializedType } from '../types/UninitializedType';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
-import { brsDocParser } from './BrightScriptDocParser';
-import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
 import type { BrsFile } from '../files/BrsFile';
@@ -445,14 +443,12 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //if there's a defined return type, use that
         let returnType: BscType;
 
-        const docs = getFunctionDocs(this);
-
         // resolve return and param types with their own typeChain and data, so they don't leak into this function's (eg. hover name and description)
         const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: {} });
 
         returnType = util.chooseTypeFromCodeOrDocComment(
             this.returnTypeExpression?.getType(innerOptions()),
-            docs.getReturnBscType({ ...innerOptions(), tableProvider: () => this.getSymbolTable() }),
+            this.docReturnTypeExpression?.getType({ ...innerOptions(), flags: SymbolTypeFlag.typetime }),
             options
         );
 
@@ -521,20 +517,25 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return false;
     }
 
+    /**
+     * The return type from the declaring function's doc comment (`@return {type}`), if it has one. Set by the parser.
+     * Not walked: it lives in a comment, so it isn't part of the code
+     */
+    public docReturnTypeExpression: TypeExpression | undefined = undefined;
+
     public clone() {
-        return this.finalizeClone(
-            new FunctionExpression({
-                parameters: this.parameters?.map(e => e?.clone()),
-                body: this.body?.clone(),
-                functionType: util.cloneToken(this.tokens.functionType),
-                endFunctionType: util.cloneToken(this.tokens.endFunctionType),
-                leftParen: util.cloneToken(this.tokens.leftParen),
-                rightParen: util.cloneToken(this.tokens.rightParen),
-                as: util.cloneToken(this.tokens.as),
-                returnTypeExpression: this.returnTypeExpression?.clone()
-            }),
-            ['body', 'returnTypeExpression']
-        );
+        const clone = new FunctionExpression({
+            parameters: this.parameters?.map(e => e?.clone()),
+            body: this.body?.clone(),
+            functionType: util.cloneToken(this.tokens.functionType),
+            endFunctionType: util.cloneToken(this.tokens.endFunctionType),
+            leftParen: util.cloneToken(this.tokens.leftParen),
+            rightParen: util.cloneToken(this.tokens.rightParen),
+            as: util.cloneToken(this.tokens.as),
+            returnTypeExpression: this.returnTypeExpression?.clone()
+        });
+        clone.docReturnTypeExpression = this.docReturnTypeExpression?.clone();
+        return this.finalizeClone(clone, ['body', 'returnTypeExpression', 'docReturnTypeExpression']);
     }
 }
 
@@ -574,8 +575,18 @@ export class FunctionParameterExpression extends Expression {
     public readonly defaultValue?: Expression;
     public readonly typeExpression?: TypeExpression;
 
+    /**
+     * The type from the function's doc comment (`@param {type} name`), if it has one. Set by the parser.
+     * Not walked: it lives in a comment, so it isn't part of the code
+     */
+    public docTypeExpression: TypeExpression | undefined = undefined;
+
+    /**
+     * The description from the function's doc comment (`@param name description`), if it has one. Set by the parser
+     */
+    public docDescription: string | undefined = undefined;
+
     public getType(options: GetTypeOptions) {
-        const docs = getFunctionDocs(this.parent);
         const paramName = this.tokens.name.text;
 
         let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
@@ -583,10 +594,10 @@ export class FunctionParameterExpression extends Expression {
         if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
             paramTypeFromCode = undefined;
         }
-        const paramTypeFromDoc = docs.getParamBscType(paramName, { ...options, fullName: paramName, typeChain: undefined, tableProvider: () => this.getSymbolTable() });
+        const paramTypeFromDoc = this.docTypeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined });
         const paramType = util.chooseTypeFromCodeOrDocComment(paramTypeFromCode, paramTypeFromDoc, options) ?? DynamicType.instance;
 
-        const docDescription = docs.getParam(paramName)?.description;
+        const docDescription = this.docDescription;
         if (docDescription) {
             options.data = options.data ?? {};
             options.data.description = docDescription;
@@ -655,16 +666,16 @@ export class FunctionParameterExpression extends Expression {
     }
 
     public clone() {
-        return this.finalizeClone(
-            new FunctionParameterExpression({
-                name: util.cloneToken(this.tokens.name),
-                as: util.cloneToken(this.tokens.as),
-                typeExpression: this.typeExpression?.clone(),
-                equals: util.cloneToken(this.tokens.equals),
-                defaultValue: this.defaultValue?.clone()
-            }),
-            ['typeExpression', 'defaultValue']
-        );
+        const clone = new FunctionParameterExpression({
+            name: util.cloneToken(this.tokens.name),
+            as: util.cloneToken(this.tokens.as),
+            typeExpression: this.typeExpression?.clone(),
+            equals: util.cloneToken(this.tokens.equals),
+            defaultValue: this.defaultValue?.clone()
+        });
+        clone.docTypeExpression = this.docTypeExpression?.clone();
+        clone.docDescription = this.docDescription;
+        return this.finalizeClone(clone, ['typeExpression', 'defaultValue', 'docTypeExpression']);
     }
 }
 
@@ -2827,16 +2838,6 @@ export class RegexLiteralExpression extends Expression {
 
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue } | null;
-
-/**
- * Doc comment of the function or method that declares `func`.
- * Anonymous functions and function type expressions have none, rather than inheriting an enclosing function's.
- */
-function getFunctionDocs(func: AstNode): BrightScriptDoc {
-    const declaration = func?.parent;
-    const isDeclared = isFunctionStatement(declaration) || isMethodStatement(declaration);
-    return brsDocParser.parseNode(isDeclared ? declaration : undefined);
-}
 
 function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (!expr) {
