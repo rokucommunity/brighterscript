@@ -31,8 +31,6 @@ import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
 import { getAllTypesFromCompoundType } from '../../types/helpers';
 import { BscTypeKind } from '../../types/BscTypeKind';
-import type { BrsDocWithType } from '../../parser/BrightScriptDocParser';
-import brsDocParser from '../../parser/BrightScriptDocParser';
 import { InvalidType } from '../../types/InvalidType';
 import { VoidType } from '../../types/VoidType';
 import { LogLevel } from '../../Logger';
@@ -308,15 +306,6 @@ export class ScopeValidator {
                     AAIndexedMemberExpression: (member) => {
                         this.addValidationKindMetric('AAIndexedMemberExpression', () => {
                             this.validateAAIndexedMemberExpression(file, member);
-                        });
-                    },
-                    AstNode: (node) => {
-                        //check for doc comments
-                        if (!node.leadingTrivia || node.leadingTrivia.filter(triviaToken => triviaToken.kind === TokenKind.Comment).length === 0) {
-                            return;
-                        }
-                        this.addValidationKindMetric('AstNode', () => {
-                            this.validateDocComments(node);
                         });
                     }
                 });
@@ -2005,23 +1994,6 @@ export class ScopeValidator {
                         location: field.getAttribute('onchange')?.tokens.value.location
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
-            }
-        }
-    }
-
-    private validateDocComments(node: AstNode) {
-        const doc = brsDocParser.parseNode(node);
-        for (const docTag of doc.tags) {
-            const docTypeTag = docTag as BrsDocWithType;
-            if (!docTypeTag.typeExpression || !docTypeTag.location) {
-                continue;
-            }
-            const foundType = docTypeTag.typeExpression?.getType({ flags: SymbolTypeFlag.typetime });
-            if (!foundType?.isResolvable()) {
-                this.addMultiScopeDiagnostic({
-                    ...DiagnosticMessages.cannotFindName(docTypeTag.typeString),
-                    location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
-                });
             }
         }
     }

@@ -15,8 +15,6 @@ import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
 import type { Location } from 'vscode-languageserver';
 import type { Locatable, SourceInfo, Token } from '../../lexer/Token';
-import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
-import brsDocParser from '../../parser/BrightScriptDocParser';
 import { TypeStatementType } from '../../types/TypeStatementType';
 import { findUnreachableRegions } from './ControlFlowReachability';
 import { findRegexLiteralProblems } from './RegexLiteralValidation';
@@ -600,25 +598,6 @@ export class BrsFileValidator {
                         location: node.tokens.name
                     });
                 }
-            },
-            AstNode: (node) => {
-                //check for doc comments
-                if (!node.leadingTrivia || node.leadingTrivia.length === 0) {
-                    return;
-                }
-                const doc = brsDocParser.parseNode(node);
-                if (doc.tags.length === 0) {
-                    return;
-                }
-
-                let funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
-                if (funcExpr) {
-                    // handle comment tags inside a function expression
-                    this.processDocTagsInFunction(doc, node, funcExpr);
-                } else {
-                    //handle comment tags outside of a function expression
-                    this.processDocTagsAtTopLevel(doc, node);
-                }
             }
         });
 
@@ -627,33 +606,6 @@ export class BrsFileValidator {
         }, {
             walkMode: WalkMode.visitAllRecursive
         });
-    }
-
-    private processDocTagsInFunction(doc: BrightScriptDoc, node: AstNode, funcExpr: FunctionExpression) {
-        //TODO: Handle doc tags that influence the function they're in
-
-        // For example, declaring variable types:
-        // const symbolTable = funcExpr.body.getSymbolTable();
-
-        // for (const varTag of doc.getAllTags(BrsDocTagKind.Var)) {
-        //     const varName = (varTag as BrsDocParamTag).name;
-        //     const varTypeStr = (varTag as BrsDocParamTag).type;
-        //     const data: ExtraSymbolData = {};
-        //     const type = doc.getTypeFromContext(varTypeStr, node, { flags: SymbolTypeFlag.typetime, fullName: varTypeStr, data: data, tableProvider: () => symbolTable });
-        //     if (type) {
-        //         symbolTable.addSymbol(varName, { ...data, isFromDocComment: true }, type, SymbolTypeFlag.runtime);
-        //     }
-        // }
-    }
-
-    private processDocTagsAtTopLevel(doc: BrightScriptDoc, node: AstNode) {
-        //TODO:
-        // - handle import statements?
-        // - handle library statements?
-        // - handle typecast statements?
-        // - handle alias statements?
-        // - handle const statements?
-        // - allow interface definitions?
     }
 
     /**
