@@ -2809,7 +2809,8 @@ export class Util {
     public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
         //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
         const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
-        const match = pattern.exec(node.toString());
+        //the comment can only be on the last non-blank line, so only look at the end of the output instead of building all of it
+        const match = pattern.exec(this.getSourceNodeTail(node));
         if (match) {
             //trim the exact matched length off the right edge, since the match may span multiple sibling leaves
             this.trimSourceNodeRight(node, match[0].length);
@@ -2985,6 +2986,55 @@ export class Util {
             } else {
                 //unrecognized child shape (not a string, not a SourceNode from any installed copy of `source-map`); stop rather than skip past it
                 trimState.bailedOut = true;
+            }
+        }
+    }
+
+    /**
+     * Get the end of a SourceNode's text: enough to include its last non-blank line and the line break before it (plus one
+     * more character, for `\r\n`), or all of it if it doesn't have that many lines
+     */
+    private getSourceNodeTail(node: SourceNode): string {
+        const tailState: SourceNodeTailState = { tail: '', foundNonBlank: false, foundLineBreak: false, isComplete: false, bailedOut: false };
+        this.collectSourceNodeTail(node, tailState);
+        return tailState.bailedOut ? node.toString() : tailState.tail;
+    }
+
+    /**
+     * Walk a SourceNode tree right to left, prepending its strings to `tailState.tail` until it holds the last non-blank line,
+     * the line break before it, and one more character. Each string is only looked at once
+     */
+    private collectSourceNodeTail(node: SourceNode, tailState: SourceNodeTailState): void {
+        const children = node.children as unknown as Array<SourceNode | string>;
+        for (let childIndex = children.length - 1; childIndex >= 0 && !tailState.isComplete && !tailState.bailedOut; childIndex--) {
+            const child = children[childIndex];
+            if (typeof child === 'string') {
+                if (child.length === 0) {
+                    continue;
+                }
+                tailState.tail = child + tailState.tail;
+                if (tailState.foundLineBreak) {
+                    //this is the character before the line break
+                    tailState.isComplete = true;
+                    continue;
+                }
+                let searchEnd = child.length - 1;
+                if (!tailState.foundNonBlank) {
+                    searchEnd = child.search(/\S\s*$/);
+                    if (searchEnd < 0) {
+                        continue;
+                    }
+                    tailState.foundNonBlank = true;
+                }
+                const lineBreakIndex = child.lastIndexOf('\n', searchEnd);
+                if (lineBreakIndex >= 0) {
+                    tailState.foundLineBreak = true;
+                    tailState.isComplete = lineBreakIndex > 0;
+                }
+            } else if (this.isSourceNodeLike(child)) {
+                this.collectSourceNodeTail(child, tailState);
+            } else {
+                tailState.bailedOut = true;
             }
         }
     }
@@ -3629,6 +3679,14 @@ interface TrimEdit {
 /**
  * Mutable state threaded through `collectSourceNodeTrimEdits` while walking a SourceNode tree right to left
  */
+interface SourceNodeTailState {
+    tail: string;
+    foundNonBlank: boolean;
+    foundLineBreak: boolean;
+    isComplete: boolean;
+    bailedOut: boolean;
+}
+
 interface TrimState {
     remainingCharCount: number;
     bailedOut: boolean;
