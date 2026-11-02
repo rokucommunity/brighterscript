@@ -1665,6 +1665,28 @@ export class Util {
     }
 
     /**
+     * Get the type implied by the type designator character at the end of a variable or parameter name
+     * (i.e. `string` for `name$`, `integer` for `count%`).
+     * @returns the designator's type, or `undefined` if the name does not end with a type designator
+     */
+    public getTypeDesignatorType(name: string): BscType | undefined {
+        switch (name?.[name.length - 1]) {
+            case '$':
+                return StringType.instance;
+            case '%':
+                return IntegerType.instance;
+            case '!':
+                return FloatType.instance;
+            case '#':
+                return DoubleType.instance;
+            case '&':
+                return LongIntegerType.instance;
+            default:
+                return undefined;
+        }
+    }
+
+    /**
      * Convert a token into a BscType
      */
     public tokenToBscType(token: Token) {
