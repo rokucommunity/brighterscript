@@ -36,7 +36,7 @@ import { brsDocParser } from './BrightScriptDocParser';
 import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
-import type { BrsFile } from '../files/BrsFile';
+import type { BrsCodeSegment } from '../files/BrsCodeSegment';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -720,7 +720,7 @@ export class DottedGetExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
-        if (state.file.calleeStartsWithNamespace(this)) {
+        if (state.codeSegment.calleeStartsWithNamespace(this)) {
             return [
                 ...state.transpileLeadingCommentsForAstNode(this),
                 state.sourceNode(this, this.getName(ParseMode.BrightScript))
@@ -1912,10 +1912,10 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
             case TokenKind.PkgPathLiteral:
-                text = `"${util.sanitizePkgPath(state.file.pkgPath)}"`;
+                text = `"${util.sanitizePkgPath(state.codeSegment.pkgPath)}"`;
                 break;
             case TokenKind.PkgLocationLiteral:
-                text = `"${util.sanitizePkgPath(state.file.pkgPath)}:" + str(LINE_NUM)`;
+                text = `"${util.sanitizePkgPath(state.codeSegment.pkgPath)}:" + str(LINE_NUM)`;
                 break;
             case TokenKind.LineNumLiteral:
             default:
@@ -1992,7 +1992,7 @@ export class NewExpression extends Expression {
 
     public transpile(state: BrsTranspileState) {
         const namespace = this.findAncestor(isNamespaceStatement);
-        const cls = state.file.getClassFileLink(
+        const cls = state.codeSegment.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             namespace?.getName(ParseMode.BrighterScript)
         )?.item;
@@ -2548,7 +2548,7 @@ export class TernaryExpression extends Expression {
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
-        const file = state.file;
+        const file = state.codeSegment;
         let consequentInfo = util.getExpressionInfo(this.consequent!, file);
         let alternateInfo = util.getExpressionInfo(this.alternate!, file);
 
@@ -2673,17 +2673,17 @@ export class NullCoalescingExpression extends Expression {
      * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
      * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
      */
-    public hasMutatingExpression(file: BrsFile) {
+    public hasMutatingExpression(codeSegment: BrsCodeSegment) {
         return [
-            ...util.getExpressionInfo(this.consequent, file).expressions,
-            ...util.getExpressionInfo(this.alternate, file).expressions
+            ...util.getExpressionInfo(this.consequent, codeSegment).expressions,
+            ...util.getExpressionInfo(this.alternate, codeSegment).expressions
         ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
     }
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
-        let consequentInfo = util.getExpressionInfo(this.consequent, state.file);
-        let alternateInfo = util.getExpressionInfo(this.alternate, state.file);
+        let consequentInfo = util.getExpressionInfo(this.consequent, state.codeSegment);
+        let alternateInfo = util.getExpressionInfo(this.alternate, state.codeSegment);
 
         //get all unique variable names used in the consequent and alternate, and sort them alphabetically so the output is consistent
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
@@ -2692,7 +2692,7 @@ export class NullCoalescingExpression extends Expression {
             return !nonReferenceableFunctions.includes(name.toLowerCase());
         });
 
-        if (this.hasMutatingExpression(state.file)) {
+        if (this.hasMutatingExpression(state.codeSegment)) {
             result.push(
                 `(function(`,
                 //write all the scope variables as parameters.

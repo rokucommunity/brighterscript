@@ -1,10 +1,10 @@
-import type { BrsFile } from '../../files/BrsFile';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideReferencesEvent } from '../../interfaces';
 import type { Location } from 'vscode-languageserver-protocol';
 import util from '../../util';
 import { WalkMode, createVisitor } from '../../astUtils/visitors';
 import type { XmlFile } from '../../files/XmlFile';
-import { isBrsFile, isXmlFile } from '../../astUtils/reflection';
+import { isBrsCodeSegment, isXmlFile } from '../../astUtils/reflection';
 
 export class ReferencesProvider {
     constructor(
@@ -12,8 +12,8 @@ export class ReferencesProvider {
     ) { }
 
     public process(): Location[] {
-        if (isBrsFile(this.event.file)) {
-            this.brsFileGetReferences(this.event.file);
+        if (isBrsCodeSegment(this.event.codeSegment)) {
+            this.brsCodeSegmentGetReferences(this.event.codeSegment);
         } else if (isXmlFile(this.event.file)) {
             this.xmlFileGetReferences(this.event.file);
         }
@@ -21,11 +21,11 @@ export class ReferencesProvider {
     }
 
     /**
-     * For a position in a BrsFile, get the location where the token at that position was defined
+     * For a position in BrightScript code, get the location where the token at that position was defined
      */
-    private brsFileGetReferences(file: BrsFile): void {
+    private brsCodeSegmentGetReferences(codeSegment: BrsCodeSegment): void {
 
-        const callSiteToken = file.getTokenAt(this.event.position);
+        const callSiteToken = codeSegment.getTokenAt(this.event.position);
 
         //there's no token at this position (i.e. the cursor is past the end of a line), so there's nothing to search for
         if (!callSiteToken) {
@@ -34,27 +34,27 @@ export class ReferencesProvider {
 
         const searchFor = callSiteToken.text.toLowerCase();
 
-        const scopes = this.event.program.getScopesForFile(file);
+        const scopes = this.event.program.getScopesForCodeSegment(codeSegment);
 
-        //track processed files across all scopes. A file's references are the same no matter which
+        //track processed code across all scopes. Code's references are the same no matter which
         //scope it was reached through, so walking it once per scope would emit duplicate results
-        const processedFiles = new Set<BrsFile>();
+        const processedCodeSegments = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
-            for (const file of scope.getAllFiles()) {
-                if (!isBrsFile(file) || processedFiles.has(file)) {
+            for (const scopeCodeSegment of scope.getAllCodeSegments()) {
+                if (!isBrsCodeSegment(scopeCodeSegment) || processedCodeSegments.has(scopeCodeSegment)) {
                     continue;
                 }
-                processedFiles.add(file);
-                file.ast.walk(createVisitor({
+                processedCodeSegments.add(scopeCodeSegment);
+                scopeCodeSegment.ast.walk(createVisitor({
                     AssignmentStatement: (s) => {
                         if (s.tokens.name?.text?.toLowerCase() === searchFor) {
-                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(s.tokens.name)?.range));
+                            this.event.references.push(util.createLocationFromRange(util.pathToUri(scopeCodeSegment.srcPath), util.getLocation(s.tokens.name)?.range));
                         }
                     },
                     VariableExpression: (e) => {
                         if (e.tokens.name.text.toLowerCase() === searchFor) {
-                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(e)?.range));
+                            this.event.references.push(util.createLocationFromRange(util.pathToUri(scopeCodeSegment.srcPath), util.getLocation(e)?.range));
                         }
                     }
                 }), {

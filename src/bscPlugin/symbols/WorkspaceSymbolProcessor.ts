@@ -1,7 +1,8 @@
-import { isBrsFile } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
+import { isBrsCodeSegment } from '../../astUtils/reflection';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideWorkspaceSymbolsEvent } from '../../interfaces';
-import { getWorkspaceSymbolsFromBrsFile } from './symbolUtils';
+import { getWorkspaceSymbolsFromBrsCodeSegment } from './symbolUtils';
+import util from '../../util';
 
 export class WorkspaceSymbolProcessor {
     public constructor(
@@ -12,16 +13,22 @@ export class WorkspaceSymbolProcessor {
 
     public process() {
         const results = Object.values(this.event.program.files).map(file => {
-            if (isBrsFile(file)) {
-                return this.getBrsFileWorkspaceSymbols(file);
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
+                return [];
             }
-            return [];
+            return codeSegments.map(codeSegment => {
+                if (isBrsCodeSegment(codeSegment)) {
+                    return this.getBrsCodeSegmentWorkspaceSymbols(codeSegment);
+                }
+                return [];
+            }).flat();
         });
         return results.flat();
     }
 
-    private getBrsFileWorkspaceSymbols(file: BrsFile) {
-        const symbols = getWorkspaceSymbolsFromBrsFile(file);
+    private getBrsCodeSegmentWorkspaceSymbols(codeSegment: BrsCodeSegment) {
+        const symbols = getWorkspaceSymbolsFromBrsCodeSegment(codeSegment);
         this.event.workspaceSymbols.push(...symbols);
         return this.event.workspaceSymbols;
     }

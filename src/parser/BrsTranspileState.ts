@@ -1,6 +1,6 @@
 import type { Locatable } from '../lexer/Token';
 import { Editor } from '../astUtils/Editor';
-import type { BrsFile } from '../files/BrsFile';
+import type { BrsCodeSegment } from '../files/BrsCodeSegment';
 import type { FirmwareCapabilities } from '../RokuConstants';
 import type { ClassStatement, ConditionalCompileStatement } from './Statement';
 import { TranspileState } from './TranspileState';
@@ -8,11 +8,14 @@ import type { AstNode, Statement } from './AstNode';
 
 export class BrsTranspileState extends TranspileState {
     public constructor(
-        public file: BrsFile
+        /**
+         * The code segment being transpiled
+         */
+        public codeSegment: BrsCodeSegment
     ) {
-        super(file.srcPath, file.program.options);
-        this.bslibPrefix = this.file.program.bslibPrefix;
-        this.firmwareCapabilities = this.file.program.firmwareCapabilities;
+        super(codeSegment.srcPath, codeSegment.program.options);
+        this.bslibPrefix = this.codeSegment.program.bslibPrefix;
+        this.firmwareCapabilities = this.codeSegment.program.firmwareCapabilities;
     }
 
     /**

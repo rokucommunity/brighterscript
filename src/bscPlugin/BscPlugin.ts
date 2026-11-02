@@ -1,5 +1,5 @@
-import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, ValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
+import { isBrsCodeSegment, isBrsFile, isXmlFile } from '../astUtils/reflection';
+import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, ValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterPrepareBrsCodeSegmentEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
 import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
@@ -13,8 +13,8 @@ import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
-import type { BrsFile } from '../files/BrsFile';
 import type { XmlFile } from '../files/XmlFile';
+import util from '../util';
 import { FileWriter } from './FileWriter';
 import { FileProvider } from './fileProviders/FileProvider';
 import { BslibManager } from './serialize/BslibManager';
@@ -77,18 +77,30 @@ export class BscPlugin implements Plugin {
     }
 
     public afterProvideSemanticTokens(event: AfterProvideSemanticTokensEvent) {
-        if (isBrsFile(event.file)) {
-            return new BrsFileSemanticTokensProcessor(event as AfterProvideSemanticTokensEvent<BrsFile>).process();
+        if (isBrsCodeSegment(event.codeSegment)) {
+            return new BrsFileSemanticTokensProcessor(event).process();
         }
     }
 
+    /**
+     * Validates the file and each of its code segments, then finishes processing the symbols of all of the file's code segments together.
+     * This runs after every plugin's `validateFile` and `validateBrsCodeSegment`, and before any `afterValidateBrsCodeSegment`
+     */
     public afterValidateFile(event: AfterValidateFileEvent) {
-        if (isBrsFile(event.file)) {
-            new BrsFileValidator(event as AfterValidateFileEvent<BrsFile>).process();
-            new BrsFileAfterValidator(event as AfterValidateFileEvent<BrsFile>).process();
-        } else if (isXmlFile(event.file)) {
+        if (isBrsFile(event.file) || isXmlFile(event.file)) {
+            util.validateTooDeepFile(event.file);
+        }
+        if (isXmlFile(event.file)) {
             new XmlFileValidator(event as AfterValidateFileEvent<XmlFile>).process();
         }
+        const codeSegments = util.getCodeSegments(event.file);
+        if (!codeSegments) {
+            return;
+        }
+        for (const codeSegment of codeSegments) {
+            new BrsFileValidator({ program: event.program, file: event.file, codeSegment: codeSegment }).process();
+        }
+        new BrsFileAfterValidator(event).process();
     }
 
     private scopeValidator = new ScopeValidator();
@@ -115,11 +127,14 @@ export class BscPlugin implements Plugin {
     private bslibManager = new BslibManager();
 
     public afterPrepareFile(event: AfterPrepareFileEvent) {
-        if (isBrsFile(event.file)) {
-            return new BrsFilePreTranspileProcessor(event as AfterPrepareFileEvent<BrsFile>).process();
-        } else if (isXmlFile(event.file)) {
+        //the BrightScript in a file is prepared in `afterPrepareBrsCodeSegment`
+        if (isXmlFile(event.file)) {
             return new XmlFilePreTranspileProcessor(event as AfterPrepareFileEvent<XmlFile>).process();
         }
+    }
+
+    public afterPrepareBrsCodeSegment(event: AfterPrepareBrsCodeSegmentEvent) {
+        return new BrsFilePreTranspileProcessor(event).process();
     }
 
     public async afterSerializeFile(event: AfterSerializeFileEvent) {

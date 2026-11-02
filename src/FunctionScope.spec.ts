@@ -3,6 +3,7 @@ import type { BrsFile } from './files/BrsFile';
 import { FunctionScope } from './FunctionScope';
 import type { FunctionExpression } from './parser/Expression';
 import { Program } from './Program';
+import { getBrsCodeSegment } from './testHelpers.spec';
 
 describe('FunctionScope', () => {
     let scope: FunctionScope;
@@ -31,10 +32,10 @@ describe('FunctionScope', () => {
                     var3 = 3
                 end sub
             `);
-            expect(file.functionScopes[0].getVariablesAbove(2)).to.be.lengthOf(0);
-            expect(file.functionScopes[0].getVariablesAbove(3)).to.be.lengthOf(1);
-            expect(file.functionScopes[0].getVariablesAbove(3)[0].name).to.equal('var1');
-            expect(file.functionScopes[0].getVariablesAbove(4)).to.be.lengthOf(2);
+            expect(getBrsCodeSegment(file).functionScopes[0].getVariablesAbove(2)).to.be.lengthOf(0);
+            expect(getBrsCodeSegment(file).functionScopes[0].getVariablesAbove(3)).to.be.lengthOf(1);
+            expect(getBrsCodeSegment(file).functionScopes[0].getVariablesAbove(3)[0].name).to.equal('var1');
+            expect(getBrsCodeSegment(file).functionScopes[0].getVariablesAbove(4)).to.be.lengthOf(2);
         });
     });
 });

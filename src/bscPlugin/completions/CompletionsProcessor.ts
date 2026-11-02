@@ -1,6 +1,6 @@
-import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isBrsCodeSegment, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
-import type { BscFile } from '../../files/BscFile';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
 import type { XmlScope } from '../../XmlScope';
 import { util } from '../../util';
@@ -12,7 +12,6 @@ import type { BscSymbol } from '../../SymbolTable';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import type { XmlFile } from '../../files/XmlFile';
 import type { Program } from '../../Program';
-import type { BrsFile } from '../../files/BrsFile';
 import type { FunctionScope } from '../../FunctionScope';
 import { BooleanType } from '../../types/BooleanType';
 import { InvalidType } from '../../types/InvalidType';
@@ -34,7 +33,7 @@ export class CompletionsProcessor {
     }
 
     public process() {
-        let file = this.event.file;
+        let codeSegment = this.event.codeSegment;
         this.event.program.logger.time(LogLevel.log, ['Processing completions'], () => {
 
             // Find the scopes for this file - Only process the first few scopes
@@ -44,17 +43,17 @@ export class CompletionsProcessor {
             let completionResults: CompletionItem[] = [];
             let globalResults: CompletionItem[] = [];
 
-            if (isXmlFile(file)) {
-                completionResults = this.getXmlFileCompletions(this.event.position, file);
-            } else if (isBrsFile(file)) {
+            if (isXmlFile(this.event.file) && !codeSegment) {
+                completionResults = this.getXmlFileCompletions(this.event.position, this.event.file);
+            } else if (isBrsCodeSegment(codeSegment)) {
                 //handle script import completions
-                let scriptImport = util.getScriptImportAtPosition(file.ownScriptImports, this.event.position);
+                let scriptImport = util.getScriptImportAtPosition(codeSegment.ownScriptImports, this.event.position);
                 if (scriptImport) {
-                    this.event.completions.push(...this.getScriptImportCompletions(file.program, file.pkgPath, scriptImport));
+                    this.event.completions.push(...this.getScriptImportCompletions(codeSegment.program, codeSegment.pkgPath, scriptImport));
                     return;
                 }
 
-                const results = this.getBrsFileCompletions(this.event.position, file, scopesToProcess);
+                const results = this.getBrsCodeSegmentCompletions(this.event.position, codeSegment, scopesToProcess);
                 completionResults = results.scoped;
                 globalResults = results.global;
             }
@@ -175,10 +174,10 @@ export class CompletionsProcessor {
     /**
      * Get completions available at the given cursor. This aggregates all values from this file and the current scope.
      */
-    public getBrsFileCompletions(position: Position, file: BrsFile, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
+    private getBrsCodeSegmentCompletions(position: Position, codeSegment: BrsCodeSegment, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
-        const currentTokenByFilePosition = file.getTokenAt(position);
-        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(util.getLocation(file.getClosestExpression(position))?.range.start);
+        const currentTokenByFilePosition = codeSegment.getTokenAt(position);
+        const currentToken = currentTokenByFilePosition ?? codeSegment.getTokenAt(util.getLocation(codeSegment.getClosestExpression(position))?.range.start);
 
         const emptyResult = { global: [], scoped: [] };
 
@@ -188,7 +187,7 @@ export class CompletionsProcessor {
         const tokenKind = currentToken?.kind;
 
         //if cursor is after a comment, disable completions
-        if (this.isPositionInComment(file, position)) {
+        if (this.isPositionInComment(codeSegment, position)) {
             return emptyResult;
         }
 
@@ -198,36 +197,36 @@ export class CompletionsProcessor {
         let symbolTableLookupFlag = SymbolTypeFlag.runtime;
         let beforeDotToken: Token;
 
-        if (file.tokenFollows(currentToken, TokenKind.Goto)) {
-            let functionScope = file.getFunctionScopeAtPosition(position);
+        if (codeSegment.tokenFollows(currentToken, TokenKind.Goto)) {
+            let functionScope = codeSegment.getFunctionScopeAtPosition(position);
             return { global: [], scoped: this.getLabelCompletion(functionScope) };
         }
 
-        if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
-            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Dot);
-            beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
+        if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Dot)) {
+            const dotToken = this.getAdjacentToken(codeSegment, currentToken, TokenKind.Dot);
+            beforeDotToken = codeSegment.getTokenBefore(dotToken);
+            expression = codeSegment.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForMembers = true;
-        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc)) {
-            const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Callfunc);
-            beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
+        } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Callfunc)) {
+            const dotToken = this.getAdjacentToken(codeSegment, currentToken, TokenKind.Callfunc);
+            beforeDotToken = codeSegment.getTokenBefore(dotToken);
+            expression = codeSegment.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForCallFuncMembers = true;
-        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.As)) {
-            if (file.parseMode === ParseMode.BrightScript) {
+        } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.As)) {
+            if (codeSegment.parseMode === ParseMode.BrightScript) {
                 return { global: NativeTypeCompletions, scoped: [] };
             }
-            expression = file.getClosestExpression(this.event.position);
+            expression = codeSegment.getClosestExpression(this.event.position);
             symbolTableLookupFlag = SymbolTypeFlag.typetime;
-        } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Equal)) {
-            expression = file.getClosestExpression(this.event.position);
+        } else if (this.isTokenAdjacentTo(codeSegment, currentToken, TokenKind.Equal)) {
+            expression = codeSegment.getClosestExpression(this.event.position);
             if (expression?.findAncestor<AliasStatement>(isAliasStatement)) {
                 // allow runtime and typetime lookups in alias statements
                 // eslint-disable-next-line no-bitwise
                 symbolTableLookupFlag = SymbolTypeFlag.runtime | SymbolTypeFlag.typetime;
             }
         } else {
-            expression = file.getClosestExpression(this.event.position);
+            expression = codeSegment.getClosestExpression(this.event.position);
         }
 
         if (isFunctionExpression(expression)) {
@@ -239,7 +238,7 @@ export class CompletionsProcessor {
             return emptyResult;
         }
 
-        const tokenBefore = file.getTokenBefore(file.getClosestToken(util.getLocation(expression)?.range?.start));
+        const tokenBefore = codeSegment.getTokenBefore(codeSegment.getClosestToken(util.getLocation(expression)?.range?.start));
 
         // helper to check get correct symbol tables for look ups
         function getSymbolTableForLookups() {
@@ -336,7 +335,7 @@ export class CompletionsProcessor {
                         currentSymbols.push(...nameSpaceTypeSofar.getMemberTable().getAllSymbols(symbolTableLookupFlag));
                     }
                 }
-                currentSymbols.push(...this.getScopeSymbolCompletions(file, scope, symbolTableLookupFlag));
+                currentSymbols.push(...this.getScopeSymbolCompletions(codeSegment, scope, symbolTableLookupFlag));
             }
 
             let ignoreAllPropertyNames = false;
@@ -361,24 +360,24 @@ export class CompletionsProcessor {
         return { global: globalCompletions, scoped: result };
     }
 
-    private getScopeSymbolCompletions(file: BrsFile, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
+    private getScopeSymbolCompletions(codeSegment: BrsCodeSegment, scope: Scope, symbolTableLookupFlag: SymbolTypeFlag) {
         // get all scope available symbols
 
-        const scopeSymbols = file.parseMode === ParseMode.BrighterScript
+        const scopeSymbols = codeSegment.parseMode === ParseMode.BrighterScript
             ? [...scope.symbolTable.getOwnSymbols(symbolTableLookupFlag), ...scope.allNamespaceTypeTable.getOwnSymbols(symbolTableLookupFlag)]
             : scope.symbolTable.getOwnSymbols(symbolTableLookupFlag);
 
-        const fileSymbols = file.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
+        const fileSymbols = codeSegment.ast.getSymbolTable().getOwnSymbols(symbolTableLookupFlag);
         scopeSymbols.push(...fileSymbols);
 
         const scopeAvailableSymbols = scopeSymbols.filter(sym => {
-            if (file.parseMode === ParseMode.BrighterScript) {
+            if (codeSegment.parseMode === ParseMode.BrighterScript) {
                 // eslint-disable-next-line no-bitwise
                 if (sym.flags & SymbolTypeFlag.postTranspile) {
                     // underscored symbols should not be available in Brighterscript files
                     return false;
                 }
-            } else if (file.parseMode === ParseMode.BrightScript) {
+            } else if (codeSegment.parseMode === ParseMode.BrightScript) {
                 if (isNamespaceType(sym.type)) {
                     return false;
                 }
@@ -568,8 +567,8 @@ export class CompletionsProcessor {
      */
     public getPropertyNameCompletions(scope: Scope) {
         let results = [] as CompletionItem[];
-        scope.enumerateBrsFiles((file) => {
-            results.push(...file.propertyNameCompletions);
+        scope.enumerateBrsCodeSegments((codeSegment) => {
+            results.push(...codeSegment.propertyNameCompletions);
         });
         return results;
     }
@@ -579,11 +578,11 @@ export class CompletionsProcessor {
      */
     public getAllClassMemberCompletions(scope: Scope) {
         let results = new Map<string, CompletionItem>();
-        let filesSearched = new Set<BscFile>();
-        for (const file of scope.getAllFiles()) {
-            if (isBrsFile(file) && !filesSearched.has(file)) {
+        let codeSegmentsSearched = new Set<BrsCodeSegment>();
+        for (const codeSegment of scope.getAllCodeSegments()) {
+            if (isBrsCodeSegment(codeSegment) && !codeSegmentsSearched.has(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (let cs of file['_cachedLookups'].classStatements) {
+                for (let cs of codeSegment['_cachedLookups'].classStatements) {
                     for (let s of cs.members) {
                         if (s.isActive !== false && !results.has(s.tokens.name.text) && s.tokens.name.text.toLowerCase() !== 'new') {
                             results.set(s.tokens.name.text, {
@@ -594,7 +593,7 @@ export class CompletionsProcessor {
                     }
                 }
             }
-            filesSearched.add(file);
+            codeSegmentsSearched.add(codeSegment);
         }
         return results;
     }
@@ -646,8 +645,8 @@ export class CompletionsProcessor {
         ];
     }
 
-    private isPositionInComment(file: BrsFile, position: Position) {
-        const currentToken = file.getCurrentOrNextTokenAt(position);
+    private isPositionInComment(codeSegment: BrsCodeSegment, position: Position) {
+        const currentToken = codeSegment.getCurrentOrNextTokenAt(position);
         const tokenKind = currentToken?.kind;
         if (!currentToken) {
             return true;
@@ -656,7 +655,7 @@ export class CompletionsProcessor {
             return true;
         }
 
-        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
+        const nextNonComment = codeSegment.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
         const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
         if (firstComment && util.comparePosition(position, util.getLocation(firstComment)?.range.start) >= 0) {
             return true;
@@ -664,12 +663,12 @@ export class CompletionsProcessor {
         return false;
     }
 
-    private isTokenAdjacentTo(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
-        return file.getPreviousToken(currentToken)?.kind === targetKind || file.isTokenNextToTokenKind(currentToken, targetKind);
+    private isTokenAdjacentTo(codeSegment: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
+        return codeSegment.getPreviousToken(currentToken)?.kind === targetKind || codeSegment.isTokenNextToTokenKind(currentToken, targetKind);
     }
 
-    private getAdjacentToken(file: BrsFile, currentToken: Token, targetKind: TokenKind) {
-        return currentToken.kind === targetKind ? currentToken : file.getTokenBefore(currentToken, targetKind);
+    private getAdjacentToken(codeSegment: BrsCodeSegment, currentToken: Token, targetKind: TokenKind) {
+        return currentToken.kind === targetKind ? currentToken : codeSegment.getTokenBefore(currentToken, targetKind);
     }
 }
 

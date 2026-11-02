@@ -1,7 +1,7 @@
-import { isBrsFile } from '../../astUtils/reflection';
-import type { BrsFile } from '../../files/BrsFile';
+import { isBrsCodeSegment } from '../../astUtils/reflection';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
 import type { ProvideDocumentSymbolsEvent } from '../../interfaces';
-import { getDocumentSymbolsFromBrsFile } from './symbolUtils';
+import { getDocumentSymbolsFromBrsCodeSegment } from './symbolUtils';
 
 export class DocumentSymbolProcessor {
     public constructor(
@@ -11,13 +11,13 @@ export class DocumentSymbolProcessor {
     }
 
     public process() {
-        if (isBrsFile(this.event.file)) {
-            return this.getBrsFileDocumentSymbols(this.event.file);
+        if (isBrsCodeSegment(this.event.codeSegment)) {
+            return this.getBrsCodeSegmentDocumentSymbols(this.event.codeSegment);
         }
     }
 
-    private getBrsFileDocumentSymbols(file: BrsFile) {
-        const symbols = getDocumentSymbolsFromBrsFile(file);
+    private getBrsCodeSegmentDocumentSymbols(codeSegment: BrsCodeSegment) {
+        const symbols = getDocumentSymbolsFromBrsCodeSegment(codeSegment);
         this.event.documentSymbols.push(...symbols);
         return this.event.documentSymbols;
     }

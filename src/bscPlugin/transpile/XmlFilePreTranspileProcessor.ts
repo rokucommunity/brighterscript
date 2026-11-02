@@ -2,13 +2,13 @@ import { createSGScript } from '../../astUtils/creators';
 import { isXmlFile } from '../../astUtils/reflection';
 import { isSGScript } from '../../astUtils/xml';
 import type { XmlFile } from '../../files/XmlFile';
-import type { AfterPrepareFileEvent } from '../../interfaces';
+import type { PrepareFileEvent } from '../../interfaces';
 import type { SGScript } from '../../parser/SGTypes';
 import util from '../../util';
 
 export class XmlFilePreTranspileProcessor {
     public constructor(
-        private event: AfterPrepareFileEvent<XmlFile>
+        private event: PrepareFileEvent<XmlFile>
     ) {
     }
 

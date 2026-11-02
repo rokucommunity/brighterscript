@@ -1,12 +1,12 @@
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import type { Scope } from './Scope';
-import type { BrsFile, ProvidedSymbol, ProvidedSymbolInfo } from './files/BrsFile';
+import type { ProvidedSymbol, ProvidedSymbolInfo } from './files/BrsFile';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { Program } from './Program';
 import { util } from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isCallExpression, isConstStatement, isEnumStatement, isEnumType, isFunctionStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
+import { isBrsFile, isCallExpression, isConstStatement, isEnumStatement, isEnumType, isFunctionStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
 import type { ReferenceType } from './types/ReferenceType';
 import { getAllRequiredSymbolNames } from './types/ReferenceType';
 import type { TypeChainEntry, TypeChainProcessResult } from './interfaces';
@@ -14,15 +14,23 @@ import { BscTypeKind } from './types/BscTypeKind';
 import { getAllTypesFromCompoundType } from './types/helpers';
 import type { BscType } from './types/BscType';
 import type { BscFile } from './files/BscFile';
+import type { BrsCodeSegment } from './files/BrsCodeSegment';
 import type { ClassStatement, ConstStatement, EnumMemberStatement, EnumStatement, InterfaceStatement, NamespaceStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
-import { globalFile } from './globalCallables';
+import { globalCodeSegment } from './globalCallables';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import type { InheritableType } from './types';
 import type { Locatable } from './lexer/Token';
 
 
-interface FileSymbolPair {
+interface CodeSegmentSymbolPair {
+    /**
+     * The code segment that provides the symbol. Undefined for symbols that don't come from BrightScript (i.e. components)
+     */
+    codeSegment?: BrsCodeSegment;
+    /**
+     * The file that provides the symbol
+     */
     file: BscFile;
     symbol: BscSymbol;
 }
@@ -37,17 +45,17 @@ interface SymbolLookupKeys {
 const CrossScopeValidatorDiagnosticTag = 'CrossScopeValidator';
 
 /**
- * Where a symbol gets added to a scope's provided symbols: the file, and its order within that file
+ * Where a symbol gets added to a scope's provided symbols: the code, and its order within that code
  * (runtime symbols first, then typetime, in insertion order - same order the scope used to add them in)
  */
 interface ProvidedSymbolEvent {
-    file: BscFile;
+    codeSegment: BrsCodeSegment;
     order: number;
     symbolName: string;
     symbolObj: ProvidedSymbol;
 }
 
-interface IndexedFile {
+interface IndexedCode {
     providedSymbols: ProvidedSymbolInfo;
     symbolNames: string[];
     namespaceNames: string[];
@@ -55,10 +63,10 @@ interface IndexedFile {
 
 /**
  * Program-wide index of every provided symbol and namespace, so each scope doesn't have to rebuild its own tree
- * out of every file's provided symbols. Only updated when a file's provided symbols change
+ * out of every code segment's provided symbols. Only updated when a code segment's provided symbols change
  */
 export class ProvidedSymbolIndex {
-    private files = new Map<BscFile, IndexedFile>();
+    private codeSegments = new Map<BrsCodeSegment, IndexedCode>();
 
     /**
      * lower full symbol name -> every place it gets provided
@@ -66,23 +74,23 @@ export class ProvidedSymbolIndex {
     public symbolEvents = new Map<string, ProvidedSymbolEvent[]>();
 
     /**
-     * lower full namespace name -> the order of the first symbol in each file that creates it
+     * lower full namespace name -> the order of the first symbol in each code segment that creates it
      */
-    public namespaceEvents = new Map<string, Map<BscFile, number>>();
+    public namespaceEvents = new Map<string, Map<BrsCodeSegment, number>>();
 
     /**
-     * (re)index a file, if its provided symbols changed since last time
+     * (re)index a code segment, if its provided symbols changed since last time
      */
-    public update(file: BrsFile) {
-        const providedSymbols = file.providedSymbols;
-        const existing = this.files.get(file);
+    public update(codeSegment: BrsCodeSegment) {
+        const providedSymbols = codeSegment.providedSymbols;
+        const existing = this.codeSegments.get(codeSegment);
         if (existing?.providedSymbols === providedSymbols) {
             return;
         }
         if (existing) {
-            this.remove(file);
+            this.remove(codeSegment);
         }
-        const indexed: IndexedFile = { providedSymbols: providedSymbols, symbolNames: [], namespaceNames: [] };
+        const indexed: IndexedCode = { providedSymbols: providedSymbols, symbolNames: [], namespaceNames: [] };
         let order = 0;
         for (const nameMap of providedSymbols.symbolMap.values()) {
             for (const [symbolName, symbolObj] of nameMap) {
@@ -94,20 +102,20 @@ export class ProvidedSymbolIndex {
                     events = [];
                     this.symbolEvents.set(symbolName, events);
                 }
-                events.push({ file: file, order: order, symbolName: symbolName, symbolObj: symbolObj });
+                events.push({ codeSegment: codeSegment, order: order, symbolName: symbolName, symbolObj: symbolObj });
                 indexed.symbolNames.push(symbolName);
 
                 //adding `a.b.c` creates the `a` and `a.b` namespaces
                 let dotIndex = symbolName.indexOf('.');
                 while (dotIndex > 0) {
                     const namespaceName = symbolName.substring(0, dotIndex);
-                    let namespaceFiles = this.namespaceEvents.get(namespaceName);
-                    if (!namespaceFiles) {
-                        namespaceFiles = new Map();
-                        this.namespaceEvents.set(namespaceName, namespaceFiles);
+                    let namespaceCodeSegments = this.namespaceEvents.get(namespaceName);
+                    if (!namespaceCodeSegments) {
+                        namespaceCodeSegments = new Map();
+                        this.namespaceEvents.set(namespaceName, namespaceCodeSegments);
                     }
-                    if (!namespaceFiles.has(file)) {
-                        namespaceFiles.set(file, order);
+                    if (!namespaceCodeSegments.has(codeSegment)) {
+                        namespaceCodeSegments.set(codeSegment, order);
                         indexed.namespaceNames.push(namespaceName);
                     }
                     dotIndex = symbolName.indexOf('.', dotIndex + 1);
@@ -115,16 +123,16 @@ export class ProvidedSymbolIndex {
                 order++;
             }
         }
-        this.files.set(file, indexed);
+        this.codeSegments.set(codeSegment, indexed);
     }
 
-    public remove(file: BscFile) {
-        const indexed = this.files.get(file);
+    public remove(codeSegment: BrsCodeSegment) {
+        const indexed = this.codeSegments.get(codeSegment);
         if (!indexed) {
             return;
         }
         for (const symbolName of new Set(indexed.symbolNames)) {
-            const events = this.symbolEvents.get(symbolName).filter(x => x.file !== file);
+            const events = this.symbolEvents.get(symbolName).filter(x => x.codeSegment !== codeSegment);
             if (events.length > 0) {
                 this.symbolEvents.set(symbolName, events);
             } else {
@@ -132,22 +140,22 @@ export class ProvidedSymbolIndex {
             }
         }
         for (const namespaceName of indexed.namespaceNames) {
-            const namespaceFiles = this.namespaceEvents.get(namespaceName);
-            namespaceFiles.delete(file);
-            if (namespaceFiles.size === 0) {
+            const namespaceCodeSegments = this.namespaceEvents.get(namespaceName);
+            namespaceCodeSegments.delete(codeSegment);
+            if (namespaceCodeSegments.size === 0) {
                 this.namespaceEvents.delete(namespaceName);
             }
         }
-        this.files.delete(file);
+        this.codeSegments.delete(codeSegment);
     }
 
     /**
-     * Drop files that aren't in the program anymore
+     * Drop code that isn't in the program anymore
      */
     public prune(program: Program) {
-        for (const file of [...this.files.keys()]) {
-            if (program.getFile(file.srcPath) !== file) {
-                this.remove(file);
+        for (const codeSegment of [...this.codeSegments.keys()]) {
+            if (!util.getCodeSegments(program.getFile(codeSegment.srcPath))?.includes(codeSegment)) {
+                this.remove(codeSegment);
             }
         }
     }
@@ -163,31 +171,31 @@ export class ProvidedSymbolIndex {
             isGlobal(symbolName);
     }
 
-    public getSymbolNames(file: BscFile) {
-        return this.files.get(file)?.symbolNames ?? [];
+    public getSymbolNames(codeSegment: BrsCodeSegment) {
+        return this.codeSegments.get(codeSegment)?.symbolNames ?? [];
     }
 }
 
-const positionsPerFile = 1e6;
+const positionsPerCode = 1e6;
 const referenceSymbolPositionStart = 1e15;
 
 interface PositionedSymbol {
     position: number;
-    pair: FileSymbolPair;
+    pair: CodeSegmentSymbolPair;
 }
 
 /**
  * The provided symbols of one scope, answered from the program-wide index. A position is when a symbol would have been
- * added to the scope's tree: the file's index in the scope, then the symbol's order in the file. Reference type symbols
+ * added to the scope's tree: the code's index in the scope, then the symbol's order in the code. Reference type symbols
  * that pass the fixpoint check get added after everything else
  */
 export class ScopeProvidedSymbols {
     constructor(
         private index: ProvidedSymbolIndex,
-        public componentsMap: Map<string, FileSymbolPair>
+        public componentsMap: Map<string, CodeSegmentSymbolPair>
     ) { }
 
-    public fileIndex = new Map<BscFile, number>();
+    public codeIndex = new Map<BrsCodeSegment, number>();
 
     private referenceSymbols = new Map<string, PositionedSymbol>();
     private referenceNamespaces = new Map<string, number>();
@@ -197,14 +205,14 @@ export class ScopeProvidedSymbols {
     private namespacePositionCache = new Map<string, number>();
 
     public getPosition(event: ProvidedSymbolEvent) {
-        return (this.fileIndex.get(event.file) * positionsPerFile) + event.order;
+        return (this.codeIndex.get(event.codeSegment) * positionsPerCode) + event.order;
     }
 
     /**
      * The events for this name in this scope, in the order they'd be added
      */
     public getEvents(symbolName: string) {
-        const events = this.index.symbolEvents.get(symbolName)?.filter(x => this.fileIndex.has(x.file)) ?? [];
+        const events = this.index.symbolEvents.get(symbolName)?.filter(x => this.codeIndex.has(x.codeSegment)) ?? [];
         return events.sort((a, b) => this.getPosition(a) - this.getPosition(b));
     }
 
@@ -215,10 +223,10 @@ export class ScopeProvidedSymbols {
         let position = this.namespacePositionCache.get(namespaceName);
         if (position === undefined) {
             position = Infinity;
-            for (const [file, order] of this.index.namespaceEvents.get(namespaceName) ?? []) {
-                const fileIndex = this.fileIndex.get(file);
-                if (fileIndex !== undefined) {
-                    position = Math.min(position, (fileIndex * positionsPerFile) + order);
+            for (const [codeSegment, order] of this.index.namespaceEvents.get(namespaceName) ?? []) {
+                const codeIndex = this.codeIndex.get(codeSegment);
+                if (codeIndex !== undefined) {
+                    position = Math.min(position, (codeIndex * positionsPerCode) + order);
                 }
             }
             this.namespacePositionCache.set(namespaceName, position);
@@ -237,7 +245,7 @@ export class ScopeProvidedSymbols {
             //only the first one can be stored - once a symbol is stored, later ones are duplicates
             const first = this.getEvents(symbolName)[0];
             if (first && this.getPosition(first) < this.getNamespacePosition(symbolName)) {
-                stored = { position: this.getPosition(first), pair: { file: first.file, symbol: first.symbolObj.symbol } };
+                stored = { position: this.getPosition(first), pair: { codeSegment: first.codeSegment, file: first.codeSegment.document, symbol: first.symbolObj.symbol } };
             }
             this.storedSymbolCache.set(symbolName, stored);
         }
@@ -247,7 +255,7 @@ export class ScopeProvidedSymbols {
     /**
      * The symbol stored for this name before the given position
      */
-    public getSymbolAt(symbolName: string, time: number): FileSymbolPair {
+    public getSymbolAt(symbolName: string, time: number): CodeSegmentSymbolPair {
         const stored = this.getStoredSymbol(symbolName) ?? this.referenceSymbols.get(symbolName);
         return stored && stored.position < time ? stored.pair : undefined;
     }
@@ -259,7 +267,7 @@ export class ScopeProvidedSymbols {
     /**
      * Add a reference type symbol that passed the fixpoint check. Returns its position
      */
-    public addReferenceSymbol(symbolName: string, pair: FileSymbolPair) {
+    public addReferenceSymbol(symbolName: string, pair: CodeSegmentSymbolPair) {
         const position = this.nextReferencePosition++;
         let dotIndex = symbolName.indexOf('.');
         while (dotIndex > 0) {
@@ -288,14 +296,14 @@ export class ProvidedSymbolsView {
         private time = Infinity
     ) { }
 
-    getSymbolByKey(symbolKeys: SymbolLookupKeys): FileSymbolPair {
+    getSymbolByKey(symbolKeys: SymbolLookupKeys): CodeSegmentSymbolPair {
         return this.getSymbol(symbolKeys.namespacedKey) ??
             this.getSymbol(symbolKeys.key) ??
             this.getSymbol(symbolKeys.namespacedPotentialTypeKey) ??
             this.getSymbol(symbolKeys.potentialTypeKey);
     }
 
-    getSymbol(symbolName: string): FileSymbolPair {
+    getSymbol(symbolName: string): CodeSegmentSymbolPair {
         if (!symbolName) {
             return;
         }
@@ -314,7 +322,7 @@ export class ProvidedSymbolsView {
         return this.getNamespaceByNameParts(lowerSymbolNameParts);
     }
 
-    getSymbolByNameParts(lowerSymbolNameParts: string[], root: ProvidedSymbolsView): FileSymbolPair {
+    getSymbolByNameParts(lowerSymbolNameParts: string[], root: ProvidedSymbolsView): CodeSegmentSymbolPair {
         const first = lowerSymbolNameParts?.[0];
         const rest = lowerSymbolNameParts.slice(1);
         if (!first) {
@@ -464,8 +472,8 @@ export class CrossScopeValidator {
         return keysArray;
     }
 
-    resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BscFile; providedSymbol: BscSymbol }>>();
-    providedTreeMap = new Map<string, { duplicatesMap: Map<string, Set<FileSymbolPair>>; providedTree: ProvidedSymbolsView }>();
+    resolutionsMap = new Map<UnresolvedSymbol, Set<{ scope: Scope; sourceCodeSegment: BrsCodeSegment; providedSymbol: BscSymbol }>>();
+    providedTreeMap = new Map<string, { duplicatesMap: Map<string, Set<CodeSegmentSymbolPair>>; providedTree: ProvidedSymbolsView }>();
 
     private providedSymbolIndex = new ProvidedSymbolIndex();
 
@@ -473,7 +481,7 @@ export class CrossScopeValidator {
      * Only kept for the length of one `addDiagnosticsForScopes` call - the global table doesn't change during it
      */
     private globalSymbolCache: Map<string, BscSymbol[] | null>;
-    private possibleDuplicateNamesCache: Map<BscFile, string[]>;
+    private possibleDuplicateNamesCache: Map<BrsCodeSegment, string[]>;
 
     private getGlobalSymbol(lowerSymbolName: string) {
         let result = this.globalSymbolCache?.get(lowerSymbolName);
@@ -486,29 +494,29 @@ export class CrossScopeValidator {
     }
 
     /**
-     * Names from this file that could be a duplicate in some scope. Every other name can't be, so it isn't looked at per scope
+     * Names from this code that could be a duplicate in some scope. Every other name can't be, so it isn't looked at per scope
      */
-    private getPossibleDuplicateNames(file: BscFile) {
-        let names = this.possibleDuplicateNamesCache?.get(file);
+    private getPossibleDuplicateNames(codeSegment: BrsCodeSegment) {
+        let names = this.possibleDuplicateNamesCache?.get(codeSegment);
         if (!names) {
-            names = this.providedSymbolIndex.getSymbolNames(file).filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
-            this.possibleDuplicateNamesCache?.set(file, names);
+            names = this.providedSymbolIndex.getSymbolNames(codeSegment).filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
+            this.possibleDuplicateNamesCache?.set(codeSegment, names);
         }
         return names;
     }
 
 
-    private componentsMap = new Map<string, FileSymbolPair>();
+    private componentsMap = new Map<string, CodeSegmentSymbolPair>();
 
     getRequiredMap(scope: Scope) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
-        scope.enumerateBrsFiles((file) => {
+        scope.enumerateBrsCodeSegments((codeSegment) => {
             //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics,
             //so don't flag their own unresolved type references as missing symbols
-            if (file.isTypedef) {
+            if (isBrsFile(codeSegment.document) && codeSegment.document.isTypedef) {
                 return;
             }
-            for (const symbol of file.requiredSymbols) {
+            for (const symbol of codeSegment.requiredSymbols) {
                 const symbolKeysArray = this.symbolMapKeys(symbol);
                 for (const symbolKeys of symbolKeysArray) {
                     map.set(symbolKeys, symbol);
@@ -524,12 +532,12 @@ export class CrossScopeValidator {
         }
         const scopeSymbols = new ScopeProvidedSymbols(this.providedSymbolIndex, this.componentsMap);
         const providedTree = new ProvidedSymbolsView(scopeSymbols);
-        const duplicatesByName = new Map<string, { position: number; dupesSet: Set<FileSymbolPair> }>();
+        const duplicatesByName = new Map<string, { position: number; dupesSet: Set<CodeSegmentSymbolPair> }>();
 
-        const referenceTypesMap = new Map<{ symbolName: string; file: BscFile; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
+        const referenceTypesMap = new Map<{ symbolName: string; codeSegment: BrsCodeSegment; symbolObj: ProvidedSymbol }, Array<{ name: string; namespacedName?: string }>>();
 
         //does the same as adding the symbol to a per-scope tree at `position`, and collects any duplicates
-        const addSymbolWithDuplicates = (symbolName: string, file: BscFile, symbolObj: ProvidedSymbol, position: number) => {
+        const addSymbolWithDuplicates = (symbolName: string, codeSegment: BrsCodeSegment, symbolObj: ProvidedSymbol, position: number) => {
             const globalSymbol = this.getGlobalSymbol(symbolName);
             const symbolIsNamespace = scopeSymbols.hasNamespaceAt(symbolName, position);
             let isDupe = symbolIsNamespace;
@@ -540,7 +548,7 @@ export class CrossScopeValidator {
             if (symbolIsNamespace || globalSymbol || isDupe || symbolObj.duplicates.length > 0) {
                 let dupesSet = duplicatesByName.get(symbolName)?.dupesSet;
                 if (!dupesSet) {
-                    dupesSet = new Set<{ file: BrsFile; symbol: BscSymbol }>();
+                    dupesSet = new Set<CodeSegmentSymbolPair>();
                     duplicatesByName.set(symbolName, { position: position, dupesSet: dupesSet });
                     //what the tree would have had for this name right after adding this symbol
                     const existing = new ProvidedSymbolsView(scopeSymbols, '', position + 0.5).getSymbol(symbolName);
@@ -548,12 +556,12 @@ export class CrossScopeValidator {
                         dupesSet.add(existing);
                     }
                 }
-                dupesSet.add({ file: file, symbol: symbolObj.symbol });
+                dupesSet.add({ codeSegment: codeSegment, file: codeSegment.document, symbol: symbolObj.symbol });
                 if (symbolIsNamespace) {
                     const namespaceContainer = scope.getNamespace(symbolName);
                     const nsNode = namespaceContainer?.namespaceStatements?.[0];
                     if (nsNode) {
-                        const nsFile = namespaceContainer.file;
+                        const nsCodeSegment = namespaceContainer.codeSegment;
                         const nsType = nsNode.getType({ flags: SymbolTypeFlag.typetime });
                         let nsSymbol: BscSymbol = {
                             name: nsNode.getName(ParseMode.BrighterScript),
@@ -561,34 +569,34 @@ export class CrossScopeValidator {
                             data: { definingNode: nsNode },
                             flags: SymbolTypeFlag.typetime
                         };
-                        dupesSet.add({ file: nsFile, symbol: nsSymbol });
+                        dupesSet.add({ codeSegment: nsCodeSegment, file: nsCodeSegment.document, symbol: nsSymbol });
                     }
                 }
                 for (const providedDupeSymbol of symbolObj.duplicates) {
-                    dupesSet.add({ file: file, symbol: providedDupeSymbol });
+                    dupesSet.add({ codeSegment: codeSegment, file: codeSegment.document, symbol: providedDupeSymbol });
                 }
                 if (globalSymbol) {
-                    dupesSet.add({ file: globalFile, symbol: globalSymbol[0] });
+                    dupesSet.add({ codeSegment: globalCodeSegment, file: globalCodeSegment.document, symbol: globalSymbol[0] });
                 }
             }
         };
 
         const possibleDuplicateNames = new Set<string>();
-        let fileIndex = 0;
-        scope.enumerateBrsFiles((file) => {
-            scopeSymbols.fileIndex.set(file, fileIndex++);
-            for (const symbolName of this.getPossibleDuplicateNames(file)) {
+        let codeIndex = 0;
+        scope.enumerateBrsCodeSegments((codeSegment) => {
+            scopeSymbols.codeIndex.set(codeSegment, codeIndex++);
+            for (const symbolName of this.getPossibleDuplicateNames(codeSegment)) {
                 possibleDuplicateNames.add(symbolName);
             }
 
             // find all "provided symbols" that are reference types
-            for (const [_, nameMap] of file.providedSymbols.referenceSymbolMap.entries()) {
+            for (const [_, nameMap] of codeSegment.providedSymbols.referenceSymbolMap.entries()) {
                 for (const [symbolName, symbolObj] of nameMap.entries()) {
                     const symbolType = symbolObj.symbol.type;
                     const namespaceLower = symbolObj.symbol.data?.definingNode?.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript).toLowerCase();
                     const allNames = getAllRequiredSymbolNames(symbolType, namespaceLower);
 
-                    referenceTypesMap.set({ symbolName: symbolName, file: file, symbolObj: symbolObj }, allNames);
+                    referenceTypesMap.set({ symbolName: symbolName, codeSegment: codeSegment, symbolObj: symbolObj }, allNames);
                 }
             }
         });
@@ -596,7 +604,7 @@ export class CrossScopeValidator {
         //everything else is only provided once in this scope, and can't clash with anything
         for (const symbolName of possibleDuplicateNames) {
             for (const event of scopeSymbols.getEvents(symbolName)) {
-                addSymbolWithDuplicates(symbolName, event.file, event.symbolObj, scopeSymbols.getPosition(event));
+                addSymbolWithDuplicates(symbolName, event.codeSegment, event.symbolObj, scopeSymbols.getPosition(event));
             }
         }
 
@@ -613,9 +621,9 @@ export class CrossScopeValidator {
                 }
                 if (neededNames.length === foundNames) {
                     //found all that were needed
-                    const pair = { file: refTypeDetails.file, symbol: refTypeDetails.symbolObj.symbol };
+                    const pair = { codeSegment: refTypeDetails.codeSegment, file: refTypeDetails.codeSegment.document, symbol: refTypeDetails.symbolObj.symbol };
                     const position = scopeSymbols.addReferenceSymbol(refTypeDetails.symbolName, pair);
-                    addSymbolWithDuplicates(refTypeDetails.symbolName, refTypeDetails.file, refTypeDetails.symbolObj, position);
+                    addSymbolWithDuplicates(refTypeDetails.symbolName, refTypeDetails.codeSegment, refTypeDetails.symbolObj, position);
                     referenceTypesMap.delete(refTypeDetails);
                     addedSymbol = true;
                 }
@@ -626,7 +634,7 @@ export class CrossScopeValidator {
         }
 
         //keep the order the duplicates were first found in
-        let duplicatesMap: Map<string, Set<FileSymbolPair>> = null;
+        let duplicatesMap: Map<string, Set<CodeSegmentSymbolPair>> = null;
         for (const [symbolName, { dupesSet }] of [...duplicatesByName].sort((a, b) => a[1].position - b[1].position)) {
             duplicatesMap ??= new Map();
             duplicatesMap.set(symbolName, dupesSet);
@@ -656,12 +664,12 @@ export class CrossScopeValidator {
                 if (!unresolvedSymbol.typeChain[0].data?.isInstance) {
                     let resolvedListForSymbol = this.resolutionsMap.get(unresolvedSymbol);
                     if (!resolvedListForSymbol) {
-                        resolvedListForSymbol = new Set<{ scope: Scope; sourceFile: BrsFile; providedSymbol: BscSymbol }>();
+                        resolvedListForSymbol = new Set<{ scope: Scope; sourceCodeSegment: BrsCodeSegment; providedSymbol: BscSymbol }>();
                         this.resolutionsMap.set(unresolvedSymbol, resolvedListForSymbol);
                     }
                     resolvedListForSymbol.add({
                         scope: scope,
-                        sourceFile: foundSymbol.file,
+                        sourceCodeSegment: foundSymbol.codeSegment,
                         providedSymbol: foundSymbol.symbol
                     });
                 }
@@ -709,9 +717,9 @@ export class CrossScopeValidator {
         return { missingSymbols: missingSymbols, duplicatesMap: duplicatesMap };
     }
 
-    clearResolutionsForFile(file: BrsFile) {
+    clearResolutionsForCodeSegment(codeSegment: BrsCodeSegment) {
         for (const symbol of this.resolutionsMap.keys()) {
-            if (symbol.file === file) {
+            if (symbol.codeSegment === codeSegment) {
                 this.resolutionsMap.delete(symbol);
             }
         }
@@ -731,20 +739,23 @@ export class CrossScopeValidator {
         }
     }
 
+    /**
+     * Get the files whose code requires any of the changed symbols. Validation is incremental per file, so when any
+     * code in a file needs revalidating, the file is returned
+     */
     getFilesRequiringChangedSymbol(scopes: Scope[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         const filesThatNeedRevalidation = new Set<BscFile>();
-        const filesThatDoNotNeedRevalidation = new Set<BscFile>();
+        const codeSegmentsAlreadyChecked = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
-            scope.enumerateBrsFiles((file) => {
-                if (filesThatNeedRevalidation.has(file) || filesThatDoNotNeedRevalidation.has(file)) {
+            scope.enumerateBrsCodeSegments((codeSegment) => {
+                if (codeSegmentsAlreadyChecked.has(codeSegment)) {
                     return;
                 }
-                if (util.hasAnyRequiredSymbolChanged(file.requiredSymbols, changedSymbols)) {
-                    filesThatNeedRevalidation.add(file);
-                    return;
+                codeSegmentsAlreadyChecked.add(codeSegment);
+                if (util.hasAnyRequiredSymbolChanged(codeSegment.requiredSymbols, changedSymbols)) {
+                    filesThatNeedRevalidation.add(codeSegment.document);
                 }
-                filesThatDoNotNeedRevalidation.add(file);
             });
         }
         return filesThatNeedRevalidation;
@@ -752,16 +763,16 @@ export class CrossScopeValidator {
 
     getScopesRequiringChangedSymbol(scopes: Scope[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
         const scopesThatNeedRevalidation = new Set<Scope>();
-        const filesAlreadyChecked = new Set<BrsFile>();
+        const codeSegmentsAlreadyChecked = new Set<BrsCodeSegment>();
 
         for (const scope of scopes) {
-            scope.enumerateBrsFiles((file) => {
-                if (filesAlreadyChecked.has(file) || scopesThatNeedRevalidation.has(scope)) {
+            scope.enumerateBrsCodeSegments((codeSegment) => {
+                if (codeSegmentsAlreadyChecked.has(codeSegment) || scopesThatNeedRevalidation.has(scope)) {
                     return;
                 }
-                filesAlreadyChecked.add(file);
+                codeSegmentsAlreadyChecked.add(codeSegment);
 
-                if (util.hasAnyRequiredSymbolChanged(file.requiredSymbols, changedSymbols)) {
+                if (util.hasAnyRequiredSymbolChanged(codeSegment.requiredSymbols, changedSymbols)) {
                     scopesThatNeedRevalidation.add(scope);
                 }
             });
@@ -792,8 +803,8 @@ export class CrossScopeValidator {
         this.possibleDuplicateNamesCache = new Map();
         this.providedSymbolIndex.prune(this.program);
         for (const scope of scopes) {
-            scope.enumerateBrsFiles((file) => {
-                this.providedSymbolIndex.update(file);
+            scope.enumerateBrsCodeSegments((codeSegment) => {
+                this.providedSymbolIndex.update(codeSegment);
             });
         }
 

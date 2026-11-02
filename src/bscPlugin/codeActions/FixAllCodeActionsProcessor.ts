@@ -52,7 +52,9 @@ export class FixAllCodeActionsProcessor {
      * per-diagnostic quick-fix.
      */
     private processMissingExtends(diagnostics: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>[]) {
-        if (!isXmlFile(this.event.file)) {
+        //only the xml file's own event (no code segment) is about the component's xml
+        const isForComponentXml = isXmlFile(this.event.file) && !this.event.codeSegment;
+        if (!isForComponentXml) {
             return;
         }
 

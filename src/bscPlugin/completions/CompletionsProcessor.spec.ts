@@ -3,7 +3,7 @@ import { Program } from '../../Program';
 import util, { standardizePath as s } from '../../util';
 import { CompletionItemKind, Position, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
-import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, outDir, trim, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectCompletionsExcludes, expectCompletionsIncludes, tempDir, rootDir, outDir, trim, expectZeroDiagnostics, getBrsCodeSegment } from '../../testHelpers.spec';
 import { XmlFile } from '../../files/XmlFile';
 import { Keywords } from '../../lexer/TokenKind';
 import { CompletionsProcessor } from './CompletionsProcessor';
@@ -722,21 +722,21 @@ describe('CompletionsProcessor', () => {
             ).to.eql(['sayHello', 'sayHello2', 'sayHello3', 'sayHello4']);
         });
 
-        describe('getBrsFileCompletions', () => {
+        describe('getBrsCodeSegmentCompletions', () => {
             it('does not crash on expression with missing range', () => {
                 const file = program.setFile<BrsFile>('source/main.brs', `
                     sub main()
                         message = alpha
                     end sub
                 `);
-                const assignment = file.ast.findChild<AssignmentStatement>(isAssignmentStatement);
+                const assignment = getBrsCodeSegment(file).ast.findChild<AssignmentStatement>(isAssignmentStatement);
                 // destroy the `range` for this value
                 delete (assignment as any).value.range;
 
                 const processor = new CompletionsProcessor({ scopes: [] } as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file, [])
+                    processor['getBrsCodeSegmentCompletions'](util.createPosition(2, 39), getBrsCodeSegment(file), [])
                 ).to.eql({ global: [], scoped: [] });
             });
 
@@ -746,14 +746,14 @@ describe('CompletionsProcessor', () => {
                         message = alpha
                     end sub
                 `);
-                const func = file.ast.findChild<FunctionExpression>(isFunctionExpression);
+                const func = getBrsCodeSegment(file).ast.findChild<FunctionExpression>(isFunctionExpression);
                 // destroy the `body` for this value
                 delete (func as any).body;
 
                 const processor = new CompletionsProcessor({} as any);
                 expect(
                     // message = alpha|
-                    processor['getBrsFileCompletions'](util.createPosition(2, 39), file, program.getScopesForFile(file))
+                    processor['getBrsCodeSegmentCompletions'](util.createPosition(2, 39), getBrsCodeSegment(file), program.getScopesForFile(file))
                 ).to.eql({ global: [], scoped: [] });
             });
         });
@@ -821,6 +821,7 @@ describe('CompletionsProcessor', () => {
                 const completionProcessor = new CompletionsProcessor({
                     program: program,
                     file: mainFile,
+                    codeSegment: program.getCodeSegmentAt(mainFile, position),
                     position: position,
                     scopes: [],
                     completions: []
@@ -828,7 +829,7 @@ describe('CompletionsProcessor', () => {
                 program.validate();
                 //get the name of all global completions
                 const globalCompletions = program.globalScope.getAllFiles().flatMap((x) => {
-                    return completionProcessor.getBrsFileCompletions(position, x as BrsFile, program.getScopesForFile(x)).global;
+                    return completionProcessor['getBrsCodeSegmentCompletions'](position, getBrsCodeSegment(x), program.getScopesForFile(x)).global;
                 }).map(x => x.label);
                 //filter out completions from global scope
                 completions = completions.filter(x => !globalCompletions.includes(x.label));
@@ -1296,12 +1297,12 @@ describe('CompletionsProcessor', () => {
 
         it('creates proper tokens', () => {
             const file = program.setFile<BrsFile>(entry, `call(ModuleA.ModuleB.ModuleC.`);
-            expect(file['getPartialVariableName'](file.parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
-            expect(file['getPartialVariableName'](file.parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
-            expect(file['getPartialVariableName'](file.parser.tokens[5])).to.equal('ModuleA.ModuleB.');
-            expect(file['getPartialVariableName'](file.parser.tokens[4])).to.equal('ModuleA.ModuleB');
-            expect(file['getPartialVariableName'](file.parser.tokens[3])).to.equal('ModuleA.');
-            expect(file['getPartialVariableName'](file.parser.tokens[2])).to.equal('ModuleA');
+            expect(getBrsCodeSegment(file)['getPartialVariableName'](getBrsCodeSegment(file).parser.tokens[7])).to.equal('ModuleA.ModuleB.ModuleC.');
+            expect(getBrsCodeSegment(file)['getPartialVariableName'](getBrsCodeSegment(file).parser.tokens[6])).to.equal('ModuleA.ModuleB.ModuleC');
+            expect(getBrsCodeSegment(file)['getPartialVariableName'](getBrsCodeSegment(file).parser.tokens[5])).to.equal('ModuleA.ModuleB.');
+            expect(getBrsCodeSegment(file)['getPartialVariableName'](getBrsCodeSegment(file).parser.tokens[4])).to.equal('ModuleA.ModuleB');
+            expect(getBrsCodeSegment(file)['getPartialVariableName'](getBrsCodeSegment(file).parser.tokens[3])).to.equal('ModuleA.');
+            expect(getBrsCodeSegment(file)['getPartialVariableName'](getBrsCodeSegment(file).parser.tokens[2])).to.equal('ModuleA');
         });
     });
 

@@ -9,7 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
+import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareBrsCodeSegmentEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent, ProvideCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import { standardizePath as s, util } from './util';
@@ -25,7 +25,7 @@ import type { FirmwareCapabilities } from './RokuConstants';
 import { DEFAULT_MIN_FIRMWARE_VERSION, getFirmwareCapabilities, RSG_VERSIONS } from './RokuConstants';
 import { URI } from 'vscode-uri';
 import PluginInterface from './PluginInterface';
-import { isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
+import { isBrsCodeSegment, isBrsFile, isXmlFile, isXmlScope, isNamespaceStatement, isReferenceType } from './astUtils/reflection';
 import type { FunctionStatement, MethodStatement, NamespaceStatement } from './parser/Statement';
 import { BscPlugin } from './bscPlugin/BscPlugin';
 import { Editor } from './astUtils/Editor';
@@ -53,6 +53,8 @@ import { BuiltInInterfaceAdder } from './types/BuiltInInterfaceAdder';
 import type { UnresolvedSymbol } from './AstValidationSegmenter';
 import { WalkMode, createVisitor } from './astUtils/visitors';
 import type { BscFile } from './files/BscFile';
+import type { BrsCodeSegment } from './files/BrsCodeSegment';
+import type { CachedLookups } from './astUtils/CachedLookups';
 import { firstBy } from 'thenby';
 import { CrossScopeValidator } from './CrossScopeValidator';
 import { DiagnosticManager } from './DiagnosticManager';
@@ -297,7 +299,10 @@ export class Program {
      */
     public plugins: PluginInterface;
 
-    private fileSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
+    /**
+     * The symbols each code segment provides and requires, keyed by the code's `key`
+     */
+    private codeSegmentSymbolInformation = new Map<string, { provides: ProvidedSymbolInfo; requires: UnresolvedSymbol[] }>();
 
     private currentScopeValidationOptions: ScopeValidationOptions;
 
@@ -315,15 +320,15 @@ export class Program {
      */
     private componentsTable = new SymbolTable('Custom Components');
 
-    public addFileSymbolInfo(file: BrsFile) {
-        this.fileSymbolInformation.set(file.pkgPath, {
-            provides: file.providedSymbols,
-            requires: file.requiredSymbols
+    public addCodeSegmentSymbolInfo(codeSegment: BrsCodeSegment) {
+        this.codeSegmentSymbolInformation.set(codeSegment.key, {
+            provides: codeSegment.providedSymbols,
+            requires: codeSegment.requiredSymbols
         });
     }
 
-    public getFileSymbolInfo(file: BrsFile) {
-        return this.fileSymbolInformation.get(file.pkgPath);
+    public getCodeSegmentSymbolInfo(codeSegment: BrsCodeSegment) {
+        return this.codeSegmentSymbolInformation.get(codeSegment.key);
     }
 
     /**
@@ -369,39 +374,45 @@ export class Program {
     private fileClusters = new Map<string, BscFile[]>();
 
     /**
-     * Map from a lower-cased namespace name part to the set of `BrsFile`s that contribute
+     * Map from a lower-cased namespace name part to the set of `BrsCodeSegment`s that contribute
      * to it. Built lazily, invalidated whenever any file is added, removed, or re-parsed
      * (`setFile` and `removeFile` both clear it).
      *
      * Used by `ScopeNamespaceLookup` to resolve a namespace name to its contributing
-     * files in O(1), then intersect against the scope's file set.
+     * code in O(1), then intersect against the scope's code set.
      */
-    private namespaceContributors: Map<string, Set<BrsFile>> | undefined;
+    private namespaceContributors: Map<string, Set<BrsCodeSegment>> | undefined;
 
     /**
-     * Look up the set of `BrsFile`s that declare any part of the given namespace name
-     * (lowercased). Returns `undefined` when no file contributes.
+     * Look up the set of `BrsCodeSegment`s that declare any part of the given namespace name
+     * (lowercased). Returns `undefined` when no code contributes.
      * @internal
      */
-    protected getNamespaceContributors(namespaceNameLower: string): Set<BrsFile> | undefined {
+    protected getNamespaceContributors(namespaceNameLower: string): Set<BrsCodeSegment> | undefined {
         if (!this.namespaceContributors) {
             this.namespaceContributors = this.buildNamespaceContributors();
         }
         return this.namespaceContributors.get(namespaceNameLower);
     }
 
-    private buildNamespaceContributors(): Map<string, Set<BrsFile>> {
-        const contributors = new Map<string, Set<BrsFile>>();
+    private buildNamespaceContributors(): Map<string, Set<BrsCodeSegment>> {
+        const contributors = new Map<string, Set<BrsCodeSegment>>();
         for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (const nameLower of file['getNamespaceContributions']().keys()) {
-                    let set = contributors.get(nameLower);
-                    if (!set) {
-                        set = new Set<BrsFile>();
-                        contributors.set(nameLower, set);
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
+                continue;
+            }
+            for (const codeSegment of codeSegments) {
+                if (isBrsCodeSegment(codeSegment)) {
+                    // eslint-disable-next-line @typescript-eslint/dot-notation
+                    for (const nameLower of codeSegment['getNamespaceContributions']().keys()) {
+                        let set = contributors.get(nameLower);
+                        if (!set) {
+                            set = new Set<BrsCodeSegment>();
+                            contributors.set(nameLower, set);
+                        }
+                        set.add(codeSegment);
                     }
-                    set.add(file);
                 }
             }
         }
@@ -409,7 +420,7 @@ export class Program {
     }
 
     /**
-     * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-pkgPaths)`.
+     * Cached slow-path namespace aggregates, keyed by `(nameLower, sorted-contributor-code-keys)`.
      * Two scopes with the same in-scope file set for a multi-contributor namespace share
      * the same aggregate object (and therefore the same merged statement collections and
      * symbolTable instance). Built lazily, invalidated alongside `namespaceContributors`.
@@ -432,9 +443,9 @@ export class Program {
         if (!this.aggregateNamespaceContainerCache) {
             this.aggregateNamespaceContainerCache = new Map<string, NamespaceContainer>();
         }
-        //sorted pkgPaths ensure two scopes with the same contributor set hit the same key
+        //sorted code keys ensure two scopes with the same contributor set hit the same key
         const key = nameLower + '|' + contributions
-            .map(c => c.file.pkgPath.toLowerCase())
+            .map(c => c.codeSegment.key.toLowerCase())
             .sort()
             .join('|');
         let aggregate = this.aggregateNamespaceContainerCache.get(key);
@@ -450,7 +461,7 @@ export class Program {
         //field order matches the NamespaceContainer interface declaration so aggregates
         //share a single V8 hidden class with the per-scope wrapper containers
         const aggregate: NamespaceContainer = {
-            file: first.file,
+            codeSegment: first.codeSegment,
             fullName: first.fullName,
             nameRange: first.nameRange,
             lastPartName: first.lastPartName,
@@ -1196,15 +1207,17 @@ export class Program {
             if (this.isSourceBrsFile(file)) {
                 this.dependencyGraph.removeDependency('scope:source', file.dependencyGraphKey);
             }
-            if (isBrsFile(file)) {
-                this.logger.debug('Removing file symbol info', file.srcPath);
-
-                if (!keepSymbolInformation) {
-                    //the symbols this file provided are gone, so anything that required them needs to be revalidated
-                    this.addRemovedFileSymbolsToChangedSymbols(file);
-                    this.fileSymbolInformation.delete(file.pkgPath);
+            const codeSegments = util.getCodeSegments(file);
+            if (codeSegments) {
+                for (const codeSegment of codeSegments) {
+                    if (!keepSymbolInformation && isBrsCodeSegment(codeSegment)) {
+                        this.logger.debug('Removing code symbol info', codeSegment.key);
+                        //the symbols this code provided are gone, so anything that required them needs to be revalidated
+                        this.addRemovedCodeSegmentSymbolsToChangedSymbols(codeSegment);
+                        this.codeSegmentSymbolInformation.delete(codeSegment.key);
+                    }
+                    this.crossScopeValidation.clearResolutionsForCodeSegment(codeSegment);
                 }
-                this.crossScopeValidation.clearResolutionsForFile(file);
             }
 
             this.diagnostics.clearForFile(file.srcPath);
@@ -1229,11 +1242,11 @@ export class Program {
     }
 
     /**
-     * Record every symbol a removed file previously provided as changed, so the next validation
-     * revalidates the files and scopes that depended on them
+     * Record every symbol removed code previously provided as changed, so the next validation
+     * revalidates the code and scopes that depended on them
      */
-    private addRemovedFileSymbolsToChangedSymbols(file: BrsFile) {
-        const previouslyProvidedSymbols = this.fileSymbolInformation.get(file.pkgPath)?.provides.symbolMap;
+    private addRemovedCodeSegmentSymbolsToChangedSymbols(codeSegment: BrsCodeSegment) {
+        const previouslyProvidedSymbols = this.codeSegmentSymbolInformation.get(codeSegment.key)?.provides.symbolMap;
         if (!previouslyProvidedSymbols) {
             return;
         }
@@ -1256,6 +1269,10 @@ export class Program {
     private validationDetails: {
         brsFilesValidated: BrsFile[];
         xmlFilesValidated: XmlFile[];
+        /**
+         * The BrightScript code in every validated file (including code embedded in xml files)
+         */
+        brsCodeSegmentsValidated: BrsCodeSegment[];
         changedSymbols: Map<SymbolTypeFlag, Set<string>>;
         changedComponentTypes: string[];
         scopesToInvalidate: Scope[];
@@ -1265,6 +1282,7 @@ export class Program {
     } = {
             brsFilesValidated: [],
             xmlFilesValidated: [],
+            brsCodeSegmentsValidated: [],
             changedSymbols: new Map<SymbolTypeFlag, Set<string>>(),
             changedComponentTypes: [],
             scopesToInvalidate: [],
@@ -1323,6 +1341,7 @@ export class Program {
 
         const brsFilesValidated: BrsFile[] = this.validationDetails.brsFilesValidated;
         const xmlFilesValidated: XmlFile[] = this.validationDetails.xmlFilesValidated;
+        const brsCodeSegmentsValidated: BrsCodeSegment[] = this.validationDetails.brsCodeSegmentsValidated;
         const changedSymbols = this.validationDetails.changedSymbols;
         const changedComponentTypes = this.validationDetails.changedComponentTypes;
         const scopesToInvalidate = this.validationDetails.scopesToInvalidate;
@@ -1375,8 +1394,8 @@ export class Program {
             })
             //run before/validate/after as a single per-file action so the Sequencer can't cancel
             //between them. Splitting into three forEach steps would let cancellation land after
-            //`validateFile` (where BrsFileValidator pushes per-node symbols via addSymbol) but
-            //before `afterValidateFile` (where processSymbolInformation registers validation
+            //`validateBrsCodeSegment` (where BrsFileValidator pushes per-node symbols via addSymbol) but
+            //before `afterValidateBrsCodeSegment` (where processSymbolInformation registers validation
             //segments) — leaving the file in a half-processed state. The next pass would either
             //re-run BrsFileValidator (pushing duplicate symbols → CrossScopeValidator name-
             //collision) or skip the file in scope validation (no segments to walk → no
@@ -1384,18 +1403,41 @@ export class Program {
             //it's untouched. Plugins that need an all-files-done signal should use
             //`afterValidateProgram` instead of `afterValidateFile`.
             .forEach('validateFile', () => filesToProcess, (file) => {
-                this.plugins.emit('beforeValidateFile', {
+                //each phase runs the file's event, then the event for each code segment it provides: every `before`, then
+                //every main event, then every `after`. Code segments are validated in their events; the file events are
+                //for checks about the file itself (including xml). All of a file's events run here, in one action
+                const codeSegments = util.getCodeSegments(file);
+                const fileEvent = {
                     program: this,
                     file: file
-                });
-                this.plugins.emit('validateFile', {
+                };
+                const codeEvents = codeSegments?.map(codeSegment => ({
                     program: this,
-                    file: file
-                });
-                this.plugins.emit('afterValidateFile', {
-                    program: this,
-                    file: file
-                });
+                    file: file,
+                    codeSegment: codeSegment
+                }));
+                this.plugins.emit('beforeValidateFile', fileEvent);
+                if (codeEvents) {
+                    for (const codeEvent of codeEvents) {
+                        this.plugins.emit('beforeValidateBrsCodeSegment', codeEvent);
+                    }
+                }
+                this.plugins.emit('validateFile', fileEvent);
+                if (codeEvents) {
+                    for (const codeEvent of codeEvents) {
+                        this.plugins.emit('validateBrsCodeSegment', codeEvent);
+                    }
+                }
+                this.plugins.emit('afterValidateFile', fileEvent);
+                if (codeEvents) {
+                    for (const codeEvent of codeEvents) {
+                        this.plugins.emit('afterValidateBrsCodeSegment', codeEvent);
+                        codeEvent.codeSegment.isValidated = true;
+                        if (isBrsCodeSegment(codeEvent.codeSegment)) {
+                            brsCodeSegmentsValidated.push(codeEvent.codeSegment);
+                        }
+                    }
+                }
                 file.isValidated = true;
                 if (isBrsFile(file)) {
                     brsFilesValidated.push(file);
@@ -1403,14 +1445,15 @@ export class Program {
                     xmlFilesValidated.push(file);
                 }
             })
-            .forEach('do deferred component creation', () => [...brsFilesValidated, ...xmlFilesValidated], (file) => {
-                if (isXmlFile(file)) {
-                    this.addDeferredComponentTypeSymbolCreation(file);
-                } else if (isBrsFile(file) && !this.isFirstValidation) {
-                    const fileHasChanges = file.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || file.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
-                    if (fileHasChanges) {
-                        for (const scope of this.getScopesForFile(file)) {
-                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, file.providedSymbols.changes)) {
+            .forEach('do deferred component creation', () => [...brsCodeSegmentsValidated, ...xmlFilesValidated], (fileOrCodeSegment) => {
+                if (isXmlFile(fileOrCodeSegment)) {
+                    this.addDeferredComponentTypeSymbolCreation(fileOrCodeSegment);
+                } else if (isBrsCodeSegment(fileOrCodeSegment) && !this.isFirstValidation) {
+                    const codeSegment = fileOrCodeSegment;
+                    const codeHasChanges = codeSegment.providedSymbols.changes.get(SymbolTypeFlag.runtime).size > 0 || codeSegment.providedSymbols.changes.get(SymbolTypeFlag.typetime).size > 0;
+                    if (codeHasChanges) {
+                        for (const scope of this.getScopesForCodeSegment(codeSegment)) {
+                            if (isXmlScope(scope) && this.doesXmlFileRequireProvidedSymbols(scope.xmlFile, codeSegment.providedSymbols.changes)) {
                                 this.addDeferredComponentTypeSymbolCreation(scope.xmlFile);
                             }
                         }
@@ -1431,16 +1474,11 @@ export class Program {
                 });
             })
             .once('track and update type-time and runtime symbol dependencies and changes', () => {
-                const changedSymbolsMapArr = [...brsFilesValidated, ...xmlFilesValidated]?.map(f => {
-                    if (isBrsFile(f)) {
-                        return f.providedSymbols.changes;
-                    }
-                    return null;
-                }).filter(x => x);
+                const changedSymbolsMapArr = brsCodeSegmentsValidated.map(codeSegment => codeSegment.providedSymbols.changes);
 
                 // update the map of typetime dependencies
-                for (const file of brsFilesValidated) {
-                    for (const [symbolName, provided] of file.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
+                for (const codeSegment of brsCodeSegmentsValidated) {
+                    for (const [symbolName, provided] of codeSegment.providedSymbols.symbolMap.get(SymbolTypeFlag.typetime).entries()) {
                         // clear existing dependencies
                         for (const values of this.symbolDependencies.values()) {
                             values.delete(symbolName);
@@ -1507,6 +1545,7 @@ export class Program {
                 // can reset filesValidatedList, because they are no longer needed
                 this.validationDetails.brsFilesValidated = [];
                 this.validationDetails.xmlFilesValidated = [];
+                this.validationDetails.brsCodeSegmentsValidated = [];
             })
             .once('tracks changed symbols and prepares files and scopes for validation', () => {
                 if (this.options.logLevel === LogLevel.debug) {
@@ -1541,11 +1580,15 @@ export class Program {
                 this.validationDetails.changedComponentTypes = [];
             })
             .forEach('invalidating file segments', () => filesToBeValidatedInScopeContext, (file) => {
-                if (isBrsFile(file)) {
-                    file.validationSegmenter.unValidateAllSegments();
-                    if (!this.isFirstValidation) {
-                        scopesToInvalidate.push(...this.getScopesForFile(file));
-                    }
+                const codeSegments = util.getCodeSegments(file);
+                if (!codeSegments) {
+                    return;
+                }
+                for (const codeSegment of codeSegments) {
+                    codeSegment.validationSegmenter.unValidateAllSegments();
+                }
+                if (!this.isFirstValidation) {
+                    scopesToInvalidate.push(...this.getScopesForFile(file));
                 }
             })
             .once('invalidate affected scopes', () => {
@@ -1761,6 +1804,18 @@ export class Program {
         }
     }
 
+    /**
+     * Get the file that provides the symbols for the given file.
+     * A `.brs` file that has a typedef (`.d.bs`) is described by that typedef, so the typedef is returned instead.
+     * Every other file provides its own symbols.
+     */
+    public getSymbolProvider(file: BscFile): BscFile {
+        if (isBrsFile(file) && file.hasTypedef && file.typedefFile) {
+            return file.typedefFile;
+        }
+        return file;
+    }
+
     private sortedScopeNames: string[] = undefined;
 
     /**
@@ -1826,8 +1881,59 @@ export class Program {
     }
 
     /**
-     * Get the first found scope for a file.
+     * Get the code in a file at the given position. When code segments are nested (i.e. a `<script>` block inside an xml component),
+     * the innermost one is returned.
+     * @returns the code at that position, or undefined if the file provides no code
      */
+    public getCodeSegmentAt(file: BscFile, position: Position): BrsCodeSegment | undefined {
+        let result: BrsCodeSegment;
+        const codeSegments = util.getCodeSegments(file);
+        if (!codeSegments) {
+            return undefined;
+        }
+        for (const codeSegment of codeSegments) {
+            if (!codeSegment.range) {
+                //code that covers the whole document is the fallback when no more specific code contains the position
+                result ??= codeSegment;
+            } else if (util.rangeContains(codeSegment.range, position)) {
+                if (!result?.range || util.isRangeInRange(codeSegment.range, result.range)) {
+                    result = codeSegment;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get what a file-wide request should be emitted for: the file itself (`undefined`), then each of its code segments
+     */
+    private getCodeSegmentsForRequest(file: BscFile): Array<BrsCodeSegment | undefined> {
+        const codeSegments = util.getCodeSegments(file);
+        return codeSegments ? [undefined, ...codeSegments] : [undefined];
+    }
+
+    /**
+     * Does the location belong to the given code segment (i.e. is it the innermost segment at that location)?
+     * With no code segment, does the location belong to the file outside of all of its code segments?
+     */
+    private isLocationInCodeSegment(file: BscFile, location: Location, codeSegment: BrsCodeSegment) {
+        return this.getCodeSegmentAt(file, location?.range?.start) === codeSegment;
+    }
+
+    /**
+     * Get the scopes that contain the given code. Code belongs to the same scopes as the file it lives in.
+     */
+    public getScopesForCodeSegment(codeSegment: BrsCodeSegment) {
+        return this.getScopesForFile(codeSegment.document);
+    }
+
+    /**
+     * Get the first scope that contains the given code. Code belongs to the same scopes as the file it lives in.
+     */
+    public getFirstScopeForCodeSegment(codeSegment: BrsCodeSegment): Scope | undefined {
+        return this.getFirstScopeForFile(codeSegment.document);
+    }
+
     public getFirstScopeForFile(file: BscFile): Scope | undefined {
         const scopeKeys = this.getSortedScopeNames();
         for (let key of scopeKeys) {
@@ -1839,36 +1945,36 @@ export class Program {
         }
     }
 
-    public getStatementsByName(name: string, originFile: BrsFile, namespaceName?: string): FileLink<Statement>[] {
+    public getStatementsByName(name: string, origin: BrsCodeSegment, namespaceName?: string): FileLink<Statement>[] {
         let results = new Map<Statement, FileLink<Statement>>();
-        const filesSearched = new Set<BrsFile>();
+        const codeSegmentsSearched = new Set<BrsCodeSegment>();
         let lowerNamespaceName = namespaceName?.toLowerCase();
         let lowerName = name?.toLowerCase();
 
-        function addToResults(statement: FunctionStatement | MethodStatement, file: BrsFile) {
-            let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(originFile.parseMode)?.toLowerCase();
+        function addToResults(statement: FunctionStatement | MethodStatement, codeSegment: BrsCodeSegment) {
+            let parentNamespaceName = statement.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(origin.parseMode)?.toLowerCase();
             if (statement.tokens.name.text.toLowerCase() === lowerName && (!lowerNamespaceName || parentNamespaceName === lowerNamespaceName)) {
                 if (!results.has(statement)) {
-                    results.set(statement, { item: statement, file: file as BrsFile });
+                    results.set(statement, { item: statement, codeSegment: codeSegment });
                 }
             }
         }
 
         //look through all files in scope for matches
-        for (const scope of this.getScopesForFile(originFile)) {
-            for (const file of scope.getAllFiles()) {
-                //skip non-brs files, or files we've already processed
-                if (!isBrsFile(file) || filesSearched.has(file)) {
+        for (const scope of this.getScopesForCodeSegment(origin)) {
+            for (const codeSegment of scope.getAllCodeSegments()) {
+                //skip non-brs code, or code we've already processed
+                if (!isBrsCodeSegment(codeSegment) || codeSegmentsSearched.has(codeSegment)) {
                     continue;
                 }
-                filesSearched.add(file);
+                codeSegmentsSearched.add(codeSegment);
 
-                file.ast.walk(createVisitor({
+                codeSegment.ast.walk(createVisitor({
                     FunctionStatement: (statement: FunctionStatement) => {
-                        addToResults(statement, file);
+                        addToResults(statement, codeSegment);
                     },
                     MethodStatement: (statement: MethodStatement) => {
-                        addToResults(statement, file);
+                        addToResults(statement, codeSegment);
                     }
                 }), {
                     walkMode: WalkMode.visitStatements
@@ -1880,7 +1986,7 @@ export class Program {
 
     public getStatementsForXmlFile(scope: XmlScope, filterName?: string): FileLink<FunctionStatement>[] {
         let results = new Map<Statement, FileLink<FunctionStatement>>();
-        const filesSearched = new Set<BrsFile>();
+        const codeSegmentsSearched = new Set<BrsCodeSegment>();
 
         //get all function names for the xml file and parents
         let funcNames = new Set<string>();
@@ -1896,23 +2002,29 @@ export class Program {
 
         //look through all files in scope for matches
         for (const file of scope.getOwnFiles()) {
-            //skip non-brs files, or files we've already processed
-            if (!isBrsFile(file) || filesSearched.has(file)) {
+            const codeSegments = util.getCodeSegments(file);
+            if (!codeSegments) {
                 continue;
             }
-            filesSearched.add(file);
+            for (const codeSegment of codeSegments) {
+                //skip non-brs code, or code we've already processed
+                if (!isBrsCodeSegment(codeSegment) || codeSegmentsSearched.has(codeSegment)) {
+                    continue;
+                }
+                codeSegmentsSearched.add(codeSegment);
 
-            file.ast.walk(createVisitor({
-                FunctionStatement: (statement: FunctionStatement) => {
-                    if (funcNames.has(statement.tokens.name.text)) {
-                        if (!results.has(statement)) {
-                            results.set(statement, { item: statement, file: file });
+                codeSegment.ast.walk(createVisitor({
+                    FunctionStatement: (statement: FunctionStatement) => {
+                        if (funcNames.has(statement.tokens.name.text)) {
+                            if (!results.has(statement)) {
+                                results.set(statement, { item: statement, codeSegment: codeSegment });
+                            }
                         }
                     }
-                }
-            }), {
-                walkMode: WalkMode.visitStatements
-            });
+                }), {
+                    walkMode: WalkMode.visitStatements
+                });
+            }
         }
         return [...results.values()];
     }
@@ -1931,6 +2043,7 @@ export class Program {
         const event: ProvideCompletionsEvent = {
             program: this,
             file: file,
+            codeSegment: this.getCodeSegmentAt(file, position),
             scopes: this.getScopesForFile(file),
             position: position,
             completions: []
@@ -1972,6 +2085,7 @@ export class Program {
         const event: ProvideDefinitionEvent = {
             program: this,
             file: file,
+            codeSegment: this.getCodeSegmentAt(file, position),
             position: position,
             definitions: []
         };
@@ -1990,6 +2104,7 @@ export class Program {
             const event = {
                 program: this,
                 file: file,
+                codeSegment: this.getCodeSegmentAt(file, position),
                 position: position,
                 scopes: this.getScopesForFile(file),
                 hovers: []
@@ -2010,15 +2125,25 @@ export class Program {
     public getDocumentSymbols(srcPath: string): DocumentSymbol[] | undefined {
         let file = this.getFile(srcPath);
         if (file) {
-            const event: ProvideDocumentSymbolsEvent = {
+            const documentSymbols = [] as DocumentSymbol[];
+            //one event for the file, then one for each of its code segments, collecting all of their symbols.
+            //Each phase runs for every event before the next phase starts
+            const events = this.getCodeSegmentsForRequest(file).map((codeSegment): ProvideDocumentSymbolsEvent => ({
                 program: this,
                 file: file,
-                documentSymbols: []
-            };
-            this.plugins.emit('beforeProvideDocumentSymbols', event);
-            this.plugins.emit('provideDocumentSymbols', event);
-            this.plugins.emit('afterProvideDocumentSymbols', event);
-            return event.documentSymbols;
+                codeSegment: codeSegment,
+                documentSymbols: documentSymbols
+            }));
+            for (const event of events) {
+                this.plugins.emit('beforeProvideDocumentSymbols', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('provideDocumentSymbols', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('afterProvideDocumentSymbols', event);
+            }
+            return documentSymbols;
         } else {
             return undefined;
         }
@@ -2032,16 +2157,50 @@ export class Program {
     public getSelectionRanges(srcPath: string, positions: Position[]): SelectionRange[] {
         const file = this.getFile(srcPath);
         if (file) {
-            const event: ProvideSelectionRangesEvent = {
-                program: this,
-                file: file,
-                positions: positions,
-                selectionRanges: []
-            };
-            this.plugins.emit('beforeProvideSelectionRanges', event);
-            this.plugins.emit('provideSelectionRanges', event);
-            this.plugins.emit('afterProvideSelectionRanges', event);
-            return event.selectionRanges;
+            //the result has one entry per position, in order. Group the positions by the code they fall in,
+            //emit once per code segment, then put each result back in its position's place
+            const indexesByCode = new Map<BrsCodeSegment | undefined, number[]>();
+            for (let i = 0; i < positions.length; i++) {
+                const codeSegment = this.getCodeSegmentAt(file, positions[i]);
+                if (!indexesByCode.has(codeSegment)) {
+                    indexesByCode.set(codeSegment, []);
+                }
+                indexesByCode.get(codeSegment).push(i);
+            }
+            const groups = [...indexesByCode].map(([codeSegment, indexes]) => ({
+                indexes: indexes,
+                event: {
+                    program: this,
+                    file: file,
+                    codeSegment: codeSegment,
+                    positions: indexes.map(i => positions[i]),
+                    selectionRanges: []
+                } as ProvideSelectionRangesEvent
+            }));
+            //each phase runs for every event before the next phase starts
+            for (const group of groups) {
+                this.plugins.emit('beforeProvideSelectionRanges', group.event);
+            }
+            for (const group of groups) {
+                this.plugins.emit('provideSelectionRanges', group.event);
+            }
+            for (const group of groups) {
+                this.plugins.emit('afterProvideSelectionRanges', group.event);
+            }
+            //when every position is in the same code segment, the event's results are already in order
+            if (groups.length === 1) {
+                return groups[0].event.selectionRanges;
+            }
+            const selectionRanges = [] as SelectionRange[];
+            //plugins may contribute more ranges than there are positions. Those go after the per-position results
+            const extraSelectionRanges = [] as SelectionRange[];
+            for (const group of groups) {
+                for (let j = 0; j < group.indexes.length; j++) {
+                    selectionRanges[group.indexes[j]] = group.event.selectionRanges[j];
+                }
+                extraSelectionRanges.push(...group.event.selectionRanges.slice(group.indexes.length));
+            }
+            return [...selectionRanges, ...extraSelectionRanges];
         }
         return [];
     }
@@ -2052,17 +2211,28 @@ export class Program {
     public getInlayHints(srcPath: string, range: Range): InlayHint[] {
         const file = this.getFile(srcPath);
         if (file) {
-            const event: ProvideInlayHintsEvent = {
+            const inlayHints = [] as InlayHint[];
+            const scopes = this.getScopesForFile(file);
+            //one event for the file, then one for each of its code segments, collecting all of their hints.
+            //Each phase runs for every event before the next phase starts
+            const events = this.getCodeSegmentsForRequest(file).map((codeSegment): ProvideInlayHintsEvent => ({
                 program: this,
                 file: file,
+                codeSegment: codeSegment,
                 range: range,
-                scopes: this.getScopesForFile(file),
-                inlayHints: []
-            };
-            this.plugins.emit('beforeProvideInlayHints', event);
-            this.plugins.emit('provideInlayHints', event);
-            this.plugins.emit('afterProvideInlayHints', event);
-            return event.inlayHints;
+                scopes: scopes,
+                inlayHints: inlayHints
+            }));
+            for (const event of events) {
+                this.plugins.emit('beforeProvideInlayHints', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('provideInlayHints', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('afterProvideInlayHints', event);
+            }
+            return inlayHints;
         }
         return [];
     }
@@ -2084,33 +2254,36 @@ export class Program {
                 .filter(x => util.rangesIntersectOrTouch(x.location.range, range));
 
             const scopes = this.getScopesForFile(file);
-
-            this.plugins.emit('beforeProvideCodeActions', {
+            //one event for each code segment the range touches, plus one for the file itself when part of the range is
+            //outside of its code segments (i.e. in the xml of a component). Each event only gets the diagnostics that
+            //belong to it, the same as source fix-all. A range inside a single code segment (like a cursor) gets one event
+            const codeSegments = util.getCodeSegments(file);
+            const isRangeInOneCodeSegment = !!codeSegments?.some(codeSegment => {
+                return !codeSegment.range || (util.rangeContains(codeSegment.range, range.start) && util.rangeContains(codeSegment.range, range.end));
+            });
+            const targets: Array<BrsCodeSegment | undefined> = isRangeInOneCodeSegment ? [] : [undefined];
+            if (codeSegments) {
+                targets.push(...codeSegments.filter(codeSegment => !codeSegment.range || util.rangesIntersectOrTouch(codeSegment.range, range)));
+            }
+            const events = targets.map((codeSegment): ProvideCodeActionsEvent => ({
                 program: this,
                 file: file,
+                codeSegment: codeSegment,
                 range: range,
-                diagnostics: diagnostics,
+                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, codeSegment)),
                 scopes: scopes,
                 codeActions: codeActions
-            });
-
-            this.plugins.emit('provideCodeActions', {
-                program: this,
-                file: file,
-                range: range,
-                diagnostics: diagnostics,
-                scopes: scopes,
-                codeActions: codeActions
-            });
-
-            this.plugins.emit('afterProvideCodeActions', {
-                program: this,
-                file: file,
-                range: range,
-                diagnostics: diagnostics,
-                scopes: scopes,
-                codeActions: codeActions
-            });
+            }));
+            //each phase runs for every event before the next phase starts
+            for (const event of events) {
+                this.plugins.emit('beforeProvideCodeActions', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('provideCodeActions', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('afterProvideCodeActions', event);
+            }
         }
         return codeActions;
     }
@@ -2130,16 +2303,25 @@ export class Program {
                 .getDiagnostics()
                 .filter(x => x.location?.uri === fileUri);
             const scopes = this.getScopesForFile(file);
-            const event: ProvideSourceFixAllCodeActionsEvent = {
+            //one event for the file, then one for each of its code segments, each with only the diagnostics that belong
+            //to it. Each phase runs for every event before the next phase starts
+            const events = this.getCodeSegmentsForRequest(file).map((codeSegment): ProvideSourceFixAllCodeActionsEvent => ({
                 program: this,
                 file: file,
-                diagnostics: diagnostics,
+                codeSegment: codeSegment,
+                diagnostics: diagnostics.filter(x => this.isLocationInCodeSegment(file, x.location, codeSegment)),
                 scopes: scopes,
                 actions: actions
-            };
-            this.plugins.emit('beforeProvideSourceFixAllCodeActions', event);
-            this.plugins.emit('provideSourceFixAllCodeActions', event);
-            this.plugins.emit('afterProvideSourceFixAllCodeActions', event);
+            }));
+            for (const event of events) {
+                this.plugins.emit('beforeProvideSourceFixAllCodeActions', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('provideSourceFixAllCodeActions', event);
+            }
+            for (const event of events) {
+                this.plugins.emit('afterProvideSourceFixAllCodeActions', event);
+            }
         }
         return actions.map(action => codeActionUtil.createCodeAction({
             ...action,
@@ -2153,35 +2335,49 @@ export class Program {
     public getSemanticTokens(srcPath: string): SemanticToken[] | undefined {
         const file = this.getFile(srcPath);
         if (file) {
-            this.plugins.emit('beforeProvideSemanticTokens', {
-                program: this,
-                file: file,
-                scopes: this.getScopesForFile(file),
-                semanticTokens: undefined
-            });
             const result = [] as SemanticToken[];
-            this.plugins.emit('provideSemanticTokens', {
-                program: this,
-                file: file,
-                scopes: this.getScopesForFile(file),
-                semanticTokens: result
-            });
-            this.plugins.emit('afterProvideSemanticTokens', {
-                program: this,
-                file: file,
-                scopes: this.getScopesForFile(file),
-                semanticTokens: result
-            });
+            const scopes = this.getScopesForFile(file);
+            //one event for the file, then one for each of its code segments, collecting all of their tokens.
+            //Each phase runs for every one of them before the next phase starts
+            const codeSegments = this.getCodeSegmentsForRequest(file);
+            for (const codeSegment of codeSegments) {
+                this.plugins.emit('beforeProvideSemanticTokens', {
+                    program: this,
+                    file: file,
+                    codeSegment: codeSegment,
+                    scopes: scopes,
+                    semanticTokens: undefined
+                });
+            }
+            for (const codeSegment of codeSegments) {
+                this.plugins.emit('provideSemanticTokens', {
+                    program: this,
+                    file: file,
+                    codeSegment: codeSegment,
+                    scopes: scopes,
+                    semanticTokens: result
+                });
+            }
+            for (const codeSegment of codeSegments) {
+                this.plugins.emit('afterProvideSemanticTokens', {
+                    program: this,
+                    file: file,
+                    codeSegment: codeSegment,
+                    scopes: scopes,
+                    semanticTokens: result
+                });
+            }
             return result;
         }
     }
 
     public getSignatureHelp(filePath: string, position: Position): SignatureInfoObj[] {
-        let file: BrsFile = this.getFile(filePath);
-        if (!file || !isBrsFile(file)) {
+        const file = this.getFile(filePath);
+        const codeSegment = file ? this.getCodeSegmentAt(file, position) : undefined;
+        if (!isBrsCodeSegment(codeSegment)) {
             return [];
         }
-        let callExpressionInfo = new CallExpressionInfo(file, position);
+        let callExpressionInfo = new CallExpressionInfo(codeSegment, position);
         let signatureHelpUtil = new SignatureHelpUtil();
         return signatureHelpUtil.getSignatureHelpItems(callExpressionInfo);
     }
@@ -2193,6 +2389,7 @@ export class Program {
         const event: ProvideReferencesEvent = {
             program: this,
             file: file,
+            codeSegment: this.getCodeSegmentAt(file, position),
             position: position,
             references: []
         };
@@ -2314,38 +2511,16 @@ export class Program {
         const outDir = this.getOutDir();
 
         //plugins are allowed to add files to `programEvent.files` while we're iterating (and they may insert or reorder
-        //rather than append), so track which files we've handled instead of relying on array position. Keep draining
-        //until every file in the list has been prepared exactly once.
+        //rather than append), so track which files we've handled instead of relying on array position. Files added
+        //during a round get a full round of their own, until every file in the list has been prepared exactly once.
         const preparedFiles = new Set<BscFile>();
         let filesToPrepare = [...programEvent.files];
         while (filesToPrepare.length > 0) {
             for (const file of filesToPrepare) {
                 preparedFiles.add(file);
-
-                const scope = this.getFirstScopeForFile(file);
-                //link the symbol table for all the files in this scope
-                scope?.linkSymbolTable();
-
-                //if the file doesn't have an editor yet, assign one now
-                if (!file.editor) {
-                    file.editor = new Editor();
-                }
-                const event = {
-                    program: this,
-                    file: file,
-                    editor: file.editor,
-                    scope: scope,
-                    outputPath: this.getOutputPath(file, outDir)
-                } as PrepareFileEvent & { outputPath: string };
-
-                await this.plugins.emitAsync('beforePrepareFile', event);
-                await this.plugins.emitAsync('prepareFile', event);
-                await this.plugins.emitAsync('afterPrepareFile', event);
-
-                //unlink the symbolTable so the next loop iteration can link theirs
-                scope?.unlinkSymbolTable();
             }
-            //pick up any files the plugins added during this pass
+            await this.prepareFiles(filesToPrepare, outDir);
+            //pick up any files the plugins added during this round
             filesToPrepare = programEvent.files.filter(x => !preparedFiles.has(x));
         }
 
@@ -2355,6 +2530,71 @@ export class Program {
         this.assignEditors(programEvent.files);
 
         return programEvent.files;
+    }
+
+    /**
+     * Prepare a round of files. Each phase runs for every file before the next phase starts: every `beforePrepareFile`
+     * (and the `beforePrepareBrsCodeSegment` for that file's code), then every `prepareFile`/`prepareBrsCodeSegment`, then every `afterPrepareFile`/`afterPrepareBrsCodeSegment`.
+     */
+    private async prepareFiles(files: BscFile[], outDir: string) {
+        const entries = files.map(file => {
+            const scope = this.getFirstScopeForFile(file);
+            //if the file doesn't have an editor yet, assign one now
+            if (!file.editor) {
+                file.editor = new Editor();
+            }
+            const event = {
+                program: this,
+                file: file,
+                editor: file.editor,
+                scope: scope,
+                outputPath: this.getOutputPath(file, outDir)
+            } as PrepareFileEvent & { outputPath: string };
+            const codeEvents = util.getCodeSegments(file)?.map((codeSegment): PrepareBrsCodeSegmentEvent => ({
+                program: this,
+                file: file,
+                codeSegment: codeSegment,
+                editor: codeSegment.editor ?? file.editor,
+                scope: scope
+            }));
+            return { scope: scope, event: event, codeEvents: codeEvents };
+        });
+
+        const phases = [
+            ['beforePrepareFile', 'beforePrepareBrsCodeSegment'],
+            ['prepareFile', 'prepareBrsCodeSegment'],
+            ['afterPrepareFile', 'afterPrepareBrsCodeSegment']
+        ] as const;
+        for (const [fileEventName, codeEventName] of phases) {
+            await this.runWithScopes(entries, async (entry) => {
+                await this.plugins.emitAsync(fileEventName, entry.event);
+                if (entry.codeEvents) {
+                    for (const codeEvent of entry.codeEvents) {
+                        await this.plugins.emitAsync(codeEventName, codeEvent);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * Run `action` for each item in order, with the item's scope's symbol table linked. Consecutive items in the same
+     * scope share one link, so the symbol table is only relinked when the scope changes.
+     */
+    private async runWithScopes<T extends { scope?: Scope }>(items: T[], action: (item: T) => Promise<void>) {
+        let linkedScope: Scope;
+        try {
+            for (const item of items) {
+                if (item.scope !== linkedScope) {
+                    linkedScope?.unlinkSymbolTable();
+                    linkedScope = item.scope;
+                    linkedScope?.linkSymbolTable();
+                }
+                await action(item);
+            }
+        } finally {
+            linkedScope?.unlinkSymbolTable();
+        }
     }
 
     /**
@@ -2394,8 +2634,8 @@ export class Program {
         //plugins may have added files during the serializeProgram events, so make sure every file has an editor
         this.assignEditors(files);
 
-        // serialize each file
-        for (const file of files) {
+        //serialize the files in phases: every `beforeSerializeFile`, then every `serializeFile`, then every `afterSerializeFile`
+        const entries = files.map(file => {
             let scope = this.getFirstScopeForFile(file);
 
             //if the file doesn't have a scope, create a temporary scope for the file so it can depend on scope-level items
@@ -2404,20 +2644,18 @@ export class Program {
                 scope.getAllFiles = () => [file];
                 scope.getOwnFiles = scope.getAllFiles;
             }
-
-            //link the symbol table for all the files in this scope
-            scope?.linkSymbolTable();
             const event: SerializeFileEvent = {
                 program: this,
                 file: file,
                 scope: scope,
                 result: allFiles
             };
-            await this.plugins.emitAsync('beforeSerializeFile', event);
-            await this.plugins.emitAsync('serializeFile', event);
-            await this.plugins.emitAsync('afterSerializeFile', event);
-            //unlink the symbolTable so the next loop iteration can link theirs
-            scope?.unlinkSymbolTable();
+            return { scope: scope, event: event };
+        });
+        for (const eventName of ['beforeSerializeFile', 'serializeFile', 'afterSerializeFile'] as const) {
+            await this.runWithScopes(entries, async (entry) => {
+                await this.plugins.emitAsync(eventName, entry.event);
+            });
         }
 
         this.plugins.emit('afterSerializeProgram', serializeProgramEvent);
@@ -2444,21 +2682,18 @@ export class Program {
             .map(([, serializedFiles]) => serializedFiles)
             .flat();
 
-        //write all the files to disk (asynchronously)
-        await Promise.all(
-            serializedFiles.map(async (file) => {
-                const event = await this.plugins.emitAsync('beforeWriteFile', {
-                    program: this,
-                    file: file,
-                    outputPath: this.getOutputPath(file, outDir),
-                    processedFiles: new Set<SerializedFile>()
-                });
-
-                await this.plugins.emitAsync('writeFile', event);
-
-                await this.plugins.emitAsync('afterWriteFile', event);
-            })
+        //write all the files to disk in phases: every `beforeWriteFile`, then every `writeFile`, then every `afterWriteFile`.
+        //The files within each phase are handled in parallel
+        const writeEvents = await Promise.all(
+            serializedFiles.map(file => this.plugins.emitAsync('beforeWriteFile', {
+                program: this,
+                file: file,
+                outputPath: this.getOutputPath(file, outDir),
+                processedFiles: new Set<SerializedFile>()
+            }))
         );
+        await Promise.all(writeEvents.map(event => this.plugins.emitAsync('writeFile', event)));
+        await Promise.all(writeEvents.map(event => this.plugins.emitAsync('afterWriteFile', event)));
 
         await this.plugins.emitAsync('afterWriteProgram', programEvent);
     }
@@ -2499,6 +2734,16 @@ export class Program {
             for (const file of new Set([...event.files, ...serializedFilesByFile.keys()])) {
                 //a file added by a plugin very late in the flow might not have an editor at all
                 file.editor?.undoAll();
+                //code can have an editor of its own (i.e. code embedded in an xml file)
+                const codeSegments = util.getCodeSegments(file);
+                if (!codeSegments) {
+                    continue;
+                }
+                for (const codeSegment of codeSegments) {
+                    if (codeSegment.editor && codeSegment.editor !== file.editor) {
+                        codeSegment.editor.undoAll();
+                    }
+                }
             }
         });
 
@@ -2515,84 +2760,54 @@ export class Program {
 
 
     /**
-     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     * Find the brs files that provide code matching the given check. Used to suggest imports, so xml files
+     * (which can't be imported) are not included, even when their `<script>` blocks match.
      */
-    public findFilesForFunction(functionName: string) {
+    private findBrsFilesWithMatchingCodeSegment(matches: (lookups: CachedLookups) => boolean) {
         const files = [] as BscFile[];
-        const lowerFunctionName = functionName.toLowerCase();
-        //find every file with this function defined
         for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-                //TODO handle namespace-relative function calls
-                //if the file has a function with this name
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].functionStatementMap.get(lowerFunctionName)) {
-                    files.push(file);
-                }
+            // eslint-disable-next-line @typescript-eslint/dot-notation
+            if (isBrsFile(file) && file.codeSegments.some(codeSegment => isBrsCodeSegment(codeSegment) && matches(codeSegment['_cachedLookups']))) {
+                files.push(file);
             }
         }
         return files;
     }
 
     /**
+     * Find a list of files in the program that have a function with the given name (case INsensitive)
+     */
+    public findFilesForFunction(functionName: string) {
+        const lowerFunctionName = functionName.toLowerCase();
+        //TODO handle namespace-relative function calls
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => !!lookups.functionStatementMap.get(lowerFunctionName));
+    }
+
+    /**
      * Find a list of files in the program that have a class with the given name (case INsensitive)
      */
     public findFilesForClass(className: string) {
-        const files = [] as BscFile[];
         const lowerClassName = className.toLowerCase();
-        //find every file with this class defined
-        for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-                //TODO handle namespace-relative classes
-                //if the file has a function with this name
-
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].classStatementMap.get(lowerClassName) !== undefined) {
-                    files.push(file);
-                }
-            }
-        }
-        return files;
+        //TODO handle namespace-relative classes
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => lookups.classStatementMap.get(lowerClassName) !== undefined);
     }
 
     public findFilesForNamespace(name: string) {
-        const files = [] as BscFile[];
         const lowerName = name.toLowerCase();
-        //find every file with this class defined
-        for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].namespaceStatements.find((x) => {
-                    const namespaceName = x.name.toLowerCase();
-                    return (
-                        //the namespace name matches exactly
-                        namespaceName === lowerName ||
-                        //the full namespace starts with the name (honoring the part boundary)
-                        namespaceName.startsWith(lowerName + '.')
-                    );
-                })) {
-                    files.push(file);
-                }
-            }
-        }
-
-        return files;
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => lookups.namespaceStatements.some((x) => {
+            const namespaceName = x.name.toLowerCase();
+            return (
+                //the namespace name matches exactly
+                namespaceName === lowerName ||
+                //the full namespace starts with the name (honoring the part boundary)
+                namespaceName.startsWith(lowerName + '.')
+            );
+        }));
     }
 
     public findFilesForEnum(name: string) {
-        const files = [] as BscFile[];
         const lowerName = name.toLowerCase();
-        //find every file with this enum defined
-        for (const file of Object.values(this.files)) {
-            if (isBrsFile(file)) {
-                // eslint-disable-next-line @typescript-eslint/dot-notation
-                if (file['_cachedLookups'].enumStatementMap.get(lowerName)) {
-                    files.push(file);
-                }
-            }
-        }
-        return files;
+        return this.findBrsFilesWithMatchingCodeSegment(lookups => !!lookups.enumStatementMap.get(lowerName));
     }
 
     private _manifest: Map<string, string>;

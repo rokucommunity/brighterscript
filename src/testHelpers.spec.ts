@@ -8,7 +8,7 @@ import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
-import { util, standardizePath as s } from './util';
+import util, { standardizePath as s } from './util';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
@@ -16,7 +16,8 @@ import type { BscFile } from './files/BscFile';
 import type { BscType } from './types/BscType';
 import type { LspDiagnostic } from './lsp/LspProject';
 import { Project } from './lsp/Project';
-import { isProgram, isProject } from './astUtils/reflection';
+import { isBrsCodeSegment, isProgram, isProject } from './astUtils/reflection';
+import type { BrsCodeSegment } from './files/BrsCodeSegment';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import type { Locatable, SourceInfo } from './lexer/Token';
 
@@ -598,4 +599,18 @@ export async function once<T = any>(
             resolve(args);
         });
     });
+}
+
+/**
+ * Get the brightscript code a file provides: a brs/bs file's code, or the code in an xml file's `<script>` blocks, in order
+ */
+export function getBrsCodeSegments(file: BscFile): BrsCodeSegment[] {
+    return util.getCodeSegments(file)?.filter(isBrsCodeSegment) ?? [];
+}
+
+/**
+ * Get one piece of the brightscript code a file provides (the first one by default)
+ */
+export function getBrsCodeSegment(file: BscFile, index = 0): BrsCodeSegment {
+    return getBrsCodeSegments(file)[index];
 }

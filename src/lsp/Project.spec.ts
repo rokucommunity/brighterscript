@@ -384,6 +384,29 @@ describe('Project', () => {
             expect(editsByUri.get(util.pathToUri(s`${rootDir}/source/main.bs`))).to.eql('pkg:/source/lib2.bs');
             expect(editsByUri.get(util.pathToUri(s`${rootDir}/components/widget.xml`))).to.eql('pkg:/source/lib2.bs');
         });
+
+        it('rewrites an import inside an xml file\'s CDATA script block', async () => {
+            fsExtra.outputFileSync(s`${rootDir}/source/lib.bs`, '');
+            fsExtra.outputFileSync(s`${rootDir}/components/widget.xml`, `<?xml version="1.0" encoding="utf-8"?>
+                <component name="Widget" extends="Group">
+                    <script type="text/brighterscript"><![CDATA[
+                        import "pkg:/source/lib.bs"
+                    ]]></script>
+                </component>`);
+            await activateBareProject();
+
+            const edits = await project.getFileRenameEdits({
+                oldSrcPath: s`${rootDir}/source/lib.bs`,
+                newSrcPath: s`${rootDir}/source/lib2.bs`
+            });
+
+            expect(edits).to.have.lengthOf(1);
+            expect(edits[0].uri).to.eql(util.pathToUri(s`${rootDir}/components/widget.xml`));
+            expect(edits[0].newText).to.eql('pkg:/source/lib2.bs');
+            //the range is in the xml file's coordinates, just inside the quotes
+            expect(edits[0].range.start).to.eql({ line: 3, character: 32 });
+            expect(edits[0].range.end).to.eql({ line: 3, character: 50 });
+        });
     });
 
     describe('activate', () => {

@@ -1,8 +1,8 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isBrsFile, isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
-import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
+import type { BrsCodeSegment } from '../../files/BrsCodeSegment';
+import type { ExtraSymbolData, ValidateBrsCodeSegmentEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression } from '../../parser/Expression';
@@ -38,7 +38,7 @@ const typeDesignatorTypes: Record<string, string> = {
 
 export class BrsFileValidator {
     constructor(
-        public event: ValidateFileEvent<BrsFile>
+        public event: ValidateBrsCodeSegmentEvent
     ) {
     }
 
@@ -72,18 +72,16 @@ export class BrsFileValidator {
     private parseDiagnosticIndex: Array<{ startPosition: number; furthestEndPosition: number }> | undefined;
 
     public process() {
-        const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
-
-        util.validateTooDeepFile(this.event.file);
+        const unlinkGlobalSymbolTable = this.event.codeSegment.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
 
         // Invalidate cache on this file
         // It could have potentially changed before this from plugins, after this, it will not change
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        this.event.file['_cachedLookups'].invalidate();
+        this.event.codeSegment['_cachedLookups'].invalidate();
         //rebuild the lookups now, because that full walk resolves every `#if` and `#const` (and sets `isActive`) before the walk below,
         //whose visitors can ask about nodes it has not reached yet (such as the members of a class)
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        this.event.file['_cachedLookups'].rehydrate();
+        this.event.codeSegment['_cachedLookups'].rehydrate();
 
         this.literalPools = {};
         this.walk();
@@ -91,7 +89,8 @@ export class BrsFileValidator {
         this.validateGotosAndLabels();
         this.flagTopLevelStatements();
         //only validate the file if it was actually parsed (skip files containing typedefs)
-        if (!this.event.file.hasTypedef) {
+        const file = this.event.file;
+        if (!(isBrsFile(file) && file.hasTypedef)) {
             this.validateTopOfFileStatements();
             this.validateTypecastStatements();
         }
@@ -195,7 +194,7 @@ export class BrsFileValidator {
      * Walk the full AST
      */
     private walk() {
-        const isBrighterscript = this.event.file.parser.options.mode === ParseMode.BrighterScript;
+        const isBrighterscript = this.event.codeSegment.parser.options.mode === ParseMode.BrighterScript;
 
         const visitor = createVisitor({
             MethodStatement: (node) => {
@@ -270,7 +269,7 @@ export class BrsFileValidator {
                     //add the transpiled name for namespaced constructors to the root symbol table
                     const transpiledClassConstructor = node.getName(ParseMode.BrightScript);
 
-                    this.event.file.parser.ast.symbolTable.addSymbol(
+                    this.event.codeSegment.parser.ast.symbolTable.addSymbol(
                         transpiledClassConstructor,
                         { definingNode: node },
                         node.getConstructorType(),
@@ -346,7 +345,7 @@ export class BrsFileValidator {
                         const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
                         runtimeName = transpiledNamespaceFunctionName;
 
-                        this.event.file.parser.ast.symbolTable.addSymbol(
+                        this.event.codeSegment.parser.ast.symbolTable.addSymbol(
                             transpiledNamespaceFunctionName,
                             { definingNode: node },
                             funcType,
@@ -622,7 +621,7 @@ export class BrsFileValidator {
             }
         });
 
-        this.event.file.ast.walk((node, parent) => {
+        this.event.codeSegment.ast.walk((node, parent) => {
             visitor(node, parent);
         }, {
             walkMode: WalkMode.visitAllRecursive
@@ -893,7 +892,7 @@ export class BrsFileValidator {
                 if (sourceLiteral.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                for (const part of this.getSourceLiteralReplacements(sourceLiteral, this.event.file)) {
+                for (const part of this.getSourceLiteralReplacements(sourceLiteral, this.event.codeSegment)) {
                     addToPool(part.type, part.value, sourceLiteral);
                 }
                 const literalKind = sourceLiteral.tokens.value.kind;
@@ -959,10 +958,10 @@ export class BrsFileValidator {
      * Returns an empty array for source literals that stay native identifiers (like `LINE_NUM`).
      * `PKG_LOCATION` additionally emits a native `str(LINE_NUM)` that is not part of the returned parts.
      */
-    private getSourceLiteralReplacements(sourceLiteral: SourceLiteralExpression, file: BrsFile): Array<{ type: LiteralPoolName; value: string | number }> {
+    private getSourceLiteralReplacements(sourceLiteral: SourceLiteralExpression, codeSegment: BrsCodeSegment): Array<{ type: LiteralPoolName; value: string | number }> {
         switch (sourceLiteral.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
-                const pathUrl = util.fileUrl(file.srcPath);
+                const pathUrl = util.fileUrl(codeSegment.srcPath);
                 return [
                     { type: 'string', value: pathUrl.substring(0, 4) },
                     { type: 'string', value: pathUrl.substring(4) }
@@ -982,15 +981,15 @@ export class BrsFileValidator {
                 namespaceRootParts.pop(); // remove the function name
                 return [{ type: 'string', value: namespaceRootParts.shift() ?? '' }];
             case TokenKind.SourceLocationLiteral:
-                const locationUrl = util.fileUrl(file.srcPath);
+                const locationUrl = util.fileUrl(codeSegment.srcPath);
                 return [
                     { type: 'string', value: locationUrl.substring(0, 4) },
                     { type: 'string', value: `${locationUrl.substring(4)}:${this.getClosestLineNumber(sourceLiteral)}` }
                 ];
             case TokenKind.PkgPathLiteral:
-                return [{ type: 'string', value: util.sanitizePkgPath(file.pkgPath) }];
+                return [{ type: 'string', value: util.sanitizePkgPath(codeSegment.pkgPath) }];
             case TokenKind.PkgLocationLiteral:
-                return [{ type: 'string', value: `${util.sanitizePkgPath(file.pkgPath)}:` }];
+                return [{ type: 'string', value: `${util.sanitizePkgPath(codeSegment.pkgPath)}:` }];
             default:
                 return [];
         }
@@ -1069,7 +1068,7 @@ export class BrsFileValidator {
     private validateFunctionGotoLabelCount(func: FunctionExpression) {
         const labelLocations = new Map<string, Locatable>();
         const continueLoops = new Set<AstNode>();
-        const continueIsTranspiled = this.event.file.needsTranspiled && !this.event.program.firmwareCapabilities.continueStatement;
+        const continueIsTranspiled = this.event.codeSegment.needsTranspiled && !this.event.program.firmwareCapabilities.continueStatement;
         func.body?.walk(createVisitor({
             GotoStatement: (statement) => {
                 const labelName = statement.tokens.label?.text?.toLowerCase();
@@ -1259,7 +1258,7 @@ export class BrsFileValidator {
 
     private getParseDiagnosticIndex(sourceInfo: SourceInfo) {
         if (!this.parseDiagnosticIndex) {
-            const spans = this.event.file.parser.diagnostics
+            const spans = this.event.codeSegment.parser.diagnostics
                 //parser diagnostics are usually Locatables (tokens/nodes). Convert any resolved `Location` into positions too
                 .map(diagnostic => {
                     const location = diagnostic.location;
@@ -1317,7 +1316,7 @@ export class BrsFileValidator {
                 //the branch runs from the end of its opening directive to the start of its closing directive
                 const { start, end } = util.getLocation(branch).range;
                 if (end.line - start.line > 1) {
-                    const location = util.createLocation(start.line + 1, 0, end.line, 0, this.event.file.srcPath);
+                    const location = util.createLocation(start.line + 1, 0, end.line, 0, this.event.codeSegment.srcPath);
                     if (overlappingRunLocation && util.rangesIntersect(location.range, overlappingRunLocation.range)) {
                         continue;
                     }
@@ -1346,7 +1345,7 @@ export class BrsFileValidator {
      * Find statements defined at the top level (or inside a namespace body) that are not allowed to be there
      */
     private flagTopLevelStatements() {
-        const statements = [...this.event.file.ast.statements];
+        const statements = [...this.event.codeSegment.ast.statements];
         while (statements.length > 0) {
             const statement = statements.pop();
             if (isNamespaceStatement(statement)) {
@@ -1383,7 +1382,7 @@ export class BrsFileValidator {
 
     private getTopOfFileStatements() {
         let topOfFileIncludeStatements = [] as Array<LibraryStatement | ImportStatement | TypecastStatement | AliasStatement>;
-        for (let stmt of this.event.file.parser.ast.statements) {
+        for (let stmt of this.event.codeSegment.parser.ast.statements) {
             //if we found a non-library statement, this statement is not at the top of the file
             if (this.isAllowedAtTopOfFile(stmt)) {
                 topOfFileIncludeStatements.push(stmt);
@@ -1400,11 +1399,11 @@ export class BrsFileValidator {
 
         let statements = [
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].libraryStatements,
+            ...this.event.codeSegment['_cachedLookups'].libraryStatements,
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].importStatements,
+            ...this.event.codeSegment['_cachedLookups'].importStatements,
             // eslint-disable-next-line @typescript-eslint/dot-notation
-            ...this.event.file['_cachedLookups'].aliasStatements
+            ...this.event.codeSegment['_cachedLookups'].aliasStatements
         ];
         for (let result of statements) {
             //if this statement is not one of the top-of-file statements,
@@ -1432,7 +1431,7 @@ export class BrsFileValidator {
 
     private validateTypecastStatements() {
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        for (let typecastStmt of this.event.file['_cachedLookups'].typecastStatements) {
+        for (let typecastStmt of this.event.codeSegment['_cachedLookups'].typecastStatements) {
             let isBadTypecastObj = false;
 
             const block = typecastStmt.findAncestor<Body | Block>(node => (isBody(node) || isBlock(node)));
@@ -1544,7 +1543,7 @@ export class BrsFileValidator {
                     if (firstValue) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.duplicateCaseValue(
-                                util.getTextForRange(this.event.file.fileContents, util.getLocation(value)?.range) ?? key,
+                                this.event.codeSegment.getText(util.getLocation(value)?.range) ?? key,
                                 util.getStartPosition(firstValue)?.line + 1
                             ),
                             location: value
@@ -1656,7 +1655,7 @@ export class BrsFileValidator {
      * targets, so the emitted code runs on the older device.
      */
     private validateMinFirmwareVersionForContinue(statement: ContinueStatement) {
-        if (this.event.file.needsTranspiled) {
+        if (this.event.codeSegment.needsTranspiled) {
             return;
         }
         if (!this.event.program.firmwareCapabilities.continueStatement) {
@@ -1810,9 +1809,9 @@ export class BrsFileValidator {
         if (!availability) {
             return;
         }
-        const rsgDiagnostic = this.computeAvailabilityDiagnostic(calleeName, 'rsg', availability.rsg, this.event.file.program.getRsgVersion());
+        const rsgDiagnostic = this.computeAvailabilityDiagnostic(calleeName, 'rsg', availability.rsg, this.event.codeSegment.program.getRsgVersion());
         const diagnostic = rsgDiagnostic ??
-            this.computeAvailabilityDiagnostic(calleeName, 'os', availability.os, this.event.file.program.getMinFirmwareVersion());
+            this.computeAvailabilityDiagnostic(calleeName, 'os', availability.os, this.event.codeSegment.program.getMinFirmwareVersion());
         if (diagnostic) {
             this.event.program.diagnostics.register({
                 ...diagnostic,

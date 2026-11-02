@@ -1,6 +1,6 @@
-import type { BrsFile } from './files/BrsFile';
+import type { BrsCodeSegment } from './files/BrsCodeSegment';
 import type { Scope, NamespaceContainer, NamespaceFileContribution } from './Scope';
-import { isBrsFile } from './astUtils/reflection';
+import { isBrsCodeSegment } from './astUtils/reflection';
 
 /**
  * The per-scope namespace lookup. Implements `Map<string, NamespaceContainer>` so existing
@@ -36,8 +36,8 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
     private nameSet: Set<string> | undefined;
     /** Map from lower-cased parent name to lower-cased immediate child names. */
     private childrenByParent: Map<string, string[]> | undefined;
-    /** Cached `Set<BrsFile>` for `scope.getAllFiles()`, used when filtering contributors. */
-    private inScopeBrsFiles: Set<BrsFile> | undefined;
+    /** Cached `Set<BrsCodeSegment>` for `scope.getAllCodeSegments()`, used when filtering contributors. */
+    private inScopeBrsCodeSegments: Set<BrsCodeSegment> | undefined;
     /** Set to true after `populateAll` runs so iteration doesn't keep re-checking. */
     private isFullyBuilt = false;
 
@@ -47,10 +47,10 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         }
         const nameSet = new Set<string>();
         const childrenByParent = new Map<string, string[]>();
-        for (const file of this.scope.getAllFiles()) {
-            if (isBrsFile(file)) {
+        for (const codeSegment of this.scope.getAllCodeSegments()) {
+            if (isBrsCodeSegment(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                for (const nameLower of file['getNamespaceContributions']().keys()) {
+                for (const nameLower of codeSegment['getNamespaceContributions']().keys()) {
                     nameSet.add(nameLower);
                 }
             }
@@ -71,17 +71,17 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         this.childrenByParent = childrenByParent;
     }
 
-    private getInScopeBrsFiles(): Set<BrsFile> {
-        if (!this.inScopeBrsFiles) {
-            const set = new Set<BrsFile>();
-            for (const file of this.scope.getAllFiles()) {
-                if (isBrsFile(file)) {
-                    set.add(file);
+    private getInScopeBrsCodeSegments(): Set<BrsCodeSegment> {
+        if (!this.inScopeBrsCodeSegments) {
+            const set = new Set<BrsCodeSegment>();
+            for (const codeSegment of this.scope.getAllCodeSegments()) {
+                if (isBrsCodeSegment(codeSegment)) {
+                    set.add(codeSegment);
                 }
             }
-            this.inScopeBrsFiles = set;
+            this.inScopeBrsCodeSegments = set;
         }
-        return this.inScopeBrsFiles;
+        return this.inScopeBrsCodeSegments;
     }
 
     public override has(key: string): boolean {
@@ -166,16 +166,16 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
 
     private buildContainer(nameLower: string): NamespaceContainer | undefined {
         // eslint-disable-next-line @typescript-eslint/dot-notation
-        const candidateFiles = this.scope.program['getNamespaceContributors'](nameLower);
-        if (!candidateFiles || candidateFiles.size === 0) {
+        const candidateCodeSegments = this.scope.program['getNamespaceContributors'](nameLower);
+        if (!candidateCodeSegments || candidateCodeSegments.size === 0) {
             return undefined;
         }
-        const inScopeFiles = this.getInScopeBrsFiles();
+        const inScopeCodeSegments = this.getInScopeBrsCodeSegments();
         const inScopeContributions: NamespaceFileContribution[] = [];
-        for (const file of candidateFiles) {
-            if (inScopeFiles.has(file)) {
+        for (const codeSegment of candidateCodeSegments) {
+            if (inScopeCodeSegments.has(codeSegment)) {
                 // eslint-disable-next-line @typescript-eslint/dot-notation
-                const contribution = file['getNamespaceContributions']().get(nameLower);
+                const contribution = codeSegment['getNamespaceContributions']().get(nameLower);
                 if (contribution) {
                     inScopeContributions.push(contribution);
                 }
@@ -199,7 +199,7 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         //field order matches the NamespaceContainer interface declaration so the
         //fast-path and slow-path containers share a single V8 hidden class.
         return {
-            file: contribution.file,
+            codeSegment: contribution.codeSegment,
             fullName: contribution.fullName,
             nameRange: contribution.nameRange,
             lastPartName: contribution.lastPartName,
@@ -230,7 +230,7 @@ export class ScopeNamespaceLookup extends Map<string, NamespaceContainer> {
         //field order matches the NamespaceContainer interface declaration so fast-path
         //and slow-path containers share a single V8 hidden class
         return {
-            file: aggregate.file,
+            codeSegment: aggregate.codeSegment,
             fullName: aggregate.fullName,
             nameRange: aggregate.nameRange,
             lastPartName: aggregate.lastPartName,

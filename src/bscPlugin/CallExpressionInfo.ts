@@ -2,7 +2,7 @@ import type { Expression } from '../parser/AstNode';
 import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
-import type { BrsFile } from '../files/BrsFile';
+import type { BrsCodeSegment } from '../files/BrsCodeSegment';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { ParseMode } from '../parser/Parser';
@@ -28,7 +28,10 @@ export class CallExpressionInfo {
     callExpression?: CallExpression | CallfuncExpression;
     type: CallExpressionType;
 
-    file: BrsFile;
+    /**
+     * The code segment the call is in
+     */
+    codeSegment: BrsCodeSegment;
     myClass: ClassStatement;
     namespace?: NamespaceContainer;
     dotPart: string;
@@ -41,9 +44,9 @@ export class CallExpressionInfo {
 
     private position: Position;
 
-    constructor(file: BrsFile, position: Position) {
-        this.expression = file.ast.findChildAtPosition<Expression>(position);
-        this.file = file;
+    constructor(codeSegment: BrsCodeSegment, position: Position) {
+        this.expression = codeSegment.ast.findChildAtPosition<Expression>(position);
+        this.codeSegment = codeSegment;
         this.position = position;
         this.process();
     }
@@ -149,7 +152,7 @@ export class CallExpressionInfo {
     }
 
     private getNamespace(): NamespaceContainer {
-        let scope = this.file.program.getFirstScopeForFile(this.file);
+        let scope = this.codeSegment.program.getFirstScopeForCodeSegment(this.codeSegment);
         return scope.namespaceLookup.get(this.dotPart);
     }
 
