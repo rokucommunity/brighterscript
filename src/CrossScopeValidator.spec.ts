@@ -504,6 +504,31 @@ describe('CrossScopeValidator', () => {
     });
 
     describe('cannotFindName', () => {
+        it('does not complain about a namespaced field initializer when a method param uses its own class as a type', () => {
+            program.setFile('source/math.bs', `
+                namespace BGE.Math
+                    interface Vector
+                        x as float
+                    end interface
+                    function create() as Vector
+                        return { x: 0 }
+                    end function
+                end namespace
+            `);
+            program.setFile('source/collider.bs', `
+                namespace BGE
+                    class Collider
+                        offset as BGE.Math.Vector = BGE.Math.create()
+                        function collidesWith(other as Collider) as boolean
+                            return true
+                        end function
+                    end class
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('should not complain when all non-namespaced symbols are found', () => {
             program.setFile<BrsFile>('source/file1.bs', `
                 function callsOther() as string
