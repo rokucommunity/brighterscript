@@ -415,7 +415,8 @@ export class DiagnosticManager {
                 this.removeDiagnosticIfNoContexts(cachedData.diagnostic);
             }
         }
-        this.segmentMap.get(segment)?.clear();
+        //delete the entry rather than emptying it: the key is an AST node, and keeping it would keep that file's whole AST alive
+        this.segmentMap.delete(segment);
     }
 
     public clearForTag(tag: string) {
@@ -576,7 +577,12 @@ export class DiagnosticManager {
                     }
                 }
                 if (!foundSegmentOtherContext) {
-                    this.segmentMap.get(context.segment)?.delete(key);
+                    const segmentKeys = this.segmentMap.get(context.segment);
+                    segmentKeys?.delete(key);
+                    //the key is an AST node, so drop the entry once it's empty. Otherwise segments from replaced files (and their whole ASTs) are kept forever
+                    if (segmentKeys?.size === 0) {
+                        this.segmentMap.delete(context.segment);
+                    }
                 }
             }
         }
