@@ -75,7 +75,7 @@ export abstract class AstNode implements Locatable {
     /**
      * The parent node for this statement. This is set dynamically during `validateFile`, and should not be set directly.
      */
-    public parent?: AstNode;
+    public parent?: AstNode = undefined;
 
     /**
      * Certain expressions or statements can have a symbol table (such as blocks, functions, namespace bodies, etc).
@@ -243,7 +243,7 @@ export abstract class AstNode implements Locatable {
      *
      * Every walk sets this from the parent, but only a full walk from the root re-evaluates the `#if` conditions.
      */
-    public isActive?: boolean;
+    public isActive?: boolean = undefined;
 
     public getBsConsts(): Map<string, boolean> | undefined {
         return this.bsConsts ?? this.parent?.getBsConsts?.();
