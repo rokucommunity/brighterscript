@@ -2,10 +2,10 @@ import type { Scope } from '../Scope';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import type { CallExpression } from '../parser/Expression';
 import { ParseMode } from '../parser/Parser';
-import type { ClassStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
+import type { ClassStatement, MemberStatement, MethodStatement, NamespaceStatement } from '../parser/Statement';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { isCallExpression, isFieldStatement, isMethodStatement, isNamespaceStatement } from '../astUtils/reflection';
-import type { BsDiagnostic } from '../interfaces';
+import type { BsDiagnosticInput } from '../interfaces';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { BrsFile } from '../files/BrsFile';
 import { TokenKind } from '../lexer/TokenKind';
@@ -16,11 +16,13 @@ import type { BscFile } from '../files/BscFile';
 
 export class BsClassValidator {
     private scope: Scope;
-    public diagnostics: BsDiagnostic[];
+    public diagnostics: BsDiagnosticInput[];
     /**
      * The key is the namespace-prefixed class name. (i.e. `NameA.NameB.SomeClass` or `CoolClass`)
      */
     private classes: Map<string, AugmentedClassStatement> = new Map();
+
+    private activeMemberMapsByClass = new Map<AugmentedClassStatement, Record<string, MemberStatement>>();
 
     public constructor(scope: Scope) {
         this.scope = scope;
@@ -56,7 +58,7 @@ export class BsClassValidator {
                         if (expressionNameLower === 'm') {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.classConstructorIllegalUseOfMBeforeSuperCall(),
-                                location: expression.location
+                                location: expression
                             });
                         }
                         if (isCallExpression(parent) && expressionNameLower === 'super') {
@@ -74,7 +76,7 @@ export class BsClassValidator {
                 if (!superCall && !(classStatement.file as BrsFile).isTypedef) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.classConstructorMissingSuperCall(),
-                        location: newMethod.location
+                        location: newMethod
                     });
                 }
             }
@@ -95,7 +97,7 @@ export class BsClassValidator {
                     this.diagnostics.push({
                         ...DiagnosticMessages.circularReferenceDetected(
                             Array.from(names.values()).concat(className)),
-                        location: cls.tokens.name.location
+                        location: cls.tokens.name
                     });
                     break;
                 }
@@ -115,8 +117,8 @@ export class BsClassValidator {
             let methods = {};
             let fields = {};
 
-            for (let statement of classStatement.body) {
-                if (isMethodStatement(statement) || isFieldStatement(statement)) {
+            for (let statement of classStatement.members) {
+                if (statement.isActive !== false) {
                     let member = statement;
                     let memberName = member.tokens.name;
 
@@ -130,7 +132,7 @@ export class BsClassValidator {
                     if (methods[lowerMemberName] || fields[lowerMemberName]) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.duplicateIdentifier(memberName.text),
-                            location: memberName.location
+                            location: memberName
                         });
                     }
 
@@ -156,7 +158,7 @@ export class BsClassValidator {
                                     childFieldType.toString(),
                                     ancestorMemberType.toString()
                                 ),
-                                location: member.location
+                                location: member
                             });
                         }
 
@@ -179,7 +181,7 @@ export class BsClassValidator {
                                         childFieldType.toString(),
                                         ancestorMemberType.toString()
                                     ),
-                                    location: member.location
+                                    location: member
                                 });
                             }
                         }
@@ -197,25 +199,31 @@ export class BsClassValidator {
                                 ...DiagnosticMessages.missingOverrideKeyword(
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                location: member.location
+                                location: member
                             });
                         }
+
+                        //NOTE: only MethodStatement exposes a top-level `accessModifier`; FieldStatement keeps
+                        //it at `tokens.accessModifier`. This reads the method-shaped property only, which means an
+                        //ancestor *field* always resolves to undefined here and is treated as public. That is
+                        //pre-existing behavior, preserved deliberately -- see #1848.
+                        const ancestorMember = ancestorAndMember.member as MethodStatement;
 
                         //child member has different visiblity
                         if (
                             //is a method
                             isMethodStatement(member) &&
-                            (member.accessModifier?.kind ?? TokenKind.Public) !== (ancestorAndMember.member.accessModifier?.kind ?? TokenKind.Public)
+                            (member.accessModifier?.kind ?? TokenKind.Public) !== (ancestorMember.accessModifier?.kind ?? TokenKind.Public)
                         ) {
                             this.diagnostics.push({
                                 ...DiagnosticMessages.mismatchedOverriddenMemberVisibility(
                                     classStatement.tokens.name.text,
                                     ancestorAndMember.member.tokens.name?.text,
                                     member.accessModifier?.text ?? 'public',
-                                    ancestorAndMember.member.accessModifier?.text || 'public',
+                                    ancestorMember.accessModifier?.text || 'public',
                                     ancestorAndMember.classStatement.getName(ParseMode.BrighterScript)
                                 ),
-                                location: member.location
+                                location: member
                             });
                         }
                     }
@@ -232,13 +240,30 @@ export class BsClassValidator {
     }
 
     /**
+     * The compiled members of the class by lowercase name, so an active member always wins over an inactive member of the same name
+     */
+    private getActiveMemberMap(classStatement: AugmentedClassStatement) {
+        let activeMemberMap = this.activeMemberMapsByClass.get(classStatement);
+        if (!activeMemberMap) {
+            activeMemberMap = {};
+            for (const member of classStatement.members) {
+                if (member.isActive !== false) {
+                    activeMemberMap[member.tokens.name?.text.toLowerCase()] = member;
+                }
+            }
+            this.activeMemberMapsByClass.set(classStatement, activeMemberMap);
+        }
+        return activeMemberMap;
+    }
+
+    /**
      * Get the closest member with the specified name (case-insensitive)
      */
-    getAncestorMember(classStatement, memberName) {
+    getAncestorMember(classStatement: AugmentedClassStatement, memberName: string) {
         let lowerMemberName = memberName.toLowerCase();
         let ancestor = classStatement.parentClass;
         while (ancestor) {
-            let member = ancestor.memberMap[lowerMemberName];
+            let member = this.getActiveMemberMap(ancestor)[lowerMemberName];
             if (member) {
                 return {
                     member: member,
@@ -263,6 +288,10 @@ export class BsClassValidator {
 
             // eslint-disable-next-line @typescript-eslint/dot-notation
             for (let x of file['_cachedLookups'].classStatements ?? []) {
+                //inactive classes are not compiled, so they are neither validated nor registered as duplicates of an active class
+                if (x.isActive === false) {
+                    continue;
+                }
                 let classStatement = x as AugmentedClassStatement;
                 let name = classStatement.getName(ParseMode.BrighterScript);
                 //skip this class if it doesn't have a name

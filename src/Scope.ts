@@ -1,15 +1,19 @@
 /* eslint-disable @typescript-eslint/dot-notation */
 import * as path from 'path';
 import chalk from 'chalk';
-import type { CallableContainer, FileReference, FileLink, Callable, NamespaceContainer, ScopeValidationOptions, ScopeNamespaceContainer } from './interfaces';
+import type { Range } from 'vscode-languageserver-protocol';
+import type { CallableContainer, FileReference, FileLink, Callable, ScopeValidationOptions } from './interfaces';
 import type { Program } from './Program';
-import { type NamespaceStatement, type ClassStatement, type EnumStatement, type InterfaceStatement, type EnumMemberStatement, type ConstStatement } from './parser/Statement';
+import type { NamespaceStatement, FunctionStatement, ClassStatement, EnumStatement, InterfaceStatement, EnumMemberStatement, ConstStatement, TypeStatement } from './parser/Statement';
 import { ParseMode } from './parser/Parser';
 import { util } from './util';
+import { CachedLookups } from './astUtils/CachedLookups';
 import { Cache } from './Cache';
 import type { BrsFile } from './files/BrsFile';
+import type { Identifier } from './lexer/Token';
 import type { DependencyGraph, DependencyChangedEvent } from './DependencyGraph';
-import { isBrsFile, isXmlFile, isEnumMemberStatement, isXmlScope } from './astUtils/reflection';
+import { isBrsFile, isXmlFile, isEnumMemberStatement, isNamespaceStatement, isTypeStatement, isXmlScope } from './astUtils/reflection';
+import { WalkMode } from './astUtils/visitors';
 import { SymbolTable } from './SymbolTable';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscFile } from './files/BscFile';
@@ -20,6 +24,7 @@ import type { Statement } from './parser/AstNode';
 import { performance } from 'perf_hooks';
 import { LogLevel } from './logging';
 import { uninitializedTypeFactory } from './types/UninitializedType';
+import { ScopeNamespaceLookup } from './ScopeNamespaceLookup';
 
 /**
  * Assign some few factories to the SymbolTable to prevent cyclical imports. This file seems like the most intuitive place to do the linking
@@ -106,11 +111,11 @@ export class Scope {
 
         let ns: NamespaceContainer;
         if (containingNamespace) {
-            ns = lookup.get(`${containingNamespace?.toLowerCase()}.${nameLower}`)?.firstInstance;
+            ns = lookup.get(`${containingNamespace?.toLowerCase()}.${nameLower}`);
         }
         //if we couldn't find the namespace by its full namespaced name, look for a global version
         if (!ns) {
-            ns = lookup.get(nameLower)?.firstInstance;
+            ns = lookup.get(nameLower);
         }
         return ns;
     }
@@ -141,7 +146,7 @@ export class Scope {
         if (containingNamespace) {
             lookupName = `${containingNamespace?.toLowerCase()}.${nameLower}`;
         }
-        return this.namespaceLookup.get(lookupName)?.firstInstance;
+        return this.namespaceLookup.get(lookupName);
     }
 
     /**
@@ -173,29 +178,67 @@ export class Scope {
 
     private useFileCachesForFileLinkLookups = false;
 
-    private getFileLinkFromFileMap<T>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
+    /**
+     * Look up a file link by name using each file's cached lookup maps
+     * @param cachedMapName - The name of the per-file cached lookup map to search
+     * @param itemName - The item name, including the namespace of the item if possible
+     * @param containingNamespace - The namespace used to resolve relative names
+     * @param referencingItem - The statement making this reference. A statement can't refer to itself by its namespace-relative name,
+     * so that match is skipped in favor of the global name.
+     */
+    private getFileLinkFromFileMap<T extends Statement>(cachedMapName: string, itemName: string, containingNamespace?: string, referencingItem?: Statement): FileLink<T> {
         let result: FileLink<T>;
         const fullNameLower = util.getFullyQualifiedClassName(itemName, containingNamespace)?.toLowerCase();
         const itemNameLower = itemName?.toLowerCase();
         if (fullNameLower) {
-            this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = file['_cachedLookups'][cachedMapName].get(fullNameLower);
-                if (stmt) {
-                    result = { item: stmt, file: file };
-                }
-                return !!stmt;
-            });
+            result = this.findTopCandidateFileLink<T>(cachedMapName, fullNameLower);
         }
-        if (!result && itemNameLower && fullNameLower !== itemNameLower) {
-            this.enumerateBrsFilesWithBreak((file) => {
-                let stmt = file['_cachedLookups'][cachedMapName].get(itemNameLower);
-                if (stmt) {
-                    result = { item: stmt, file: file };
-                }
-                return !!stmt;
-            });
+        if (itemNameLower && fullNameLower !== itemNameLower) {
+            if (referencingItem && result?.item === referencingItem) {
+                result = undefined;
+            }
+            result = this.preferActiveGlobalLink(result, () => this.findTopCandidateFileLink<T>(cachedMapName, itemNameLower));
         }
         return result;
+    }
+
+    /**
+     * Find the first file with an active declaration of the name, falling back to the first inactive declaration
+     */
+    private findTopCandidateFileLink<T extends Statement>(cachedMapName: string, nameLower: string): FileLink<T> {
+        let activeLink: FileLink<T>;
+        let inactiveLink: FileLink<T>;
+        this.enumerateBrsFilesWithBreak((file) => {
+            const stmt: T = file['_cachedLookups'][cachedMapName].get(nameLower);
+            if (stmt) {
+                if (stmt.isActive !== false) {
+                    activeLink = { item: stmt, file: file };
+                    return true;
+                }
+                inactiveLink ??= { item: stmt, file: file };
+            }
+            return false;
+        });
+        return activeLink ?? inactiveLink;
+    }
+
+    /**
+     * Choose between a namespace-qualified match and the global match of the same name.
+     * The qualified match wins unless it is inactive and the global match is active, so an inactive namespaced declaration never hides an active global one.
+     */
+    private preferActiveGlobalLink<T extends Statement>(qualifiedLink: FileLink<T>, getGlobalLink: () => FileLink<T>): FileLink<T> {
+        if (qualifiedLink && qualifiedLink.item.isActive !== false) {
+            return qualifiedLink;
+        }
+        const globalLink = getGlobalLink();
+        if (!qualifiedLink || (globalLink && globalLink.item.isActive !== false)) {
+            return globalLink;
+        }
+        return qualifiedLink;
+    }
+
+    public getTypeStatement(typeName: string, containingNamespace?: string): Statement {
+        return this.getTypeStatementFileLink(typeName, containingNamespace)?.item;
     }
 
     /**
@@ -212,9 +255,9 @@ export class Scope {
         const classMap = this.getClassMap();
 
         let cls = classMap.get(fullNameLower);
-        //if we couldn't find the class by its full namespaced name, look for a global class with that name
-        if (!cls && lowerName && lowerName !== fullNameLower) {
-            cls = classMap.get(lowerName);
+        //if we couldn't find an active class by its full namespaced name, look for a global class with that name
+        if (lowerName && lowerName !== fullNameLower) {
+            cls = this.preferActiveGlobalLink(cls, () => classMap.get(lowerName));
         }
         return cls;
     }
@@ -233,9 +276,9 @@ export class Scope {
         const ifaceMap = this.getInterfaceMap();
 
         let iface = ifaceMap.get(fullNameLower);
-        //if we couldn't find the iface by its full namespaced name, look for a global class with that name
-        if (!iface && lowerName && lowerName !== fullNameLower) {
-            iface = ifaceMap.get(lowerName);
+        //if we couldn't find an active iface by its full namespaced name, look for a global iface with that name
+        if (lowerName && lowerName !== fullNameLower) {
+            iface = this.preferActiveGlobalLink(iface, () => ifaceMap.get(lowerName));
         }
         return iface;
     }
@@ -254,9 +297,9 @@ export class Scope {
         const enumMap = this.getEnumMap();
 
         let enumeration = enumMap.get(fullNameLower);
-        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
-        if (!enumeration && lowerName && lowerName !== fullNameLower) {
-            enumeration = enumMap.get(lowerName);
+        //if we couldn't find an active enum by its full namespaced name, look for a global enum with that name
+        if (lowerName && lowerName !== fullNameLower) {
+            enumeration = this.preferActiveGlobalLink(enumeration, () => enumMap.get(lowerName));
         }
         return enumeration;
     }
@@ -275,10 +318,8 @@ export class Scope {
         let enumeration = enumMap.get(
             util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
         );
-        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
-        if (!enumeration) {
-            enumeration = enumMap.get(lowerName);
-        }
+        //if we couldn't find an active enum by its full namespaced name, look for a global enum with that name
+        enumeration = this.preferActiveGlobalLink(enumeration, () => enumMap.get(lowerName));
         if (enumeration) {
             let member = enumeration.item.findChild<EnumMemberStatement>((child) => isEnumMemberStatement(child) && child.name?.toLowerCase() === memberName);
             return member ? { item: member, file: enumeration.file } : undefined;
@@ -289,10 +330,12 @@ export class Scope {
      * Get a constant and its containing file by the constant name
      * @param constName - The constant name, including the namespace of the constant if possible
      * @param containingNamespace - The namespace used to resolve relative constant names. (i.e. the namespace around the current statement trying to find a constant)
+     * @param referencingConst - The const whose initializer contains this reference. A const can't refer to itself by its namespace-relative
+     * name (i.e. `namespace promises: const chain = chain`), so that match is skipped in favor of the global name.
      */
-    public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
+    public getConstFileLink(constName: string, containingNamespace?: string, referencingConst?: ConstStatement): FileLink<ConstStatement> {
         if (this.useFileCachesForFileLinkLookups) {
-            return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace);
+            return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace, referencingConst);
         }
         const lowerName = constName?.toLowerCase();
         const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
@@ -300,9 +343,12 @@ export class Scope {
         const constMap = this.getConstMap();
 
         let result = constMap.get(fullNameLower);
-        //if we couldn't find the constant by its full namespaced name, look for a global constant with that name
-        if (!result && lowerName !== fullNameLower) {
-            result = constMap.get(lowerName);
+        //if we couldn't find an active constant by its full namespaced name, look for a global constant with that name
+        if (lowerName !== fullNameLower) {
+            if (referencingConst && result?.item === referencingConst) {
+                result = undefined;
+            }
+            result = this.preferActiveGlobalLink(result, () => constMap.get(lowerName));
         }
         return result;
     }
@@ -339,6 +385,25 @@ export class Scope {
     }
 
     /**
+     * Get an TypeStatement and its containing file by the type name
+     * @param typeName - The TypeStatement name, including the namespace of the type if possible
+     * @param containingNamespace - The namespace used to resolve relative type names. (i.e. the namespace around the current statement trying to find a type)
+     */
+    public getTypeStatementFileLink(typeName: string, containingNamespace?: string): FileLink<TypeStatement> {
+        const lowerName = typeName?.toLowerCase();
+        const typeStatementMap = this.getTypeStatementMap();
+
+        let typeStatement = typeStatementMap.get(
+            util.getFullyQualifiedClassName(lowerName, containingNamespace?.toLowerCase())
+        );
+        //if we couldn't find the enum by its full namespaced name, look for a global enum with that name
+        if (!typeStatement) {
+            typeStatement = typeStatementMap.get(lowerName);
+        }
+        return typeStatement;
+    }
+
+    /**
      * Get a map of all enums by their member name.
      * The keys are lower-case fully-qualified paths to the enum and its member. For example:
      * namespace.enum.value
@@ -354,6 +419,7 @@ export class Scope {
             return result;
         });
     }
+
 
     /**
      * Tests if a class exists with the specified name
@@ -382,6 +448,10 @@ export class Scope {
         return !!this.getEnum(enumName, namespaceName);
     }
 
+    public hasTypeStatementType(typeName: string, namespaceName?: string): boolean {
+        return !!this.getTypeStatement(typeName, namespaceName);
+    }
+
     /**
      * A dictionary of all classes in this scope. This includes namespaced classes always with their full name.
      * The key is stored in lower case
@@ -389,13 +459,14 @@ export class Scope {
     public getClassMap(): Map<string, FileLink<ClassStatement>> {
         return this.cache.getOrAdd('classMap', () => {
             const map = new Map<string, FileLink<ClassStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let cls of file['_cachedLookups'].classStatements) {
                         const className = cls.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (className) {
-                            map.set(className.toLowerCase(), { item: cls, file: file });
+                            CachedLookups.setTopCandidate(map, activeKeys, className.toLowerCase(), { item: cls, file: file }, cls.isActive !== false);
                         }
                     }
                 }
@@ -411,13 +482,14 @@ export class Scope {
     public getInterfaceMap(): Map<string, FileLink<InterfaceStatement>> {
         return this.cache.getOrAdd('interfaceMap', () => {
             const map = new Map<string, FileLink<InterfaceStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 if (isBrsFile(file)) {
                     for (let iface of file['_cachedLookups'].interfaceStatements) {
                         const ifaceName = iface.getName(ParseMode.BrighterScript);
                         //only track classes with a defined name (i.e. exclude nameless malformed classes)
                         if (ifaceName) {
-                            map.set(ifaceName.toLowerCase(), { item: iface, file: file });
+                            CachedLookups.setTopCandidate(map, activeKeys, ifaceName.toLowerCase(), { item: iface, file: file }, iface.isActive !== false);
                         }
                     }
                 }
@@ -433,11 +505,12 @@ export class Scope {
     public getEnumMap(): Map<string, FileLink<EnumStatement>> {
         return this.cache.getOrAdd('enumMap', () => {
             const map = new Map<string, FileLink<EnumStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 for (let enumStmt of file['_cachedLookups'].enumStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (enumStmt.fullName) {
-                        map.set(enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file });
+                        CachedLookups.setTopCandidate(map, activeKeys, enumStmt.fullName.toLowerCase(), { item: enumStmt, file: file }, enumStmt.isActive !== false);
                     }
                 }
             });
@@ -452,13 +525,37 @@ export class Scope {
     public getConstMap(): Map<string, FileLink<ConstStatement>> {
         return this.cache.getOrAdd('constMap', () => {
             const map = new Map<string, FileLink<ConstStatement>>();
+            const activeKeys = new Set<string>();
             this.enumerateBrsFiles((file) => {
                 for (let stmt of file['_cachedLookups'].constStatements) {
                     //only track enums with a defined name (i.e. exclude nameless malformed enums)
                     if (stmt.fullName) {
-                        map.set(stmt.fullName.toLowerCase(), { item: stmt, file: file });
+                        CachedLookups.setTopCandidate(map, activeKeys, stmt.fullName.toLowerCase(), { item: stmt, file: file }, stmt.isActive !== false);
                     }
                 }
+            });
+            return map;
+        });
+    }
+
+    /**
+     * A dictionary of all TypeStatements in this scope. This includes namespaced types always with their full name.
+     * The key is stored in lower case
+     */
+    public getTypeStatementMap(): Map<string, FileLink<TypeStatement>> {
+        return this.cache.getOrAdd('typeStatementMap', () => {
+            const map = new Map<string, FileLink<TypeStatement>>();
+            this.enumerateBrsFiles((file) => {
+                file.ast.walk((node) => {
+                    if (isTypeStatement(node)) {
+                        const namespaceName = node.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
+                        const typeName = node.tokens.name?.text;
+                        if (typeName) {
+                            const fullName = (namespaceName ? `${namespaceName}.${typeName}` : typeName).toLowerCase();
+                            map.set(fullName, { item: node, file: file });
+                        }
+                    }
+                }, { walkMode: WalkMode.visitAllRecursive });
             });
             return map;
         });
@@ -473,6 +570,8 @@ export class Scope {
      * Clean up all event handles
      */
     public dispose() {
+        this.unlinkSymbolTable();
+        this.cache.clear();
         this.unsubscribeFromDependencyGraph?.();
     }
 
@@ -729,29 +828,21 @@ export class Scope {
     }
 
     /**
-     * Builds a tree of namespace objects
+     * Build the namespace lookup for this scope.
+     *
+     * The lookup is now backed by `ScopeNamespaceLookup`, which queries the
+     * Program-level `getNamespaceContributors` map lazily on each
+     * `.get(name)` call. Per-file contributions are pre-built by
+     * `BrsFile.getNamespaceContributions` and shared across every scope that
+     * pulls in the file, so single-contribution containers reuse the file's
+     * pre-built statement collections and symbolTable instead of allocating
+     * per-scope copies.
+     *
+     * The return type is `Map<string, NamespaceContainer>` for backward
+     * compatibility with plugins that consume the public API.
      */
-    public buildNamespaceLookup() {
-        let namespaceLookup = new Map<string, ScopeNamespaceContainer>();
-        this.enumerateBrsFiles((file) => {
-            const fileNamespaceLookup = file.getNamespaceLookupObject();
-
-            for (const [lowerNamespaceName, nsContainer] of fileNamespaceLookup) {
-                if (!namespaceLookup.has(lowerNamespaceName)) {
-                    const newScopeNsContainer: ScopeNamespaceContainer = {
-                        namespaceContainers: [],
-                        symbolTable: new SymbolTable(`Namespace Scope Aggregate: '${nsContainer.fullName}'`),
-                        firstInstance: nsContainer
-                    };
-                    namespaceLookup.set(lowerNamespaceName, newScopeNsContainer);
-                }
-
-                const scopeNsContainer = namespaceLookup.get(lowerNamespaceName);
-                scopeNsContainer.symbolTable.mergeSymbolTable(nsContainer.symbolTable);
-                scopeNsContainer.namespaceContainers.push(nsContainer);
-            }
-        });
-        return namespaceLookup;
+    public buildNamespaceLookup(): Map<string, NamespaceContainer> {
+        return new ScopeNamespaceLookup(this);
     }
 
     public getAllNamespaceStatements() {
@@ -763,6 +854,8 @@ export class Scope {
     }
 
     protected logDebug(...args: any[]) {
+        //variadic passthrough to the logger; `args` is intentionally `any[]`
+        //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         this.program.logger.debug(this._debugLogComponentName, ...args);
     }
     private _debugLogComponentName: string;
@@ -896,12 +989,28 @@ export class Scope {
     public linkSymbolTable() {
         SymbolTable.cacheVerifier.generateToken();
         this._allNamespaceTypeTable = new SymbolTable(`Scope NamespaceTypes ${this.name}`);
+        // `namespaceLookup` is rebuilt on every access while any file in the scope is unvalidated
+        // (e.g. files added by plugins during build). Linking doesn't change files or namespaces,
+        // so get it once per link instead of once per namespace statement.
+        const namespaceLookup = this.namespaceLookup;
         for (const file of this.getAllFiles()) {
             if (isBrsFile(file)) {
                 this.linkSymbolTableDisposables.push(
                     file.parser.symbolTable.pushParentProvider(() => this.symbolTable)
                 );
 
+                //link each NamespaceStatement's SymbolTable with the aggregate NamespaceLookup SymbolTable.
+                //Leaf containers always have symbolTable populated, so the lookup below is safe; the null
+                //guard tolerates edge cases like a namespace that failed to register.
+                for (const namespace of file['_cachedLookups'].namespaceStatements) {
+                    const namespaceNameLower = namespace.getName(ParseMode.BrighterScript).toLowerCase();
+                    const aggregate = namespaceLookup.get(namespaceNameLower)?.symbolTable;
+                    if (aggregate) {
+                        this.linkSymbolTableDisposables.push(
+                            namespace.getSymbolTable().addSibling(aggregate)
+                        );
+                    }
+                }
             }
         }
         this.enumerateBrsFiles((file) => {
@@ -911,15 +1020,6 @@ export class Scope {
                 ...this._allNamespaceTypeTable.mergeNamespaceSymbolTables(namespaceTypes)
             );
         });
-        for (const [_, scopeNsContainer] of this.namespaceLookup) {
-            for (let nsContainer of scopeNsContainer.namespaceContainers) {
-                for (let nsStmt of nsContainer.namespaceStatements) {
-                    this.linkSymbolTableDisposables.push(
-                        nsStmt?.getSymbolTable().addSibling(scopeNsContainer.symbolTable)
-                    );
-                }
-            }
-        }
         this.linkSymbolTableDisposables.push(
             this.symbolTable.addSibling(this._allNamespaceTypeTable)
         );
@@ -993,3 +1093,62 @@ export class Scope {
         return items;
     }
 }
+
+/**
+ * A single file's contribution to a namespace name. Cached on `BrsFile` and shared
+ * across every scope that pulls in this file. The fields here are intrinsic to the
+ * file's parsed AST, so they never need to be rebuilt per scope.
+ *
+ * Pure-intermediate contributions (a namespace name part that this file only references
+ * as a dotted prefix, e.g. `A` from `namespace A.B`) carry only the structural fields
+ * (file, fullName, lastPartName, nameRange). Leaf contributions populate the relevant
+ * statement collections and the per-file `symbolTable`.
+ *
+ * The `symbolTable` here has no parent provider; sibling resolution in `linkSymbolTable`
+ * does not walk into a sibling's parent, so the parent-provider plumbing was dead code.
+ */
+export interface NamespaceFileContribution {
+    file: BrsFile;
+    fullName: string;
+    lastPartName: string;
+    nameRange: Range;
+    namespaceStatements?: NamespaceStatement[];
+    statements?: Statement[];
+    classStatements?: Record<string, ClassStatement>;
+    functionStatements?: Record<string, FunctionStatement>;
+    enumStatements?: Map<string, EnumStatement>;
+    constStatements?: Map<string, ConstStatement>;
+    symbolTable?: SymbolTable;
+}
+
+/**
+ * A node in the per-scope namespace tree.
+ *
+ * `namespaces` is always allocated so parent-child wiring works for every container.
+ * The remaining collections are lazily allocated by `buildNamespaceLookup` only when
+ * a corresponding declaration is encountered, so pure-intermediate containers and
+ * sparsely-populated leaves do not pay the cost of empty Maps/Records they will never use.
+ *
+ * Consumers must handle these fields being undefined.
+ */
+export interface NamespaceContainer {
+    file: BscFile;
+    fullName: string;
+    nameRange: Range;
+    lastPartName: string;
+    namespaces?: Map<string, NamespaceContainer>;
+    namespaceStatements?: NamespaceStatement[];
+    statements?: Statement[];
+    classStatements?: Record<string, ClassStatement>;
+    functionStatements?: Record<string, FunctionStatement>;
+    enumStatements?: Map<string, EnumStatement>;
+    constStatements?: Map<string, ConstStatement>;
+    symbolTable?: SymbolTable;
+    //fields used by per-file namespace lookups; optional so scope-level callers don't have to populate them
+    fullNameLower?: string;
+    parentNameLower?: string;
+    nameParts?: Identifier[];
+    lastPartNameLower?: string;
+    isTopLevel?: boolean;
+}
+

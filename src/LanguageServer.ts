@@ -1,5 +1,4 @@
 import * as path from 'path';
-import 'array-flat-polyfill';
 import type {
     CompletionItem,
     Connection,
@@ -26,7 +25,14 @@ import type {
     CompletionList,
     CancellationToken,
     DidChangeConfigurationParams,
-    DidChangeConfigurationRegistrationOptions
+    DidChangeConfigurationRegistrationOptions,
+    SelectionRangeParams,
+    RenameFilesParams,
+    WorkspaceEdit,
+    TextEdit,
+    InlayHint,
+    InlayHintParams,
+    WorkspaceFolder
 } from 'vscode-languageserver/node';
 import {
     SemanticTokensRequest,
@@ -44,6 +50,7 @@ import { util } from './util';
 import { DiagnosticCollection } from './DiagnosticCollection';
 import { encodeSemanticTokens, semanticTokensLegend } from './SemanticTokenUtils';
 import { LogLevel, createLogger, logger, setLspLoggerProps } from './logging';
+import type { LogLevel as LogLevelText } from '@rokucommunity/logger';
 import ignore from 'ignore';
 import * as micromatch from 'micromatch';
 import type { LspProject, LspDiagnostic } from './lsp/LspProject';
@@ -51,8 +58,10 @@ import { PathFilterer } from './lsp/PathFilterer';
 import type { WorkspaceConfig } from './lsp/ProjectManager';
 import { ProjectManager } from './lsp/ProjectManager';
 import * as fsExtra from 'fs-extra';
-import type { MaybePromise } from './interfaces';
+import type { FileChange, MaybePromise } from './interfaces';
+import { Deferred } from './deferred';
 import { workerPool } from './lsp/worker/WorkerThreadProject';
+import { getDefaultMaxWorkerThreads } from './lsp/worker/WorkerPool';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import isEqual = require('lodash.isequal');
 
@@ -65,6 +74,19 @@ export class LanguageServer {
      * The default project discovery setting for the language server. Can be overridden by per-workspace settings
      */
     public static enableProjectDiscoveryDefault = true;
+
+    /**
+     * The default number of projects that are permitted to activate concurrently.
+     */
+    private static projectActivationConcurrencyLimitDefault = 3;
+
+    /**
+     * The default maximum number of worker threads to use for running LSP projects. Can be overridden by
+     * per-workspace settings. Once this limit is reached, additional projects are spread evenly across the
+     * existing worker threads instead of each getting a dedicated one.
+     */
+    public static maxWorkerThreadsDefault = getDefaultMaxWorkerThreads();
+
     /**
      * The language server protocol connection, used to send and receive all requests and responses
      */
@@ -81,6 +103,11 @@ export class LanguageServer {
      * Indicates whether the client supports workspace folders
      */
     private clientHasWorkspaceFolderCapability = false;
+
+    /**
+     * The workspace folders the client sent in the `initialize` request. Used when the client does not support the `workspace/workspaceFolders` request
+     */
+    private initialWorkspaceFolders: WorkspaceFolder[] = [];
 
     /**
      * Create a simple text document manager.
@@ -116,6 +143,13 @@ export class LanguageServer {
         this.projectManager.on('diagnostics', (event) => {
             this.logger.debug(`Received ${event.diagnostics.length} diagnostics from project ${event.project.projectNumber}`);
             this.sendDiagnostics(event).catch(logAndIgnoreError);
+        });
+
+        //notify the client if a project's worker thread crashes unexpectedly
+        this.projectManager.on('critical-failure', (event) => {
+            const message = `[${util.getProjectLogName(event.project)}] ${event.message}`;
+            this.logger.error(message);
+            this.sendCriticalFailure(message);
         });
 
         // Send all open document changes whenever a project is activated. This is necessary because at project startup, the project loads files from disk
@@ -166,6 +200,12 @@ export class LanguageServer {
         //Register semantic token requests. TODO switch to a more specific connection function call once they actually add it
         this.connection.onRequest(SemanticTokensRequest.method, this.onFullSemanticTokens.bind(this));
 
+        //Register inlay hint requests. Inlay hints live under connection.languages and aren't picked up by the on* auto-bind loop above
+        this.connection.languages.inlayHint.on(this.onInlayHint.bind(this));
+
+        //file-operation requests live under connection.workspace, so they aren't picked up by the on* auto-bind loop above
+        this.connection.workspace.onWillRenameFiles(this.onWillRenameFiles.bind(this));
+
         // The content of a text document has changed. This event is emitted
         // when the text document is first opened, when its content has changed,
         // or when document is closed without saving (original contents are sent as a change)
@@ -194,6 +234,16 @@ export class LanguageServer {
         this.hasConfigurationCapability = !!(clientCapabilities.workspace && !!clientCapabilities.workspace.configuration);
         this.clientHasWorkspaceFolderCapability = !!(clientCapabilities.workspace && !!clientCapabilities.workspace.workspaceFolders);
 
+        //remember the initial workspace folders (falling back to the deprecated `rootUri`) for clients that don't support `workspace/workspaceFolders`
+        if (params.workspaceFolders) {
+            this.initialWorkspaceFolders = params.workspaceFolders;
+        } else if (params.rootUri) {
+            this.initialWorkspaceFolders = [{
+                uri: params.rootUri,
+                name: path.basename(util.uriToPath(params.rootUri))
+            }];
+        }
+
         //return the capabilities of the server
         return {
             capabilities: {
@@ -201,8 +251,8 @@ export class LanguageServer {
                 // Tell the client that the server supports code completion
                 completionProvider: {
                     resolveProvider: false,
-                    //anytime the user types a period, auto-show the completion results
-                    triggerCharacters: ['.'],
+                    //`.` auto-shows brightscript completions; `<` auto-shows xml element completions
+                    triggerCharacters: ['.', '<'],
                     allCommitCharacters: ['.', '@']
                 },
                 documentSymbolProvider: true,
@@ -213,17 +263,35 @@ export class LanguageServer {
                 } as SemanticTokensOptions,
                 referencesProvider: true,
                 codeActionProvider: {
-                    codeActionKinds: [CodeActionKind.Refactor]
+                    codeActionKinds: [
+                        CodeActionKind.QuickFix,
+                        CodeActionKind.Refactor,
+                        CodeActionKind.SourceFixAll
+                    ]
                 },
                 signatureHelpProvider: {
                     triggerCharacters: ['(', ',']
                 },
                 definitionProvider: true,
                 hoverProvider: true,
+                selectionRangeProvider: true,
+                inlayHintProvider: true,
                 executeCommandProvider: {
                     commands: [
                         CustomCommands.TranspileFile
                     ]
+                },
+                workspace: {
+                    fileOperations: {
+                        willRename: {
+                            filters: [{
+                                pattern: {
+                                    glob: '**/*.{bs,brs,xml}',
+                                    matches: 'file'
+                                }
+                            }]
+                        }
+                    }
                 }
             } as ServerCapabilities
         };
@@ -243,6 +311,9 @@ export class LanguageServer {
 
         //set our logger to the most verbose logLevel found across any project
         await this.syncLogLevel();
+
+        this.syncProjectActivationConcurrencyLimit();
+        this.syncMaxWorkerThreads();
 
         try {
             if (this.hasConfigurationCapability) {
@@ -299,7 +370,7 @@ export class LanguageServer {
                     if (typeof value === 'string') {
                         value = value.toLowerCase();
                     }
-                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as any);
+                    const logLevelNumeric = this.logger.getLogLevelNumeric(value as LogLevelText | LogLevel);
 
                     if (typeof logLevelNumeric === 'number') {
                         return logLevelNumeric;
@@ -341,6 +412,56 @@ export class LanguageServer {
         this.logger.logLevel = LogLevel.log;
     }
 
+    /**
+     * Get the project activation concurrency limit from all workspaces and set the project manager's concurrency limit to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
+     */
+    private syncProjectActivationConcurrencyLimit() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.projectActivationConcurrencyLimit)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.projectActivationConcurrencyLimitDefault);
+        }
+
+        let concurrencyLimit = Math.min(...limits);
+        //we must always at least support 1 project activating at a time, otherwise no projects would ever activate
+        if (!(concurrencyLimit >= 1)) {
+            this.logger.log(`projectActivationConcurrencyLimit was set to ${concurrencyLimit}, which is not a valid value. Defaulting to 1.`);
+            concurrencyLimit = 1;
+        }
+        this.projectManager.projectActivationConcurrencyLimit = concurrencyLimit;
+        this.logger.info(`projectActivationConcurrencyLimit set to ${concurrencyLimit}`);
+    }
+
+    /**
+     * Get the max worker threads setting from all workspaces and set the worker pool's cap to the lowest value found.
+     * This ensures that if the user has multiple workspaces open with different limits,
+     * we respect the most restrictive limit to avoid overwhelming the user's machine.
+     */
+    private syncMaxWorkerThreads() {
+        const limits = [...this.workspaceConfigsCache]
+            .map(x => x?.[1]?.languageServer?.maxWorkerThreads)
+            .filter(x => typeof x === 'number');
+
+        //if we don't have any limits defined, use our default value
+        if (limits.length === 0) {
+            limits.push(LanguageServer.maxWorkerThreadsDefault);
+        }
+
+        let maxWorkerThreads = Math.min(...limits);
+        //we must always support at least 1 worker, otherwise no threaded projects could ever activate
+        if (!(maxWorkerThreads >= 1)) {
+            this.logger.log(`maxWorkerThreads was set to ${maxWorkerThreads}, which is not a valid value. Defaulting to 1.`);
+            maxWorkerThreads = 1;
+        }
+        workerPool.maxWorkers = maxWorkerThreads;
+        this.logger.info(`maxWorkerThreads set to ${maxWorkerThreads}`);
+    }
+
     @AddStackToErrorMessage
     private async onTextDocumentDidChangeContent(event: TextDocumentChangeEvent<TextDocument>) {
         this.logger.debug('onTextDocumentDidChangeContent', event.document.uri);
@@ -354,16 +475,35 @@ export class LanguageServer {
     }
 
     /**
+     * Pending file changes waiting to be flushed after the debounce period
+     */
+    private pendingFileChanges: FileChange[] = [];
+
+    /**
+     * Timer handle for the file change debounce
+     */
+    private fileChangeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /**
+     * How long to wait (in ms) after the last file change event before processing the batch.
+     * This prevents excessive revalidation during bulk operations like `git checkout` or package installs.
+     */
+    public fileChangeDebounceDelay = 300;
+
+    /**
      * Called when watched files changed (add/change/delete).
      * The CLIENT is in charge of what files to watch, so all client
      * implementations should ensure that all valid project
      * file types are watched (.brs,.bs,.xml,manifest, and any json/text/image files)
+     *
+     * File changes are debounced to batch rapid successive events (e.g. during builds or VCS operations)
+     * into a single processing pass, reducing redundant work across projects.
      */
     @AddStackToErrorMessage
     public async onDidChangeWatchedFiles(params: DidChangeWatchedFilesParams) {
-        const workspacePaths = (await this.connection.workspace.getWorkspaceFolders()).map(x => util.uriToPath(x.uri));
+        const workspacePaths = (await this.getWorkspaceFolders()).map(x => util.uriToPath(x.uri));
 
-        let changes = params.changes
+        const changes = params.changes
             .map(x => ({
                 srcPath: util.uriToPath(x.uri),
                 type: x.type,
@@ -375,10 +515,50 @@ export class LanguageServer {
 
         this.logger.debug('onDidChangeWatchedFiles', changes);
 
+        //accumulate changes into the pending buffer
+        this.pendingFileChanges.push(...changes);
+
+        //reset the debounce timer so we batch rapid successive events
+        clearTimeout(this.fileChangeDebounceTimer);
+
+        //use a deferred so callers can await the completion of the flush
+        if (!this.pendingFileChangesDeferred) {
+            this.pendingFileChangesDeferred = new Deferred();
+        }
+        const deferred = this.pendingFileChangesDeferred;
+
+        this.fileChangeDebounceTimer = setTimeout(() => {
+            void this.flushFileChanges().then(
+                () => deferred.resolve(),
+                (err) => deferred.reject(err)
+            );
+        }, this.fileChangeDebounceDelay);
+
+        return deferred.promise;
+    }
+
+    /**
+     * Deferred for the current pending file changes batch
+     */
+    private pendingFileChangesDeferred: Deferred | undefined;
+
+    /**
+     * Flush all pending file changes accumulated during the debounce window
+     */
+    private async flushFileChanges() {
+        //grab all pending changes and clear the buffer, deduping by srcPath (last event wins)
+        const deduped = new Map<string, FileChange>();
+        for (const change of this.pendingFileChanges.splice(0, this.pendingFileChanges.length)) {
+            deduped.set(change.srcPath, change);
+        }
+        const changes = [...deduped.values()];
+        this.pendingFileChangesDeferred = undefined;
+
         //if the client changed any files containing include/exclude patterns, rebuild the path filterer before processing these changes
         if (
             micromatch.some(changes.map(x => x.srcPath), [
                 '**/.gitignore',
+                '**/.git/info/exclude',
                 '**/.vscode/settings.json',
                 '**/*bsconfig*.json'
             ], {
@@ -409,6 +589,16 @@ export class LanguageServer {
         this.logger.debug('onCompletion', params, cancellationToken);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
+
+        //`<` is registered as a trigger character for xml element completions, but it's the less-than
+        //operator everywhere else, so ignore it for non-xml files
+        if (params.context?.triggerCharacter === '<' && !srcPath.toLowerCase().endsWith('.xml')) {
+            return {
+                items: [],
+                isIncomplete: false
+            };
+        }
+
         const completions = await this.projectManager.getCompletions({
             srcPath: srcPath,
             position: params.position,
@@ -418,13 +608,28 @@ export class LanguageServer {
     }
 
     /**
+     * Get the client's workspace folders. Only sends the `workspace/workspaceFolders` request if the client supports it,
+     * otherwise (or if that request fails) falls back to the folders the client sent during `initialize`
+     */
+    private async getWorkspaceFolders(): Promise<WorkspaceFolder[]> {
+        if (this.clientHasWorkspaceFolderCapability) {
+            try {
+                return await this.connection.workspace.getWorkspaceFolders() ?? [];
+            } catch (e) {
+                this.logger.error('Failed to get workspace folders from the client. Falling back to the initial workspace folders', e);
+            }
+        }
+        return this.initialWorkspaceFolders;
+    }
+
+    /**
      * Get a list of workspaces, and their configurations.
      * Get only the settings for the workspace that are relevant to the language server. We do this so we can cache this object for use in change detection in the future.
      */
     private async getWorkspaceConfigs(): Promise<WorkspaceConfig[]> {
         //get all workspace folders (we'll use these to get settings)
         let workspaces = await Promise.all(
-            (await this.connection.workspace.getWorkspaceFolders() ?? []).map(async (x) => {
+            (await this.getWorkspaceFolders()).map(async (x) => {
                 const workspaceFolder = util.uriToPath(x.uri);
                 const brightscriptConfig = await this.getClientConfiguration<BrightScriptClientConfiguration>(x.uri, 'brightscript');
                 return {
@@ -436,8 +641,9 @@ export class LanguageServer {
                         enableProjectDiscovery: brightscriptConfig?.languageServer?.enableProjectDiscovery ?? LanguageServer.enableProjectDiscoveryDefault,
                         projectDiscoveryMaxDepth: brightscriptConfig?.languageServer?.projectDiscoveryMaxDepth ?? 15,
                         projectDiscoveryExclude: brightscriptConfig?.languageServer?.projectDiscoveryExclude,
-                        logLevel: brightscriptConfig?.languageServer?.logLevel
-
+                        logLevel: brightscriptConfig?.languageServer?.logLevel,
+                        projectActivationConcurrencyLimit: brightscriptConfig?.languageServer?.projectActivationConcurrencyLimit,
+                        maxWorkerThreads: brightscriptConfig?.languageServer?.maxWorkerThreads
                     }
                 };
             })
@@ -449,7 +655,7 @@ export class LanguageServer {
      * Extract project paths from settings' projects list, expanding the workspaceFolder variable if necessary
      */
     private normalizeProjectPaths(workspaceFolder: string, projects: (string | BrightScriptProjectConfiguration)[]): BrightScriptProjectConfiguration[] | undefined {
-        return projects?.reduce((acc, project) => {
+        return projects?.reduce<BrightScriptProjectConfiguration[]>((acc, project) => {
             if (typeof project === 'string') {
                 acc.push({ path: project });
             } else if (typeof project.path === 'string') {
@@ -472,11 +678,15 @@ export class LanguageServer {
         const configs = new Map(
             (await this.getWorkspaceConfigs()).map(x => [x.workspaceFolder, x])
         );
+
         //find any changed configs. This includes newly created workspaces, deleted workspaces, etc.
         //TODO: enhance this to only reload specific projects, depending on the change
         if (!isEqual(configs, this.workspaceConfigsCache)) {
             //now that we've processed any config diffs, update the cached copy of them
             this.workspaceConfigsCache = configs;
+
+            this.syncProjectActivationConcurrencyLimit();
+            this.syncMaxWorkerThreads();
 
             //if configuration changed, rebuild the path filterer
             await this.rebuildPathFilterer();
@@ -505,6 +715,23 @@ export class LanguageServer {
     }
 
     @AddStackToErrorMessage
+    public async onSelectionRanges(params: SelectionRangeParams) {
+        this.logger.debug('onSelectionRanges', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        return this.projectManager.getSelectionRanges({ srcPath: srcPath, positions: params.positions });
+    }
+
+    @AddStackToErrorMessage
+    public async onInlayHint(params: InlayHintParams): Promise<InlayHint[]> {
+        this.logger.debug('onInlayHint', params);
+
+        const srcPath = util.uriToPath(params.textDocument.uri);
+        const result = await this.projectManager.getInlayHints({ srcPath: srcPath, range: params.range });
+        return result ?? [];
+    }
+
+    @AddStackToErrorMessage
     public async onDocumentSymbol(params: DocumentSymbolParams) {
         this.logger.debug('onDocumentSymbol', params);
 
@@ -519,7 +746,7 @@ export class LanguageServer {
 
         const srcPath = util.uriToPath(params.textDocument.uri);
 
-        const result = this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
+        const result = await this.projectManager.getDefinition({ srcPath: srcPath, position: params.position });
         return result;
     }
 
@@ -550,6 +777,29 @@ export class LanguageServer {
         return result ?? [];
     }
 
+    @AddStackToErrorMessage
+    public async onWillRenameFiles(params: RenameFilesParams): Promise<WorkspaceEdit | null> {
+        this.logger.debug('onWillRenameFiles', params);
+
+        const changes: Record<string, TextEdit[]> = {};
+        for (const file of params.files ?? []) {
+            const oldSrcPath = util.uriToPath(file.oldUri);
+            const newSrcPath = util.uriToPath(file.newUri);
+            const edits = await this.projectManager.getFileRenameEdits({ oldSrcPath: oldSrcPath, newSrcPath: newSrcPath });
+            for (const edit of edits) {
+                (changes[edit.uri] ??= []).push({
+                    range: edit.range,
+                    newText: edit.newText
+                });
+            }
+        }
+
+        if (Object.keys(changes).length === 0) {
+            return null;
+        }
+        return { changes: changes };
+    }
+
 
     @AddStackToErrorMessage
     private async onFullSemanticTokens(params: SemanticTokensParams) {
@@ -568,7 +818,30 @@ export class LanguageServer {
         this.logger.debug('onCodeAction', params);
 
         const srcPath = util.uriToPath(params.textDocument.uri);
-        const result = await this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range });
+        const requestedKinds = params.context?.only ?? [];
+        const wantsAnyKind = requestedKinds.length === 0;
+
+        // Fix-all is opt-in and expensive, so only fetch when the client asks for it.
+        const fixAllKind = CodeActionKind.SourceFixAll;
+        const wantsFixAll = wantsAnyKind ||
+            requestedKinds.some(kind => kind.startsWith(fixAllKind) || fixAllKind.startsWith(kind));
+
+        // Standard actions (quickfix, refactor, etc.) all come through getCodeActions,
+        // so only skip that pipeline when the client explicitly asked for fix-all only.
+        const wantsStandardActions = wantsAnyKind ||
+            requestedKinds.some(kind => !kind.startsWith(fixAllKind));
+
+        const [standardActions, fixAllActions] = await Promise.all([
+            wantsStandardActions ? this.projectManager.getCodeActions({ srcPath: srcPath, range: params.range }) : [],
+            wantsFixAll ? this.projectManager.getFixAllCodeActions({ srcPath: srcPath }) : []
+        ]);
+
+        const result = [...(standardActions ?? []), ...(fixAllActions ?? [])];
+
+        // filter out any code actions with a kind that the client did not ask for (if the client specified any kinds at all)
+        if (!wantsAnyKind) {
+            return result.filter(x => x.kind && requestedKinds.some(only => x.kind === only || x.kind.startsWith(only + '.')));
+        }
         return result;
     }
 
@@ -650,12 +923,21 @@ export class LanguageServer {
                 this.pathFilterer.registerExcludeList(rootDir, workspaceConfig.excludePatterns)
             );
 
-            //get any .gitignore patterns from the client from this workspace
-            const gitignorePath = path.resolve(rootDir, '.gitignore');
-            if (await fsExtra.pathExists(gitignorePath)) {
-                const matcher = ignore({ ignoreCase: true }).add(
-                    fsExtra.readFileSync(gitignorePath).toString()
-                );
+            //get any .gitignore and .git/info/exclude patterns from this workspace (both use the same syntax)
+            const ignoreFilePaths = [
+                path.resolve(rootDir, '.gitignore'),
+                path.resolve(rootDir, '.git', 'info', 'exclude')
+            ];
+            const ignoreFileContents: string[] = [];
+            for (const ignoreFilePath of ignoreFilePaths) {
+                if (await fsExtra.pathExists(ignoreFilePath)) {
+                    ignoreFileContents.push(
+                        (await fsExtra.readFile(ignoreFilePath)).toString()
+                    );
+                }
+            }
+            if (ignoreFileContents.length > 0) {
+                const matcher = ignore({ ignoreCase: true }).add(ignoreFileContents);
                 this.pathFiltererDisposables.push(
                     this.pathFilterer.registerExcludeMatcher((p: string) => {
                         const relPath = path.relative(rootDir, p);
@@ -772,6 +1054,7 @@ export class LanguageServer {
     private diagnosticCollection = new DiagnosticCollection();
 
     protected dispose() {
+        clearTimeout(this.fileChangeDebounceTimer);
         this.loggerSubscription?.();
         this.projectManager?.dispose?.();
     }
@@ -839,6 +1122,8 @@ export interface BrightScriptClientConfiguration {
         projectDiscoveryExclude?: Record<string, boolean>;
         logLevel: LogLevel | string;
         projectDiscoveryMaxDepth?: number;
+        projectActivationConcurrencyLimit?: number;
+        maxWorkerThreads?: number;
     };
 }
 

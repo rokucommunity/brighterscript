@@ -2,10 +2,13 @@ import type { AttributeCstNode, ContentCstNode, DocumentCstNode, ElementCstNode 
 import * as parser from '@xml-tools/parser';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
-import { SGAst, SGProlog, SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGAttribute } from './SGTypes';
+import { SGAst, SGProlog, SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGAttribute, SGFieldTypes } from './SGTypes';
 import type { SGElement, SGToken, SGReferences } from './SGTypes';
 import { isSGComponent } from '../astUtils/xml';
-import type { BsDiagnostic } from '../interfaces';
+import { isTypeExpression } from '../astUtils/reflection';
+import type { BsDiagnosticInput } from '../interfaces';
+import { ParseMode, Parser } from './Parser';
+import type { TypeExpression } from './Expression';
 import type { Location, Range } from 'vscode-languageserver';
 
 export default class SGParser {
@@ -20,7 +23,7 @@ export default class SGParser {
     /**
      * The list of diagnostics found during the parse process
      */
-    public diagnostics = [] as BsDiagnostic[];
+    public diagnostics = [] as BsDiagnosticInput[];
 
     /**
      * The options used to parse the file
@@ -118,7 +121,8 @@ export default class SGParser {
             });
         }
 
-        const { prolog, root } = this.buildAST(cst as any);
+        //the xml-tools parser types its CST root generically; we know this grammar always produces a document root
+        const { prolog, root } = this.buildAST(cst as unknown as DocumentCstNode);
         if (!root) {
             const token1 = tokenVector[0];
             const token2 = tokenVector[1];
@@ -198,7 +202,9 @@ export default class SGParser {
             endTagClose: endTagClose
         };
 
-        switch (startTagName.text) {
+        //match structural tags case-insensitively so wrong-cased tags (like `<Children>`) still
+        //produce a proper AST node. `XmlFileValidator` reports the casing problem during validation.
+        switch (startTagName.text.toLowerCase()) {
             case 'component':
                 constructorOptions.elements = this.mapElements(content, ['interface', 'script', 'children', 'customization']);
                 return new SGComponent(constructorOptions);
@@ -212,7 +218,9 @@ export default class SGParser {
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
-                return new SGInterfaceField(constructorOptions);
+                const field = new SGInterfaceField(constructorOptions);
+                field.typeExpression = this.parseFieldType(field);
+                return field;
             case 'function':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
@@ -240,12 +248,17 @@ export default class SGParser {
         }
     }
 
-    mapNode({ children }: ElementCstNode): SGNode {
+    mapNode({ children }: ElementCstNode): SGNode | undefined {
+        const nameToken = children.Name?.[0];
+        //skip malformed elements that have no tag name (e.g. a lone `<` while the user is still typing)
+        if (!nameToken) {
+            return undefined;
+        }
         return new SGNode({
             //<
             startTagOpen: this.mapToken(children.OPEN[0]),
             // TagName
-            startTagName: this.mapToken(children.Name[0]),
+            startTagName: this.mapToken(nameToken),
             attributes: this.mapAttributes(children.attribute),
             // > or />
             startTagClose: this.mapToken((children.SLASH_CLOSE ?? children.START_CLOSE)?.[0]),
@@ -269,7 +282,9 @@ export default class SGParser {
             for (const entry of element) {
                 const name = entry.children.Name?.[0];
                 if (name?.image) {
-                    if (!allow.includes(name.image)) {
+                    //compare case-insensitively so wrong-cased tags (like `<Children>`) are still
+                    //mapped into the AST. `XmlFileValidator` reports the casing problem separately.
+                    if (!allow.includes(name.image.toLowerCase())) {
                         //unexpected tag
                         this.diagnostics.push({
                             ...DiagnosticMessages.xmlUnexpectedTag(name.image),
@@ -290,7 +305,9 @@ export default class SGParser {
             return [];
         }
         const { element } = content.children;
-        return element?.map(element => this.mapNode(element));
+        return element
+            ?.map(element => this.mapNode(element))
+            .filter((node): node is SGNode => !!node);
     }
 
     hasElements(content: ContentCstNode): boolean {
@@ -386,6 +403,35 @@ export default class SGParser {
         );
     }
 
+    /**
+     * Parse a field's `type` attribute as a BrighterScript type expression (i.e. `MyInterface`, `string or integer`).
+     * Built-in SceneGraph field types are skipped, since they don't need it
+     */
+    private parseFieldType(field: SGInterfaceField): TypeExpression {
+        const type = field.type;
+        if (!type || SGFieldTypes.includes(type.toLowerCase())) {
+            return undefined;
+        }
+        const { ast, diagnostics } = Parser.parse(type, { mode: ParseMode.BrighterScript, typeOnly: true });
+
+        //the type was parsed on its own, so move its diagnostics to where the type attribute's value is in this file
+        const valueStart = field.getAttribute('type').tokens.value.location.range.start;
+        for (const diagnostic of diagnostics) {
+            const { start, end } = ('range' in diagnostic.location ? diagnostic.location : util.getLocation(diagnostic.location)).range;
+            this.diagnostics.push({
+                ...diagnostic,
+                location: this.getLocationFromRange(util.createRange(
+                    valueStart.line + start.line,
+                    (start.line === 0 ? valueStart.character : 0) + start.character,
+                    valueStart.line + end.line,
+                    (end.line === 0 ? valueStart.character : 0) + end.character
+                ))
+            });
+        }
+        const typeExpression = ast.statements[0];
+        return isTypeExpression(typeExpression) ? typeExpression : undefined;
+    }
+
     private emptySGReferences(): SGReferences {
         return {
             scriptTagImports: []
@@ -397,6 +443,19 @@ export default class SGParser {
     }
 }
 
+//make range not including quotes
+export function rangeFromTokenValue(token: IToken) {
+    if (!token) {
+        return undefined;
+    }
+    return util.createRange(
+        token.startLine - 1,
+        token.startColumn,
+        token.endLine - 1,
+        token.endColumn - 1
+    );
+}
+
 //not exposed by @xml-tools/parser
 interface IToken {
     image: string;
@@ -406,6 +465,10 @@ interface IToken {
     endOffset?: number;
     endLine?: number;
     endColumn?: number;
+    /**
+     * The lexer token type. Present on tokens produced by `@xml-tools`; used to classify cursor context.
+     */
+    tokenType?: { name: string };
 }
 
 export interface CstNodeLocation {

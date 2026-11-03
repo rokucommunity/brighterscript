@@ -7,7 +7,8 @@ import { rokuDeploy, DefaultFiles } from 'roku-deploy';
 import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
 import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, BsConfigCompilerOptions, FinalizedBsConfig } from './BsConfig';
+import { deprecatedCompilerOptionKeys } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory, TypeCircularReferenceInfo } from './interfaces';
 import { TypeChainEntry } from './interfaces';
@@ -21,13 +22,15 @@ import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { CallExpression, CallfuncExpression, DottedGetExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { AALiteralExpression, ArrayLiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { FunctionScope } from './FunctionScope';
 import { LogLevel, createLogger } from './logging';
-import { isToken, type Identifier, type Token } from './lexer/Token';
+import { isToken, type Identifier, type Locatable, type SourceInfo, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAnyReferenceType, isBinaryExpression, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isDottedGetExpression, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike } from './astUtils/reflection';
+import { isAnyReferenceType, isAssignmentStatement, isFunctionExpression, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isConstStatement, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
-import { SourceNode } from 'source-map';
+import { SourceNode, SourceMapConsumer } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
@@ -45,13 +48,14 @@ import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromVa
 import { AssociativeArrayType } from './types/AssociativeArrayType';
 import { ComponentType } from './types/ComponentType';
 import { FunctionType } from './types/FunctionType';
-import type { AssignmentStatement, NamespaceStatement } from './parser/Statement';
-import type { BscFile } from './files/BscFile';
+import type { AssignmentStatement, ConstStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from './parser/Statement';
 import type { NamespaceType } from './types/NamespaceType';
 import { getUniqueType } from './types/helpers';
 import { InvalidType } from './types/InvalidType';
 import { TypedFunctionType } from './types';
 import { IntersectionType } from './types/IntersectionType';
+import { TokenObject } from './lexer/TokenObject';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 
 export class Util {
     public clearConsole() {
@@ -155,6 +159,70 @@ export class Util {
         }
     }
 
+    /**
+     * Create a new `bsconfig.json` file in the given directory or at the given `project` path (this powers `bsc --init`).
+     * The file contains recommended defaults, followed by the rest of the supported options commented out.
+     * An existing `bsconfig.json` file is never overwritten.
+     * @param cwd the directory where the `bsconfig.json` file should be created (or against which `project` is resolved)
+     * @param project optional path to the config file, resolved relative to `cwd`
+     * @returns the path to the new file, or `undefined` if the target file already exists
+     */
+    public createConfigFile(cwd = process.cwd(), project = 'bsconfig.json'): string | undefined {
+        const configPath = path.resolve(cwd, project);
+        if (fsExtra.pathExistsSync(configPath)) {
+            return undefined;
+        }
+        //each setting is followed by a short description, aligned like `tsc --init`
+        const option = (setting: string, description: string, indent = '    ') => `${indent}${setting.padEnd(50 - indent.length)} /* ${description} */`;
+        const compilerOption = (setting: string, description: string) => option(setting, description, '        ');
+        const contents = [
+            '{',
+            option('"outDir": "dist",', 'The directory where the transpiled files are placed.'),
+            option('"compilerOptions": {', 'Options that control how your code is validated and transpiled.'),
+            compilerOption(`"minFirmwareVersion": "${DEFAULT_MIN_FIRMWARE_VERSION}",`, 'The minimum Roku firmware version required to run this project.'),
+            compilerOption('"autoImportComponentScript": true,', 'For every xml component, automatically import a .bs or .brs file with the same name (if it exists).'),
+            compilerOption('"sourceMap": true,', 'Generate sourcemap files so debuggers can show the original source code.'),
+            compilerOption('"relativeSourceMaps": true,', 'Write sourcemap `sources` as relative paths instead of absolute paths.'),
+            '',
+            compilerOption('// "allowBrighterScriptInBrightScript": false,', 'Allow BrighterScript features (classes, interfaces, etc...) in BrightScript (`.brs`) files, and force those files to be transpiled.'),
+            compilerOption('// "bslibDestinationDir": "source",', 'Override the output directory location of the bslib.brs file. Using a location outside of `source` will break scripts that depend on it.'),
+            compilerOption('// "emitDefinitions": false,', 'Emit type definition files (`d.bs`) during transpile.'),
+            compilerOption('// "emitFullPaths": false,', 'Emit full paths to files when printing diagnostics to the console.'),
+            compilerOption('// "legacyCallfuncHandling": false,', 'Insert `invalid` as an argument to `callfunc()` calls that have no arguments, for legacy Roku OS versions.'),
+            compilerOption('// "manifest": { "bs_const": {} },', 'Override values in the manifest file (currently only `bs_const` is supported).'),
+            compilerOption('// "pruneEmptyCodeFiles": false,', 'Remove files that are empty (or only contain comments) after transpilation.'),
+            compilerOption('// "removeParameterTypes": false,', 'Remove explicit parameter and return types (the `as type` syntax) from functions.'),
+            compilerOption('// "resolveSourceRoot": false,', 'Resolve `sourceRoot` to an absolute path (relative to this bsconfig.json file).'),
+            compilerOption('// "sourceRoot": "",', 'Override where source files appear to live in sourcemaps and source literals.'),
+            compilerOption('// "strict": false,', 'Enable all strict mode options (`strictCallFunc`, `strictNodeMembers`, and any added in the future).'),
+            compilerOption('// "strictCallFunc": false,', 'Disallow `callfunc()` invocations on generic Node types.'),
+            compilerOption('// "strictNodeMembers": false', 'Treat unknown members on Node types as errors instead of dynamic values.'),
+            '    },',
+            '',
+            option('// "cwd": "./",', 'Override the current working directory.'),
+            option('// "diagnosticFilters": [],', 'A list of filters used to hide diagnostics.'),
+            option('// "diagnosticLevel": "warn",', 'Which diagnostic levels are printed to the console: "hint", "info", "warn", or "error".'),
+            option('// "diagnosticReporters": "detailed",', 'How diagnostics are reported to the console: "detailed", "github-actions", or a custom template string.'),
+            option('// "diagnosticSeverityOverrides": {},', 'A map of diagnostic codes to severity overrides ("hint", "info", "warn", or "error").'),
+            option('// "extends": "",', 'Path to another bsconfig.json file that this file should import and then override.'),
+            option(`// "files": ${JSON.stringify(DefaultFiles).replace(/,/g, ', ')},`, 'The list of files (or globs) to include in your project.'),
+            option('// "logLevel": "log",', 'The log level: "error", "warn", "log", "info", "debug", "trace", or "off".'),
+            option('// "noEmit": false,', 'Validate the project without writing any files to `outDir`.'),
+            option('// "plugins": [],', 'A list of node scripts or npm modules to load as compiler plugins.'),
+            option('// "require": [],', 'A list of node scripts or npm modules to `require()` on startup.'),
+            option('// "rootDir": "./",', 'The root directory of your Roku project (where the manifest lives).'),
+            option('// "showDiagnosticsInConsole": true,', 'Print diagnostics to the console.'),
+            option('// "validate": true,', 'Set to false to skip validation (diagnostics) entirely, which can speed up builds.'),
+            option('// "watch": false', 'Keep running, and recompile on every file change.'),
+            '}',
+            ''
+        ].join('\n');
+        fsExtra.ensureDirSync(path.dirname(configPath));
+        //the `wx` flag guarantees we never overwrite an existing file
+        fsExtra.writeFileSync(configPath, contents, { flag: 'wx' });
+        return configPath;
+    }
+
     public getRangeFromOffsetLength(text: string, offset: number, length: number) {
         let lineIndex = 0;
         let colIndex = 0;
@@ -228,11 +296,21 @@ export class Util {
             util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
+            let baseProjectConfigDeprecationDiagnostics: BsDiagnostic[] | undefined;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
+                //`compilerOptions` is deep-merged (like TypeScript does), so a child config only
+                //overriding one option doesn't wipe out the rest of the options set by its parent(s)
+                if (baseProjectConfig?.compilerOptions || projectConfig.compilerOptions) {
+                    result.compilerOptions = {
+                        ...baseProjectConfig?.compilerOptions,
+                        ...projectConfig.compilerOptions
+                    };
+                }
+                baseProjectConfigDeprecationDiagnostics = (baseProjectConfig as any)?._deprecationDiagnostics;
             } else {
                 result = projectConfig;
                 let ancestors = parentProjectPaths ? parentProjectPaths : [];
@@ -247,11 +325,47 @@ export class Util {
             if (result.outDir) {
                 result.outDir = path.resolve(projectFileCwd, result.outDir);
             }
+            //map the deprecated staging options to `outDir` (relative to THIS config file).
+            //the deprecated options themselves are left as-is so consumers that still read them keep working
+            if (!('outDir' in projectConfig)) {
+                if (projectConfig.stagingFolderPath) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingFolderPath);
+                } else if (projectConfig.stagingDir) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingDir);
+                }
+            }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-            if (result.sourceRoot && result.resolveSourceRoot) {
-                result.sourceRoot = path.resolve(projectFileCwd, result.sourceRoot);
+
+            //flag any deprecated top-level `compilerOptions` options used directly in THIS config file
+            //(this is deliberately scoped to options loaded from an actual bsconfig.json file; options
+            //passed programmatically to `Program`/`ProgramBuilder` are not flagged)
+            const deprecationDiagnostics: BsDiagnostic[] = [...((baseProjectConfigDeprecationDiagnostics) ?? [])];
+            for (const key of deprecatedCompilerOptionKeys) {
+                if (key in projectConfig) {
+                    deprecationDiagnostics.push({
+                        ...DiagnosticMessages.deprecatedBsConfigOption(key),
+                        location: {
+                            uri: this.pathToUri(configFilePath),
+                            range: this.createRange(0, 0, 0, 0)
+                        }
+                    });
+                }
+            }
+            (result as any)._deprecationDiagnostics = deprecationDiagnostics;
+
+            //`sourceRoot`/`resolveSourceRoot` may live at the top level (deprecated) or in `compilerOptions`.
+            //resolve whichever location actually holds the value, relative to THIS config file
+            const sourceRootValue = result.compilerOptions?.sourceRoot ?? result.sourceRoot;
+            const resolveSourceRootValue = result.compilerOptions?.resolveSourceRoot ?? result.resolveSourceRoot;
+            if (sourceRootValue && resolveSourceRootValue) {
+                const resolvedSourceRoot = path.resolve(projectFileCwd, sourceRootValue);
+                if (result.compilerOptions?.sourceRoot !== undefined) {
+                    result.compilerOptions.sourceRoot = resolvedSourceRoot;
+                } else {
+                    result.sourceRoot = resolvedSourceRoot;
+                }
             }
             return result;
         }
@@ -284,27 +398,32 @@ export class Util {
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({
-            ...config
-        });
-
         if (config?.noProject) {
-            return result;
+            return this.normalizeConfig({
+                ...config
+            });
         }
 
+        let project: string | undefined;
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = this.getConfigFilePath(config?.cwd);
+            project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
-            result.project = config.project;
+            project = config.project;
         }
-        if (result.project) {
-            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
-            result = Object.assign(result, configFile);
+
+        let mergedConfig = { ...config };
+        if (project) {
+            let configFile = this.loadConfigFile(project, undefined, config?.cwd);
+            //the project file values are the defaults; the provided options override them
+            mergedConfig = { ...configFile, ...config };
         }
-        //override the defaults with the specified options
-        result = Object.assign(result, config);
+
+        //set defaults and map deprecated options AFTER merging the project file, so that
+        //deprecated options (i.e. `stagingFolderPath`, `copyToStaging`) from the project file are properly honored
+        let result = this.normalizeConfig(mergedConfig);
+        result.project = project;
         return result;
     }
 
@@ -317,10 +436,27 @@ export class Util {
 
         const cwd = config.cwd ?? process.cwd();
 
+        //Resolve `compilerOptions`: values set there win over their deprecated top-level counterparts.
+        //(deprecation diagnostics for options loaded directly from a bsconfig.json file are collected
+        //separately, in `loadConfigFile`, and simply carried through on `config._deprecationDiagnostics`)
+        const compilerOptions: BsConfigCompilerOptions = { ...(config.compilerOptions ?? {}) };
+        for (const key of deprecatedCompilerOptionKeys) {
+            if (!(key in compilerOptions) && key in config) {
+                (compilerOptions as any)[key] = (config as any)[key];
+            }
+            //push the resolved (winning) value back onto the flat config so the rest of this function
+            //(and any code that still reads the deprecated flat option) sees the correct, resolved value
+            if (key in compilerOptions) {
+                (config as any)[key] = compilerOptions[key];
+            }
+        }
+
         let logLevel: LogLevel = LogLevel.log;
 
         if (typeof config.logLevel === 'string') {
             logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
+        } else if (typeof config.logLevel === 'number') {
+            logLevel = config.logLevel;
         }
 
         let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
@@ -349,12 +485,15 @@ export class Util {
             outDir = './out'; //default case
         }
 
+        const strictValue = !!config.strict;
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
             //use default files array from rokuDeploy
             files: config.files ?? [...DefaultFiles],
             outDir: outDir,
             sourceMap: config.sourceMap === true,
+            relativeSourceMaps: config.relativeSourceMaps === true,
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
             noEmit: noEmit,
@@ -373,7 +512,12 @@ export class Util {
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
-            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false
+            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
+            validate: config.validate === false ? false : true,
+            strict: strictValue,
+            strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue),
+            compilerOptions: compilerOptions
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -468,6 +612,29 @@ export class Util {
     }
 
     /**
+     * Compute the replacement text for a file-path string (used in `import` statements and XML `<script uri>` attributes)
+     * when the target file is being renamed. Preserves the original path style: `pkg:/...` stays `pkg:/...`,
+     * relative paths stay relative (recomputed from the containing file's pkg path).
+     *
+     * @param originalText the path string as it appears in source (no surrounding quotes)
+     * @param containingFilePkgPath pkg path of the file containing the reference
+     * @param newTargetPkgPath pkg path of the renamed file (path-separator agnostic)
+     * @returns the new path string, or `null` if the original style is unsupported
+     */
+    public computeRenamedReferencePath(originalText: string, containingFilePkgPath: string, newTargetPkgPath: string): string | null {
+        if (!originalText) {
+            return null;
+        }
+        const newPkgPathForwardSlash = path.normalize(newTargetPkgPath).split(path.sep).join('/');
+        const schemeMatch = /^(pkg|libpkg):\//i.exec(originalText);
+        if (schemeMatch) {
+            return `${schemeMatch[1]}:/${newPkgPathForwardSlash}`;
+        }
+        const relative = this.getRelativePath(containingFilePkgPath, newTargetPkgPath);
+        return relative.split(path.sep).join('/');
+    }
+
+    /**
      * Compute the relative path from the source file to the target file
      * @param pkgSrcPath  - the absolute path to the source, where cwd is the package location
      * @param pkgTargetPath  - the absolute path to the target, where cwd is the package location
@@ -519,8 +686,8 @@ export class Util {
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
-    public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
-        let left: any = dottedGet;
+    public findBeginningVariableExpression(expression: Expression): VariableExpression | undefined {
+        let left: Expression = expression;
         while (left) {
             if (isVariableExpression(left)) {
                 return left;
@@ -625,6 +792,107 @@ export class Util {
             return 1;
         }
         return 0;
+    }
+
+    /**
+     * Convert a file path into a `file://` URL string (e.g. `file:///C:/projects/file.brs`).
+     * Mirrors the `file-url` package: resolves the path, normalizes slashes, prefixes a leading slash
+     * (required for Windows drive letters), and escapes per RFC 3986.
+     */
+    public fileUrl(filePath: string) {
+        let pathName = path.resolve(filePath).replace(/\\/g, '/');
+        //Windows drive letter must be prefixed with a slash
+        if (!pathName.startsWith('/')) {
+            pathName = `/${pathName}`;
+        }
+        //escape required characters for path components
+        return encodeURI(`file://${pathName}`).replace(/[?#]/g, encodeURIComponent);
+    }
+
+    /**
+     * `JSON.stringify` that is safe against circular references and throwing getters. Replaces the
+     * `safe-json-stringify` package.
+     */
+    public safeJsonStringify(data: any, replacer?: (key: string, value: any) => any, space?: string | number) {
+        const seen: any[] = [];
+        const throwsMessage = (err: any) => '[Throws: ' + (err ? err.message : '?') + ']';
+        const safeGetValue = (obj: any, property: string) => {
+            try {
+                return obj[property];
+            } catch (err) {
+                return throwsMessage(err);
+            }
+        };
+        const visit = (obj: any) => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+            if (seen.includes(obj)) {
+                return '[Circular]';
+            }
+            seen.push(obj);
+            try {
+                if (typeof obj.toJSON === 'function') {
+                    try {
+                        return visit(obj.toJSON());
+                    } catch (err) {
+                        return throwsMessage(err);
+                    }
+                }
+                if (Array.isArray(obj)) {
+                    return obj.map(visit);
+                }
+                return Object.keys(obj as Record<string, unknown>).reduce<Record<string, any>>((result, prop) => {
+                    result[prop] = visit(safeGetValue(obj, prop));
+                    return result;
+                }, {});
+            } finally {
+                seen.pop();
+            }
+        };
+        return JSON.stringify(visit(data), replacer, space);
+    }
+
+    /**
+     * Serialize an error (or any thrown value) into a plain object suitable for `JSON.stringify`,
+     * handling circular references. Replaces the `serialize-error` package.
+     */
+    public serializeError(value: any) {
+        const commonProperties = ['name', 'message', 'stack', 'code'];
+        const destroyCircular = (from: any, seen: any[]) => {
+            const to: any = Array.isArray(from) ? [] : {};
+            seen.push(from);
+            for (const [key, val] of Object.entries(from as Record<string, unknown>)) {
+                if (typeof val === 'function') {
+                    continue;
+                }
+                if (!val || typeof val !== 'object') {
+                    to[key] = val;
+                    continue;
+                }
+                if (!seen.includes(from[key])) {
+                    to[key] = destroyCircular(from[key], seen.slice());
+                    continue;
+                }
+                to[key] = '[Circular]';
+            }
+            for (const property of commonProperties) {
+                if (typeof from[property] === 'string') {
+                    to[property] = from[property];
+                }
+            }
+            return to;
+        };
+
+        if (typeof value === 'object' && value !== null) {
+            return destroyCircular(value, []);
+        }
+        //people sometimes throw things besides Error objects…
+        if (typeof value === 'function') {
+            //`JSON.stringify()` discards functions. We do too, unless a function is thrown directly.
+            return `[Function: ${(value.name || 'anonymous')}]`;
+        }
+        return value;
     }
 
     /**
@@ -766,10 +1034,14 @@ export class Util {
     public pathToUri(filePath: string) {
         if (!filePath) {
             return filePath;
+        } else if (this.pathToURICache.has(filePath)) {
+            return this.pathToURICache.get(filePath);
         } else if (this.isUriLike(filePath)) {
             return filePath;
         } else {
-            return URI.file(filePath).toString();
+            const uri = URI.file(filePath).toString();
+            this.pathToURICache.set(filePath, uri);
+            return uri;
         }
     }
 
@@ -864,6 +1136,8 @@ export class Util {
     public extractRange(rangeIsh: RangeLike): Range | undefined {
         if (!rangeIsh) {
             return undefined;
+        } else if ('sourceInfo' in rangeIsh) {
+            return this.getLocation(rangeIsh)?.range;
         } else if ('location' in rangeIsh) {
             return rangeIsh.location?.range;
         } else if ('range' in rangeIsh) {
@@ -966,7 +1240,7 @@ export class Util {
     /**
      * Helper for creating `Location` objects from a file and range
      */
-    public createLocationFromFileRange(file: BscFile, range: Range): Location {
+    public createLocationFromFileRange(file: { srcPath: string }, range: Range): Location {
         return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
     }
 
@@ -1043,16 +1317,28 @@ export class Util {
     /**
      * Clone every token
      */
+    /**
+     * The whitespace directly before this token (on the same line), from its leading trivia
+     */
+    public getLeadingWhitespace(token: Token): string {
+        const trivia = token?.leadingTrivia;
+        const last = trivia?.[trivia.length - 1];
+        return last?.kind === TokenKind.Whitespace ? last.text : '';
+    }
+
     public cloneToken<T extends Token>(token: T): T {
         if (token) {
-            const result = {
-                kind: token.kind,
-                location: this.cloneLocation(token.location),
-                text: token.text,
-                isReserved: token.isReserved,
-                leadingWhitespace: token.leadingWhitespace,
-                leadingTrivia: token.leadingTrivia.map(x => this.cloneToken(x))
-            } as Token;
+            //keep this field order identical to `Lexer.addToken` so cloned tokens
+            //share the same V8 hidden class as lexer-produced tokens
+            const result = new TokenObject(
+                token.kind,
+                token.text,
+                token.isReserved,
+                token.startPosition,
+                token.endPosition,
+                token.sourceInfo,
+                token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
+            ) as Token;
             //handle those tokens that have charCode
             if ('charCode' in token) {
                 (result as any).charCode = (token as any).charCode;
@@ -1067,7 +1353,7 @@ export class Util {
      *  Gets the bounding range of a bunch of ranges or objects that have ranges
      *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
      */
-    public createBoundingLocation(...locatables: Array<{ location?: Location } | Location | { range?: Range } | Range | undefined>): Location | undefined {
+    public createBoundingLocation(...locatables: Array<RangeLike>): Location | undefined {
         let uri: string | undefined;
         let startPosition: Position | undefined;
         let endPosition: Position | undefined;
@@ -1076,6 +1362,12 @@ export class Util {
             let range: Range;
             if (!locatable) {
                 continue;
+            } else if ('sourceInfo' in locatable) {
+                const location = this.getLocation(locatable);
+                range = location?.range;
+                if (!uri) {
+                    uri = location?.uri;
+                }
             } else if ('location' in locatable) {
                 range = locatable.location?.range;
                 if (!uri) {
@@ -1109,7 +1401,11 @@ export class Util {
             }
         }
         if (startPosition && endPosition) {
-            return util.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
+            //reuse the positions instead of copying them - positions are never mutated in place, and every AST node gets one of these
+            return {
+                uri: util.pathToUri(uri),
+                range: { start: startPosition, end: endPosition }
+            };
         } else {
             return undefined;
         }
@@ -1124,40 +1420,238 @@ export class Util {
     }
 
     /**
-     * Gets the bounding range of an object that contains a bunch of tokens
-     * @param tokens Object with tokens in it
-     * @returns Range containing all the tokens
+     * Set the `startPosition`, `endPosition`, and `sourceInfo` of `target` to the bounds of all the locatables.
+     * Positions from different sources can't be compared, so only locatables from one source are included: the first one that has a uri,
+     * or the first one if none of them do. That way, code parsed from a snippet (which has no uri) never takes over the bounds of real code from a file.
+     * A trailing newline is not included in the bounds, so the target never ends at the start of the next line.
+     * Pass a list that can be large (like a block's statements) as an array instead of spreading it, since spreading a huge array overflows the call stack
      */
-    public createBoundingLocationFromTokens(tokens: Record<string, { location?: Location }>): Location | undefined {
-        let uri: string;
-        let startPosition: Position | undefined;
-        let endPosition: Position | undefined;
-        for (let key in tokens) {
-            let token = tokens?.[key];
-            let locatableRange = token?.location?.range;
-            if (!locatableRange) {
-                continue;
-            }
-
-            if (!startPosition) {
-                startPosition = locatableRange.start;
-            } else if (this.comparePosition(locatableRange.start, startPosition) < 0) {
-                startPosition = locatableRange.start;
-            }
-            if (!endPosition) {
-                endPosition = locatableRange.end;
-            } else if (this.comparePosition(locatableRange.end, endPosition) > 0) {
-                endPosition = locatableRange.end;
-            }
-            if (!uri) {
-                uri = token.location.uri;
+    public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | ReadonlyArray<Locatable | undefined> | undefined>): T {
+        let startPosition: number;
+        let endPosition: number;
+        let sourceInfo: SourceInfo;
+        for (const item of locatables) {
+            const isGroup = Array.isArray(item);
+            const count = isGroup ? item.length : 1;
+            for (let i = 0; i < count; i++) {
+                const locatable = (isGroup ? item[i] : item) as Locatable | undefined;
+                if (!locatable?.sourceInfo) {
+                    continue;
+                } else if (!sourceInfo || (!sourceInfo.uri && locatable.sourceInfo.uri)) {
+                    sourceInfo = locatable.sourceInfo;
+                    startPosition = locatable.startPosition;
+                    endPosition = this.getContentEnd(locatable);
+                } else if (locatable.sourceInfo === sourceInfo) {
+                    startPosition = Math.min(startPosition, locatable.startPosition);
+                    endPosition = Math.max(endPosition, this.getContentEnd(locatable));
+                }
             }
         }
-        if (startPosition && endPosition) {
-            return this.createLocation(startPosition.line, startPosition.character, endPosition.line, endPosition.character, uri);
+        target.startPosition = startPosition;
+        target.endPosition = endPosition;
+        target.sourceInfo = sourceInfo;
+        return target;
+    }
+
+    /**
+     * Give a locatable (such as a token or node created by a plugin) a position from a line/character `Location` in the given source
+     * (i.e. `file.sourceInfo`), so it combines with the rest of that source's AST like any parsed item would.
+     * This is meant for building new items. Parsed tokens and nodes describe where they came from in the original source, so don't move them.
+     *
+     * Prefer `util.setBounds(target, someRealToken)` when a token or node from the same file is available.
+     * The position is cleared if there's no location or source, if the location is for a different uri, or if its lines aren't in the source
+     */
+    public setLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo: SourceInfo | undefined): T {
+        const range = location?.range;
+        const startPosition = this.getOffset(sourceInfo, range?.start);
+        const endPosition = this.getOffset(sourceInfo, range?.end);
+        if (startPosition === undefined || endPosition === undefined || (location.uri && location.uri !== sourceInfo.uri)) {
+            target.sourceInfo = undefined;
+            target.startPosition = undefined;
+            target.endPosition = undefined;
         } else {
+            target.sourceInfo = sourceInfo;
+            target.startPosition = startPosition;
+            target.endPosition = endPosition;
+        }
+        return target;
+    }
+
+    /**
+     * Give a locatable the exact position of a line/character `Location`. This supports code written for the `Location`-based api,
+     * like assigning `token.location` or passing a `Location` to a creator.
+     *
+     * The position is in `sourceInfo` when the location is in it, so the item combines with the rest of that source's AST.
+     * Otherwise it's in a placeholder source for the location's uri, which `util.getLocation()` turns back into the same location,
+     * so items given locations this way still combine with each other. The position is cleared if there's no location
+     */
+    public assignLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo?: SourceInfo): T {
+        const range = location?.range;
+        if (!this.isDetachablePosition(range?.start) || !this.isDetachablePosition(range?.end)) {
+            return this.setLocation(target, undefined, undefined);
+        }
+        if (sourceInfo && (!location.uri || location.uri === sourceInfo.uri) && this.isInSource(sourceInfo, range.start) && this.isInSource(sourceInfo, range.end)) {
+            return this.setLocation(target, location, sourceInfo);
+        }
+        target.sourceInfo = this.getDetachedSource(location.uri, Math.max(range.start.line, range.end.line));
+        target.startPosition = (range.start.line * Util.detachedLineLength) + range.start.character;
+        target.endPosition = (range.end.line * Util.detachedLineLength) + range.end.character;
+        return target;
+    }
+
+    /**
+     * Get a `Locatable` for an item that may instead be a line/character `Location` (or an object with a `location`),
+     * for code written against the `Location`-based api. Locatables are returned as-is
+     */
+    public toLocatable(item: Locatable | Location | { location?: Location } | undefined): Locatable | undefined {
+        if (!item || typeof (item as Locatable).startPosition === 'number') {
+            return item as Locatable;
+        }
+        const location = (item as Location).range ? item as Location : (item as { location?: Location }).location;
+        if (location?.range) {
+            return this.assignLocation({} as Locatable, location);
+        }
+        return item as Locatable;
+    }
+
+    /**
+     * Each line in a placeholder source (see `assignLocation`) is this many positions long, so a position there is `(line * detachedLineLength) + character`
+     */
+    private static readonly detachedLineLength = 2 ** 24;
+
+    /**
+     * Placeholder sources for locations that aren't in a parsed source, keyed by uri (see `assignLocation`)
+     */
+    private detachedSources = new Map<string, SourceInfo>();
+
+    /**
+     * Get the placeholder source for the uri, with lines up to at least `lastLine`
+     */
+    private getDetachedSource(uri: string | undefined, lastLine: number): SourceInfo {
+        let source = this.detachedSources.get(uri ?? '');
+        if (!source) {
+            source = { uri: uri, linePositions: [0] };
+            this.detachedSources.set(uri ?? '', source);
+        }
+        const linePositions = source.linePositions;
+        while (linePositions.length <= lastLine) {
+            linePositions.push(linePositions.length * Util.detachedLineLength);
+        }
+        return source;
+    }
+
+    /**
+     * Can this position be represented in a placeholder source (see `assignLocation`)?
+     */
+    private isDetachablePosition(position: Position | undefined) {
+        return Number.isInteger(position?.line) && position.line >= 0 &&
+            Number.isInteger(position.character) && position.character >= 0 && position.character < Util.detachedLineLength;
+    }
+
+    /**
+     * Is the position's line in the source, with the character before the start of the next line?
+     */
+    private isInSource(sourceInfo: SourceInfo, position: Position) {
+        const lineStart = sourceInfo.linePositions[position.line];
+        const nextLineStart = sourceInfo.linePositions[position.line + 1];
+        return lineStart !== undefined && (nextLineStart === undefined || lineStart + position.character < nextLineStart);
+    }
+
+    /**
+     * Get the end position of a locatable, excluding any trailing newline (i.e. a `Newline` token, or an escaped newline in a template string)
+     */
+    public getContentEnd(locatable: Locatable): number {
+        const text = (locatable as Token).text;
+        if (typeof text === 'string' && text.length > 0) {
+            const lastCharCode = text.charCodeAt(text.length - 1);
+            // \n (and \r\n)
+            if (lastCharCode === 10) {
+                return locatable.endPosition - (text.length > 1 && text.charCodeAt(text.length - 2) === 13 ? 2 : 1);
+                // \r
+            } else if (lastCharCode === 13) {
+                return locatable.endPosition - 1;
+            }
+        }
+        return locatable.endPosition;
+    }
+
+    /**
+     * Get the first item that has a real location (a `sourceInfo`), skipping `undefined` and synthetic items.
+     * The locatable equivalent of `util.getLocation(a) ?? util.getLocation(b)`
+     */
+    public firstLocatable<T extends Locatable>(...items: Array<T | undefined>): T | undefined {
+        for (const item of items) {
+            if (item?.sourceInfo) {
+                return item;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `sourceInfo`)
+     */
+    public getLocation(locatable: Locatable): Location | undefined {
+        const sourceInfo = locatable?.sourceInfo;
+        if (!sourceInfo) {
             return undefined;
         }
+        const linePositions = sourceInfo.linePositions;
+        const startLine = this.getLineIndex(linePositions, locatable.startPosition, 0);
+        let endLine = this.getLineIndex(linePositions, locatable.endPosition, startLine);
+        //a token that ends with a newline ends on its own line rather than at the start of the next one
+        if (endLine > startLine && linePositions[endLine] === locatable.endPosition && this.getContentEnd(locatable) !== locatable.endPosition) {
+            endLine--;
+        }
+        return {
+            uri: sourceInfo.uri,
+            range: this.createRange(startLine, locatable.startPosition - linePositions[startLine], endLine, locatable.endPosition - linePositions[endLine])
+        };
+    }
+
+    /**
+     * Get just the start line/character `Position` of a locatable. Cheaper than `getLocation()` when the end isn't needed.
+     * Returns `undefined` for synthetic items (those without a `sourceInfo`)
+     */
+    public getStartPosition(locatable: Locatable): Position | undefined {
+        const linePositions = locatable?.sourceInfo?.linePositions;
+        if (!linePositions) {
+            return undefined;
+        }
+        const line = this.getLineIndex(linePositions, locatable.startPosition, 0);
+        return this.createPosition(line, locatable.startPosition - linePositions[line]);
+    }
+
+    /**
+     * Convert a line/character `Position` into a position counted from the start of the source (see `Locatable.startPosition`).
+     * A character past the end of its line is clamped to that line, so it never lands on the next line.
+     * Returns `undefined` if the source or the position's line is missing
+     */
+    public getOffset(sourceInfo: SourceInfo | undefined, position: Position | undefined): number | undefined {
+        const linePositions = sourceInfo?.linePositions;
+        const lineStart = linePositions?.[position?.line];
+        if (lineStart === undefined) {
+            return undefined;
+        }
+        const offset = lineStart + position.character;
+        const nextLineStart = linePositions[position.line + 1];
+        return nextLineStart !== undefined && offset >= nextLineStart ? nextLineStart - 1 : offset;
+    }
+
+    /**
+     * Binary search `linePositions` (beginning at line index `low`) for the index of the line that contains `position`
+     */
+    private getLineIndex(linePositions: number[], position: number, low: number) {
+        let high = linePositions.length - 1;
+        while (low < high) {
+            const mid = Math.floor((low + high + 1) / 2);
+            if (linePositions[mid] <= position) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return low;
     }
 
     /**
@@ -1168,6 +1662,28 @@ export class Util {
             line: line,
             character: character
         };
+    }
+
+    /**
+     * Get the type implied by the type designator character at the end of a variable or parameter name
+     * (i.e. `string` for `name$`, `integer` for `count%`).
+     * @returns the designator's type, or `undefined` if the name does not end with a type designator
+     */
+    public getTypeDesignatorType(name: string): BscType | undefined {
+        switch (name?.[name.length - 1]) {
+            case '$':
+                return StringType.instance;
+            case '%':
+                return IntegerType.instance;
+            case '!':
+                return FloatType.instance;
+            case '#':
+                return DoubleType.instance;
+            case '&':
+                return LongIntegerType.instance;
+            default:
+                return undefined;
+        }
     }
 
     /**
@@ -1248,7 +1764,7 @@ export class Util {
      * @param typeDescriptor the type descriptor from the docs
      * @returns {BscType} the known type, or dynamic
      */
-    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable, dynamicIfNotFound = true): BscType {
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
         let typeDescriptorLower = typeDescriptor.toLowerCase().trim().replace(/\*/g, '');
 
         if (typeDescriptorLower.startsWith('as ')) {
@@ -1364,17 +1880,13 @@ export class Util {
             return this.getNodeFieldType('roSGNodeContentNode', lookupTable);
         } else if (typeDescriptorLower.endsWith(' node')) {
             return this.getNodeFieldType('roSgNode' + typeDescriptorLower.substring(0, typeDescriptorLower.length - 5), lookupTable);
-        } else if (lookupTable && !typeDescriptorLower.includes(' ')) {
+        } else if (lookupTable) {
             //try doing a lookup
             return lookupTable.getSymbolType(typeDescriptorLower, {
                 flags: SymbolTypeFlag.typetime,
                 fullName: typeDescriptor,
                 tableProvider: () => lookupTable
             });
-        }
-
-        if (!dynamicIfNotFound) {
-            return undefined;
         }
 
         return DynamicType.instance;
@@ -1403,7 +1915,15 @@ export class Util {
             rightType = this.getHighestPriorityType(rightType.types);
         }
 
-        if (isVoidType(leftType) || isVoidType(rightType) || isUninitializedType(leftType) || isUninitializedType(rightType)) {
+        if (isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+        if (isVoidType(leftType) || isVoidType(rightType)) {
+            // = and <> can still be used to check a possibly-void value against invalid/dynamic
+            if ((operator.kind === TokenKind.Equal || operator.kind === TokenKind.LessGreater) &&
+                (isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType) || isDynamicType(leftType) || isDynamicType(rightType))) {
+                return BooleanType.instance;
+            }
             return undefined;
         }
 
@@ -1737,7 +2257,7 @@ export class Util {
                     acc.push(plugin);
                 } catch (err: any) {
                     if (onError) {
-                        onError(pathOrModule, err);
+                        onError(pathOrModule, err as Error);
                     } else {
                         throw err;
                     }
@@ -1756,7 +2276,7 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        function expressionWalker(expression) {
+        function expressionWalker(expression: AstNode) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
@@ -1778,17 +2298,36 @@ export class Util {
         const scope = file.program.getFirstScopeForFile(file);
         let filteredVarNames = [...uniqueVarNames];
         if (scope) {
+            //a parameter or local variable can share a namespace's name, so only treat a name as a namespace when the enclosing function doesn't declare it
+            const func = expression?.findAncestor<FunctionExpression>(isFunctionExpression);
+            const functionScope = func ? this.findFunctionScope(file.functionScopes, func) : undefined;
             filteredVarNames = filteredVarNames.filter((varName: string) => {
                 const varNameLower = varName.toLowerCase();
-                // TODO: include namespaces in this filter
+                const isNamespace = scope.namespaceLookup.has(varNameLower) && !functionScope?.getVariableByName(varNameLower);
                 return !scope.getEnumMap().has(varNameLower) &&
-                    !scope.getConstMap().has(varNameLower);
+                    !scope.getConstMap().has(varNameLower) &&
+                    !isNamespace;
             });
         }
 
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: filteredVarNames };
     }
 
+
+    /**
+     * Find the function scope (searching nested function scopes too) for the given function
+     */
+    private findFunctionScope(functionScopes: FunctionScope[], func: FunctionExpression): FunctionScope | undefined {
+        for (const functionScope of functionScopes ?? []) {
+            if (functionScope.func === func) {
+                return functionScope;
+            }
+            const childScope = this.findFunctionScope(functionScope.childrenScopes, func);
+            if (childScope) {
+                return childScope;
+            }
+        }
+    }
 
     public concatAnnotationLeadingTrivia(stmt: Statement): Token[] {
         return [...(stmt.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...stmt.leadingTrivia];
@@ -1804,16 +2343,21 @@ export class Util {
         let lines = src.split(/\r?\n/g);
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             let line = lines[lineIndex];
-            chunks.push(
-                lineIndex > 0 ? '\n' : '',
-                new SourceNode(lineIndex + 1, 0, source, line)
-            );
+            if (lineIndex > 0) {
+                chunks.push('\n');
+            }
+            //skip wrapping empty lines in a SourceNode, since they'd have empty children
+            if (line.length > 0) {
+                chunks.push(new SourceNode(lineIndex + 1, 0, source, line));
+            }
         }
         return new SourceNode(null, null, source, chunks);
     }
 
     private isWindows = process.platform === 'win32';
     private standardizePathCache = new Map<string, string>();
+
+    private pathToURICache = new Map<string, string>();
 
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
@@ -2001,7 +2545,7 @@ export class Util {
                 case AstNodeKind.FunctionParameterExpression:
                     return [(nextPart as FunctionParameterExpression).tokens.name];
                 case AstNodeKind.GroupingExpression:
-                    parts.push(createIdentifier('()', nextPart.location));
+                    parts.push(createIdentifier('()', nextPart));
                     break loop;
                 default:
                     //we found a non-DottedGet expression, so return because this whole operation is invalid.
@@ -2009,6 +2553,21 @@ export class Util {
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * Spread is only supported when the literal is the direct value of an assignment, dotted set, or indexed set
+     * that lives in a statement list. Returns that statement, or undefined when the literal is anywhere else.
+     */
+    public getSpreadLiteralOwnerStatement(literal: ArrayLiteralExpression | AALiteralExpression): AssignmentStatement | DottedSetStatement | IndexedSetStatement | undefined {
+        const parent = literal.parent;
+        if (
+            (isAssignmentStatement(parent) || isDottedSetStatement(parent) || isIndexedSetStatement(parent)) &&
+            parent.value === literal &&
+            (isBlock(parent.parent) || isBody(parent.parent))
+        ) {
+            return parent;
+        }
     }
 
     /**
@@ -2023,10 +2582,80 @@ export class Util {
         const parts = this.getAllDottedGetParts(node) ?? [];
         var result = parts[0]?.text;
         for (var i = 1; i < parts.length; i++) {
-            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + parts[i].text;
+            //some parts can be undefined (e.g. an unfinished `widget@.` callfunc with no method name)
+            const part = parts[i];
+            if (!part) {
+                continue;
+            }
+            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + part.text;
         }
         return result;
         /* eslint-enable no-var */
+    }
+
+    /**
+     * Reconstruct the written name of a "complex" type expression - one that isn't a plain
+     * dotted-get chain, so `getAllDottedGetPartsAsString` can't represent it. Handles
+     * unions/intersections, inline interfaces, typed arrays, typed function types, and groupings.
+     * Returns `undefined` for anything it can't render.
+     */
+    public getTypeExpressionName(node: Expression, parseMode = ParseMode.BrighterScript): string {
+        if (isTypeExpression(node)) {
+            return this.getTypeExpressionName(node.expression, parseMode);
+        }
+        if (isBinaryExpression(node)) {
+            //union (`or`) / intersection (`and`) types
+            const left = this.getTypeExpressionName(node.left, parseMode);
+            const right = this.getTypeExpressionName(node.right, parseMode);
+            if (left === undefined || right === undefined) {
+                return undefined;
+            }
+            return `${left} ${node.tokens.operator?.text ?? 'or'} ${right}`;
+        }
+        if (isGroupingExpression(node)) {
+            const inner = this.getTypeExpressionName(node.expression, parseMode);
+            return inner === undefined ? undefined : `(${inner})`;
+        }
+        if (isTypedArrayExpression(node)) {
+            const inner = this.getTypeExpressionName(node.innerType, parseMode);
+            return inner === undefined ? undefined : `${inner}[]`;
+        }
+        if (isInlineInterfaceExpression(node)) {
+            const members = [];
+            for (const member of node.members ?? []) {
+                const memberType = member.typeExpression
+                    ? this.getTypeExpressionName(member.typeExpression, parseMode)
+                    : undefined;
+                members.push([
+                    member.isOptional ? 'optional ' : '',
+                    member.tokens.name?.text ?? '',
+                    memberType === undefined ? '' : ` as ${memberType}`
+                ].join(''));
+            }
+            return `{ ${members.join(', ')} }`;
+        }
+        if (isTypedFunctionTypeExpression(node)) {
+            const params = [];
+            for (const param of node.params ?? []) {
+                const paramType = param.typeExpression
+                    ? this.getTypeExpressionName(param.typeExpression, parseMode)
+                    : undefined;
+                params.push([
+                    param.tokens.name?.text ?? '',
+                    paramType === undefined ? '' : ` as ${paramType}`
+                ].join(''));
+            }
+            const returnType = node.returnType
+                ? this.getTypeExpressionName(node.returnType, parseMode)
+                : undefined;
+            return [
+                node.tokens.functionType?.text ?? 'function',
+                `(${params.join(', ')})`,
+                returnType === undefined ? '' : ` as ${returnType}`
+            ].join('');
+        }
+        //fall back to the dotted-get chain (variable/dotted-get leaves of the type expression)
+        return this.getAllDottedGetPartsAsString(node, parseMode);
     }
 
     /**
@@ -2056,7 +2685,7 @@ export class Util {
      * Returns an integer if valid, or undefined. Eliminates checking for NaN
      */
     public parseInt(value: any) {
-        const result = parseInt(value);
+        const result = parseInt(value as string);
         if (!isNaN(result)) {
             return result;
         } else {
@@ -2163,6 +2792,18 @@ export class Util {
     }
 
     /**
+     * Append every item to the end of `target`, and return `target`.
+     * Use this instead of `target.push(...items)` when `items` could be very large: spreading passes each item
+     * as its own function argument, which throws "Maximum call stack size exceeded" somewhere past ~100k items.
+     */
+    public pushAll<T>(target: T[], items: Iterable<T>): T[] {
+        for (const item of items) {
+            target.push(item);
+        }
+        return target;
+    }
+
+    /**
      * Wraps SourceNode's constructor to be compatible with the TranspileResult type
      */
     public sourceNodeFromTranspileResult(
@@ -2174,7 +2815,29 @@ export class Util {
     ): SourceNode {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
-        return new SourceNode(line, column, source, chunks as any, name);
+        return new SourceNode(line, column, source, chunks as string | SourceNode | (string | SourceNode)[], name);
+    }
+
+    /**
+     * Strip a trailing `sourceMappingURL` comment (and the newline preceding it) from the end of a
+     * transpile result, so that appending a freshly-generated one doesn't produce a duplicate. A file
+     * can already carry a comment from a previous build, which is either preserved verbatim (for
+     * files that don't need transpiling) or re-emitted as a comment by the AST transpile.
+     *
+     * Handles both BrightScript-style (`'//# sourceMappingURL=...`) and XML-style
+     * (`<!--//# sourceMappingURL=... -->`) comments. Leaves the node untouched when no trailing
+     * sourceMappingURL comment is present.
+     */
+    public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
+        //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
+        const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+        //the comment can only be on the last non-blank line, so only look at the end of the output instead of building all of it
+        const match = pattern.exec(this.getSourceNodeTail(node));
+        if (match) {
+            //trim the exact matched length off the right edge, since the match may span multiple sibling leaves
+            this.trimSourceNodeRight(node, match[0].length);
+        }
+        return node;
     }
 
     /**
@@ -2197,7 +2860,7 @@ export class Util {
         let itemTypeKind = '';
         let parentTypeKind = '';
         let astNode: AstNode;
-        let errorLocation: Location;
+        let errorLocatable: Locatable;
         let containsDynamic = false;
         let continueResolvingAllItems = true;
         let crossedCallFunc = false;
@@ -2248,7 +2911,7 @@ export class Util {
                 containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
                 crossedCallFunc = crossedCallFunc || chainItem.data?.isFromCallFunc;
                 if (!chainItem.isResolved) {
-                    errorLocation = chainItem.location;
+                    errorLocatable = chainItem.locatable;
                     continueResolvingAllItems = false;
                 }
             }
@@ -2260,7 +2923,10 @@ export class Util {
             itemParentTypeKind: parentTypeKind,
             fullNameOfItem: fullErrorName,
             fullChainName: fullChainName,
-            location: errorLocation,
+            get location() {
+                return util.getLocation(errorLocatable);
+            },
+            locatable: errorLocatable,
             containsDynamic: containsDynamic,
             astNode: astNode,
             crossedCallFunc: crossedCallFunc
@@ -2301,10 +2967,193 @@ export class Util {
         return false;
     }
 
-    public isGenericNodeType(type: BscType) {
+    /**
+     * Trim `charCount` characters off the right edge of a SourceNode tree, walking children right to left.
+     * Collects the edits in a first pass and only applies them if the full `charCount` was accounted for,
+     * so a tree containing an unrecognized child (e.g. a SourceNode from a different installed copy of
+     * `source-map`) is left completely untouched instead of partially trimmed.
+     * Returns true if the full `charCount` was trimmed, false if the walk bailed out or ran out of content.
+     */
+    private trimSourceNodeRight(node: SourceNode, charCount: number): boolean {
+        const trimEdits: TrimEdit[] = [];
+        const trimState: TrimState = { remainingCharCount: charCount, bailedOut: false };
+        this.collectSourceNodeTrimEdits(node, trimState, trimEdits);
+        if (trimState.bailedOut || trimState.remainingCharCount > 0) {
+            return false;
+        }
+        for (const trimEdit of trimEdits) {
+            trimEdit.children[trimEdit.childIndex] = trimEdit.replacement;
+        }
+        return true;
+    }
+
+    /**
+     * Walk a SourceNode tree right to left, recording planned leaf edits into `trimEdits` without mutating
+     * anything, until `trimState.remainingCharCount` reaches zero or an unrecognized child is encountered
+     */
+    private collectSourceNodeTrimEdits(node: SourceNode, trimState: TrimState, trimEdits: TrimEdit[]): void {
+        const children = node.children as unknown as Array<SourceNode | string>;
+        for (let childIndex = children.length - 1; childIndex >= 0 && trimState.remainingCharCount > 0 && !trimState.bailedOut; childIndex--) {
+            const child = children[childIndex];
+            if (typeof child === 'string') {
+                if (child.length <= trimState.remainingCharCount) {
+                    trimState.remainingCharCount -= child.length;
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: '' });
+                } else {
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: child.slice(0, child.length - trimState.remainingCharCount) });
+                    trimState.remainingCharCount = 0;
+                }
+            } else if (this.isSourceNodeLike(child)) {
+                this.collectSourceNodeTrimEdits(child, trimState, trimEdits);
+            } else {
+                //unrecognized child shape (not a string, not a SourceNode from any installed copy of `source-map`); stop rather than skip past it
+                trimState.bailedOut = true;
+            }
+        }
+    }
+
+    /**
+     * Get the end of a SourceNode's text: enough to include its last non-blank line and the line break before it (plus one
+     * more character, for `\r\n`), or all of it if it doesn't have that many lines
+     */
+    private getSourceNodeTail(node: SourceNode): string {
+        const tailState: SourceNodeTailState = { tail: '', foundNonBlank: false, foundLineBreak: false, isComplete: false, bailedOut: false };
+        this.collectSourceNodeTail(node, tailState);
+        return tailState.bailedOut ? node.toString() : tailState.tail;
+    }
+
+    /**
+     * Walk a SourceNode tree right to left, prepending its strings to `tailState.tail` until it holds the last non-blank line,
+     * the line break before it, and one more character. Each string is only looked at once
+     */
+    private collectSourceNodeTail(node: SourceNode, tailState: SourceNodeTailState): void {
+        const children = node.children as unknown as Array<SourceNode | string>;
+        for (let childIndex = children.length - 1; childIndex >= 0 && !tailState.isComplete && !tailState.bailedOut; childIndex--) {
+            const child = children[childIndex];
+            if (typeof child === 'string') {
+                if (child.length === 0) {
+                    continue;
+                }
+                tailState.tail = child + tailState.tail;
+                if (tailState.foundLineBreak) {
+                    //this is the character before the line break
+                    tailState.isComplete = true;
+                    continue;
+                }
+                let searchEnd = child.length - 1;
+                if (!tailState.foundNonBlank) {
+                    searchEnd = child.search(/\S\s*$/);
+                    if (searchEnd < 0) {
+                        continue;
+                    }
+                    tailState.foundNonBlank = true;
+                }
+                const lineBreakIndex = child.lastIndexOf('\n', searchEnd);
+                if (lineBreakIndex >= 0) {
+                    tailState.foundLineBreak = true;
+                    tailState.isComplete = lineBreakIndex > 0;
+                }
+            } else if (this.isSourceNodeLike(child)) {
+                this.collectSourceNodeTail(child, tailState);
+            } else {
+                tailState.bailedOut = true;
+            }
+        }
+    }
+
+    /**
+     * Duck-check for a SourceNode, matching the same marker property `source-map` itself uses in `SourceNode.prototype.add()`,
+     * so this also recognizes SourceNodes produced by a different installed copy of the `source-map` package
+     */
+    private isSourceNodeLike(value: string | SourceNode): value is SourceNode {
+        return !!value && typeof value === 'object' && (value as any).$$$isSourceNode$$$ === true && Array.isArray((value as any).children);
+    }
+
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+     * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
+     * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
+     * Returns undefined if no map can be found.
+     */
+    public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Strip any trailing XML comment close (either --> or --!>) that may have been captured
+        // when the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
+        if (match) {
+            const url = match[1].replace(/--!?>$/, '').trim();
+            if (url.startsWith('data:')) {
+                // inline base64: data:application/json;base64,<b64>
+                const b64Match = /base64,([A-Za-z0-9+/=]+)$/.exec(url);
+                if (b64Match) {
+                    return JSON.parse(Buffer.from(b64Match[1], 'base64').toString('utf8')) as RawSourceMap;
+                }
+            } else {
+                const mapPath = path.isAbsolute(url) ? url : path.resolve(path.dirname(srcPath), url);
+                if (await fsExtra.pathExists(mapPath)) {
+                    return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
+                }
+            }
+        }
+
+        // no usable sourceMappingURL; try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
+        }
+        return undefined;
+    }
+
+    /**
+     * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
+     * output traces back through the input map to the original source.
+     */
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+        await SourceMapConsumer.with(inputMap, null, (consumer) => {
+            generator.applySourceMap(consumer, sourceFile);
+        });
+    }
+
+    /**
+     * Chain a prebuild input sourcemap (loaded from a co-located `.map` file or a
+     * `sourceMappingURL` comment in the file contents) onto an existing serialized output
+     * sourcemap. Returns the chained sourcemap as a JSON string. If no input map is found,
+     * the original output map JSON is returned unchanged.
+     */
+    public async chainInputSourceMap(outputMapJson: string, file: { fileContents?: string; srcPath: string }): Promise<string> {
+        const inputMap = await this.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+        if (!inputMap) {
+            return outputMapJson;
+        }
+        const { SourceMapConsumer: Consumer, SourceMapGenerator: Generator } = await import('source-map');
+        const outputMap = JSON.parse(outputMapJson) as RawSourceMap;
+        return Consumer.with(outputMap, null, async (outputConsumer) => {
+            const generator = Generator.fromSourceMap(outputConsumer);
+            await Consumer.with(inputMap, null, (inputConsumer) => {
+                generator.applySourceMap(inputConsumer, file.srcPath);
+            });
+            return generator.toString();
+        });
+    }
+
+    public isBuiltInType(typeName: string) {
+        const typeNameLower = typeName.toLowerCase();
+        if (typeNameLower.startsWith('rosgnode')) {
+            // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
+            return true;
+        }
+        return false;
+    }
+
+    public isGenericNodeType(type: BscType, mustBeCallfuncAble: boolean) {
         if (isComponentType(type)) {
             const lowerName = type.toString().toLowerCase();
             if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+            if (!mustBeCallfuncAble && (lowerName === 'rosgnodecontentnode')) {
                 return true;
             }
         }
@@ -2421,7 +3270,7 @@ export class Util {
 
     public hasLeadingComments(input: Token | AstNode) {
         const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
-        return !!leadingTrivia.find(t => t?.kind === TokenKind.Comment);
+        return !!leadingTrivia?.find(t => t?.kind === TokenKind.Comment);
     }
 
     public getLeadingComments(input: Token | AstNode) {
@@ -2432,7 +3281,7 @@ export class Util {
     public isLeadingCommentOnSameLine(line: RangeLike, input: Token | AstNode) {
         const leadingCommentRange = this.getLeadingComments(input)?.[0];
         if (leadingCommentRange) {
-            return this.linesTouch(line, leadingCommentRange?.location);
+            return this.linesTouch(line, util.getLocation(leadingCommentRange));
         }
         return false;
     }
@@ -2498,6 +3347,13 @@ export class Util {
         let result: BscType;
         let methodName = methodNameToken?.text?.replace(/"/g, ''); // remove quotes if it was the first arg of .callFunc()
 
+        //bail early when there's no method name (e.g. an unfinished `widget@.` callfunc).
+        //downstream getCallFuncType / ReferenceType paths assume a non-empty member name and
+        //will eventually try `name.toLowerCase()` on undefined and crash.
+        if (!methodName) {
+            return undefined;
+        }
+
         // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
         // It's nicer for CallExpression, because it's a call on any expression.
         let calleeType: BscType;
@@ -2506,13 +3362,13 @@ export class Util {
         } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
             calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
         }
-        const funcType = calleeType.getCallFuncType?.(methodName, options);
+        const funcType = calleeType?.getCallFuncType?.(methodName, options);
         if (funcType) {
             options.typeChain?.push(new TypeChainEntry({
                 name: methodName,
                 type: funcType,
                 data: options.data,
-                location: methodNameToken.location,
+                locatable: methodNameToken,
                 separatorToken: createToken(TokenKind.Callfunc),
                 astNode: callExpr
             }));
@@ -2627,6 +3483,29 @@ export class Util {
         return false;
     }
 
+    /**
+     * If `expression` is used in the initializer of a namespaced const with the same name (i.e. `namespace promises: const chain = chain`),
+     * return that const. A const can't refer to itself by its namespace-relative name, so that name refers to the outer (global) symbol instead.
+     */
+    public getSelfNamedConstOfInitializer(expression: VariableExpression): ConstStatement | undefined {
+        //this runs for every variable expression, so only walk up to the nearest statement instead of all the way to the root.
+        //a const's initializer is an expression, so the nearest statement around it is the const itself
+        let node = expression?.parent;
+        while (node && !isStatement(node)) {
+            node = node.parent;
+        }
+        if (!isConstStatement(node)) {
+            return undefined;
+        }
+        const constStatement = node;
+        if (
+            constStatement.tokens.name?.text.toLowerCase() === expression.tokens.name?.text.toLowerCase() &&
+            constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)
+        ) {
+            return constStatement;
+        }
+    }
+
     public isCalleeMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
         namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
 
@@ -2674,9 +3553,10 @@ export class Util {
 
         if (isNamespaceStatement(namespace)) {
             let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
-            // check if the namespace has a symbol with the same name, but different definiton
-            if (namespaceHasSymbol && !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable())) {
-                return true;
+            // the variable is shadowing the namespace's symbol if it resolves to a different definition. If it resolves to the
+            // namespace's own symbol, then nothing is shadowing it, even if a different symbol with this name exists at the file level
+            if (namespaceHasSymbol) {
+                return !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable());
             }
         }
         const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();
@@ -2731,6 +3611,9 @@ export class Util {
         if (!resultType.isResolvable()) {
             if (isUnionType(resultType)) {
                 resultType = DynamicType.instance;
+            } else if (isParamTypeFromValueReferenceType(resultType)) {
+                //already wrapped — wrapping again would build a recursive proxy chain whose
+                //get handlers loop forever via Reflect.get
             } else {
                 resultType = new ParamTypeFromValueReferenceType(resultType);
             }
@@ -2787,10 +3670,10 @@ export class Util {
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
  * we can't use `object.tag` syntax.
  */
-export function standardizePath(stringParts, ...expressions: any[]) {
+export function standardizePath(stringParts: TemplateStringsArray | string, ...expressions: any[]) {
     let result: string[] = [];
     for (let i = 0; i < stringParts?.length; i++) {
-        result.push(stringParts[i], expressions[i]);
+        result.push(stringParts[i], expressions[i] as string);
     }
     return util.standardizePath(
         result.join('')
@@ -2800,7 +3683,33 @@ export function standardizePath(stringParts, ...expressions: any[]) {
 /**
  * An item that can be coerced into a `Range`
  */
-export type RangeLike = { location?: Location } | Location | { range?: Range } | Range | undefined;
+export type RangeLike = Locatable | { location?: Location } | Location | { range?: Range } | Range | undefined;
 
 export let util = new Util();
 export default util;
+
+/**
+ * A single planned string replacement for one entry in a SourceNode's `children` array, produced by
+ * `collectSourceNodeTrimEdits` and only applied once the full trim amount has been accounted for
+ */
+interface TrimEdit {
+    children: Array<SourceNode | string>;
+    childIndex: number;
+    replacement: string;
+}
+
+/**
+ * Mutable state threaded through `collectSourceNodeTrimEdits` while walking a SourceNode tree right to left
+ */
+interface SourceNodeTailState {
+    tail: string;
+    foundNonBlank: boolean;
+    foundLineBreak: boolean;
+    isComplete: boolean;
+    bailedOut: boolean;
+}
+
+interface TrimState {
+    remainingCharCount: number;
+    bailedOut: boolean;
+}

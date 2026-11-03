@@ -1,4 +1,5 @@
-import { expect } from 'chai';
+import { expect } from '../chai-config.spec';
+import * as sinon from 'sinon';
 import { SymbolTable } from '../SymbolTable';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { expectTypeToBe } from '../testHelpers.spec';
@@ -19,6 +20,10 @@ import { ArrayType } from './ArrayType';
 const runtimeFlag = SymbolTypeFlag.runtime;
 
 describe('ReferenceType', () => {
+    afterEach(() => {
+        sinon.restore();
+    });
+
     it('can be checked with reflection', () => {
         const table = new SymbolTable('test');
         const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
@@ -53,6 +58,81 @@ describe('ReferenceType', () => {
         const ref = new ReferenceType('someKlass', 'someKlass', runtimeFlag, () => table);
         table.addSymbol('someKlass', null, new ClassType('SomeKlass'), SymbolTypeFlag.runtime);
         expect(ref.toString()).to.eq('SomeKlass');
+    });
+
+    describe('resolution caching', () => {
+        it('does not look up the symbol again once resolved', () => {
+            const table = new SymbolTable('test');
+            const ref = new ReferenceType('someKlass', 'someKlass', runtimeFlag, () => table);
+            table.addSymbol('someKlass', null, new ClassType('SomeKlass'), SymbolTypeFlag.runtime);
+            const getSymbolTypeSpy = sinon.spy(table, 'getSymbolType');
+            expect(ref.toString()).to.eq('SomeKlass');
+            expect(ref.toString()).to.eq('SomeKlass');
+            expect(ref.isResolvable()).to.be.true;
+            expect(getSymbolTypeSpy.callCount).to.eq(1);
+        });
+
+        it('looks up the symbol again after any symbol table changes', () => {
+            const table = new SymbolTable('test');
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
+            table.addSymbol('someVar', null, StringType.instance, SymbolTypeFlag.runtime);
+            const getSymbolTypeSpy = sinon.spy(table, 'getSymbolType');
+            expectTypeToBe(ref, StringType);
+            expect(getSymbolTypeSpy.callCount).to.eq(1);
+
+            //(the table's own type cache still answers until the cache token changes, same as before)
+            new SymbolTable('unrelated').addSymbol('other', null, IntegerType.instance, SymbolTypeFlag.runtime);
+            expectTypeToBe(ref, StringType);
+            expect(getSymbolTypeSpy.callCount).to.eq(2);
+        });
+
+        it('resolves again when the table provider changes along with the cache token', () => {
+            const stringTable = new SymbolTable('strings');
+            stringTable.addSymbol('someVar', null, StringType.instance, SymbolTypeFlag.runtime);
+            const integerTable = new SymbolTable('integers');
+            integerTable.addSymbol('someVar', null, IntegerType.instance, SymbolTypeFlag.runtime);
+            let currentTable = stringTable;
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => currentTable);
+            expectTypeToBe(ref, StringType);
+
+            //this is what linking a scope does
+            currentTable = integerTable;
+            SymbolTable.cacheVerifier.generateToken();
+            expectTypeToBe(ref, IntegerType);
+        });
+
+        it('resolves once the symbol gets added', () => {
+            const table = new SymbolTable('test');
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
+            expect(ref.isResolvable()).to.be.false;
+            table.addSymbol('someVar', null, StringType.instance, SymbolTypeFlag.runtime);
+            expectTypeToBe(ref, StringType);
+        });
+
+        it('does not look up a missing symbol again until a symbol table changes', () => {
+            const table = new SymbolTable('test');
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => table);
+            const getSymbolTypeSpy = sinon.spy(table, 'getSymbolType');
+            expect(ref.isResolvable()).to.be.false;
+            expect(ref.isResolvable()).to.be.false;
+            expect(ref.toString()).to.eq('someVar');
+            expect(getSymbolTypeSpy.callCount).to.eq(1);
+
+            new SymbolTable('unrelated').addSymbol('other', null, IntegerType.instance, SymbolTypeFlag.runtime);
+            expect(ref.isResolvable()).to.be.false;
+            expect(getSymbolTypeSpy.callCount).to.eq(2);
+        });
+
+        it('does not cache a lookup when there is no table yet', () => {
+            const table = new SymbolTable('test');
+            table.addSymbol('someVar', null, StringType.instance, SymbolTypeFlag.runtime);
+            let currentTable: SymbolTable;
+            const ref = new ReferenceType('someVar', 'someVar', runtimeFlag, () => currentTable);
+            expect(ref.isResolvable()).to.be.false;
+            //no symbol table changes and no new cache token, but now there's a table to look in
+            currentTable = table;
+            expectTypeToBe(ref, StringType);
+        });
     });
 
     describe('circular references', () => {

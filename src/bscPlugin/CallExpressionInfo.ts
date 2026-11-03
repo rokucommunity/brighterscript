@@ -6,7 +6,7 @@ import type { BrsFile } from '../files/BrsFile';
 import type { Position } from 'vscode-languageserver-protocol';
 import { util } from '../util';
 import { ParseMode } from '../parser/Parser';
-import type { NamespaceContainer } from '../interfaces';
+import type { NamespaceContainer } from '../Scope';
 
 
 export enum CallExpressionType {
@@ -87,7 +87,7 @@ export class CallExpressionInfo {
             }
         }
 
-        this.myClass = this.expression.findAncestor<ClassStatement>(isClassStatement);
+        this.myClass = this.expression.findAncestor(isClassStatement);
         this.type = this.ascertainType();
         this.parameterIndex = this.getParameterIndex();
     }
@@ -96,7 +96,7 @@ export class CallExpressionInfo {
         if (!this.callExpression) {
             return false;
         }
-        let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen?.location, this.callExpression.tokens.closingParen?.location);
+        let boundingRange = util.createBoundingRange(util.getLocation(this.callExpression.tokens.openingParen), util.getLocation(this.callExpression.tokens.closingParen));
         return util.rangeContains(boundingRange, this.position);
     }
 
@@ -150,7 +150,7 @@ export class CallExpressionInfo {
 
     private getNamespace(): NamespaceContainer {
         let scope = this.file.program.getFirstScopeForFile(this.file);
-        return scope.namespaceLookup.get(this.dotPart)?.firstInstance;
+        return scope.namespaceLookup.get(this.dotPart);
     }
 
     private getParameterIndex() {
@@ -159,7 +159,7 @@ export class CallExpressionInfo {
         }
         for (let i = this.callExpression.args.length - 1; i > -1; i--) {
             let argExpression = this.callExpression.args[i];
-            let comparison = util.comparePositionToRange(this.position, argExpression.location?.range);
+            let comparison = util.comparePositionToRange(this.position, util.getLocation(argExpression)?.range);
             if (comparison >= 0) {
                 return i + comparison;
             }

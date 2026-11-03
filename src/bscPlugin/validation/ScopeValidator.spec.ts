@@ -13,10 +13,13 @@ import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
 import { tempDir, rootDir } from '../../testHelpers.spec';
-import { isReturnStatement } from '../../astUtils/reflection';
+import { isFunctionStatement, isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
-import type { ReturnStatement } from '../../parser/Statement';
+import type { FunctionStatement, ReturnStatement } from '../../parser/Statement';
 import { Logger } from '@rokucommunity/logger';
+import { ParseMode } from '../..';
+import { Range } from 'vscode-languageserver';
+import { util, standardizePath as s } from '../../util';
 
 describe('ScopeValidator', () => {
 
@@ -501,6 +504,24 @@ describe('ScopeValidator', () => {
             expect(program.getDiagnostics().map(x => x.message)).to.include(
                 DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
             );
+        });
+
+        it('Catches argument type mismatches on method calls using doc comment param types', () => {
+            program.setFile('source/file.bs', `
+                class Counter
+                    ' @param {integer} count the count
+                    sub add(count)
+                    end sub
+                end class
+                sub main()
+                    tally = new Counter()
+                    tally.add("hello")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('string', 'integer').message
+            ]);
         });
 
         it('Catches argument type mismatches on function calls for functions defined in another file', () => {
@@ -2130,154 +2151,6 @@ describe('ScopeValidator', () => {
             });
         });
 
-        describe('for loops', () => {
-            it('allows using the loop variable inside the loop', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for each item in [1, 2, 3]
-                            x as integer = item + 2
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
-
-            it('validates the loop variable usage', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for each item in ["test"]
-                            x as integer = item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates assignment of for loop variable to non-number', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for i = "test" to 8 ' can't set loop var to string
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates for loop step of non-number', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for i = 1 to 8 step "two"' can't set step to string
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates for loop final value of non-number', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for i = 1 to "eight" step 2 ' can't set final value to string
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates for loop with types from different places', () => {
-                program.setFile('source/main.bs', `
-
-                    function getInt() as integer
-                        return 2
-                    end function
-
-                    namespace TestNamespace
-                        const ONE = 1
-                    end namespace
-
-                    sub main(data as string[])
-                        for i = TestNamespace.ONE to data.count() step getInt()
-                            print i
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectZeroDiagnostics(program);
-            });
-
-
-            it('validates assignment of for each loop variable for array literal', () => {
-                program.setFile('source/main.bs', `
-                    sub main()
-                        for each item as integer in ["test"] 'can't set loop var to integer, if given string
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates assignment of for each loop variable for typed array', () => {
-                program.setFile('source/main.bs', `
-                    sub main(data as string[])
-                        for each item as integer in data 'can't set loop var to integer, if given string
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-
-            it('validates assignment of for each loop variable for roByteArray', () => {
-                program.setFile('source/main.bs', `
-                    sub main(data as roByteArray)
-                        for each item as string in data 'can't set loop var to string, byte arrays are integers
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
-                ]);
-            });
-
-            it('validates assignment of for each loop variable for AAs', () => {
-                program.setFile('source/main.bs', `
-                    sub main(data as roAssociativeArray)
-                        for each item as integer in data 'can't set loop var to integer, associative arrays give keys
-                            print item
-                        end for
-                    end sub
-                `);
-                program.validate();
-                expectDiagnostics(program, [
-                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
-                ]);
-            });
-        });
-
         describe('typed function type expressions', () => {
             it('allows using typed function type expressions correctly', () => {
                 program.setFile('source/main.bs', `
@@ -3121,6 +2994,89 @@ describe('ScopeValidator', () => {
                 ]);
             });
         });
+
+        describe('arbitrary members on roSGNode and roSNodeContentNode', () => {
+            it('allows arbitrary member on node in BrightScript (brs) files', () => {
+                program.setFile('source/util.brs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on node in BrightScript (bs) files', () => {
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <script uri="comp1.bs"/>
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/comp1.bs', `
+                  function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on node as part of component interface', () => {
+                program.setFile('components/comp1.xml', `
+                    <component name="Comp1" extends="Group">
+                        <interface>
+                            <field id="myNode" type="node" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('source/util.bs', `
+                    function getComp1(node as roSGNode) as roSGNodeComp1
+                        comp1 = createObject("roSGNode", "Comp1")
+                        comp1.myNode = node
+                        comp1.myNode.someArbitraryMember = "hello"
+                        return comp1
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows arbitrary member on ContentNode', () => {
+                program.setFile('source/util.bs', `
+                    function buildContentNode(data as roAssociativeArray) as roSGNodeContentNode
+                        content = createObject("roSGNode", "ContentNode")
+                        content.update(data, true)
+                        content.arbitrary = 123
+                    end function
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('disallows arbitrary member on node when strictNodeMembers mode is on', () => {
+                program.options.strictNodeMembers = true;
+                program.setFile('source/util.bs', `
+                    function doStuff()
+                        node = createObject("roSGNode", "Node")
+                        node.someArbitraryMember = "hello"
+                        return node
+                    end function
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('someArbitraryMember', 'roSGNodeNode.someArbitraryMember', 'roSGNodeNode')
+                ]);
+            });
+        });
+
     });
 
     describe('itemCannotBeUsedAsVariable', () => {
@@ -3336,6 +3292,26 @@ describe('ScopeValidator', () => {
             //should have error - return value should be a float, not a string
             expectDiagnostics(program, [
                 DiagnosticMessages.returnTypeMismatch('string', 'float').message
+            ]);
+        });
+
+        it('does not crash when the returned value has an unknowable type', () => {
+            //an enum named `String` can never be referenced, because the name always resolves to
+            //the built-in `string` type, whose members are not dynamic. `String.EMPTY` therefore
+            //has no type at all, and that must not crash the return statement validation
+            program.setFile('source/util.bs', `
+                enum String
+                    EMPTY = ""
+                end enum
+
+                function getEmpty() as string
+                    return String.EMPTY
+                end function
+            `);
+            program.validate();
+            //only the cannot-find-name diagnostic, no returnTypeMismatch and no crash
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindName('EMPTY', undefined, 'string').message
             ]);
         });
 
@@ -4077,6 +4053,19 @@ describe('ScopeValidator', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('does not report cannot-find-name for unresolvable types referenced in .d.bs files', () => {
+            //simulates a .d.bs typedef whose namespace-qualified types don't actually resolve
+            //(e.g. produced by a buggy third-party rewrite tool), which should never produce diagnostics
+            program.setFile('source/util.d.bs', `
+                namespace SomeNamespace
+                    function getSomething(a as SomeNamespace.ifDraw2d) as SomeNamespace.roAssociativeArray
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
     });
 
     describe('assignmentTypeMismatch', () => {
@@ -4443,6 +4432,201 @@ describe('ScopeValidator', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('for loops', () => {
+            it('allows using the loop variable inside the loop', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item in [1, 2, 3]
+                            x as integer = item + 2
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('validates the loop variable usage', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item in ["test"]
+                            x as integer = item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for loop variable to non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = "test" to 8 ' can't set loop var to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop step of non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = 1 to 8 step "two"' can't set step to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop final value of non-number', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for i = 1 to "eight" step 2 ' can't set final value to string
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates for loop with types from different places', () => {
+                program.setFile('source/main.bs', `
+
+                    function getInt() as integer
+                        return 2
+                    end function
+
+                    namespace TestNamespace
+                        const ONE = 1
+                    end namespace
+
+                    sub main(data as string[])
+                        for i = TestNamespace.ONE to data.count() step getInt()
+                            print i
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+
+            it('validates assignment of for each loop variable for array literal', () => {
+                program.setFile('source/main.bs', `
+                    sub main()
+                        for each item as integer in ["test"] 'can't set loop var to integer, if given string
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for typed array', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as string[])
+                        for each item as integer in data 'can't set loop var to integer, if given string
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for roByteArray', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roByteArray)
+                        for each item as string in data 'can't set loop var to string, byte arrays are integers
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('integer', 'string').message
+                ]);
+            });
+
+            it('validates assignment of for each loop variable for AAs', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roAssociativeArray)
+                        for each item as integer in data 'can't set loop var to integer, associative arrays give keys
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.assignmentTypeMismatch('string', 'integer').message
+                ]);
+            });
+
+            it('allows assignment of for each loop variable as string for union of AAs and string array', () => {
+                program.setFile('source/main.bs', `
+                    sub main(data as roAssociativeArray or string[])
+                        for each item as string in data
+                            print item
+                        end for
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('allows assignment of for each loop variable from array of type statement types of union of custom components', () => {
+
+                program.setFile('components/widget1.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget1" extends="Group">
+                        <interface>
+                            <field id="someField" type="string" />
+                        </interface>
+                    </component>
+                `);
+
+                program.setFile('components/widget2.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget2" extends="Group">
+                        <interface>
+                            <field id="someField" type="integer" />
+                        </interface>
+                    </component>
+                `);
+
+
+                program.setFile('source/main.bs', `
+                    sub main(data as thing[])
+                        for each item in data
+                            print item.someField
+                        end for
+                    end sub
+
+
+                    type thing = roSGNodeWidget1 or roSGNodeWidget2
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+        });
     });
 
     describe('operatorTypeMismatch', () => {
@@ -4576,6 +4760,29 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.operatorTypeMismatch('+', 'Direction', 'integer').message,
                 DiagnosticMessages.operatorTypeMismatch('*', 'float', 'Direction').message
             ]);
+        });
+
+        it('allows comparisons on a variable whose union includes both an enum type and an enum member type', () => {
+            // https://github.com/rokucommunity/brighterscript/issues/1807
+            program.setFile('source/util.bs', `
+                enum Direction
+                    north = "n"
+                    south = "s"
+                end enum
+
+                sub makeEasterly(input as string)
+                    d = input as Direction
+                    if d = Direction.north
+                        d = Direction.south
+                    end if
+                    if d = Direction.north
+                        print "still north"
+                    end if
+                end sub
+            `);
+            program.validate();
+            //should have no errors
+            expectZeroDiagnostics(program);
         });
 
         it('validates unary operators', () => {
@@ -4765,6 +4972,79 @@ describe('ScopeValidator', () => {
                     i1 = i + 5
                     i2 = 5 + i
                 end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('detects when a union contains an incompatible type', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                function test(x as string or integer)
+                    print x + "world"
+                end function
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.operatorTypeMismatch('+', 'string or integer', 'string').message
+            ]);
+        });
+
+        it('allows comparing a void value against a dynamic value with =', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub logEvent(name as string)
+                    print name
+                end sub
+
+                sub main(input as dynamic)
+                    result = logEvent("started")
+                    if result = input
+                        print "same"
+                    else
+                        print "different"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a void value against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub getConfig()
+                end sub
+
+                sub main()
+                    config = getConfig()
+                    if config <> invalid
+                        print "config exists"
+                    else
+                        print "no config"
+                    end if
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows comparing a "void or <type>" union against invalid with <>', () => {
+            program.setFile<BrsFile>('source/main.bs', `
+                sub fetchChannelData()
+                end sub
+
+                sub main()
+                    channel = fetchChannelData()
+                    if true
+                        channel = {
+                            title: "Home"
+                        }
+                    end if
+
+                    if channel <> invalid
+                        print channel.title
+                    else
+                        print "no channel"
+                    end if
+                end sub
             `);
             program.validate();
             expectZeroDiagnostics(program);
@@ -5080,10 +5360,16 @@ describe('ScopeValidator', () => {
                 end sub
             `);
             program.validate();
+            //v1's circular detection reports both the full 3-cycle (A->B->C->A and its
+            //rotations) and the pair-wise B<->C cycle that emerges once each const is
+            //resolved through the next.
             expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'C', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'C', 'A', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
                 DiagnosticMessages.circularReferenceDetected(['B', 'C', 'B']).message,
+                DiagnosticMessages.circularReferenceDetected(['C', 'A', 'B', 'C']).message,
                 DiagnosticMessages.circularReferenceDetected(['C', 'B', 'C']).message
             ]);
         });
@@ -5695,7 +5981,10 @@ describe('ScopeValidator', () => {
                 #end if
             `);
             program.validate();
-            expectZeroDiagnostics(program);
+            expectDiagnostics(program, [
+                //the `#else` in main.bs
+                { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+            ]);
         });
     });
 
@@ -5761,6 +6050,160 @@ describe('ScopeValidator', () => {
             `);
             program.validate();
             expectZeroDiagnostics(program);
+        });
+    });
+
+    describe('observerCallbackNotFound', () => {
+        function setComponent(name: string, scriptUris: string[], parentName = 'Group') {
+            program.setFile(`components/${name}.xml`, [
+                `<?xml version="1.0" encoding="utf-8" ?>`,
+                `<component name="${name}" extends="${parentName}">`,
+                ...scriptUris.map(uri => `    <script uri="${uri}" />`),
+                `</component>`
+            ].join('\n'));
+        }
+
+        it('flags a missing callback observed on m.top', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.observeField("width", "onWidthChange")
+                    m.top.observeFieldScoped("height", "onHeightChange")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onWidthChange', 'Widget'),
+                DiagnosticMessages.observerCallbackNotFound('onHeightChange', 'Widget')
+            ]);
+        });
+
+        it('flags a missing callback observed on a variable with a node type', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    poster = CreateObject("roSGNode", "Poster")
+                    poster.observeField("loadStatus", "onLoadStatusChange")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onLoadStatusChange', 'Widget')
+            ]);
+        });
+
+        it('allows callbacks defined in the same file, another script, or a parent component (case-insensitive)', () => {
+            setComponent('Base', ['Base.bs']);
+            program.setFile('components/Base.bs', `
+                sub onBaseChange()
+                end sub
+            `);
+            setComponent('Widget', ['Widget.bs', 'Helpers.bs'], 'Base');
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.observeField("a", "onLocalChange")
+                    m.top.observeField("b", "onHelperChange")
+                    m.top.observeField("c", "onBaseChange")
+                    m.top.observeField("d", "ONLOCALCHANGE")
+                end sub
+                sub onLocalChange()
+                end sub
+            `);
+            program.setFile('components/Helpers.bs', `
+                sub onHelperChange()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not check receivers that are not known to be nodes', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.poster = m.top.findNode("poster")
+                    m.poster.observeField("loadStatus", "notChecked")
+                    m.observerManager = {
+                        observeFieldScoped: sub(id as string, field as string, callback as string)
+                        end sub
+                    }
+                    m.observerManager.observeFieldScoped("myButton", "selected", "alsoNotChecked")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not check callbacks that are not string literals', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    port = CreateObject("roMessagePort")
+                    m.top.observeField("width", port)
+                    callbackName = "notChecked"
+                    m.top.observeField("height", callbackName)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not check code outside of components', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    node = CreateObject("roSGNode", "Poster")
+                    node.observeField("loadStatus", "onLoadStatusChange")
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('requires the transpiled name for namespaced callbacks', () => {
+            setComponent('Widget', ['Widget.bs']);
+            program.setFile('components/Widget.bs', `
+                namespace alpha
+                    sub onChange()
+                    end sub
+                end namespace
+                sub init()
+                    m.top.observeField("width", "alpha_onChange")
+                    m.top.observeField("height", "alpha.onChange")
+                    m.top.observeField("x", "onChange")
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('alpha.onChange', 'Widget', 'alpha_onChange'),
+                DiagnosticMessages.observerCallbackNotFound('onChange', 'Widget')
+            ]);
+        });
+
+        it('updates when the callback is added or removed in another file', () => {
+            setComponent('Widget', ['Widget.bs', 'Helpers.bs']);
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.observeField("width", "onWidthChange")
+                end sub
+            `);
+            program.setFile('components/Helpers.bs', ``);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onWidthChange', 'Widget')
+            ]);
+
+            program.setFile('components/Helpers.bs', `
+                sub onWidthChange()
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            program.setFile('components/Helpers.bs', ``);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.observerCallbackNotFound('onWidthChange', 'Widget')
+            ]);
         });
     });
 
@@ -6324,6 +6767,95 @@ describe('ScopeValidator', () => {
             ]);
         });
 
+        it('allows an array of an interface type as a callfunc arg, when the interface is imported into two different component scopes', () => {
+            program.setFile('components/types.bs', `
+                interface MyItem
+                    sku as string
+                end interface
+            `);
+
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="A.bs"/>
+                    <interface>
+                        <function name="doThing" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/A.bs', `
+                import "pkg:/components/types.bs"
+
+                function doThing(items as MyItem[]) as void
+                    print items.Count()
+                end function
+            `);
+
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="B.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/B.bs', `
+                import "pkg:/components/types.bs"
+
+                sub callIt(aNode as roSGNodeA)
+                    item as MyItem = { sku: "abc" }
+                    aNode@.doThing([item])
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('still catches a genuinely incompatible array arg to a callfunc, alongside a compatible interface array', () => {
+            program.setFile('components/types.bs', `
+                interface MyItem
+                    sku as string
+                end interface
+            `);
+
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="A.bs"/>
+                    <interface>
+                        <function name="doThing" />
+                    </interface>
+                </component>
+            `);
+
+            program.setFile('components/A.bs', `
+                import "pkg:/components/types.bs"
+
+                function doThing(items as MyItem[]) as void
+                    print items.Count()
+                end function
+            `);
+
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="B.bs"/>
+                </component>
+            `);
+
+            program.setFile('components/B.bs', `
+                import "pkg:/components/types.bs"
+
+                sub callIt(aNode as roSGNodeA)
+                    aNode@.doThing([1, 2, 3])
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.argumentTypeMismatch('Array<integer>', 'Array<MyItem>').message
+            ]);
+        });
+
         it('allows return value of as void functions to be dynamic', () => {
             program.setFile('components/Widget.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
@@ -6848,6 +7380,19 @@ describe('ScopeValidator', () => {
                 DiagnosticMessages.notCallable('node@.getName').message
             ]);
         });
+
+        it('disallows callfunc on generic node when strictCallFunc mode is enabled', () => {
+            program.options.strictCallFunc = true;
+            program.setFile('source/test.bs', `
+                sub doCallfunc(node as roSGNode)
+                    node.callfunc("someFunc", 1, 2, 3)
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindCallFuncFunction('someFunc', 'roSGNodeNode@.someFunc', 'roSGNodeNode').message
+            ]);
+        });
     });
 
     describe('notIterable', () => {
@@ -6995,4 +7540,354 @@ describe('ScopeValidator', () => {
             expectZeroDiagnostics(program);
         });
     });
+
+
+    describe('file filter', () => {
+        it('should not walk files if the DiagnosticFilterer says not to', () => {
+            const program = new Program({
+                rootDir: rootDir + '/src',
+                files: [
+                    `/source/**/*.*`,
+                    `/components/**/*.*`
+                ],
+                diagnosticFilters: [
+                    { files: `source/doNotValidate.brs` }
+                ]
+            });
+
+            const fileNotValidated = program.setFile<BrsFile>('source/doNotValidate.brs', `
+                sub doStuff()
+                    a = 1 + "hello" ' obviously wrong, but should not be reported because of the filter
+                end sub
+            `);
+
+            program.validate();
+            expectZeroDiagnostics(program);
+            const unvalidatedSegments = fileNotValidated.validationSegmenter.getAllUnvalidatedSegments();
+            expect(unvalidatedSegments).to.lengthOf(1);
+            expect(isFunctionStatement(unvalidatedSegments[0])).to.be.true;
+            expect((unvalidatedSegments[0] as FunctionStatement).getName(ParseMode.BrighterScript)).to.equal('doStuff');
+        });
+    });
+
+    /* eslint-disable no-template-curly-in-string */
+    describe('location boundaries', () => {
+        function uriOf(pkgPath: string) {
+            return util.pathToUri(s`${rootDir}/${pkgPath}`);
+        }
+
+        function range(startLine: number, startChar: number, endLine: number, endChar: number) {
+            return Range.create(startLine, startChar, endLine, endChar);
+        }
+
+        it('flags an identifier in a .brs file', () => {
+            program.setFile('source/main.brs', 'sub main()\n    print notDefined\nend sub\n');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 10, 1, 20)
+                }
+            }]);
+        });
+
+        it('flags an identifier in a .bs file', () => {
+            program.setFile('source/main.bs', 'sub main()\n    print notDefined\nend sub\n');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 10, 1, 20)
+                }
+            }]);
+        });
+
+        it('flags a token at column 0 right after a newline', () => {
+            program.setFile('source/main.brs', 'sub main()\nnotDefined()\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindFunction('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 0, 1, 10)
+                }
+            }]);
+        });
+
+        it('flags a token at the end of a line and at the end of a file with no trailing newline', () => {
+            program.setFile('source/main.brs', 'sub main()\nend sub\nprint notDefined');
+            program.validate();
+            expectDiagnostics(program, [{
+                //the whole statement (starting at column 0)
+                code: DiagnosticMessages.unexpectedStatementOutsideFunction().code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 0, 2, 16)
+                }
+            }, {
+                //the very last token in the file
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 6, 2, 16)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a .brs file', () => {
+            program.setFile('source/main.brs', 'sub main()\n    return {\n        a: 1\n    }\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                //the whole return statement
+                code: DiagnosticMessages.voidFunctionMayNotReturnValue('sub').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }, {
+                //just the returned expression
+                code: DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'void').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 11, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a .bs file', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x as integer = {\n        a: 1\n    }\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.assignmentTypeMismatch('roAssociativeArray', 'integer').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a file with CRLF line endings', () => {
+            program.setFile('source/main.brs', 'sub main()\r\n    return {\r\n        a: 1\r\n    }\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.voidFunctionMayNotReturnValue('sub').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }, {
+                code: DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'void').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 11, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags identifiers in a file with CRLF line endings', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    a = 1\r\n    print notDefined\r\nnotDefined2()\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 10, 2, 20)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindFunction('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 0, 3, 11)
+                }
+            }]);
+        });
+
+        it('flags identifiers in a file mixing LF and CRLF line endings', () => {
+            program.setFile('source/main.brs', 'sub main()\r\n    a = 1\n    print notDefined\r\n\n\r\n    print a + notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 10, 2, 20)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(5, 14, 5, 25)
+                }
+            }]);
+        });
+
+        it('counts a surrogate-pair emoji before the flagged token as two characters', () => {
+            program.setFile('source/main.brs', 'sub main()\n    print "😀" + notDefined\n    print "😀😀" + notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 17, 1, 27)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 19, 2, 30)
+                }
+            }]);
+        });
+
+        it('counts a surrogate-pair emoji before the flagged token on a CRLF line', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    print "😀" + notDefined\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 17, 1, 27)
+                }
+            }]);
+        });
+
+        it('flags a token after a multi-line template string', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x = `a\n${1}\n`: print notDefined\n    print notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 9, 3, 19)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(4, 10, 4, 21)
+                }
+            }]);
+        });
+
+        it('flags a token after a multi-line template string with CRLF line endings', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    x = `a\r\n${1}\r\n`: print notDefined\r\n    print notDefined2\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 9, 3, 19)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(4, 10, 4, 21)
+                }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later line of the template', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x = `😀 ${1}\n  and ${notDefined}\n`\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 8, 2, 18)
+                }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later CRLF line of the template', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    x = `😀 ${1}\r\n  and ${notDefined}\r\n`\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 8, 2, 18)
+                }
+            }]);
+        });
+
+        it('includes correct related information uris and ranges across files', () => {
+            program.setFile('source/a.brs', 'sub main()\nend sub\n\nsub doIt()\nend sub');
+            program.setFile('source/b.brs', 'sub doIt()\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.duplicateFunctionImplementation('doIt').code,
+                location: {
+                    uri: uriOf('source/a.brs'),
+                    range: range(3, 4, 3, 8)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('source/b.brs'),
+                        range: range(0, 4, 0, 8)
+                    },
+                    message: 'Function declared here'
+                }, {
+                    location: {
+                        uri: uriOf('source/a.brs'),
+                        range: range(3, 4, 3, 8)
+                    },
+                    message: `In scope 'source'`
+                }]
+            }, {
+                code: DiagnosticMessages.duplicateFunctionImplementation('doIt').code,
+                location: {
+                    uri: uriOf('source/b.brs'),
+                    range: range(0, 4, 0, 8)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('source/a.brs'),
+                        range: range(3, 4, 3, 8)
+                    },
+                    message: 'Function declared here'
+                }, {
+                    location: {
+                        uri: uriOf('source/b.brs'),
+                        range: range(0, 4, 0, 8)
+                    },
+                    message: `In scope 'source'`
+                }]
+            }]);
+        });
+
+        it('includes correct locations for xml diagnostics in a CRLF file', () => {
+            program.setFile('components/Comp.xml', '<?xml version="1.0" encoding="utf-8" ?>\r\n<component name="Comp" extends="Group">\r\n    <script uri="missing.brs" />\r\n</component>');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.referencedFileDoesNotExist().code,
+                location: {
+                    uri: uriOf('components/Comp.xml'),
+                    range: range(2, 17, 2, 28)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('components/Comp.xml'),
+                        range: range(1, 17, 1, 21)
+                    },
+                    message: `In component scope 'Comp'`
+                }]
+            }]);
+        });
+
+        it('flags a token in a component script and relates it to the xml file', () => {
+            program.setFile('components/Comp.xml', '<?xml version="1.0" encoding="utf-8" ?>\n<component name="Comp" extends="Group">\n    <script uri="Comp.brs" />\n</component>');
+            program.setFile('components/Comp.brs', 'sub init()\r\n    print "😀" : print notDefined\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('components/Comp.brs'),
+                    range: range(1, 23, 1, 33)
+                }
+            }]);
+        });
+    });
+    /* eslint-enable no-template-curly-in-string */
 });

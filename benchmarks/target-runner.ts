@@ -4,7 +4,7 @@ import type Benchmark from 'benchmark';
 import { Suite, formatNumber } from 'benchmark';
 import * as readline from 'readline';
 import * as chalk from 'chalk';
-const v8Profiler = require('v8-profiler-next');
+import * as inspector from 'inspector';
 
 let idx = 2;
 const extraNamePadding = 20;
@@ -26,10 +26,12 @@ const brighterscript = require(path.join(__dirname, 'node_modules', bscAlias));
 const addTargetTestFunction = require(path.join(__dirname, 'targets', target));
 (async () => {
 
+    //built-in inspector instead of v8-profiler-next, which is a native module that no longer builds on current node
+    const session = new inspector.Session();
     if (profile) {
-        // set generateType 1 to generate new format for cpuprofile parsing in vscode.
-        v8Profiler.setGenerateType(1);
-        v8Profiler.startProfiling(profileTitle, true);
+        session.connect();
+        session.post('Profiler.enable');
+        session.post('Profiler.start');
     }
 
     const suite = new Suite('parser suite', {
@@ -71,10 +73,12 @@ const addTargetTestFunction = require(path.join(__dirname, 'targets', target));
                 );
 
                 if (profile) {
-                    const profile = v8Profiler.stopProfiling(profileTitle);
-                    profile.export((error, result) => {
-                        fsExtra.writeFileSync(`${Date.now()}-${profileTitle}.cpuprofile`, result);
-                        profile.delete();
+                    session.post('Profiler.stop', (error, result) => {
+                        if (error) {
+                            console.error(error);
+                            return;
+                        }
+                        fsExtra.outputJsonSync(path.join(__dirname, '.tmp', 'profiles', `${Date.now()}-${profileTitle}.cpuprofile`), result.profile);
                     });
                 }
             }
@@ -88,9 +92,8 @@ const addTargetTestFunction = require(path.join(__dirname, 'targets', target));
             fullName: `${target}@${version}`,
             brighterscript: brighterscript,
             projectPath: projectPath,
-            suiteOptions: {
-                // minTime: quick ? undefined : 3.5
-            },
+            //benchmark.js defaults to at least 5 samples over up to ~5s. `--quick` trades precision for speed
+            suiteOptions: quick ? { minSamples: 2, maxTime: 1 } : {},
             additionalConfig: config
         })
     );

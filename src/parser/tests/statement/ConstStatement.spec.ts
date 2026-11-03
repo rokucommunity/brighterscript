@@ -1,4 +1,4 @@
-import { expectCompletionsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
+import { expectCompletionsIncludes, expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile } from '../../../testHelpers.spec';
 import { util, standardizePath as s } from '../../../util';
 import { Program } from '../../../Program';
 import { createSandbox } from 'sinon';
@@ -7,6 +7,7 @@ import { expect } from '../../../chai-config.spec';
 import type { ConstStatement } from '../../Statement';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { LiteralExpression } from '../../Expression';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { rootDir } from '../../../testHelpers.spec';
 import { CompletionItemKind } from 'vscode-languageserver';
 
@@ -53,7 +54,7 @@ describe('ConstStatement', () => {
         expect(value).to.be.instanceof(LiteralExpression);
         expect(value.tokens.value?.text).to.eql('"abc"');
         //ensure range is correct
-        expect(statement.location?.range).to.eql(util.createRange(0, 0, 0, 21));
+        expect(util.getLocation(statement)?.range).to.eql(util.createRange(0, 0, 0, 21));
     });
 
     it('produces typedef', async () => {
@@ -317,6 +318,8 @@ describe('ConstStatement', () => {
         });
 
         it('handles cyclical const references without infinite loop', async () => {
+            //the cycle is also reported via a diagnostic; this test only verifies
+            //the transpile output doesn't recurse forever.
             await testTranspile(`
                 const A = B
                 const B = C
@@ -428,6 +431,694 @@ describe('ConstStatement', () => {
                     }
                 end sub
             `);
+        });
+
+        it('resolves enum refs inside an aa-literal const used cross-file (issue #1618)', async () => {
+            program.setFile('source/map.bs', `
+                namespace name.space
+                    enum someEnum
+                        one = "val1"
+                        two = "val2"
+                        three = "val3"
+                    end enum
+
+                    const myMap = {
+                        "key1": someEnum.one
+                        "key2": someEnum.two
+                        "key3": someEnum.three
+                    }
+                end namespace
+            `);
+            await testTranspile(`
+                namespace name.space
+                    class someClass
+                        public function someFunc(key as dynamic) as object
+                            return name.space.myMap[key]
+                        end function
+                    end class
+                end namespace
+            `, `
+                sub __name_space_someClass_method_new()
+                end sub
+                function __name_space_someClass_method_someFunc(key as dynamic) as object
+                    return ({
+                        "key1": "val1"
+                        "key2": "val2"
+                        "key3": "val3"
+                    })[key]
+                end function
+                function __name_space_someClass_builder()
+                    instance = {}
+                    instance.new = __name_space_someClass_method_new
+                    instance.someFunc = __name_space_someClass_method_someFunc
+                    return instance
+                end function
+                function name_space_someClass()
+                    instance = __name_space_someClass_builder()
+                    instance.new()
+                    return instance
+                end function
+            `);
+        });
+
+        it('resolves enum refs in computed keys of an aa-literal const used cross-file', async () => {
+            program.setFile('source/map.bs', `
+                namespace name.space
+                    enum someEnum
+                        one = "key1"
+                        two = "key2"
+                    end enum
+
+                    const myMap = {
+                        [someEnum.one]: "val1"
+                        [someEnum.two]: "val2"
+                    }
+                end namespace
+            `);
+            await testTranspile(`
+                namespace name.space
+                    sub useMap(key as dynamic) as object
+                        return name.space.myMap[key]
+                    end sub
+                end namespace
+            `, `
+                sub name_space_useMap(key as dynamic) as object
+                    return ({
+                        "key1": "val1"
+                        "key2": "val2"
+                    })[key]
+                end sub
+            `);
+        });
+
+        it('inlines a const aa-literal at multiple consumer call sites in the same file', async () => {
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const M = { "x": ns.E.X }
+                end namespace
+            `);
+            await testTranspile(`
+                sub main()
+                    a = ns.M
+                    b = ns.M
+                end sub
+            `, `
+                sub main()
+                    a = ({
+                        "x": "X"
+                    })
+                    b = ({
+                        "x": "X"
+                    })
+                end sub
+            `);
+        });
+
+        it('handles diamond const reference graph (one base const reached via two paths)', async () => {
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const C = { "c": ns.E.X }
+                    const A = { "a": ns.C }
+                    const B = { "b": ns.C }
+                end namespace
+            `);
+            await testTranspile(`
+                sub main()
+                    print ns.A
+                    print ns.B
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        "a": ({
+                            "c": "X"
+                        })
+                    })
+                    print ({
+                        "b": ({
+                            "c": "X"
+                        })
+                    })
+                end sub
+            `);
+        });
+
+        it('does not infinite-loop on circular const-of-aa references', async function () {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.A }
+                end namespace
+            `);
+            //the inner-most cyclic ref is left as the original namespace path so
+            //transpile completes without recursing forever. The runtime semantics
+            //of the cyclic ref are inherently broken, but the compile must not hang.
+            //(A diagnostic is also emitted; see the dedicated cycle-diagnostic tests.)
+            await testTranspile(`
+                sub main()
+                    print ns.A
+                end sub
+            `, `
+                sub main()
+                    print ({
+                        "x": ({
+                            "y": ns_A
+                        })
+                    })
+                end sub
+            `, 'trim', 'source/main.bs', false);
+        });
+
+        it('does not infinite-loop on scalar three-cycle const references', async function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                const a = b
+                const b = c
+                const c = a
+            `);
+            await testTranspile(`
+                sub main()
+                    print a
+                end sub
+            `, `
+                sub main()
+                    print a
+                end sub
+            `, 'trim', 'source/main.bs', false);
+            //v1 also reports the cycle during type resolution (duplicate and partial chains), so only check for the cycles themselves
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.circularReferenceDetected(['a', 'b', 'c', 'a']).message,
+                DiagnosticMessages.circularReferenceDetected(['b', 'c', 'a', 'b']).message,
+                DiagnosticMessages.circularReferenceDetected(['c', 'a', 'b', 'c']).message
+            ]);
+        });
+
+        it('does not infinite-loop on namespaced three-cycle using relative names', async function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                namespace ns
+                    const a = b
+                    const b = c
+                    const c = a
+                end namespace
+            `);
+            await testTranspile(`
+                namespace ns
+                    sub doWork()
+                        print a
+                    end sub
+                end namespace
+            `, `
+                sub ns_doWork()
+                    print a
+                end sub
+            `, 'trim', 'source/main.bs', false);
+            //v1 also reports the cycle during type resolution (duplicate and partial chains), so only check for the cycles themselves
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.a', 'ns.b', 'ns.c', 'ns.a']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.b', 'ns.c', 'ns.a', 'ns.b']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.c', 'ns.a', 'ns.b', 'ns.c']).message
+            ]);
+        });
+
+        it('does not infinite-loop on a relative-name cycle back to a const (self-exclusion only skips the referencing const)', async function() {
+            this.timeout(2000);
+            program.setFile('source/consts.bs', `
+                function chain()
+                end function
+                namespace ns
+                    const chain = other
+                    const other = chain
+                end namespace
+            `);
+            await testTranspile(`
+                sub main()
+                    print ns.chain
+                end sub
+            `, `
+                sub main()
+                    print ns_chain
+                end sub
+            `, 'trim', 'source/main.bs', false);
+            //v1 also reports the cycle during type resolution (duplicate and partial chains), so only check for the cycles themselves
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.chain', 'ns.other', 'ns.chain']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.other', 'ns.chain', 'ns.other']).message
+            ]);
+        });
+
+        it('flags scalar circular const reference', () => {
+            program.setFile('source/main.bs', `
+                const A = B
+                const B = A
+            `);
+            program.validate();
+            //matches the class-hierarchy convention: one diagnostic per const in the cycle,
+            //each rotated so the diagnostic's const is at the head of the chain. v1 also
+            //fires the bare single-symbol form during reference resolution.
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected('B').message,
+                DiagnosticMessages.circularReferenceDetected(['A', 'B', 'A']).message,
+                DiagnosticMessages.circularReferenceDetected(['B', 'A', 'B']).message
+            ]);
+        });
+
+        it('flags aggregate circular const reference', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.A }
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.A']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.A', 'ns.B']).message
+            ]);
+        });
+
+        it('flags three-cycle const reference once per node', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    const A = { "x": ns.B }
+                    const B = { "y": ns.C }
+                    const C = { "z": ns.A }
+                end namespace
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.circularReferenceDetected(['ns.A', 'ns.B', 'ns.C', 'ns.A']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.B', 'ns.C', 'ns.A', 'ns.B']).message,
+                DiagnosticMessages.circularReferenceDetected(['ns.C', 'ns.A', 'ns.B', 'ns.C']).message
+            ]);
+        });
+
+        describe('const values resolve relative to the const namespace', () => {
+            it('ignores a same-named const in the usage namespace', async () => {
+                program.setFile('source/consts.bs', `
+                    namespace alpha
+                        const BASE = "alpha"
+                        const KEY = BASE
+                    end namespace
+                    namespace beta
+                        const BASE = "beta"
+                    end namespace
+                `);
+                await testTranspile(`
+                    namespace beta
+                        sub doWork()
+                            print alpha.KEY
+                        end sub
+                    end namespace
+                `, `
+                    sub beta_doWork()
+                        print "alpha"
+                    end sub
+                `);
+            });
+
+            it('resolves a relative enum reference when used outside the namespace', async () => {
+                program.setFile('source/consts.bs', `
+                    namespace alpha
+                        enum Direction
+                            up = "up"
+                        end enum
+                        const DEFAULT = Direction.up
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print alpha.DEFAULT
+                    end sub
+                `, `
+                    sub main()
+                        print "up"
+                    end sub
+                `);
+            });
+
+            it('resolves a multi-hop relative chain when used from another namespace', async () => {
+                program.setFile('source/consts.bs', `
+                    namespace alpha
+                        const A = B
+                        const B = C
+                        const C = "c"
+                    end namespace
+                `);
+                await testTranspile(`
+                    namespace beta
+                        sub doWork()
+                            print alpha.A
+                        end sub
+                    end namespace
+                `, `
+                    sub beta_doWork()
+                        print "c"
+                    end sub
+                `);
+            });
+        });
+
+        it('inlines a namespaced const inside its namespace when a global function has the same name', async () => {
+            program.setFile('source/lib.bs', `
+                function foo()
+                end function
+                namespace ns
+                    const foo = 1
+                end namespace
+            `);
+            await testTranspile(`
+                namespace ns
+                    sub doWork()
+                        print foo
+                    end sub
+                end namespace
+            `, `
+                sub ns_doWork()
+                    print 1
+                end sub
+            `);
+        });
+
+        it('inlines a namespaced const inside its namespace when a global const has the same name', async () => {
+            program.setFile('source/lib.bs', `
+                const foo = "global"
+                namespace ns
+                    const foo = "ns"
+                end namespace
+            `);
+            await testTranspile(`
+                namespace ns
+                    sub doWork()
+                        print foo
+                    end sub
+                end namespace
+            `, `
+                sub ns_doWork()
+                    print "ns"
+                end sub
+            `);
+        });
+
+        describe('const that shares its name with what it references', () => {
+            it('does not flag a namespaced const referencing a global function with the same name', () => {
+                program.setFile('source/main.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('inlines the global function when used outside the namespace', async () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('inlines the global function when used inside the namespace', async () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                await testTranspile(`
+                    namespace promises
+                        sub doWork()
+                            print chain
+                            print promises.chain
+                        end sub
+                    end namespace
+                `, `
+                    sub promises_doWork()
+                        print (chain)
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('inlines the global function from a nested namespace', async () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace alpha.beta
+                        const chain = chain
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print alpha.beta.chain
+                    end sub
+                    namespace alpha.beta
+                        sub doWork()
+                            print chain
+                        end sub
+                    end namespace
+                `, `
+                    sub main()
+                        print (chain)
+                    end sub
+                    sub alpha_beta_doWork()
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('inlines the global function when referenced from inside an aa', async () => {
+                program.setFile('source/promises.bs', `
+                    function chain()
+                    end function
+
+                    namespace promises
+                        const chain = { "fn": chain }
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print ({
+                            "fn": chain
+                        })
+                    end sub
+                `);
+            });
+
+            it('resolves to a global const with the same name', async () => {
+                program.setFile('source/consts.bs', `
+                    const chain = "global"
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                    namespace promises
+                        sub doWork()
+                            print chain
+                        end sub
+                    end namespace
+                `, `
+                    sub main()
+                        print "global"
+                    end sub
+                    sub promises_doWork()
+                        print "global"
+                    end sub
+                `);
+            });
+
+            it('resolves to a function in another namespace with the same name', async () => {
+                program.setFile('source/promises.bs', `
+                    namespace utils
+                        function chain()
+                        end function
+                    end namespace
+
+                    namespace promises
+                        const chain = utils.chain
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print (utils_chain)
+                    end sub
+                `);
+            });
+
+            it('only skips the referencing const, so sibling consts still resolve', async () => {
+                program.setFile('source/consts.bs', `
+                    namespace promises
+                        const chain = other
+                        const other = "other"
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print "other"
+                    end sub
+                `);
+            });
+
+            it('still prefers a namespaced const over a global const of the same name when it is not the referencing const', async () => {
+                program.setFile('source/consts.bs', `
+                    const value = "global"
+                    namespace promises
+                        const value = "namespaced"
+                        const alias = value
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print promises.alias
+                    end sub
+                `, `
+                    sub main()
+                        print "namespaced"
+                    end sub
+                `);
+            });
+
+            it('follows a chain through a self-named const in another namespace', async () => {
+                program.setFile('source/consts.bs', `
+                    function chain()
+                    end function
+                    namespace promises
+                        const chain = chain
+                    end namespace
+                    namespace other
+                        const chain = promises.chain
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print other.chain
+                    end sub
+                `, `
+                    sub main()
+                        print (chain)
+                    end sub
+                `);
+            });
+
+            it('resolves sibling refs inside an aa alongside the self-named ref', async () => {
+                program.setFile('source/consts.bs', `
+                    function chain()
+                    end function
+                    namespace promises
+                        const chain = { "fn": chain, "other": other }
+                        const other = "other"
+                    end namespace
+                `);
+                await testTranspile(`
+                    sub main()
+                        print promises.chain
+                    end sub
+                `, `
+                    sub main()
+                        print ({
+                            "fn": chain
+                            "other": "other"
+                        })
+                    end sub
+                `);
+            });
+
+            it('still flags a namespaced const that references itself by its full name', () => {
+                program.setFile('source/main.bs', `
+                    namespace promises
+                        const chain = promises.chain
+                    end namespace
+                `);
+                program.validate();
+                //v1 also reports the cycle during type resolution (duplicate and partial chains), so only check for the cycles themselves
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.circularReferenceDetected(['promises.chain', 'promises.chain']).message
+                ]);
+            });
+
+            it('still flags a global const that references itself', () => {
+                program.setFile('source/main.bs', `
+                    const chain = chain
+                `);
+                program.validate();
+                //v1 also reports the cycle during type resolution (duplicate and partial chains), so only check for the cycles themselves
+                expectDiagnosticsIncludes(program, [
+                    DiagnosticMessages.circularReferenceDetected(['chain', 'chain']).message
+                ]);
+            });
+
+            it('still flags a cycle that passes back through the namespaced const', () => {
+                program.setFile('source/main.bs', `
+                    namespace promises
+                        const chain = { "next": promises.other }
+                        const other = { "prev": chain }
+                    end namespace
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.circularReferenceDetected(['promises.chain', 'promises.other', 'promises.chain']).message,
+                    DiagnosticMessages.circularReferenceDetected(['promises.other', 'promises.chain', 'promises.other']).message
+                ]);
+            });
+        });
+
+        it('does not flag diamond const reference graph', () => {
+            program.setFile('source/main.bs', `
+                namespace ns
+                    enum E
+                        X = "X"
+                    end enum
+                    const Base = { "c": ns.E.X }
+                    const A = { "a": ns.Base }
+                    const B = { "b": ns.Base }
+                    const Root = { "left": ns.A, "right": ns.B }
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
 
         it('resolves complex multi-file const-enum chain', async () => {

@@ -6,19 +6,24 @@ import type { BsConfig } from './BsConfig';
 import * as fsExtra from 'fs-extra';
 import { createSandbox } from 'sinon';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import { tempDir, rootDir, expectTypeToBe } from './testHelpers.spec';
+import { tempDir, rootDir, expectTypeToBe, testLocatable } from './testHelpers.spec';
 import { TypeChainEntry } from './interfaces';
 import { NamespaceType } from './types/NamespaceType';
 import { ClassType } from './types/ClassType';
 import { ReferenceType } from './types/ReferenceType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
-import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UnionType, VoidType } from './types';
+import { BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, InvalidType, LongIntegerType, ObjectType, StringType, TypedFunctionType, UninitializedType, UnionType, VoidType } from './types';
 import { TokenKind } from './lexer/TokenKind';
 import { createToken } from './astUtils/creators';
 import { createDottedIdentifier, createVariableExpression } from './astUtils/creators';
-import { Parser } from './parser/Parser';
-import type { FunctionStatement } from './parser/Statement';
+import { Parser, ParseMode } from './parser/Parser';
+import type { ExitStatement, FunctionStatement } from './parser/Statement';
+import { Lexer } from './lexer/Lexer';
+import type { Locatable } from './lexer/Token';
+import { isExitStatement } from './astUtils/reflection';
 import { ComponentType } from './types/ComponentType';
+import { SourceNode } from 'source-map';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
 
 const sinon = createSandbox();
 
@@ -159,6 +164,7 @@ describe('util', () => {
                 '_ancestors': [
                     s`${rootDir}/child.json`
                 ],
+                '_deprecationDiagnostics': [],
                 'cwd': s`${rootDir}/cwd`,
                 'rootDir': s`${rootDir}/rootDir`
             });
@@ -227,6 +233,117 @@ describe('util', () => {
             } finally {
                 process.chdir(cwd);
             }
+        });
+    });
+
+    describe('createConfigFile', () => {
+        beforeEach(() => {
+            fsExtra.ensureDirSync(rootDir);
+        });
+
+        it('creates a bsconfig.json file', () => {
+            const configPath = util.createConfigFile(rootDir);
+            expect(configPath).to.equal(s`${rootDir}/bsconfig.json`);
+            expect(fsExtra.pathExistsSync(configPath!)).to.be.true;
+        });
+
+        it('uses cwd when not provided', () => {
+            process.chdir(rootDir);
+            try {
+                util.createConfigFile();
+            } finally {
+                process.chdir(cwd);
+            }
+            expect(fsExtra.pathExistsSync(s`${rootDir}/bsconfig.json`)).to.be.true;
+        });
+
+        it('includes the recommended defaults, and nothing else uncommented', () => {
+            const config = util.loadConfigFile(util.createConfigFile(rootDir))!;
+            delete config._ancestors;
+            expect(config).to.eql({
+                //loadConfigFile resolves paths relative to the config file
+                outDir: s`${rootDir}/dist`,
+                compilerOptions: {
+                    minFirmwareVersion: DEFAULT_MIN_FIRMWARE_VERSION,
+                    autoImportComponentScript: true,
+                    sourceMap: true,
+                    relativeSourceMaps: true
+                },
+                //none of the generated settings are deprecated
+                _deprecationDiagnostics: []
+            });
+        });
+
+        it('includes the other supported options as comments', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            for (const key of [
+                'allowBrighterScriptInBrightScript', 'bslibDestinationDir', 'cwd', 'diagnosticFilters', 'diagnosticLevel',
+                'diagnosticReporters', 'diagnosticSeverityOverrides', 'emitDefinitions', 'emitFullPaths', 'extends', 'files',
+                'legacyCallfuncHandling', 'logLevel', 'manifest', 'noEmit', 'plugins', 'pruneEmptyCodeFiles', 'removeParameterTypes', 'require',
+                'resolveSourceRoot', 'rootDir', 'showDiagnosticsInConsole', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers',
+                'validate', 'watch'
+            ]) {
+                expect(contents).to.include(`// "${key}":`);
+            }
+        });
+
+        it('only includes v1 options, in the right section', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            const topLevelKeys: string[] = [];
+            const compilerOptionKeys: string[] = [];
+            //every setting (commented or not) starts its line. 4 spaces of indent is top-level, 8 is inside `compilerOptions`
+            for (const line of contents.split('\n')) {
+                const match = /^( +)(?:\/\/ )?"(\w+)":/.exec(line);
+                if (match) {
+                    (match[1].length === 4 ? topLevelKeys : compilerOptionKeys).push(match[2]);
+                }
+            }
+            //an exact list, so a deprecated option (`stagingDir`, `deploy`, top-level compiler options, etc.) or a
+            //v0-only option (`host`, `password`, `outFile`, etc.) can't sneak in
+            expect(topLevelKeys.sort()).to.eql([
+                'compilerOptions', 'cwd', 'diagnosticFilters', 'diagnosticLevel', 'diagnosticReporters', 'diagnosticSeverityOverrides',
+                'extends', 'files', 'logLevel', 'noEmit', 'outDir', 'plugins', 'require', 'rootDir', 'showDiagnosticsInConsole',
+                'validate', 'watch'
+            ]);
+            expect(compilerOptionKeys.sort()).to.eql([
+                'allowBrighterScriptInBrightScript', 'autoImportComponentScript', 'bslibDestinationDir', 'emitDefinitions',
+                'emitFullPaths', 'legacyCallfuncHandling', 'manifest', 'minFirmwareVersion', 'pruneEmptyCodeFiles', 'relativeSourceMaps',
+                'removeParameterTypes', 'resolveSourceRoot', 'sourceMap', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers'
+            ]);
+        });
+
+        it('puts each description on the same line as its setting', () => {
+            const contents = fsExtra.readFileSync(util.createConfigFile(rootDir)!).toString();
+            const settingLines = contents.split('\n').filter(line => line.includes('": '));
+            expect(settingLines.length).to.be.greaterThan(0);
+            for (const line of settingLines) {
+                expect(line).to.match(/\/\* .+ \*\/$/);
+            }
+        });
+
+        it('does not overwrite an existing bsconfig.json file', () => {
+            const configPath = s`${rootDir}/bsconfig.json`;
+            fsExtra.outputFileSync(configPath, '{ "rootDir": "custom" }');
+
+            expect(util.createConfigFile(rootDir)).to.be.undefined;
+            expect(fsExtra.readFileSync(configPath).toString()).to.equal('{ "rootDir": "custom" }');
+        });
+
+        it('writes to the provided project path resolved against cwd', () => {
+            fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '{ "rootDir": "existing" }');
+
+            const configPath = util.createConfigFile(rootDir, 'sub/bsconfig.json');
+            expect(configPath).to.equal(s`${rootDir}/sub/bsconfig.json`);
+            expect(fsExtra.pathExistsSync(configPath!)).to.be.true;
+            expect(fsExtra.readFileSync(s`${rootDir}/bsconfig.json`).toString()).to.equal('{ "rootDir": "existing" }');
+        });
+
+        it('does not overwrite an existing file at the provided project path', () => {
+            const configPath = s`${rootDir}/sub/bsconfig.json`;
+            fsExtra.outputFileSync(configPath, '{ "rootDir": "custom" }');
+
+            expect(util.createConfigFile(rootDir, 'sub/bsconfig.json')).to.be.undefined;
+            expect(fsExtra.readFileSync(configPath).toString()).to.equal('{ "rootDir": "custom" }');
         });
     });
 
@@ -394,6 +511,201 @@ describe('util', () => {
                 outDir: './out'
             });
         });
+
+        it('honors stagingFolderPath from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/staging`
+            );
+        });
+
+        it('honors stagingDir from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingDir: './staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/staging`
+            );
+        });
+
+        it('prefers outDir over stagingFolderPath when both are in the project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                outDir: './modern',
+                stagingFolderPath: './legacy'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/modern`
+            );
+        });
+
+        it('prefers a provided outDir option over the project file stagingFolderPath', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './legacy'
+            });
+            expect(
+                util.normalizeAndResolveConfig({
+                    project: s`${rootDir}/bsconfig.json`,
+                    outDir: './cli-out'
+                }).outDir
+            ).to.eql(
+                './cli-out'
+            );
+        });
+
+        it('resolves stagingFolderPath relative to the bsconfig file that declared it', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/folder1/parent.json`, {
+                stagingFolderPath: './staging'
+            });
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                extends: 'folder1/parent.json'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/folder1/staging`
+            );
+        });
+
+        it('lets a child config stagingFolderPath override the parent outDir', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/parent.json`, {
+                outDir: './parent-out'
+            });
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                extends: 'parent.json',
+                stagingFolderPath: './child-staging'
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).outDir
+            ).to.eql(
+                s`${rootDir}/child-staging`
+            );
+        });
+
+        it('passes deprecated staging options from project files through to the final options', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                stagingFolderPath: './staging',
+                stagingDir: './staging'
+            });
+            const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+            expect(result.stagingFolderPath).to.eql('./staging');
+            expect(result.stagingDir).to.eql('./staging');
+        });
+
+        it('honors copyToStaging from a loaded project file', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                copyToStaging: false
+            });
+            expect(
+                util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` }).noEmit
+            ).to.be.true;
+        });
+
+        describe('compilerOptions', () => {
+            it('honors a deprecated top-level option from a loaded project file', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    sourceMap: true
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.sourceMap).to.be.true;
+                expect(result.compilerOptions.sourceMap).to.be.true;
+            });
+
+            it('flags a deprecated top-level option from a loaded project file with a warning diagnostic', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    sourceMap: true
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                const diagnostics = (result as any)._deprecationDiagnostics as Array<{ code: string }>;
+                expect(diagnostics.map(d => d.code)).to.include('deprecated-bsconfig-option');
+            });
+
+            it('does not flag options set only in compilerOptions', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    compilerOptions: {
+                        sourceMap: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.sourceMap).to.be.true;
+                const diagnostics = (result as any)._deprecationDiagnostics as Array<{ code: string }>;
+                expect(diagnostics).to.be.empty;
+            });
+
+            it('prefers compilerOptions over a deprecated top-level option in the same file', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    strict: false,
+                    compilerOptions: {
+                        strict: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.strict).to.be.true;
+                expect(result.compilerOptions.strict).to.be.true;
+            });
+
+            it('does not flag options passed programmatically (not from a bsconfig.json file)', () => {
+                const result = util.normalizeAndResolveConfig({
+                    sourceMap: true
+                });
+                const diagnostics = (result as any)._deprecationDiagnostics as Array<{ code: string }> | undefined;
+                expect(diagnostics ?? []).to.be.empty;
+            });
+
+            it('deep-merges compilerOptions across an extends chain', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/parent.json`, {
+                    compilerOptions: {
+                        sourceMap: true,
+                        strict: true
+                    }
+                });
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    extends: 'parent.json',
+                    compilerOptions: {
+                        strictCallFunc: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.compilerOptions.sourceMap).to.be.true;
+                expect(result.compilerOptions.strict).to.be.true;
+                expect(result.compilerOptions.strictCallFunc).to.be.true;
+            });
+
+            it('lets a child compilerOptions value override the parent', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/parent.json`, {
+                    compilerOptions: {
+                        strict: true
+                    }
+                });
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    extends: 'parent.json',
+                    compilerOptions: {
+                        strict: false
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.compilerOptions.strict).to.be.false;
+                expect(result.strict).to.be.false;
+            });
+
+            it('resolves a compilerOptions.sourceRoot relative to the bsconfig file that declared it', () => {
+                fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                    compilerOptions: {
+                        sourceRoot: './src',
+                        resolveSourceRoot: true
+                    }
+                });
+                const result = util.normalizeAndResolveConfig({ project: s`${rootDir}/bsconfig.json` });
+                expect(result.sourceRoot).to.eql(s`${rootDir}/src`);
+            });
+        });
     });
 
     describe('normalizeConfig', () => {
@@ -409,6 +721,12 @@ describe('util', () => {
             expect(util.normalizeConfig({}).pruneEmptyCodeFiles).to.be.false;
             expect(util.normalizeConfig({ pruneEmptyCodeFiles: true }).pruneEmptyCodeFiles).to.be.true;
             expect(util.normalizeConfig({ pruneEmptyCodeFiles: false }).pruneEmptyCodeFiles).to.be.false;
+        });
+
+        it('sets validate to true by default, or false if explicitly false', () => {
+            expect(util.normalizeConfig({}).validate).to.be.true;
+            expect(util.normalizeConfig({ validate: true }).validate).to.be.true;
+            expect(util.normalizeConfig({ validate: false }).validate).to.be.false;
         });
 
         it('loads project from disc', () => {
@@ -542,6 +860,27 @@ describe('util', () => {
             let config = util.normalizeConfig({ outDir: 'outTest', stagingDir: 'staging', stagingFolderPath: 'stagingPath' } as any);
             expect(config.outDir).to.equal('outTest');
         });
+
+        it('sets correct strict* values when strict is true', () => {
+            let config = util.normalizeConfig({ strict: true } as any);
+            expect(config.strict).to.be.true;
+            expect(config.strictCallFunc).to.be.true;
+            expect(config.strictNodeMembers).to.be.true;
+        });
+
+        it('allows strict* values to override strict', () => {
+            let config = util.normalizeConfig({ strict: true, strictCallFunc: false, strictNodeMembers: false } as any);
+            expect(config.strict).to.be.true;
+            expect(config.strictCallFunc).to.be.false;
+            //expect(config.strictNodeMembers).to.be.false;
+        });
+
+        it('defaults strict* values to false when strict is not set', () => {
+            let config = util.normalizeConfig({} as any);
+            expect(config.strict).to.be.false;
+            expect(config.strictCallFunc).to.be.false;
+            expect(config.strictNodeMembers).to.be.false;
+        });
     });
 
     describe('areArraysEqual', () => {
@@ -607,6 +946,36 @@ describe('util', () => {
         });
     });
 
+    describe('computeRenamedReferencePath', () => {
+        it('preserves pkg:/ scheme when original used it', () => {
+            expect(
+                util.computeRenamedReferencePath('pkg:/source/old.bs', 'source/main.bs', s`source/new.bs`)
+            ).to.equal('pkg:/source/new.bs');
+        });
+        it('preserves libpkg:/ scheme', () => {
+            expect(
+                util.computeRenamedReferencePath('libpkg:/source/old.bs', 'source/main.bs', s`source/new.bs`)
+            ).to.equal('libpkg:/source/new.bs');
+        });
+        it('recomputes a relative path within the same folder', () => {
+            expect(
+                util.computeRenamedReferencePath('old.bs', s`source/main.bs`, s`source/new.bs`)
+            ).to.equal('new.bs');
+        });
+        it('recomputes a relative path across folders', () => {
+            expect(
+                util.computeRenamedReferencePath('../lib/old.bs', s`source/main.bs`, s`utils/new.bs`)
+            ).to.equal('../utils/new.bs');
+        });
+        it('always emits forward slashes regardless of platform', () => {
+            const result = util.computeRenamedReferencePath('pkg:/a/b.bs', s`a/main.bs`, s`a/c/d.bs`);
+            expect(result).to.not.contain('\\');
+        });
+        it('returns null for empty input', () => {
+            expect(util.computeRenamedReferencePath('', 'a.bs', 'b.bs')).to.be.null;
+        });
+    });
+
     describe('getRelativePath', () => {
         it('works when both files are at the root', () => {
             expect(util.getRelativePath('file.xml', 'file.brs')).to.equal('file.brs');
@@ -622,6 +991,20 @@ describe('util', () => {
         });
         it('works when source and target are in different subs', () => {
             expect(util.getRelativePath('sub1/file.xml', 'sub2/file.brs')).to.equal(s`../sub2/file.brs`);
+        });
+    });
+
+    describe('pushAll', () => {
+        it('appends items in order and returns the target', () => {
+            const target = [1, 2];
+            expect(util.pushAll(target, [3, 4])).to.equal(target);
+            expect(target).to.eql([1, 2, 3, 4]);
+        });
+
+        it('handles arrays too large to spread into push', () => {
+            const items = new Array<number>(500_000).fill(1);
+            expect(() => [].push(...items)).to.throw(RangeError);
+            expect(util.pushAll([0], items)).to.be.lengthOf(500_001);
         });
     });
 
@@ -772,6 +1155,235 @@ describe('util', () => {
             expect((plugins[0] as any).initOptions).to.eql({
                 version: util.getBrighterScriptVersion()
             });
+        });
+    });
+
+    describe('getLocation', () => {
+        function getRanges(code: string) {
+            return Lexer.scan(code).tokens.map(x => [x.kind, util.getLocation(x)?.range]);
+        }
+
+        it('returns undefined for synthetic items', () => {
+            expect(util.getLocation(createToken(TokenKind.Identifier, 'a'))).to.be.undefined;
+            expect(util.getLocation(undefined)).to.be.undefined;
+        });
+
+        it('uses the uri from the source', () => {
+            const token = Lexer.scan('a', { srcPath: s`${rootDir}/source/main.brs` }).tokens[0];
+            expect(util.getLocation(token).uri).to.eql(util.pathToUri(s`${rootDir}/source/main.brs`));
+        });
+
+        it('keeps a LF newline token on its own line', () => {
+            expect(getRanges('a\nb')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 2)],
+                [TokenKind.Identifier, util.createRange(1, 0, 1, 1)],
+                [TokenKind.Eof, util.createRange(1, 1, 1, 2)]
+            ]);
+        });
+
+        it('keeps a CRLF newline token on its own line', () => {
+            expect(getRanges('a\r\nb')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 3)],
+                [TokenKind.Identifier, util.createRange(1, 0, 1, 1)],
+                [TokenKind.Eof, util.createRange(1, 1, 1, 2)]
+            ]);
+        });
+
+        it('handles a trailing newline at the end of the file', () => {
+            expect(getRanges('a\n')).to.eql([
+                [TokenKind.Identifier, util.createRange(0, 0, 0, 1)],
+                [TokenKind.Newline, util.createRange(0, 1, 0, 2)],
+                [TokenKind.Eof, util.createRange(1, 0, 1, 1)]
+            ]);
+        });
+
+        it('counts surrogate pairs as two characters', () => {
+            const tokens = Lexer.scan('x = "😀" + y').tokens;
+            expect(util.getLocation(tokens.find(x => x.text === 'y')).range).to.eql(util.createRange(0, 11, 0, 12));
+        });
+
+        it('tracks lines through multi-line template strings', () => {
+            // eslint-disable-next-line no-template-curly-in-string
+            const tokens = Lexer.scan('x = `one\ntwo ${y}\r\nthree`\nz').tokens;
+            expect(util.getLocation(tokens.find(x => x.text === 'y')).range).to.eql(util.createRange(1, 6, 1, 7));
+            expect(util.getLocation(tokens.find(x => x.text === 'z')).range).to.eql(util.createRange(3, 0, 3, 1));
+        });
+
+        it('handles the split `elseif` tokens', () => {
+            const tokens = Lexer.scan('if a then\nelseif b then\nend if').tokens;
+            expect(util.getLocation(tokens.find(x => x.kind === TokenKind.Else)).range).to.eql(util.createRange(1, 0, 1, 4));
+            expect(util.getLocation(tokens.filter(x => x.kind === TokenKind.If)[1]).range).to.eql(util.createRange(1, 4, 1, 6));
+        });
+
+        it('handles the split `exitwhile` tokens', () => {
+            const { ast } = Parser.parse('sub main()\n    while true\n        exitwhile\n    end while\nend sub');
+            const exitStatement = ast.findChild<ExitStatement>(isExitStatement);
+            expect(util.getLocation(exitStatement.tokens.exit).range).to.eql(util.createRange(2, 8, 2, 12));
+            expect(util.getLocation(exitStatement.tokens.loopType).range).to.eql(util.createRange(2, 12, 2, 17));
+        });
+
+        it('builds locations for multi-line nodes', () => {
+            const { ast } = Parser.parse('sub main()\r\n    print 1\r\nend sub');
+            expect(util.getLocation(ast.statements[0]).range).to.eql(util.createRange(0, 0, 2, 7));
+        });
+
+        it('ends an empty print statement on its own line', () => {
+            const { ast } = Parser.parse('sub main()\n    print\n    x = 1\nend sub');
+            const print = (ast.statements[0] as FunctionStatement).func.body.statements[0];
+            expect(util.getLocation(print).range).to.eql(util.createRange(1, 4, 1, 9));
+        });
+
+        it('ends a `new` without a class name on its own line', () => {
+            const { ast } = Parser.parse('sub main()\n    new\n    x = 1\nend sub', { mode: ParseMode.BrighterScript });
+            const statement = (ast.statements[0] as FunctionStatement).func.body.statements[0];
+            expect(util.getLocation(statement).range.end.line).to.eql(1);
+        });
+    });
+
+    describe('setBounds', () => {
+        it('uses the min start and max end of the locatables', () => {
+            const result = util.setBounds({} as Locatable, testLocatable(1, 5, 1, 8), undefined, testLocatable(0, 2, 0, 4), createToken(TokenKind.Identifier, 'synthetic'));
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 2, 1, 8));
+        });
+
+        it('ignores locatables from a different source', () => {
+            const other = Lexer.scan('\n\nabcdef').tokens[2];
+            const result = util.setBounds({} as Locatable, testLocatable(0, 2, 0, 4), other);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 2, 0, 4));
+        });
+
+        it('prefers a source with a uri over one parsed from a snippet, no matter the order', () => {
+            const real = Lexer.scan('\n\nabcdef', { srcPath: s`${rootDir}/source/main.brs` }).tokens[2];
+            const snippet = Lexer.scan('xyz').tokens[0];
+            expect(util.getLocation(util.setBounds({} as Locatable, snippet, real))).to.eql(util.getLocation(real));
+            expect(util.getLocation(util.setBounds({} as Locatable, real, snippet))).to.eql(util.getLocation(real));
+        });
+
+        it('clears the bounds when nothing has a source', () => {
+            const result = util.setBounds({ startPosition: 1, endPosition: 2, sourceInfo: testLocatable(0, 0, 0, 0).sourceInfo }, createToken(TokenKind.Identifier, 'a'));
+            expect(result).to.eql({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
+        });
+
+        it('does not end at the start of the next line when the last locatable is a LF newline', () => {
+            const tokens = Lexer.scan('print\nx').tokens;
+            const result = util.setBounds({} as Locatable, tokens[0], tokens[1]);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 0, 0, 5));
+        });
+
+        it('does not end at the start of the next line when the last locatable is a CRLF newline', () => {
+            const tokens = Lexer.scan('print\r\nx').tokens;
+            const result = util.setBounds({} as Locatable, tokens[0], tokens[1]);
+            expect(util.getLocation(result).range).to.eql(util.createRange(0, 0, 0, 5));
+        });
+    });
+
+    describe('getContentEnd', () => {
+        it('excludes trailing newlines', () => {
+            const tokens = Lexer.scan('a\nb\r\nc').tokens;
+            expect(tokens.map(x => [x.text, util.getContentEnd(x)])).to.eql([
+                ['a', 1],
+                ['\n', 1],
+                ['b', 3],
+                ['\r\n', 3],
+                ['c', 6],
+                ['', 7]
+            ]);
+        });
+
+        it('uses the end for nodes', () => {
+            expect(util.getContentEnd(testLocatable(0, 2, 0, 4))).to.eql(4);
+        });
+    });
+
+    describe('getStartPosition', () => {
+        it('matches the start of getLocation', () => {
+            const tokens = Lexer.scan('a\n  bb\r\n    ccc').tokens;
+            for (const token of tokens) {
+                expect(util.getStartPosition(token)).to.eql(util.getLocation(token).range.start);
+            }
+        });
+
+        it('returns undefined for synthetic items', () => {
+            expect(util.getStartPosition(createToken(TokenKind.Identifier, 'a'))).to.be.undefined;
+            expect(util.getStartPosition(undefined)).to.be.undefined;
+        });
+    });
+
+    describe('firstLocatable', () => {
+        it('returns the first item that has a sourceInfo', () => {
+            const [a, b] = Lexer.scan('a b').tokens;
+            const synthetic = createToken(TokenKind.Identifier, 'c');
+            expect(util.firstLocatable(undefined, synthetic, a, b)).to.equal(a);
+            expect(util.firstLocatable(b, a)).to.equal(b);
+        });
+
+        it('returns undefined when nothing has a sourceInfo', () => {
+            expect(util.firstLocatable(undefined, createToken(TokenKind.Identifier, 'c'))).to.be.undefined;
+            expect(util.firstLocatable()).to.be.undefined;
+        });
+    });
+
+    describe('getOffset', () => {
+        const source = Lexer.scan('ab\ncd\nef').tokens[0].sourceInfo;
+
+        it('converts positions to offsets', () => {
+            expect(util.getOffset(source, util.createPosition(0, 0))).to.eql(0);
+            expect(util.getOffset(source, util.createPosition(1, 1))).to.eql(4);
+            expect(util.getOffset(source, util.createPosition(2, 2))).to.eql(8);
+        });
+
+        it('clamps characters past the end of the line to that line', () => {
+            expect(util.getOffset(source, util.createPosition(0, 99))).to.eql(2);
+        });
+
+        it('returns undefined for a missing source or line', () => {
+            expect(util.getOffset(undefined, util.createPosition(0, 0))).to.be.undefined;
+            expect(util.getOffset(source, util.createPosition(99, 0))).to.be.undefined;
+            expect(util.getOffset(source, undefined)).to.be.undefined;
+        });
+    });
+
+    describe('setLocation', () => {
+        const srcPath = s`${rootDir}/source/main.brs`;
+
+        it('maps the location into the source, so it combines with that source', () => {
+            const tokens = Lexer.scan('a = 1\nbb = 2', { srcPath: srcPath }).tokens;
+            const sourceInfo = tokens[0].sourceInfo;
+            const location = util.createLocation(1, 0, 1, 2, sourceInfo.uri);
+            const result = util.setLocation({} as Locatable, location, sourceInfo);
+            expect(result.sourceInfo).to.equal(sourceInfo);
+            expect(result.startPosition).to.eql(6);
+            expect(result.endPosition).to.eql(8);
+            expect(util.getLocation(result)).to.eql(location);
+            expect(util.getLocation(util.setBounds({} as Locatable, tokens[0], result)).range).to.eql(util.createRange(0, 0, 1, 2));
+        });
+
+        it('clears the position when given no location or source', () => {
+            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), undefined, sourceInfo)).to.include({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
+            expect(util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1), undefined)).to.include({ startPosition: undefined, endPosition: undefined, sourceInfo: undefined });
+        });
+
+        it('clears the position for a location in a different file', () => {
+            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
+            const result = util.setLocation(testLocatable(0, 0, 0, 1), util.createLocation(0, 0, 0, 1, 'file:///other.brs'), sourceInfo);
+            expect(util.getLocation(result)).to.be.undefined;
+        });
+
+        it('clears the position for lines that are not in the source', () => {
+            const sourceInfo = Lexer.scan('a = 1', { srcPath: srcPath }).tokens[0].sourceInfo;
+            //bsc builds ranges like this for comment flags that run to the end of the file
+            const result = util.setLocation({} as Locatable, util.createLocation(0, 0, Number.MAX_SAFE_INTEGER, 0, sourceInfo.uri), sourceInfo);
+            expect(util.getLocation(result)).to.be.undefined;
+        });
+
+        it('keeps a character past the end of a line on that line', () => {
+            const sourceInfo = Lexer.scan('a = 1\nb = 2', { srcPath: srcPath }).tokens[0].sourceInfo;
+            //bsc builds ranges like this for whole-file diagnostics
+            const result = util.setLocation({} as Locatable, util.createLocation(0, 0, 0, Number.MAX_VALUE, sourceInfo.uri), sourceInfo);
+            expect(util.getLocation(result).range.end.line).to.eql(0);
         });
     });
 
@@ -1137,9 +1749,9 @@ describe('util', () => {
     describe('processTypeChain', () => {
         it('should  find the correct details in a list of type resolutions', () => {
             const nodes = [
-                createVariableExpression('Alpha', util.createLocation(1, 1, 2, 2)),
-                createVariableExpression('Beta', util.createLocation(2, 2, 3, 3)),
-                createVariableExpression('CharlieProp', util.createLocation(3, 3, 4, 4))
+                createVariableExpression('Alpha', testLocatable(1, 1, 2, 2)),
+                createVariableExpression('Beta', testLocatable(2, 2, 3, 3)),
+                createVariableExpression('CharlieProp', testLocatable(3, 3, 4, 4))
             ];
 
             const chain = [
@@ -1158,8 +1770,8 @@ describe('util', () => {
 
         it('respects the separatorToken', () => {
             const nodes = [
-                createVariableExpression('Custom', util.createLocation(1, 1, 2, 2)),
-                createVariableExpression('someCallFunc', util.createLocation(2, 2, 3, 3))
+                createVariableExpression('Custom', testLocatable(1, 1, 2, 2)),
+                createVariableExpression('someCallFunc', testLocatable(2, 2, 3, 3))
             ];
             const chain = [
                 new TypeChainEntry({ name: 'roSGNodeCustom', type: new ComponentType('Custom'), data: { flags: SymbolTypeFlag.runtime }, astNode: nodes[0] }),
@@ -1340,6 +1952,32 @@ describe('util', () => {
 
         it('handles object Types', () => {
             expectTypeToBe(util.binaryOperatorResultType(new ObjectType(), createToken(TokenKind.Plus), IntegerType.instance), IntegerType);
+        });
+
+        it('allows = and <> comparisons of a void type against invalid', () => {
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.Equal), VoidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.LessGreater), InvalidType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(InvalidType.instance, createToken(TokenKind.LessGreater), VoidType.instance), BooleanType);
+        });
+
+        it('allows = and <> comparisons of a void type against dynamic', () => {
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), DynamicType.instance), BooleanType);
+            expectTypeToBe(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.LessGreater), DynamicType.instance), BooleanType);
+        });
+
+        it('still disallows non-comparison operators on a void type', () => {
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Plus), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Less), InvalidType.instance)).to.be.undefined;
+        });
+
+        it('still disallows comparisons of a void type against non-invalid/dynamic types', () => {
+            expect(util.binaryOperatorResultType(VoidType.instance, createToken(TokenKind.Equal), StringType.instance)).to.be.undefined;
+        });
+
+        it('still disallows = and <> comparisons of an uninitialized type against invalid', () => {
+            expect(util.binaryOperatorResultType(UninitializedType.instance, createToken(TokenKind.Equal), InvalidType.instance)).to.be.undefined;
+            expect(util.binaryOperatorResultType(UninitializedType.instance, createToken(TokenKind.LessGreater), InvalidType.instance)).to.be.undefined;
         });
     });
 
@@ -1623,6 +2261,7 @@ describe('util', () => {
     describe('standardizePath', () => {
         let isWindowsOrig = util['isWindows'];
         let isWindows = isWindowsOrig;
+        let standardizePathCacheLimitOrig = util['standardizePathCacheLimit'];
 
         beforeEach(() => {
             util['standardizePathCache'].clear();
@@ -1630,6 +2269,7 @@ describe('util', () => {
         afterEach(() => {
             util['standardizePathCache'].clear();
             util['isWindows'] = isWindowsOrig;
+            util['standardizePathCacheLimit'] = standardizePathCacheLimitOrig;
         });
 
         function test(incoming: string, expected: string) {
@@ -1816,6 +2456,80 @@ describe('util', () => {
             const token = createToken(TokenKind.Identifier);
             token.leadingTrivia = [undefined, null, 1, true, 'string', {}, createToken(TokenKind.Comment, `'comment 2`)] as any[];
             expect(util.getLeadingComments(token)).eql([createToken(TokenKind.Comment, `'comment 2`)]);
+        });
+    });
+
+    describe('stripTrailingSourceMappingURLComment', () => {
+        it('strips the comment from a simpleMap node whose source ends with a trailing newline', () => {
+            //reproduces https://github.com/rokucommunity/brighterscript/issues/1818: the file's final
+            //line is empty (trailing newline), so the last SourceNode produced by simpleMap has no children
+            const fileContents = 'sub p()\nend sub\n\'//# sourceMappingURL=./p.brs.map\n';
+            const sourceMapNode = util.simpleMap('source/p.brs', fileContents);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(sourceMapNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
+        });
+
+        it('guards against a plugin-produced SourceNode whose rightmost descendant has no children', () => {
+            //a SourceNode can end up with an empty rightmost child from any producer, not just simpleMap
+            const emptyTrailingNode = new SourceNode(1, 0, 'source/plugin-output.brs', []);
+            const rootNode = new SourceNode(null, null, 'source/plugin-output.brs', [
+                'sub p()\nend sub\n\'//# sourceMappingURL=./plugin-output.brs.map\n',
+                emptyTrailingNode
+            ]);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(rootNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
+        });
+
+        it('does not eat real content when the tree contains a SourceNode from a different installed copy of `source-map`', () => {
+            //a plugin bundling its own `source-map` dependency can produce SourceNodes that fail `instanceof` against
+            //this copy of the class, so this stand-in duck-types the same way source-map's own code does internally
+            const foreignSourceNodeStandIn = {
+                //this is the exact marker property name/spelling that source-map itself uses to identify SourceNodes
+                '$$$isSourceNode$$$': true,
+                children: ['\n'],
+                walk: function walk(visitChunk: (chunk: string) => void) {
+                    for (const child of this.children) {
+                        visitChunk(child);
+                    }
+                }
+            };
+            const rootNode = new SourceNode(null, null, 'source/plugin-output.brs', [
+                'sub p()\nend sub\n\'//# sourceMappingURL=./plugin-output.brs.map',
+                foreignSourceNodeStandIn as unknown as SourceNode
+            ]);
+            const strippedNode = util.stripTrailingSourceMappingURLComment(rootNode);
+            expect(strippedNode.toString()).to.eql('sub p()\nend sub');
+        });
+
+        it('only needs the end of the output, however the text is split into nodes', () => {
+            const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+            const texts = [
+                `sub p()\nend sub\n'//# sourceMappingURL=./p.brs.map`,
+                `sub p()\r\nend sub\r\n'//# sourceMappingURL=./p.brs.map\r\n\r\n`,
+                `sub p()\nend sub\n  '//# sourceMappingURL=./p.brs.map  \n`,
+                `<component>\n</component>\n<!-- //# sourceMappingURL=./p.xml.map -->\n`,
+                `'//# sourceMappingURL=./p.brs.map`,
+                `\n'//# sourceMappingURL=./p.brs.map`,
+                `sub p()\nend sub\n`,
+                `sub p()\nend sub\n'//# sourceMappingURL=./p.brs.map\nprint 1`,
+                `print "a"`,
+                `\n\n`,
+                ``
+            ];
+            for (const text of texts) {
+                const match = pattern.exec(text);
+                const expected = match ? text.slice(0, text.length - match[0].length) : text;
+                //split into 3 strings at every pair of positions, with the middle and last ones nested in child nodes
+                for (let i = 0; i <= text.length; i++) {
+                    for (let j = i; j <= text.length; j++) {
+                        const node = new SourceNode(null, null, 'source/p.brs', [
+                            text.slice(0, i),
+                            new SourceNode(1, 0, 'source/p.brs', [text.slice(i, j), new SourceNode(1, 0, 'source/p.brs', [text.slice(j)])])
+                        ]);
+                        expect(util.stripTrailingSourceMappingURLComment(node).toString(), JSON.stringify({ text: text, i: i, j: j })).to.eql(expected);
+                    }
+                }
+            }
         });
     });
 });

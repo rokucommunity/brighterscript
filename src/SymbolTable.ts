@@ -12,6 +12,11 @@ import type { UninitializedType } from './types/UninitializedType';
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
  */
+/**
+ * Shared by every table that has no pocket tables (see `SymbolTable.pocketTables`)
+ */
+const NoPocketTables: PocketTable[] = Object.freeze([]) as unknown as PocketTable[];
+
 export class SymbolTable implements SymbolTypeGetter {
     constructor(
         public name: string,
@@ -27,13 +32,15 @@ export class SymbolTable implements SymbolTypeGetter {
      * The map of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
      * Indexed by lower symbol name
      */
-    private symbolMap = new Map<string, BscSymbol[]>();
+    //lazy -- most member tables (ReferenceType, BscType, etc) never get a symbol added
+    private symbolMap: Map<string, BscSymbol[]> | undefined;
 
     private parentProviders = [] as SymbolTableProvider[];
 
     private cacheToken: string;
 
-    private typeCache: Array<Map<string, TypeCacheEntry>>;
+    //lazy -- allocated in setCachedType, most tables never get a type cached
+    private typeCache: Array<Map<string, TypeCacheEntry>> | undefined;
 
     /**
      * Used to invalidate the cache for all symbol tables.
@@ -43,7 +50,14 @@ export class SymbolTable implements SymbolTypeGetter {
      */
     static cacheVerifier = new CacheVerifier();
 
-    static referenceTypeFactory: (memberKey: string, fullName, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
+    /**
+     * Incremented whenever any SymbolTable changes in a way that could change a lookup result (symbols, parents,
+     * siblings, pocket tables). Caches of lookup results (eg. ReferenceType resolution) compare against this.
+     * Doesn't catch a parent provider closure starting to return a different table - that's what `cacheVerifier` is for
+     */
+    static mutationCount = 0;
+
+    static referenceTypeFactory: (memberKey: string, fullName: string, flags: SymbolTypeFlag, tableProvider: SymbolTypeGetterProvider) => ReferenceType;
     static unionTypeFactory: (types: BscType[]) => UnionType;
     static uninitializedTypeFactory: () => UninitializedType;
 
@@ -51,6 +65,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Push a function that will provide a parent SymbolTable when requested
      */
     public pushParentProvider(provider: SymbolTableProvider) {
+        SymbolTable.mutationCount++;
         this.cachedCircularReferenceCheck = null;
         this.parentProviders.push(provider);
         return () => {
@@ -62,6 +77,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Pop the current parentProvider
      */
     public popParentProvider() {
+        SymbolTable.mutationCount++;
         this.cachedCircularReferenceCheck = null;
         this.parentProviders.pop();
     }
@@ -73,15 +89,18 @@ export class SymbolTable implements SymbolTypeGetter {
         return this.parentProviders[this.parentProviders.length - 1]?.();
     }
 
-    private siblings = new Set<SymbolTable>();
+    //lazy -- most SymbolTables never get a sibling
+    private siblings: Set<SymbolTable> | undefined;
 
     /**
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
      */
     public addSibling(sibling: SymbolTable) {
+        SymbolTable.mutationCount++;
+        this.siblings ??= new Set();
         this.siblings.add(sibling);
         return () => {
-            this.siblings.delete(sibling);
+            this.removeSibling(sibling);
         };
     }
 
@@ -89,21 +108,42 @@ export class SymbolTable implements SymbolTypeGetter {
      * Remove a sibling symbol table
      */
     public removeSibling(sibling: SymbolTable) {
-        this.siblings.delete(sibling);
+        SymbolTable.mutationCount++;
+        this.siblings?.delete(sibling);
+        //most tables have no siblings, so don't keep an empty Set around once the last one is removed
+        if (this.siblings?.size === 0) {
+            this.siblings = undefined;
+        }
     }
 
     /**
      * Does the order of symbols in this symbol table matter?
      * Normally, this would only be for symbol tables referencing symbols declared within a function
      */
-    public isOrdered = false;
+    public get isOrdered() {
+        return this._isOrdered;
+    }
+    public set isOrdered(value: boolean) {
+        SymbolTable.mutationCount++;
+        this._isOrdered = value;
+    }
+    private _isOrdered = false;
 
-    public pocketTables = new Array<PocketTable>();
+    /**
+     * Most tables never get a pocket table, so they all share one frozen empty array until the first one is added.
+     * Use `addPocketTable` rather than pushing into this directly
+     */
+    public pocketTables: PocketTable[] = NoPocketTables;
 
     public addPocketTable(pocketTable: PocketTable) {
+        SymbolTable.mutationCount++;
         pocketTable.table.isPocketTable = true;
+        if (this.pocketTables === NoPocketTables) {
+            this.pocketTables = [];
+        }
         this.pocketTables.push(pocketTable);
         return () => {
+            SymbolTable.mutationCount++;
             const index = this.pocketTables.findIndex(pt => pt === pocketTable);
             if (index >= 0) {
                 this.pocketTables.splice(index, 1);
@@ -127,18 +167,22 @@ export class SymbolTable implements SymbolTypeGetter {
         return this.pocketTables.find(pt => pt.table === symbolTable)?.index ?? -1;
     }
 
-    private complementsTables = new Set<SymbolTable>();
+    //lazy -- only branch-complement tables ever use this
+    private complementsTables: Set<SymbolTable> | undefined;
 
     /**
      * This table complements this other table
      * Eg. This is an else branch, it complements a then branch
      */
     public complementOtherTable(otherTable: SymbolTable) {
+        SymbolTable.mutationCount++;
+        this.complementsTables ??= new Set();
         this.complementsTables.add(otherTable);
     }
 
     public clearSymbols() {
-        this.symbolMap.clear();
+        SymbolTable.mutationCount++;
+        this.symbolMap?.clear();
     }
 
     /**
@@ -155,7 +199,7 @@ export class SymbolTable implements SymbolTypeGetter {
         let result: BscSymbol[];
         do {
             // look in our map first
-            if ((result = currentTable.symbolMap.get(key))) {
+            if ((result = currentTable.symbolMap?.get(key))) {
                 // eslint-disable-next-line no-bitwise
                 if (result.find(symbol => symbol.flags & bitFlags)) {
                     return true;
@@ -164,14 +208,14 @@ export class SymbolTable implements SymbolTypeGetter {
 
             //look in pocket tables
             for (let pocket of this.pocketTables) {
-                if ((result = pocket.table.symbolMap.get(key))) {
+                if ((result = pocket.table.symbolMap?.get(key))) {
                     // eslint-disable-next-line no-bitwise
                     if (result.find(symbol => symbol.flags & bitFlags)) {
                         return true;
                     }
                 }
             }
-            if ((result = currentTable.symbolMap.get(key))) {
+            if ((result = currentTable.symbolMap?.get(key))) {
                 // eslint-disable-next-line no-bitwise
                 if (result.find(symbol => symbol.flags & bitFlags)) {
                     return true;
@@ -179,11 +223,13 @@ export class SymbolTable implements SymbolTypeGetter {
             }
 
             //look through any sibling maps next
-            for (let sibling of currentTable.siblings) {
-                if ((result = sibling.symbolMap.get(key))) {
-                    // eslint-disable-next-line no-bitwise
-                    if (result.find(symbol => symbol.flags & bitFlags)) {
-                        return true;
+            if (currentTable.siblings) {
+                for (let sibling of currentTable.siblings) {
+                    if ((result = sibling.symbolMap?.get(key))) {
+                        // eslint-disable-next-line no-bitwise
+                        if (result.find(symbol => symbol.flags & bitFlags)) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -206,7 +252,13 @@ export class SymbolTable implements SymbolTypeGetter {
         const key = name?.toLowerCase();
         let result: BscSymbol[];
         let memberOfAncestor = false;
-        const addAncestorInfo = (symbol: BscSymbol) => ({ ...symbol, data: { ...symbol.data, memberOfAncestor: memberOfAncestor } });
+        //only clone the symbol when we actually need to attach the `memberOfAncestor` flag
+        //(i.e., we walked up to a parent table). Returning the original reference for own-table
+        //hits keeps identity stable, which downstream consumers (and one symbol-table spec)
+        //rely on.
+        const addAncestorInfo = (symbol: BscSymbol) => (memberOfAncestor
+            ? { ...symbol, data: { ...symbol.data, memberOfAncestor: true } }
+            : symbol);
         let maxStatementIndex = Number.isInteger(additionalOptions?.maxStatementIndex) ? additionalOptions.maxStatementIndex : Number.MAX_SAFE_INTEGER;
         do {
 
@@ -215,11 +267,17 @@ export class SymbolTable implements SymbolTypeGetter {
             }
 
             // look in our map first
-            let currentResults = currentTable.symbolMap.get(key);
+            let currentResults = currentTable.symbolMap?.get(key);
             if (currentResults) {
-                // eslint-disable-next-line no-bitwise
-                currentResults = currentResults.filter(symbol => symbol.flags & bitFlags)
-                    .filter(this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor));
+                if (currentTable.isOrdered) {
+                    const lookupFilter = this.getSymbolLookupFilter(currentTable, maxStatementIndex, memberOfAncestor);
+                    // eslint-disable-next-line no-bitwise
+                    currentResults = currentResults.filter(symbol => (symbol.flags & bitFlags) && lookupFilter(symbol));
+                } else {
+                    //statement order doesn't matter here, so only the flags need checking
+                    // eslint-disable-next-line no-bitwise
+                    currentResults = currentResults.filter(symbol => symbol.flags & bitFlags);
+                }
             }
 
             let precedingAssignmentIndex = -1;
@@ -239,18 +297,24 @@ export class SymbolTable implements SymbolTypeGetter {
                 result = currentResults;
             }
 
-            let depth = additionalOptions?.depth ?? currentTable.getCurrentPocketTableDepth();
-            const augmentationResult = currentTable.augmentSymbolResultsWithPocketTableResults(name, bitFlags, result, {
-                ...additionalOptions,
-                depth: depth,
-                maxStatementIndex: maxStatementIndex,
-                precedingAssignmentIndex: precedingAssignmentIndex
-            });
-            result = augmentationResult.symbols;
-            const needCheckParent = (!augmentationResult.exhaustive && depth > 0);
+            //with no pocket tables, augmenting would just hand back `result` as exhaustive, so skip the allocations
+            let needCheckParent = false;
+            if (currentTable.pocketTables.length > 0) {
+                let depth = additionalOptions?.depth ?? currentTable.getCurrentPocketTableDepth();
+                const augmentationResult = currentTable.augmentSymbolResultsWithPocketTableResults(name, bitFlags, result, {
+                    ...additionalOptions,
+                    depth: depth,
+                    maxStatementIndex: maxStatementIndex,
+                    precedingAssignmentIndex: precedingAssignmentIndex
+                });
+                result = augmentationResult.symbols;
+                needCheckParent = (!augmentationResult.exhaustive && depth > 0);
+            }
 
             if (result?.length > 0 && !needCheckParent) {
-                result = result.map(addAncestorInfo);
+                if (memberOfAncestor) {
+                    result = result.map(addAncestorInfo);
+                }
                 break;
             }
 
@@ -258,10 +322,12 @@ export class SymbolTable implements SymbolTypeGetter {
                 break;
             }
             //look through any sibling maps next
-            for (let sibling of currentTable.siblings) {
-                result = sibling.getSymbol(key, bitFlags);
-                if (result?.length > 0) {
-                    return result.map(addAncestorInfo);
+            if (currentTable.siblings) {
+                for (let sibling of currentTable.siblings) {
+                    result = sibling.getSymbol(key, bitFlags);
+                    if (result?.length > 0) {
+                        return result.map(addAncestorInfo);
+                    }
                 }
             }
             previousTable = currentTable;
@@ -370,7 +436,9 @@ export class SymbolTable implements SymbolTypeGetter {
         if (!name) {
             return;
         }
+        SymbolTable.mutationCount++;
         const key = name?.toLowerCase();
+        this.symbolMap ??= new Map();
         if (!this.symbolMap.has(key)) {
             this.symbolMap.set(key, []);
         }
@@ -386,11 +454,8 @@ export class SymbolTable implements SymbolTypeGetter {
      * Removes a new symbol from the table
      */
     removeSymbol(name: string) {
-        const key = name.toLowerCase();
-        if (!this.symbolMap.has(key)) {
-            this.symbolMap.set(key, []);
-        }
-        this.symbolMap.delete(key);
+        SymbolTable.mutationCount++;
+        this.symbolMap?.delete(name.toLowerCase());
     }
 
     public getSymbolTypes(name: string, options: GetSymbolTypeOptions, sortByStatementIndex = false): TypeCacheEntry[] {
@@ -456,58 +521,67 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     /**
-     * Adds all the symbols from another table to this one
-     * It will overwrite any existing symbols in this table
+     * Adds all the symbols from another table to this one.
+     * Source symbols are shared by reference (not cloned) since BscSymbol is treated as immutable.
+     * The destination still owns its own array per key, so subsequent addSymbol calls on either
+     * table do not leak across.
      */
     mergeSymbolTable(symbolTable: SymbolTable) {
-        function mergeTables(intoTable: SymbolTable, fromTable: SymbolTable) {
-            for (let [, value] of fromTable.symbolMap) {
-                for (const symbol of value) {
-                    if (symbol.data?.doNotMerge) {
-                        continue;
-                    }
-                    intoTable.addSymbol(
-                        symbol.name,
-                        symbol.data,
-                        symbol.type,
-                        symbol.flags
-                    );
+        SymbolTable.mutationCount++;
+        if (symbolTable.symbolMap) {
+            for (const [key, sourceSymbols] of symbolTable.symbolMap) {
+                //skip symbols flagged `doNotMerge` (e.g. typecast/alias bindings) so they stay
+                //local to their declaring block instead of bleeding into sibling tables that
+                //share the same merge target (e.g. the per-namespace aggregate symbol table).
+                const symbolsToMerge = sourceSymbols.filter(symbol => !symbol.data?.doNotMerge);
+                if (symbolsToMerge.length === 0) {
+                    continue;
                 }
+                this.symbolMap ??= new Map();
+                let destSymbols = this.symbolMap.get(key);
+                if (!destSymbols) {
+                    destSymbols = [];
+                    this.symbolMap.set(key, destSymbols);
+                }
+                destSymbols.push(...symbolsToMerge);
             }
         }
 
-        mergeTables(this, symbolTable);
         for (let pocketTable of symbolTable.pocketTables) {
-            mergeTables(this, pocketTable.table);
+            this.mergeSymbolTable(pocketTable.table);
         }
     }
 
     mergeNamespaceSymbolTables(symbolTable: SymbolTable) {
         const disposables = [] as Array<() => void>;
-        for (let [_name, value] of symbolTable.symbolMap) {
-            const symbol = value[0];
-            if (symbol) {
-                if (symbol.data?.doNotMerge) {
-                    continue;
-                }
-                const existingRuntimeType = this.getSymbolType(symbol.name, { flags: symbol.flags });
+        if (symbolTable.symbolMap) {
+            for (let [_name, value] of symbolTable.symbolMap) {
+                const symbol = value[0];
+                if (symbol) {
+                    if (symbol.data?.doNotMerge) {
+                        continue;
+                    }
+                    const existingRuntimeType = this.getSymbolType(symbol.name, { flags: symbol.flags });
 
-                if (isNamespaceType(existingRuntimeType) && isNamespaceType(symbol.type)) {
-                    disposables.push(...existingRuntimeType.memberTable.mergeNamespaceSymbolTables(symbol.type.memberTable));
-                } else {
-                    this.addSymbol(
-                        symbol.name,
-                        symbol.data,
-                        symbol.type,
-                        symbol.flags
-                    );
-                    disposables.push(() => this.removeSymbol(symbol.name));
+                    if (isNamespaceType(existingRuntimeType) && isNamespaceType(symbol.type)) {
+                        disposables.push(...existingRuntimeType.memberTable.mergeNamespaceSymbolTables(symbol.type.memberTable));
+                    } else {
+                        this.addSymbol(
+                            symbol.name,
+                            symbol.data,
+                            symbol.type,
+                            symbol.flags
+                        );
+                        disposables.push(() => this.removeSymbol(symbol.name));
+                    }
                 }
             }
         }
 
-        for (let siblingTable of symbolTable.siblings) {
-            disposables.push(...this.mergeNamespaceSymbolTables(siblingTable));
+        if (symbolTable.siblings) {
+            for (let siblingTable of symbolTable.siblings) {
+                disposables.push(...this.mergeNamespaceSymbolTables(siblingTable));
+            }
         }
         return disposables;
     }
@@ -516,7 +590,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Get list of symbols declared directly in this SymbolTable (excludes parent SymbolTable).
      */
     public getOwnSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
-        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
+        let symbols: BscSymbol[] = this.symbolMap ? [].concat(...this.symbolMap.values()) : [];
         // eslint-disable-next-line no-bitwise
         symbols = symbols.filter(symbol => symbol.flags & bitFlags);
         return symbols;
@@ -543,21 +617,17 @@ export class SymbolTable implements SymbolTypeGetter {
      * Get list of all symbols declared in this SymbolTable (includes parent SymbolTable).
      */
     public getAllSymbols(bitFlags: SymbolTypeFlag): BscSymbol[] {
-        let symbols: BscSymbol[] = [].concat(...this.symbolMap.values());
-        //look through any sibling maps next
-        for (let sibling of this.siblings) {
-            symbols = symbols.concat(sibling.getAllSymbols(bitFlags));
-        }
-
-        if (this.parent && !this.hasCircularReferenceWithAncestor()) {
-            symbols = symbols.concat(this.parent.getAllSymbols(bitFlags));
-        }
+        //gather every symbol from this table, its siblings, and its ancestors first, unfiltered.
+        //Filtering (and deduping) is deferred to a single pass at the end - since filter/dedup both
+        //distribute over concatenation, doing it once here produces the same result as doing it at
+        //every level of the recursion, without the redundant repeated passes over the same symbols
+        const symbols = this.collectAllSymbolsUnfiltered();
         // eslint-disable-next-line no-bitwise
-        symbols = symbols.filter(symbol => symbol.flags & bitFlags);
+        const filteredSymbols = symbols.filter(symbol => symbol.flags & bitFlags);
 
         //remove duplicate symbols
         const symbolsMap = new Map<string, BscSymbol>();
-        for (const symbol of symbols) {
+        for (const symbol of filteredSymbols) {
             const lowerSymbolName = symbol.name.toLowerCase();
             if (!symbolsMap.has(lowerSymbolName)) {
                 symbolsMap.set(lowerSymbolName, symbol);
@@ -566,13 +636,23 @@ export class SymbolTable implements SymbolTypeGetter {
         return [...symbolsMap.values()];
     }
 
+    private collectAllSymbolsUnfiltered(): BscSymbol[] {
+        let symbols: BscSymbol[] = this.symbolMap ? [].concat(...this.symbolMap.values()) : [];
+        //look through any sibling maps next
+        if (this.siblings) {
+            for (let sibling of this.siblings) {
+                symbols = symbols.concat(sibling.collectAllSymbolsUnfiltered());
+            }
+        }
+
+        if (this.parent && !this.hasCircularReferenceWithAncestor()) {
+            symbols = symbols.concat(this.parent.collectAllSymbolsUnfiltered());
+        }
+        return symbols;
+    }
+
     private resetTypeCache() {
-        this.typeCache = [
-            undefined,
-            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.runtime
-            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.typetime
-            new Map<string, TypeCacheEntry>() // SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
-        ];
+        this.typeCache = undefined;
         this.cacheToken = SymbolTable.cacheVerifier?.getToken();
     }
 
@@ -588,7 +668,7 @@ export class SymbolTable implements SymbolTypeGetter {
             return;
         }
         const cacheKey = this.getCacheKey(name, options);
-        return this.typeCache[options.flags]?.get(cacheKey);
+        return this.typeCache?.[options.flags]?.get(cacheKey);
     }
 
     setCachedType(name: string, cacheEntry: TypeCacheEntry, options: GetTypeOptions) {
@@ -604,13 +684,24 @@ export class SymbolTable implements SymbolTypeGetter {
             // no cache verifier
             return;
         }
+        //only runtime (1), typetime (2) and both (3) are cached
+        if (!(options.flags >= 1 && options.flags <= 3)) {
+            return;
+        }
+        //one map per flag value, each created on first use: most tables only ever cache for one of them
+        this.typeCache ??= [undefined, undefined, undefined, undefined];
+        let cache = this.typeCache[options.flags];
         const cacheKey = this.getCacheKey(name, options);
-        let existingCachedValue = this.typeCache[options.flags]?.get(cacheKey);
+        let existingCachedValue = cache?.get(cacheKey);
         if (isReferenceType(cacheEntry.type) && !isReferenceType(existingCachedValue)) {
             // No need to overwrite a non-referenceType with a referenceType
             return;
         }
-        return this.typeCache[options.flags]?.set(cacheKey, cacheEntry);
+        if (!cache) {
+            cache = new Map<string, TypeCacheEntry>();
+            this.typeCache[options.flags] = cache;
+        }
+        return cache.set(cacheKey, cacheEntry);
     }
 
     private getCacheKey(name: string, options?: { statementIndex?: number | 'end' }) {
@@ -623,11 +714,11 @@ export class SymbolTable implements SymbolTypeGetter {
     private toJSON() {
         return {
             name: this.name,
-            siblings: [...this.siblings].map(sibling => sibling.toJSON()),
+            siblings: this.siblings ? [...this.siblings].map(sibling => sibling.toJSON()) : [],
             parent: this.parent?.toJSON(),
             symbols: [
                 ...new Set(
-                    [...this.symbolMap.entries()].map(([key, symbols]) => {
+                    (this.symbolMap ? [...this.symbolMap.entries()] : []).map(([key, symbols]) => {
                         return symbols.map(x => {
                             return { name: x.name, type: (x.type as any)?.__identifier };
                         });
@@ -695,6 +786,11 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 }
 
+/**
+ * A symbol entry stored in a SymbolTable.
+ * Treated as immutable once added: range and type must not be reassigned, and the object
+ * may be shared by reference across multiple symbol tables (e.g. via mergeSymbolTable).
+ */
 export interface BscSymbol {
     name: string;
     data: ExtraSymbolData;

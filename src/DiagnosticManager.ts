@@ -1,10 +1,11 @@
-import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair } from './interfaces';
+import type { DiagnosticContext, BsDiagnostic, DiagnosticContextPair, BsDiagnosticInput, DiagnosticLocationInput } from './interfaces';
+import type { Locatable } from './lexer/Token';
 import type { AstNode } from './parser/AstNode';
 import type { Scope } from './Scope';
 import { util } from './util';
 import { Cache } from './Cache';
-import { isBsDiagnostic, isXmlScope } from './astUtils/reflection';
-import type { DiagnosticRelatedInformation, Location } from 'vscode-languageserver-protocol';
+import { isBlock, isBrsFile, isBsDiagnostic, isXmlScope } from './astUtils/reflection';
+import type { Location, Position, Range } from 'vscode-languageserver-protocol';
 import { DiagnosticFilterer } from './DiagnosticFilterer';
 import { DiagnosticSeverityAdjuster } from './DiagnosticSeverityAdjuster';
 import type { FinalizedBsConfig } from './BsConfig';
@@ -13,22 +14,44 @@ import type { Logger } from './logging';
 import { LogLevel, createLogger } from './logging';
 import type { Program } from './Program';
 import type { BrsFile } from './files/BrsFile';
+import { DiagnosticCodeMap, DiagnosticMessages } from './DiagnosticMessages';
+import * as path from 'path';
 
 interface DiagnosticWithContexts {
-    diagnostic: BsDiagnosticWithKey;
+    diagnostic: StoredDiagnostic;
     contexts: Set<DiagnosticContext>;
 }
 
-interface BsDiagnosticWithKey extends BsDiagnostic {
+/**
+ * The position details of a `Locatable`, detached from the locatable itself so the node/token (and its AST) is not retained.
+ * `text` is only set (to a newline constant) when the locatable ended in a newline, so `util.getLocation()` resolves it the same way
+ */
+interface DetachedLocatable extends Locatable {
+    text?: string;
+}
+
+/**
+ * Either an already-resolved `Location`, or a detached locatable that is only resolved in `getDiagnostics()`
+ */
+export type StoredLocation = Location | DetachedLocatable;
+
+export interface StoredRelatedInformation {
+    message: string;
+    location: StoredLocation;
+}
+
+export interface StoredDiagnostic extends Omit<BsDiagnostic, 'location' | 'relatedInformation'> {
     key: string;
+    location: StoredLocation;
+    relatedInformation: StoredRelatedInformation[];
 }
 
 export interface LocationResolverArgs {
-    diagnostic: BsDiagnosticWithKey;
+    diagnostic: StoredDiagnostic;
     contexts: Set<DiagnosticContext>;
 }
 
-type LocationResolver = (options: LocationResolverArgs) => Location | undefined;
+type LocationResolver = (options: LocationResolverArgs) => DiagnosticLocationInput | undefined;
 
 /**
  * Manages all diagnostics for a program.
@@ -58,6 +81,11 @@ export class DiagnosticManager {
 
     public program: Program;
 
+    /**
+     * The keys of the diagnostics that came from lexing and parsing
+     */
+    private parseDiagnosticKeys = new Set<string>();
+
     private fileUriMap = new Map<string, Set<string>>();
     private tagMap = new Map<string, Set<string>>();
     private scopeMap = new Map<string, Set<string>>();
@@ -65,30 +93,54 @@ export class DiagnosticManager {
 
     /**
      * Registers a diagnostic (or multiple diagnostics) for a program.
-     * Diagnostics can optionally be associated with a context
+     * Diagnostics can optionally be associated with a context.
+     * Locations (including in `relatedInformation`) may be `Locatable`s. Only their position details are kept,
+     * and they are not resolved into a `Location` until `getDiagnostics()`
      */
-    public register(diagnostic: BsDiagnostic, context?: DiagnosticContext);
-    public register(diagnostics: Array<BsDiagnostic>, context?: DiagnosticContext);
+    public register(diagnostic: BsDiagnosticInput, context?: DiagnosticContext);
+    public register(diagnostics: Array<BsDiagnosticInput>, context?: DiagnosticContext);
     public register(diagnostics: Array<DiagnosticContextPair>);
-    public register(diagnosticArg: BsDiagnostic | Array<BsDiagnostic | DiagnosticContextPair>, context?: DiagnosticContext) {
+    public register(diagnosticArg: BsDiagnosticInput | Array<BsDiagnosticInput | DiagnosticContextPair>, context?: DiagnosticContext) {
+        this.registerDiagnostics(diagnosticArg, context, false);
+    }
+
+    /**
+     * Registers the lexer and parser diagnostics of a file.
+     * Unlike other diagnostics, these are dropped while the code they describe is in an inactive `#if` / `#else if` / `#else` branch,
+     * because the device never compiles that code. The branches follow the file's most recent validation.
+     */
+    public registerParseDiagnostics(diagnostics: BsDiagnosticInput[]) {
+        this.registerDiagnostics(diagnostics, undefined, true);
+    }
+
+    private registerDiagnostics(diagnosticArg: BsDiagnosticInput | Array<BsDiagnosticInput | DiagnosticContextPair>, context: DiagnosticContext | undefined, isParseDiagnostic: boolean) {
         const diagnostics = Array.isArray(diagnosticArg) ? diagnosticArg : [{ diagnostic: diagnosticArg, context: context }];
         for (const diagnosticData of diagnostics) {
-            const diagnostic = isBsDiagnostic(diagnosticData) ? diagnosticData : diagnosticData.diagnostic;
+            const diagnostic = isBsDiagnostic(diagnosticData) ? diagnosticData as BsDiagnosticInput : (diagnosticData as DiagnosticContextPair).diagnostic;
             const diagContext = (diagnosticData as DiagnosticContextPair)?.context ?? context;
-            const key = this.getDiagnosticKey(diagnostic);
+            const location = this.storeLocation(diagnostic.location);
+            const relatedInformation = (diagnostic.relatedInformation ?? []).map(x => ({
+                message: x.message,
+                location: this.storeLocation(x.location)
+            }));
+            const key = this.getDiagnosticKey(diagnostic, location);
             let fromCache = true;
             const cacheData = this.diagnosticsCache.getOrAdd(key, () => {
-
-                if (!diagnostic.relatedInformation) {
-                    diagnostic.relatedInformation = [];
-                }
                 fromCache = false;
-                return { diagnostic: { key: key, ...diagnostic }, contexts: new Set<DiagnosticContext>() };
+                return {
+                    diagnostic: { ...diagnostic, key: key, location: location, relatedInformation: relatedInformation },
+                    contexts: new Set<DiagnosticContext>()
+                };
             });
 
             const cachedDiagnostic = cacheData.diagnostic;
-            if (!fromCache && diagnostic.relatedInformation) {
-                this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, diagnostic.relatedInformation);
+            if (isParseDiagnostic) {
+                this.parseDiagnosticKeys.add(key);
+            } else {
+                this.parseDiagnosticKeys.delete(key);
+            }
+            if (fromCache) {
+                this.mergeRelatedInformation(cachedDiagnostic.relatedInformation, relatedInformation);
             }
             const contexts = cacheData.contexts;
             if (diagContext) {
@@ -98,8 +150,8 @@ export class DiagnosticManager {
         }
     }
 
-    private addToMaps(diagnostic: BsDiagnosticWithKey, context?: DiagnosticContext) {
-        const uriLower = util.pathToUri(diagnostic.location?.uri?.toLowerCase());
+    private addToMaps(diagnostic: StoredDiagnostic, context?: DiagnosticContext) {
+        const uriLower = util.pathToUri(this.getUri(diagnostic.location)?.toLowerCase());
         if (uriLower) {
             if (!this.fileUriMap.has(uriLower)) {
                 this.fileUriMap.set(uriLower, new Set());
@@ -139,13 +191,13 @@ export class DiagnosticManager {
     public getDiagnostics(): BsDiagnostic[] {
         const doDiagnosticsGathering = () => {
             const diagnostics = this.getNonSuppressedDiagnostics();
+            this.logger?.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
+                this.diagnosticAdjuster?.adjust(this.options ?? {}, diagnostics);
+            });
+
             const filteredDiagnostics = this.logger?.time(LogLevel.debug, ['filter diagnostics'], () => {
                 return this.filterDiagnostics(diagnostics);
             }) ?? this.filterDiagnostics(diagnostics);
-
-            this.logger?.time(LogLevel.debug, ['adjust diagnostics severity'], () => {
-                this.diagnosticAdjuster?.adjust(this.options ?? {}, filteredDiagnostics);
-            });
 
             this.logger?.info(`diagnostic counts: total=${chalk.yellow(diagnostics.length.toString())}, after filter=${chalk.yellow(filteredDiagnostics.length.toString())}`);
 
@@ -157,9 +209,31 @@ export class DiagnosticManager {
 
     private getNonSuppressedDiagnostics() {
         const results = [] as Array<BsDiagnostic>;
+        const isInInactiveBranch = this.createInactiveBranchDetector();
         for (const cachedDiagnostic of this.diagnosticsCache.values()) {
-            const diagnostic = { ...cachedDiagnostic.diagnostic };
-            const relatedInformation = [...cachedDiagnostic.diagnostic.relatedInformation];
+            const storedDiagnostic = cachedDiagnostic.diagnostic;
+            if (isInInactiveBranch(storedDiagnostic)) {
+                continue;
+            }
+            let location = storedDiagnostic.location;
+            let message = storedDiagnostic.message;
+            if (!this.getUri(location)) {
+                location = this.storeLocation(this.locationResolver?.(cachedDiagnostic));
+                if (location) {
+                    //if we found a location, tweak the message a bit to let devs know this was not the original location
+                    message = `${message} (location unknown, added here for visibility)`;
+                }
+            }
+            //check suppression before resolving any locations, so suppressed diagnostics never pay for it
+            if (this.isSuppressed(storedDiagnostic.code, storedDiagnostic.legacyCode, location)) {
+                continue;
+            }
+
+            const originalLocation = this.resolveLocation(storedDiagnostic.location);
+            const relatedInformation = storedDiagnostic.relatedInformation.map(x => ({
+                message: x.message,
+                location: this.resolveLocation(x.location)
+            }));
             const affectedScopes = new Set<Scope>();
             for (const context of cachedDiagnostic.contexts.values()) {
                 if (context.scope) {
@@ -178,47 +252,107 @@ export class DiagnosticManager {
                 } else {
                     relatedInformation.push({
                         message: `In scope '${scope.name}'`,
-                        location: diagnostic.location
+                        location: originalLocation
                     });
                 }
 
             }
-            diagnostic.relatedInformation = relatedInformation;
-            if (!diagnostic.location?.uri) {
-                diagnostic.location = this.locationResolver?.(cachedDiagnostic);
-                if (diagnostic.location) {
-                    //if we found a location, tweak the message a bit to let devs know this was not the original location
-                    diagnostic.message = `${diagnostic.message} (location unknown, added here for visibility)`;
-                }
-            }
-            results.push(diagnostic);
+            results.push({
+                ...storedDiagnostic,
+                message: message,
+                location: location === storedDiagnostic.location ? originalLocation : this.resolveLocation(location),
+                relatedInformation: relatedInformation
+            });
         }
-        const filteredResults = results.filter((x) => {
-            return !this.isDiagnosticSuppressed(x);
-        });
-        return filteredResults;
+        return results;
+    }
+
+    /**
+     * Create a function that tells whether a diagnostic is a lexer or parser diagnostic about code the device does not compile (an inactive `#if` / `#else if` / `#else` branch).
+     * Other diagnostics are never about inactive branches because the validators skip them. Each file's inactive branches are collected at most once per call.
+     */
+    private createInactiveBranchDetector() {
+        const inactiveRangesByUri = new Map<string, Range[]>();
+        return (diagnostic: StoredDiagnostic) => {
+            if (!this.parseDiagnosticKeys.has(diagnostic.key)) {
+                return false;
+            }
+            const uri = this.getUri(diagnostic.location);
+            const start = this.getStart(diagnostic.location);
+            if (!uri || !start) {
+                return false;
+            }
+            const uriLower = uri.toLowerCase();
+            let inactiveRanges = inactiveRangesByUri.get(uriLower);
+            if (!inactiveRanges) {
+                const file = this.program?.getFile(uri);
+                inactiveRanges = [];
+                if (isBrsFile(file)) {
+                    // eslint-disable-next-line @typescript-eslint/dot-notation
+                    for (const statement of file['_cachedLookups'].conditionalCompileStatements) {
+                        for (const branch of [statement.thenBranch, statement.elseBranch]) {
+                            if (isBlock(branch) && branch.isActive === false && branch.sourceInfo) {
+                                inactiveRanges.push(util.getLocation(branch).range);
+                            }
+                        }
+                    }
+                }
+                inactiveRangesByUri.set(uriLower, inactiveRanges);
+            }
+            //a branch runs from the end of its opening directive to the start of its closing directive, so only the lines strictly between them are inactive
+            return inactiveRanges.some(range => range.start.line < start.line && start.line < range.end.line);
+        };
     }
 
     /**
      * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
      */
     public isDiagnosticSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code?.toString() ?? undefined;
-        const diagnosticLegacyCode = typeof diagnostic.legacyCode === 'string' ? diagnostic.legacyCode.toLowerCase() : diagnostic.legacyCode;
-        const file = this.program?.getFile(diagnostic.location?.uri);
+        return this.isSuppressed(diagnostic.code, diagnostic.legacyCode, diagnostic.location);
+    }
 
+    private isSuppressed(code: number | string | undefined, legacyCode: number | string | undefined, location: StoredLocation) {
+        const diagnosticCode = typeof code === 'string' ? code.toLowerCase() : code?.toString() ?? undefined;
+        const diagnosticLegacyCode = typeof legacyCode === 'string' ? legacyCode.toLowerCase() : legacyCode;
+        const file = this.program?.getFile(this.getUri(location));
+
+        if (diagnosticCode === DiagnosticCodeMap.unknownDiagnosticCode) {
+            return false;
+        }
+
+        //only computed if the file actually has comment flags
+        let start: Position | undefined;
+        let isStartComputed = false;
         for (let flag of file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.location.range && util.rangeContains(flag.affectedRange, diagnostic.location.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                const diagCodeSuppressed = (diagnosticCode !== undefined && flag.codes?.includes(diagnosticCode)) ||
-                    (diagnosticLegacyCode !== undefined && flag.codes?.includes(diagnosticLegacyCode));
-                if (flag.codes === null || diagCodeSuppressed) {
-                    return true;
-                }
+            if (!isStartComputed) {
+                start = this.getStart(location);
+                isStartComputed = true;
+            }
+            if (!start || !util.rangeContains(flag.affectedRange, start)) {
+                continue;
+            }
+            //if this flag explicitly re-enables the code, it's not suppressed here, keep looking
+            const isEnabled = flag.enableCodes === null || this.doesCodeListIncludeCode(flag.enableCodes, diagnosticCode, diagnosticLegacyCode);
+            if (isEnabled) {
+                continue;
+            }
+
+            //if this flag disables the code, it's suppressed
+            const isDisabled = flag.codes === null || this.doesCodeListIncludeCode(flag.codes, diagnosticCode, diagnosticLegacyCode);
+            if (isDisabled) {
+                return true;
             }
         }
         return false;
+    }
+
+    private doesCodeListIncludeCode(codes: (string | number)[] | null, code: string | number | undefined, legacyCode: string | number | undefined) {
+        const codeLower = typeof code === 'string' ? code.toLowerCase() : code.toString();
+        const legacyCodeLower = typeof legacyCode === 'string' ? legacyCode.toLowerCase() : legacyCode?.toString();
+        return codes?.some((c) => {
+            const cLower = typeof c === 'string' ? c.toLowerCase() : c.toString();
+            return cLower === codeLower || cLower === legacyCodeLower;
+        });
     }
 
     private filterDiagnostics(diagnostics: BsDiagnostic[]) {
@@ -232,6 +366,7 @@ export class DiagnosticManager {
 
     public clear() {
         this.diagnosticsCache.clear();
+        this.parseDiagnosticKeys.clear();
     }
 
     public clearForFile(fileSrcPath: string) {
@@ -280,7 +415,8 @@ export class DiagnosticManager {
                 this.removeDiagnosticIfNoContexts(cachedData.diagnostic);
             }
         }
-        this.segmentMap.get(segment)?.clear();
+        //delete the entry rather than emptying it: the key is an AST node, and keeping it would keep that file's whole AST alive
+        this.segmentMap.delete(segment);
     }
 
     public clearForTag(tag: string) {
@@ -303,28 +439,6 @@ export class DiagnosticManager {
         this.tagMap.get(tagLower)?.clear();
     }
 
-    /*
-     *  Filters searchData to include only those diagnostics that match the filter provided
-     *
-     * @param shouldMatch true if this is an important filter, false if it is an optional filter
-     * @param {MapIterator<DiagnosticWithContexts>} searchData Data to filter
-     * @param filteredDiagnosticKeysSet Set of keys to filter by
-     * @returns  {MapIterator<DiagnosticWithContexts>} result of intersection
-     */
-    private getSearchIntersection(shouldMatch: boolean, searchData: DiagnosticWithContexts[], filteredDiagnosticKeysSet: Set<string>, ignoreEmptyFilter = false): DiagnosticWithContexts[] {
-        if (!shouldMatch) {
-            return searchData;
-        }
-
-        if (!filteredDiagnosticKeysSet || filteredDiagnosticKeysSet.size === 0) {
-            return [];
-        }
-
-        return searchData.filter((diagnosticWithContext) => {
-            return filteredDiagnosticKeysSet.has(diagnosticWithContext.diagnostic.key);
-        });
-    }
-
     /**
      * Clears all diagnostics that match all aspects of the filter provided
      * Matches equality of tag, scope, file, segment filters. Leave filter option undefined to not filter on option
@@ -338,22 +452,62 @@ export class DiagnosticManager {
             segment: !!filter.segment
         };
 
-        let searchData = Array.from(this.diagnosticsCache.values());
-        searchData = this.getSearchIntersection(needToMatch.tag, searchData, needToMatch.tag ? this.tagMap.get(filter.tag?.toLowerCase()) : null);
-        if (searchData.length === 0) {
-            return;
+        //Intersect the indexed key-sets directly instead of copying the whole diagnosticsCache
+        //into an array and filtering it down - this is called per file/segment/scope during
+        //validation, so that copy made validation quadratic in the number of diagnostics.
+        const keySets: Array<Set<string>> = [];
+        if (needToMatch.tag) {
+            const keySet = this.tagMap.get(filter.tag?.toLowerCase());
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
         }
-        searchData = this.getSearchIntersection(needToMatch.scope, searchData, needToMatch.scope ? this.scopeMap.get(filter.scope?.name?.toLowerCase()) : null, true);
-        if (searchData.length === 0) {
-            return;
+        if (needToMatch.scope) {
+            const keySet = this.scopeMap.get(filter.scope?.name?.toLowerCase());
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
         }
-        searchData = this.getSearchIntersection(needToMatch.fileUri, searchData, needToMatch.fileUri ? this.fileUriMap.get(util.pathToUri(filter.fileUri).toLowerCase()) : null);
-        if (searchData.length === 0) {
-            return;
+        if (needToMatch.fileUri) {
+            const keySet = this.fileUriMap.get(util.pathToUri(filter.fileUri).toLowerCase());
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
         }
-        searchData = this.getSearchIntersection(needToMatch.segment, searchData, needToMatch.segment ? this.segmentMap.get(filter.segment) : null);
+        if (needToMatch.segment) {
+            const keySet = this.segmentMap.get(filter.segment);
+            if (!keySet || keySet.size === 0) {
+                return;
+            }
+            keySets.push(keySet);
+        }
 
-        for (const { diagnostic, contexts } of searchData ?? []) {
+        let candidateKeys: Iterable<string>;
+        if (keySets.length === 0) {
+            //no filter aspect specified - consider every diagnostic
+            candidateKeys = this.diagnosticsCache.keys();
+        } else {
+            //walk the smallest set and check membership in the rest
+            keySets.sort((a, b) => a.size - b.size);
+            const [smallest, ...rest] = keySets;
+            const intersection: string[] = [];
+            for (const key of smallest) {
+                if (rest.every(keySet => keySet.has(key))) {
+                    intersection.push(key);
+                }
+            }
+            candidateKeys = intersection;
+        }
+
+        for (const key of candidateKeys) {
+            const cachedData = this.diagnosticsCache.get(key);
+            if (!cachedData) {
+                continue;
+            }
+            const { diagnostic, contexts } = cachedData;
             const contextsToRemove: DiagnosticContext[] = [];
             let foundMatch = false;
             for (const context of contexts) {
@@ -365,7 +519,7 @@ export class DiagnosticManager {
                     isMatch = context.scope?.name === filter.scope.name;
                 }
                 if (isMatch && needToMatch.fileUri) {
-                    isMatch = diagnostic.location?.uri === filter.fileUri;
+                    isMatch = this.getUri(diagnostic.location) === filter.fileUri;
                 }
                 if (isMatch && needToMatch.segment) {
                     isMatch = context.segment === filter.segment;
@@ -383,7 +537,7 @@ export class DiagnosticManager {
         }
     }
 
-    private deleteContextsFromDiagnostic(diagnostic: BsDiagnosticWithKey, contexts: DiagnosticContext[]) {
+    private deleteContextsFromDiagnostic(diagnostic: StoredDiagnostic, contexts: DiagnosticContext[]) {
         const key = diagnostic.key;
         const cachedData = this.diagnosticsCache.get(key);
         for (const context of contexts) {
@@ -423,30 +577,36 @@ export class DiagnosticManager {
                     }
                 }
                 if (!foundSegmentOtherContext) {
-                    this.segmentMap.get(context.segment)?.delete(key);
+                    const segmentKeys = this.segmentMap.get(context.segment);
+                    segmentKeys?.delete(key);
+                    //the key is an AST node, so drop the entry once it's empty. Otherwise segments from replaced files (and their whole ASTs) are kept forever
+                    if (segmentKeys?.size === 0) {
+                        this.segmentMap.delete(context.segment);
+                    }
                 }
             }
         }
     }
 
-    private removeDiagnosticIfNoContexts(diagnostic: BsDiagnosticWithKey) {
+    private removeDiagnosticIfNoContexts(diagnostic: StoredDiagnostic) {
         const key = diagnostic.key;
         const cachedData = this.diagnosticsCache.get(key);
         if (cachedData.contexts.size === 0) {
             this.diagnosticsCache.delete(key);
-            this.fileUriMap.get(diagnostic.location?.uri?.toLowerCase())?.delete(key);
+            this.parseDiagnosticKeys.delete(key);
+            this.fileUriMap.get(this.getUri(diagnostic.location)?.toLowerCase())?.delete(key);
         }
     }
 
 
-    private getDiagnosticKey(diagnostic: BsDiagnostic) {
-        return `${diagnostic.location?.uri ?? 'No uri'} ${util.rangeToString(diagnostic.location?.range)} - ${diagnostic.code} - ${diagnostic.message}`;
+    private getDiagnosticKey(diagnostic: BsDiagnosticInput, location: StoredLocation) {
+        return `${this.getLocationKey(location)} - ${diagnostic.code} - ${diagnostic.message}`;
     }
 
-    private mergeRelatedInformation(target: DiagnosticRelatedInformation[], source: DiagnosticRelatedInformation[]) {
-        function getRiKey(relatedInfo: DiagnosticRelatedInformation) {
-            return `${relatedInfo.message} - ${relatedInfo.location?.uri} - ${util.rangeToString(relatedInfo.location?.range)}`.toLowerCase();
-        }
+    private mergeRelatedInformation(target: StoredRelatedInformation[], source: StoredRelatedInformation[]) {
+        const getRiKey = (relatedInfo: StoredRelatedInformation) => {
+            return `${relatedInfo.message} - ${this.getLocationKey(relatedInfo.location)}`.toLowerCase();
+        };
 
         const existingKeys = target.map(ri => getRiKey(ri));
 
@@ -458,14 +618,82 @@ export class DiagnosticManager {
         }
     }
 
-    public shouldFilterFile(file: BrsFile): boolean {
+    private isDetachedLocatable(location: StoredLocation | DiagnosticLocationInput): location is DetachedLocatable {
+        //a `Location` always has a `uri` and never a `startPosition`. Tokens and nodes always have a `startPosition` key (even synthetic ones, where it's undefined),
+        //and may also have deprecated `range`/`location` getters, so those can't be used to tell them apart.
+        //never check for `source` here: that's the diagnostic's own `source` string (i.e. 'brs' or 'bslint'), not a locatable field
+        return !!location && ('startPosition' in location || !('uri' in location));
+    }
+
+    /**
+     * Convert an incoming location into the form we keep in the cache. Locatables are copied down to just their position details
+     * so the node/token they came from (and its whole AST) is not retained by the diagnostic
+     */
+    private storeLocation(location: DiagnosticLocationInput | undefined): StoredLocation | undefined {
+        if (!this.isDetachedLocatable(location)) {
+            return location;
+        }
+        const detached: DetachedLocatable = { startPosition: location.startPosition, endPosition: location.endPosition, sourceInfo: location.sourceInfo };
+        //`util.getLocation()` keeps a newline-terminated token on its own line by looking at its text, so keep just enough text for that
+        const newlineLength = location.sourceInfo ? location.endPosition - util.getContentEnd(location) : 0;
+        if (newlineLength > 0) {
+            detached.text = newlineLength === 2 ? '\r\n' : '\n';
+        }
+        return detached;
+    }
+
+    private getUri(location: StoredLocation | undefined): string | undefined {
+        return this.isDetachedLocatable(location) ? location.sourceInfo?.uri : location?.uri;
+    }
+
+    private getStart(location: StoredLocation | undefined): Position | undefined {
+        return this.isDetachedLocatable(location) ? util.getStartPosition(location) : location?.range?.start;
+    }
+
+    private getLocationKey(location: StoredLocation | undefined) {
+        if (this.isDetachedLocatable(location)) {
+            return `${location.sourceInfo?.uri ?? 'No uri'} @${location.startPosition}-${location.endPosition}`;
+        }
+        return `${location?.uri ?? 'No uri'} ${util.rangeToString(location?.range)}`;
+    }
+
+    private resolveLocation(location: StoredLocation | undefined): Location | undefined {
+        return this.isDetachedLocatable(location) ? util.getLocation(location) : location;
+    }
+
+    /**
+     * Are the diagnostics for this file completely filtered?
+     * If so, we can skip any Scope-based validation on this file at all, which can save a lot of time for large files
+     * with many diagnostics that are being ignored
+     */
+    public canSkipScopeValidationForFile(file: BrsFile): boolean {
         if (this.diagnosticFilterer.options !== this.options) {
             this.diagnosticFilterer.options = this.options;
         }
-        this.diagnosticFilterer.isFileFiltered(file);
-        return false;
+        return this.diagnosticFilterer.isFileCompletelyFiltered(file);
     }
 
+    /**
+     * Flag `diagnosticFilters` entries that look like file paths/globs rather than diagnostic codes.
+     * This is a common mistake when migrating a bsconfig.json from the v0-style filters (which were file globs)
+     */
+    public detectPathLikeDiagnosticFilterCodes(config: FinalizedBsConfig, context?: DiagnosticContext) {
+        const knownDestPaths = this.program ? new Set(
+            Object.values(this.program.files).map(file => file.destPath.toLowerCase().replace(/\\/g, '/'))
+        ) : undefined;
+        const pathLikeCodes = this.diagnosticFilterer.getPathLikeDiagnosticFilterCodes(config, knownDestPaths);
+        if (pathLikeCodes.length === 0) {
+            return;
+        }
+        const location = util.createLocationFromRange(
+            util.pathToUri(config.project ?? path.join(config.cwd, 'bsconfig.json')),
+            util.createRange(0, 0, 0, 0)
+        );
+        this.register(pathLikeCodes.map(code => ({
+            ...DiagnosticMessages.diagnosticFilterLooksLikeFilePath(code.toString()),
+            location: location
+        })), context);
+    }
 }
 
 interface DiagnosticContextFilter {

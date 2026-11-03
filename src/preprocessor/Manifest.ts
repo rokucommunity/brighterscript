@@ -1,10 +1,22 @@
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
+import type { Range } from 'vscode-languageserver';
+import { util } from '../util';
 
 /**
  * A map containing the data from a `manifest` file.
  */
 export type Manifest = Map<string, string>;
+
+/**
+ * One key/value pair from a manifest, with the source location of the value.
+ * The range covers the value (right-hand side of `=`), suitable for diagnostic squiggles.
+ */
+export interface ManifestEntry {
+    key: string;
+    value: string;
+    range: Range;
+}
 
 /**
  * Attempts to read a `manifest` file, parsing its contents into a map of string to JavaScript
@@ -33,8 +45,21 @@ export async function getManifest(rootDir: string): Promise<Manifest> {
  *          representing the manifest file's contents
  */
 export function parseManifest(contents: string) {
-    const lines = contents.split(/\r?\n/g);
     const result = new Map<string, string>();
+    for (const entry of parseManifestEntries(contents)) {
+        result.set(entry.key, entry.value);
+    }
+    return result;
+}
+
+/**
+ * Parse a manifest file's contents into an ordered list of entries with line/column ranges.
+ * Use this when you need to attach diagnostics to specific manifest lines; for plain key→value
+ * lookups, prefer {@link parseManifest}.
+ */
+export function parseManifestEntries(contents: string): ManifestEntry[] {
+    const lines = contents.split(/\r?\n/g);
+    const result: ManifestEntry[] = [];
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         // skip empty lines and comments
@@ -42,7 +67,7 @@ export function parseManifest(contents: string) {
             continue;
         }
 
-        let equalIndex = line.indexOf('=');
+        const equalIndex = line.indexOf('=');
         if (equalIndex === -1) {
             throw new Error(
                 `[manifest:${i + 1}] No '=' detected.  Manifest attributes must be of the form 'key=value'.`
@@ -50,7 +75,9 @@ export function parseManifest(contents: string) {
         }
         const key = line.slice(0, equalIndex);
         const value = line.slice(equalIndex + 1);
-        result.set(key, value);
+        //range covers just the value (after `=`) so squiggles point at the meaningful text
+        const range = util.createRange(i, equalIndex + 1, i, line.length);
+        result.push({ key: key, value: value, range: range });
     }
     return result;
 }

@@ -152,6 +152,8 @@ export class Sequencer {
         let perfBefore = performance.now();
         try {
             return await Promise.resolve(
+                //the action queue is heterogeneous by design; `args`/`func` are intentionally `any`
+                //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                 action.func(...action.args)
             );
         } finally {
@@ -167,6 +169,8 @@ export class Sequencer {
         //record the start time for this action
         let perfBefore = performance.now();
         try {
+            //the action queue is heterogeneous by design; `args`/`func` are intentionally `any`
+            //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             return action.func(...action.args);
         } finally {
             let perfAfter = performance.now();

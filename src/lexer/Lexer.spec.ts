@@ -1,13 +1,15 @@
 /* eslint no-template-curly-in-string: 0 */
 import { expect } from '../chai-config.spec';
 
-import { AllowedTriviaTokens, TokenKind } from './TokenKind';
+import { AllowedTriviaTokens, TokenKind, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES, Keywords, ReservedTokenKinds } from './TokenKind';
 import { Lexer } from './Lexer';
 import type { Token } from './Token';
 import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
+import { util, standardizePath as s } from '../util';
+import { expectDiagnostics, rootDir } from '../testHelpers.spec';
 
 describe('lexer', () => {
     it('recognizes the `const` keyword', () => {
@@ -25,6 +27,42 @@ describe('lexer', () => {
             TokenKind.EndNamespace,
             TokenKind.EndNamespace,
             TokenKind.Eof
+        ]);
+    });
+
+    it('recognizes the `...` token', () => {
+        expectKinds('... a...b ...[1] ...{} .5...', [
+            TokenKind.DotDotDot,
+            TokenKind.Identifier,
+            TokenKind.DotDotDot,
+            TokenKind.Identifier,
+            TokenKind.DotDotDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.IntegerLiteral,
+            TokenKind.RightSquareBracket,
+            TokenKind.DotDotDot,
+            TokenKind.LeftCurlyBrace,
+            TokenKind.RightCurlyBrace,
+            TokenKind.FloatLiteral,
+            TokenKind.DotDotDot
+        ]);
+    });
+
+    it('splits more than three dots into `...` followed by `.`', () => {
+        expectKinds('.... .....', [
+            TokenKind.DotDotDot,
+            TokenKind.Dot,
+            TokenKind.DotDotDot,
+            TokenKind.Dot,
+            TokenKind.Dot
+        ]);
+    });
+
+    it('does not produce `...` when dots belong to number literals', () => {
+        expectKinds('1...2', [
+            TokenKind.FloatLiteral,
+            TokenKind.Dot,
+            TokenKind.FloatLiteral
         ]);
     });
 
@@ -169,12 +207,12 @@ describe('lexer', () => {
 
     it('computes range properly both with and without whitespace', () => {
         let withoutWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
-            .map(x => rangeToArray(x.location?.range));
+            .map(x => rangeToArray(util.getLocation(x)?.range));
 
         let withWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
             //filter out the whitespace...we only care that it was computed during the scan
             .filter(x => x.kind !== TokenKind.Whitespace)
-            .map(x => rangeToArray(x.location?.range));
+            .map(x => rangeToArray(util.getLocation(x)?.range));
 
         /*eslint-disable */
         let expectedLocations = [
@@ -278,7 +316,7 @@ describe('lexer', () => {
                 end sub
             `, {
                 includeWhitespace: true
-            }).tokens.map(x => [...rangeToArray(x.location?.range), x.text]);
+            }).tokens.map(x => [...rangeToArray(util.getLocation(x)?.range), x.text]);
 
             expect(tokens).to.eql([
                 [0, 0, 0, 1, '\n'],
@@ -316,7 +354,7 @@ describe('lexer', () => {
                 //ignore the Eof token
                 .filter(x => x.kind !== TokenKind.Eof);
 
-            expect(tokens.map(x => x.location?.range)).to.eql([
+            expect(tokens.map(x => util.getLocation(x)?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 3, 0, 4), // \n
                 Range.create(1, 0, 1, 3), // sub
@@ -461,6 +499,21 @@ describe('lexer', () => {
             ]);
         });
 
+        it('treats a lone carriage return as a newline', () => {
+            let { tokens } = Lexer.scan('`a\rb`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral, // carriage return
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect((tokens[2] as any).charCode).to.equal(13);
+            //`b` starts the next line
+            expect(util.getLocation(tokens[3]).range).to.eql(util.createRange(1, 0, 1, 1));
+        });
+
         it('prevents expressions when escaping the dollar sign', () => {
             let { tokens } = Lexer.scan('`\\${just text}`');
             expect(tokens.map(t => t.kind)).to.deep.equal([
@@ -555,6 +608,251 @@ describe('lexer', () => {
                 TokenKind.Eof
             ]);
             expect(tokens[1].text).to.deep.equal(`hello `);
+        });
+
+        it('handles nested curly braces', () => {
+            let tokens = Lexer.scan('thing = `${{}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles deeply nested curly braces', () => {
+            let tokens = Lexer.scan('thing = `${{a: {b: 1}}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.IntegerLiteral,
+                TokenKind.RightCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles curly braces alongside other expressions', () => {
+            let tokens = Lexer.scan('thing = `${arr[0]} and ${{key: value}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.LeftSquareBracket,
+                TokenKind.IntegerLiteral,
+                TokenKind.RightSquareBracket,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.Identifier,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles deeply nested template strings', () => {
+            let tokens = Lexer.scan('print `one${`two${`three${`four`}`}`}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Print,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //one
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //two
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //three
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //four
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.Eof
+            ]);
+        });
+
+        it('handles nested curly braces inside nested template strings', () => {
+            let tokens = Lexer.scan('print `a${`b${{c: {}}}`}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Print,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //a
+                TokenKind.TemplateStringExpressionBegin,
+
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi, //b
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi, //empty
+                TokenKind.BackTick,
+
+                TokenKind.Eof
+            ]);
+        });
+
+        it('ignores curly braces inside strings within an expression', () => {
+            //the `}` here belongs to the string, so it must not end the expression
+            let tokens = Lexer.scan('thing = `${{ "a}b": "{" }}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.StringLiteral,
+                TokenKind.Colon,
+                TokenKind.StringLiteral,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('ignores curly braces inside a comment within an expression', () => {
+            let tokens = Lexer.scan('thing = `${1 \'}\n}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.IntegerLiteral,
+                //the comment is captured as leading trivia rather than emitted as a token,
+                //but it still shields the `}` inside it from closing the expression
+                TokenKind.Newline,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            //prove the comment really was scanned (and so really did shield the `}`)
+            expect(
+                tokens.flatMap(x => x.leadingTrivia ?? []).filter(x => x.kind === TokenKind.Comment).map(x => x.text)
+            ).to.eql([`'}`]);
+        });
+
+        it('supports an associative array literal spanning multiple lines', () => {
+            let tokens = Lexer.scan('thing = `${{\n    b: 1\n}}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.Newline,
+                TokenKind.Identifier,
+                TokenKind.Colon,
+                TokenKind.IntegerLiteral,
+                TokenKind.Newline,
+                TokenKind.RightCurlyBrace,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports an inline function containing braces in an expression', () => {
+            let tokens = Lexer.scan('thing = `${sub()\nprint {}\nend sub}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Sub,
+                TokenKind.LeftParen,
+                TokenKind.RightParen,
+                TokenKind.Newline,
+                TokenKind.Print,
+                TokenKind.LeftCurlyBrace,
+                TokenKind.RightCurlyBrace,
+                TokenKind.Newline,
+                TokenKind.EndSub,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('supports an empty expression', () => {
+            let tokens = Lexer.scan('thing = `${}`').tokens;
+            expect(tokens.map(x => x.kind)).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('flags an unterminated template string expression', () => {
+            const { diagnostics } = Lexer.scan('thing = `${{}`');
+            expect(diagnostics).to.be.lengthOf(1);
         });
 
         it('real example, which is causing issues in the formatter', () => {
@@ -722,7 +1020,7 @@ describe('lexer', () => {
             );
             expect(tokens.map(x => {
                 return {
-                    range: x.location?.range,
+                    range: util.getLocation(x)?.range,
                     kind: x.kind
                 };
             })).to.eql([
@@ -1019,6 +1317,44 @@ describe('lexer', () => {
         });
     });
 
+    describe('isReserved', () => {
+        it('is true only for reserved words, not for other keywords or identifiers', () => {
+            //`if`/`sub` are reserved; `tab`/`as` are keywords but not reserved (see Keywords doc comment)
+            let { tokens } = Lexer.scan('if sub tab as somevar');
+            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+                true, //if
+                true, //sub
+                false, //tab
+                false, //as
+                false, //somevar (Identifier)
+                false //eof
+            ]);
+        });
+
+        it('is true for multi-word reserved keywords regardless of casing', () => {
+            let { tokens } = Lexer.scan('END WHILE end sub');
+            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+                true, //end while
+                true, //end sub
+                false //eof
+            ]);
+        });
+
+        it('agrees with every entry in ReservedTokenKinds', () => {
+            for (const [text, kind] of Object.entries(Keywords)) {
+                //`rem` at the start of a line is a comment, not a Rem token -- irrelevant here.
+                //`constructor` is a shadowed prototype property (see `Keywords.constructor = undefined` below the map), not a real keyword
+                if (text === 'rem' || text === 'constructor') {
+                    continue;
+                }
+                let { tokens } = Lexer.scan(text);
+                //some entries are multi-word (e.g. 'end if'), which lex to a single token plus Eof
+                expect(tokens[0].kind, `token kind for keyword text '${text}'`).to.equal(kind);
+                expect(tokens[0].isReserved, `isReserved for keyword text '${text}'`).to.equal(ReservedTokenKinds.has(kind));
+            }
+        });
+    });
+
     describe('conditional compilation', () => {
         it('reads constant declarations', () => {
             let { tokens } = Lexer.scan('#const foo true');
@@ -1181,7 +1517,7 @@ describe('lexer', () => {
     describe('location tracking', () => {
         it('tracks starting and ending locations including whitespace', () => {
             let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: true });
-            expect(tokens.map(t => t.location?.range)).to.eql([
+            expect(tokens.map(t => util.getLocation(t)?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 3, 0, 4), // <space>
                 Range.create(0, 4, 0, 7), // foo
@@ -1200,7 +1536,7 @@ describe('lexer', () => {
 
         it('tracks starting and ending locations excluding whitespace', () => {
             let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: false });
-            expect(tokens.map(t => t.location?.range)).to.eql([
+            expect(tokens.map(t => util.getLocation(t)?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 4, 0, 7), // foo
                 Range.create(0, 7, 0, 8), // (
@@ -1245,7 +1581,7 @@ describe('lexer', () => {
         ]);
 
         //verify the location of `rem`
-        expect(tokens.map(t => [t.location?.range.start.character, t.location?.range.end.character])).to.eql([
+        expect(tokens.map(t => [util.getLocation(t)?.range.start.character, util.getLocation(t)?.range.end.character])).to.eql([
             [0, 6], // person
             [6, 7], // .
             [7, 10], // rem
@@ -1289,6 +1625,58 @@ describe('lexer', () => {
             TokenKind.Override,
             TokenKind.Eof
         ]);
+    });
+
+    describe('token text canonicalization', () => {
+        it('uses one shared string instance for fixed-text token kinds', () => {
+            const { tokens } = Lexer.scan('a.b.c(1)(2)');
+            const dots = tokens.filter(x => x.kind === TokenKind.Dot);
+            const parens = tokens.filter(x => x.kind === TokenKind.LeftParen);
+            expect(dots).to.be.lengthOf(2);
+            expect(parens).to.be.lengthOf(2);
+            //same text, and literally the same string instance
+            expect(dots[0].text).to.eql('.');
+            expect(dots[0].text === dots[1].text).to.be.true;
+            expect(parens[0].text === parens[1].text).to.be.true;
+        });
+
+        it('still reports the correct text for fixed-text kinds', () => {
+            const { tokens } = Lexer.scan('a ?? b ?. c @. d');
+            expect(
+                tokens.filter(x => x.kind !== TokenKind.Eof).map(x => x.text)
+            ).to.eql(['a', '??', 'b', '?.', 'c', '@.', 'd']);
+        });
+
+        it('interns repeated whitespace and newline text', () => {
+            const { tokens } = Lexer.scan('sub a()\n    x = 1\n    y = 2\nend sub', { includeWhitespace: true });
+            const indents = tokens.filter(x => x.kind === TokenKind.Whitespace && x.text === '    ');
+            expect(indents.length).to.be.greaterThan(1);
+            //every occurrence should be the same instance
+            for (const token of indents) {
+                expect(token.text === indents[0].text).to.be.true;
+            }
+        });
+
+        it('stops interning once the cache is full but still lexes correctly', () => {
+            //every line gets a unique indent width, far more than the cache can hold.
+            //`x` alone on the line keeps the only whitespace run the leading indent.
+            let source = '';
+            const widths = [];
+            for (let i = 1; i <= LEXER_TEXT_CACHE_MAX_ENTRIES + 50; i++) {
+                widths.push(i);
+                source += `${' '.repeat(i)}x\n`;
+            }
+            const { tokens } = Lexer.scan(source, { includeWhitespace: true });
+
+            //cache must not grow past the cap
+            expect(LexerTextCache.size).to.be.at.most(LEXER_TEXT_CACHE_MAX_ENTRIES);
+
+            //and the text must still be exactly right, cached or not
+            const indents = tokens
+                .filter(x => x.kind === TokenKind.Whitespace)
+                .map(x => x.text.length);
+            expect(indents).to.eql(widths);
+        });
     });
 
     describe('whitespace', () => {
@@ -1336,7 +1724,7 @@ describe('lexer', () => {
         ]);
     });
 
-    it('properly tracks leadingWhitespace', () => {
+    it('keeps the whitespace before each token in its leading trivia', () => {
         /**
          * Convert a list of tokens into a string, including their leading whitespace
          */
@@ -1344,7 +1732,7 @@ describe('lexer', () => {
             let result = '';
             //skip iterating the final token
             for (let token of tokens) {
-                result += token.leadingWhitespace + token.text;
+                result += util.getLeadingWhitespace(token) + token.text;
             }
             return result;
         }
@@ -1417,6 +1805,74 @@ describe('lexer', () => {
             ]);
         });
 
+        it('recognizes a regex at the start of a template string expression', () => {
+            expect(
+                Lexer.scan('thing = `${/hello/g}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.RegexLiteral,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('does not end a template string expression at a curly brace inside a regex', () => {
+            expect(
+                Lexer.scan('thing = `${/[}]/g}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.RegexLiteral,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('recognizes a regex after a comma', () => {
+            expect(
+                Lexer.scan('thing = [1, /hello/g]').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.LeftSquareBracket,
+                TokenKind.IntegerLiteral,
+                TokenKind.Comma,
+                TokenKind.RegexLiteral,
+                TokenKind.RightSquareBracket,
+                TokenKind.Eof
+            ]);
+        });
+
+        it('still treats a forwardslash after an identifier as division', () => {
+            expect(
+                Lexer.scan('thing = `${a/b}`').tokens.map(x => x.kind)
+            ).to.eql([
+                TokenKind.Identifier,
+                TokenKind.Equal,
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.TemplateStringExpressionBegin,
+                TokenKind.Identifier,
+                TokenKind.Forwardslash,
+                TokenKind.Identifier,
+                TokenKind.TemplateStringExpressionEnd,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+        });
+
         it('only captures alphanumeric flags', () => {
             expect(
                 Lexer.scan('speak(/a/)').tokens.map(x => x.kind)
@@ -1456,7 +1912,7 @@ describe('lexer', () => {
             return tokens
                 //exclude the explicit triva tokens since they'll be included in the leading/trailing arrays
                 .filter(x => !AllowedTriviaTokens.includes(x.kind))
-                .flatMap(x => [...x.leadingTrivia, x])
+                .flatMap(x => [...x.leadingTrivia ?? [], x])
                 .map(x => x.text)
                 .join('');
         }
@@ -1476,13 +1932,37 @@ describe('lexer', () => {
             ).to.eql(input);
         });
 
+        it('tokens only have leadingTrivia array when they have at least one trivia item', () => {
+            const input = `
+                function   test(  )
+                    'comment
+                    print   "alpha"
+                    x = 1 + 2
+                    '  blabla
+                    print x
+                end function`;
+            const tokens = Lexer.scan(input).tokens;
+            let numWithTrivia = 0;
+            for (const token of tokens) {
+                if (token.leadingTrivia) {
+                    expect(token.leadingTrivia.length).to.greaterThan(0);
+                    numWithTrivia++;
+                } else {
+                    expect(token.leadingTrivia).to.be.undefined;
+                }
+
+            }
+            expect(numWithTrivia).to.be.lessThan(tokens.length);
+        });
+
+
         function expectTrivia(text: string, expected: Array<{ text: string; leadingTrivia?: string[]; trailingTrivia?: string[] }>) {
             const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.includes(x.kind));
             expect(
                 tokens.map(x => {
                     return {
                         text: x.text,
-                        leadingTrivia: x.leadingTrivia.map(x => x.text)
+                        leadingTrivia: x.leadingTrivia?.map(x => x.text) ?? []
                     };
                 })
             ).to.eql(
@@ -1505,6 +1985,71 @@ describe('lexer', () => {
                     //EOF
                     { leadingTrivia: [` `, `'trueComment`, `\n`, `'eof`], text: `` }
                 ]);
+        });
+    });
+
+    describe('location boundaries', () => {
+        const srcPath = s`${rootDir}/source/main.brs`;
+        const uri = util.pathToUri(srcPath);
+
+        function scan(text: string) {
+            return Lexer.scan(text, { srcPath: srcPath }).diagnostics;
+        }
+
+        it('flags an unterminated string at the end of the file', () => {
+            expectDiagnostics(scan('x = "abc'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(0, 4, 0, 8) }
+            }]);
+        });
+
+        it('flags an unterminated string followed by a LF newline', () => {
+            expectDiagnostics(scan('x = "abc\ny = 1'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(0, 4, 0, 7) }
+            }]);
+        });
+
+        it('flags an unterminated string on a CRLF line', () => {
+            expectDiagnostics(scan('x = 1\r\ny = "abc\r\nz = 3'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(1, 4, 1, 7) }
+            }]);
+        });
+
+        it('flags an unterminated string at the end of a CRLF file', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2\r\nz = "abc'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(2, 4, 2, 8) }
+            }]);
+        });
+
+        it('flags an unexpected character on a CRLF line', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2 ~ 3'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(1, 6, 1, 7) }
+            }]);
+        });
+
+        it('flags an unexpected character in a file mixing LF and CRLF', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2\n\r\nz = 3 ~ 4'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(3, 6, 3, 7) }
+            }]);
+        });
+
+        it('flags an unexpected character after a surrogate-pair emoji on the same line', () => {
+            expectDiagnostics(scan('x = 1\ny = "😀" ~ 1'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(1, 9, 1, 10) }
+            }]);
+        });
+
+        it('flags an unexpected character after a multi-line template string', () => {
+            expectDiagnostics(scan('x = `a\r\n${b}\nc` ~ 1'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(2, 3, 2, 4) }
+            }]);
         });
     });
 });

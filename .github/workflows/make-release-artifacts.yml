@@ -24,7 +24,7 @@ jobs:
     uses: rokucommunity/workflows/.github/workflows/make-release-artifacts.yml@master
     with:
       branch: ${{ github.event.inputs.tag || github.event.pull_request.head.ref }}
-      node-version: "16.20.2"
+      node-version: "18.20.4"
       artifact-paths: "./*.tgz" # "*.vsix"
       force: ${{ github.event.inputs.force == 'true' }}
     secrets: inherit

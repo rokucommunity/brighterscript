@@ -1,7 +1,8 @@
 import type { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from './DiagnosticMessages';
 import type { BscFile } from './files/BscFile';
-import type { BsDiagnostic, CommentFlag, DiagnosticCode } from './interfaces';
+import type { BsDiagnosticInput, CommentFlag, DiagnosticCode } from './interfaces';
+import type { Locatable } from './lexer/Token';
 import { util } from './util';
 
 export class CommentFlagProcessor {
@@ -17,15 +18,8 @@ export class CommentFlagProcessor {
         /**
          * Valid diagnostic codes. Codes NOT in this list will be flagged
          */
-        public diagnosticCodes = [] as DiagnosticCode[],
-        /**
-         * Diagnostic codes to never filter (these codes will always be flagged)
-         */
-        public ignoreDiagnosticCodes = [] as DiagnosticCode[]
+        public diagnosticCodes = [] as DiagnosticCode[]
     ) {
-
-        this.allCodesExceptIgnores = this.diagnosticCodes.filter(x => !this.ignoreDiagnosticCodes.includes(x));
-
     }
 
     /**
@@ -36,87 +30,165 @@ export class CommentFlagProcessor {
     /**
      * List of diagnostics generated during processing
      */
-    public diagnostics = [] as BsDiagnostic[];
+    public diagnostics = [] as BsDiagnosticInput[];
 
     /**
-     * A list of all codes EXCEPT the ones in `ignoreDiagnosticCodes`
+     * Block-level `bs:disable` / `bs:enable` directives, recorded in source order
+     * by `tryAdd` and resolved into `CommentFlag`s by `finalize()`.
      */
-    public allCodesExceptIgnores: DiagnosticCode[];
+    private blockDirectives = [] as BlockDirective[];
 
-    public tryAdd(text: string, range: Range) {
-        const tokenized = this.tokenize(text, range);
+    /**
+     * @param text the text of the comment
+     * @param range the range of the comment
+     * @param locatable the comment token, if available. Used for the location of any diagnostics instead of `range`
+     */
+    public tryAdd(text: string, range: Range, locatable?: Locatable) {
+        const tokenized = this.tokenize(text, range, locatable);
         if (!tokenized) {
             return;
         }
 
-        let affectedRange: Range;
-        if (tokenized.disableType === 'line') {
-            affectedRange = util.createRange(range.start.line, 0, range.start.line, range.start.character);
-        } else {
-            // tokenized.disableType must be 'next-line'
-            affectedRange = util.createRange(range.start.line + 1, 0, range.start.line + 1, Number.MAX_SAFE_INTEGER);
+        //queue block directives with their raw code tokens; finalize() validates and resolves them
+        if (tokenized.directive === 'disable' || tokenized.directive === 'enable') {
+            this.blockDirectives.push({
+                kind: tokenized.directive,
+                rawCodes: tokenized.codes,
+                range: range
+            });
+            return;
         }
 
-        let commentFlag: CommentFlag | null = null;
+        //line-level directives emit a flag inline
+        const affectedRange = tokenized.directive === 'line'
+            ? util.createRange(range.start.line, 0, range.start.line, range.start.character)
+            : util.createRange(range.start.line + 1, 0, range.start.line + 1, Number.MAX_SAFE_INTEGER);
 
-        //statement to disable EVERYTHING
         if (tokenized.codes.length === 0) {
-            commentFlag = {
+            //bare `bs:disable-line` / `bs:disable-next-line` suppresses everything
+            this.commentFlags.push({
                 file: this.file,
-                //null means all codes
                 codes: null,
                 range: range,
                 affectedRange: affectedRange
-            };
-
-            //disable specific diagnostic codes
-        } else {
-            let codes = [] as DiagnosticCode[];
-            for (let codeToken of tokenized.codes) {
-                let codeInt = parseInt(codeToken.code);
-                //is a plugin-contributed or non-numeric code
-                if (isNaN(codeInt)) {
-                    codes.push(codeToken.code?.toString()?.toLowerCase());
-
-                    //validate numeric codes against the list of known bsc codes
-                } else if (this.diagnosticCodes.includes(codeInt)) {
-                    codes.push(codeInt);
-
-                    //add a warning for unknown codes
-                } else {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
-                        location: util.createLocationFromFileRange(this.file, codeToken.range)
-                    });
-                }
-            }
-            if (codes.length > 0) {
-                commentFlag = {
-                    file: this.file,
-                    codes: codes,
-                    range: range,
-                    affectedRange: affectedRange
-                };
-            }
+            });
+            return;
         }
 
-        if (commentFlag) {
-            this.commentFlags.push(commentFlag);
-
-            //add an ignore for everything in this comment except for Unknown_diagnostic_code_1014
+        const codes = this.collectCodes(tokenized.codes);
+        if (codes && codes.length > 0) {
             this.commentFlags.push({
-                affectedRange: commentFlag.range,
-                range: commentFlag.range,
-                codes: this.allCodesExceptIgnores,
-                file: this.file
+                file: this.file,
+                codes: codes,
+                range: range,
+                affectedRange: affectedRange
             });
         }
     }
 
     /**
-     * Small tokenizer for bs:disable comments
+     * Resolve any pending `bs:disable` / `bs:enable` block directives into `CommentFlag`s.
+     * Must be called after the file's comment tokens have been fed through `tryAdd`.
      */
-    private tokenize(text: string, range: Range): DisableToken | null {
+    public finalize() {
+        if (this.blockDirectives.length === 0) {
+            return;
+        }
+
+        //state across the file: which codes are suppressed within the current block
+        let allSuppressed = false;
+        const carveOuts = new Set<DiagnosticCode>();
+
+        for (let i = 0; i < this.blockDirectives.length; i++) {
+            const directive = this.blockDirectives[i];
+            const codes = this.collectCodes(directive.rawCodes);
+
+            //apply this directive to the running state
+            if (codes === null) {
+                //bare `bs:disable` / `bs:enable` resets state
+                allSuppressed = directive.kind === 'disable';
+                carveOuts.clear();
+            } else if (directive.kind === 'disable') {
+                //in disable-all mode, "disable: X" cancels a prior carve-out for X
+                //in enable-all mode, "disable: X" adds X to the suppressed set
+                for (const code of codes) {
+                    if (allSuppressed) {
+                        carveOuts.delete(code);
+                    } else {
+                        carveOuts.add(code);
+                    }
+                }
+            } else {
+                //'enable' with specific codes does the opposite of the disable branch above
+                for (const code of codes) {
+                    if (allSuppressed) {
+                        carveOuts.add(code);
+                    } else {
+                        carveOuts.delete(code);
+                    }
+                }
+            }
+
+            //affectedRange runs from the line after this directive to just before the next block directive (or EOF)
+            const next = this.blockDirectives[i + 1];
+            const startLine = directive.range.start.line + 1;
+            const endLine = next ? next.range.start.line - 1 : Number.MAX_SAFE_INTEGER;
+            if (endLine < startLine) {
+                continue;
+            }
+            const affectedRange = util.createRange(startLine, 0, endLine, Number.MAX_SAFE_INTEGER);
+
+            //emit a flag only when the current state actually suppresses something
+            if (allSuppressed) {
+                this.commentFlags.push({
+                    file: this.file,
+                    codes: null,
+                    enableCodes: carveOuts.size > 0 ? [...carveOuts] : undefined,
+                    range: directive.range,
+                    affectedRange: affectedRange
+                });
+            } else if (carveOuts.size > 0) {
+                this.commentFlags.push({
+                    file: this.file,
+                    codes: [...carveOuts],
+                    range: directive.range,
+                    affectedRange: affectedRange
+                });
+            }
+        }
+    }
+
+    /**
+     * Resolve a list of `{ code, range }` tokens into validated diagnostic codes.
+     * Pushes diagnostics for any unknown numeric codes. Returns `null` when no codes were specified
+     * (i.e. a bare `bs:disable` / `bs:enable`), and an array otherwise.
+     */
+    private collectCodes(rawCodes: RawCode[]): DiagnosticCode[] | null {
+        if (rawCodes.length === 0) {
+            return null;
+        }
+        const codes = [] as DiagnosticCode[];
+        for (const codeToken of rawCodes) {
+            const codeInt = parseInt(codeToken.code);
+            if (isNaN(codeInt)) {
+                //plugin-contributed or non-numeric code
+                codes.push(codeToken.code?.toString()?.toLowerCase());
+            } else if (this.diagnosticCodes.includes(codeInt)) {
+                codes.push(codeInt);
+            } else {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unknownDiagnosticCode(codeInt),
+                    location: codeToken.locatable ?? util.createLocationFromFileRange(this.file, codeToken.range)
+                });
+            }
+        }
+        return codes;
+    }
+
+    /**
+     * Small tokenizer for `bs:` directive comments.
+     */
+    private tokenize(text: string, range: Range, locatable?: Locatable): DisableToken | null {
         let lowerText = text.toLowerCase();
         let offset = 0;
         let commentTokenText: string | null = null;
@@ -130,19 +202,29 @@ export class CommentFlagProcessor {
             }
         }
 
-        let disableType: 'line' | 'next-line';
-        //trim leading/trailing whitespace
-        let len = lowerText.length;
+        //trim leading whitespace
+        const len = lowerText.length;
         lowerText = lowerText.trimLeft();
         offset += len - lowerText.length;
+
+        //match longest-prefix first so `bs:disable-line` doesn't get parsed as `bs:disable`
+        let directive: 'line' | 'next-line' | 'disable' | 'enable';
         if (lowerText.startsWith('bs:disable-line')) {
             lowerText = lowerText.substring('bs:disable-line'.length);
             offset += 'bs:disable-line'.length;
-            disableType = 'line';
+            directive = 'line';
         } else if (lowerText.startsWith('bs:disable-next-line')) {
             lowerText = lowerText.substring('bs:disable-next-line'.length);
             offset += 'bs:disable-next-line'.length;
-            disableType = 'next-line';
+            directive = 'next-line';
+        } else if (lowerText.startsWith('bs:disable')) {
+            lowerText = lowerText.substring('bs:disable'.length);
+            offset += 'bs:disable'.length;
+            directive = 'disable';
+        } else if (lowerText.startsWith('bs:enable')) {
+            lowerText = lowerText.substring('bs:enable'.length);
+            offset += 'bs:enable'.length;
+            directive = 'enable';
         } else {
             return null;
         }
@@ -153,23 +235,32 @@ export class CommentFlagProcessor {
             offset += 1;
         }
 
-        let items = this.tokenizeByWhitespace(lowerText);
-        let codes = [] as Array<{ code: string; range: Range }>;
-        for (let item of items) {
-            codes.push({
+        const items = this.tokenizeByWhitespace(lowerText);
+        const codes = [] as RawCode[];
+        for (const item of items) {
+            const codeOffset = offset + item.startIndex;
+            const code: RawCode = {
                 code: item.text,
                 range: util.createRange(
                     range.start.line,
-                    range.start.character + offset + item.startIndex,
+                    range.start.character + codeOffset,
                     range.start.line,
-                    range.start.character + offset + item.startIndex + item.text.length
+                    range.start.character + codeOffset + item.text.length
                 )
-            });
+            };
+            if (locatable?.sourceInfo) {
+                code.locatable = {
+                    startPosition: locatable.startPosition + codeOffset,
+                    endPosition: locatable.startPosition + codeOffset + item.text.length,
+                    sourceInfo: locatable.sourceInfo
+                };
+            }
+            codes.push(code);
         }
 
         return {
             commentTokenText: commentTokenText,
-            disableType: disableType,
+            directive: directive,
             codes: codes
         };
     }
@@ -216,9 +307,28 @@ interface Token {
 
 interface DisableToken {
     commentTokenText: string | null;
-    disableType: 'line' | 'next-line';
-    codes: {
-        code: string;
-        range: Range;
-    }[];
+    directive: 'line' | 'next-line' | 'disable' | 'enable';
+    codes: RawCode[];
+}
+
+/**
+ * A code from a directive comment
+ */
+interface RawCode {
+    code: string;
+    range: Range;
+    /**
+     * The position of the code, when the comment was given as a locatable
+     */
+    locatable?: Locatable;
+}
+
+interface BlockDirective {
+    kind: 'disable' | 'enable';
+    /**
+     * The raw code tokens parsed from the directive comment. `finalize()` runs `collectCodes` over
+     * these to validate them and emit any unknown-code diagnostics. An empty array means a bare directive.
+     */
+    rawCodes: RawCode[];
+    range: Range;
 }

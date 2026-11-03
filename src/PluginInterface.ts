@@ -148,6 +148,7 @@ export default class PluginInterface<T extends Plugin = Plugin> {
             afterProgramCreate: 'afterProvideProgram',
             beforeProgramValidate: 'beforeValidateProgram',
             onProgramValidate: 'validateProgram',
+            afterProgramValidate: 'afterValidateProgram',
             beforeProgramDispose: 'beforeRemoveProgram',
             afterScopeCreate: 'afterProvideScope',
             beforeScopeDispose: 'beforeRemoveScope',
@@ -165,7 +166,8 @@ export default class PluginInterface<T extends Plugin = Plugin> {
             beforeFileValidate: 'beforeValidateFile',
             onFileValidate: 'validateFile',
             afterFileValidate: 'afterValidateFile',
-            onSerializeProgram: 'serializeProgram'
+            onSerializeProgram: 'serializeProgram',
+            onGetSourceFixAllCodeActions: 'provideSourceFixAllCodeActions'
         };
 
         for (const [oldEvent, newEvent] of Object.entries(upgradeWithWarn)) {

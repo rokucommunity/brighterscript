@@ -9,7 +9,7 @@ import { LogLevel, createLogger } from './logging';
 import * as diagnosticUtils from './diagnosticUtils';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectZeroDiagnostics, expectDiagnosticsIncludes } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
 import type { BscFile } from './files/BscFile';
 import { tempDir, rootDir, outDir } from './testHelpers.spec';
@@ -79,6 +79,7 @@ describe('ProgramBuilder', () => {
     it('can edit files array in afterProvideProgram event', async () => {
         builder = new ProgramBuilder();
         const deferred = new Deferred<Program>();
+        const beforeFilesLength = builder.options.files.length;
         builder.plugins.add({
             name: 'test',
             afterProvideProgram: (event: AfterProvideProgramEvent) => {
@@ -92,7 +93,7 @@ describe('ProgramBuilder', () => {
             await deferred.promise
         ).to.exist;
 
-        expect(builder.options.files.length).to.equal(5);
+        expect(builder.options.files.length).to.equal(beforeFilesLength + 1);
     });
 
     describe('loadFiles', () => {
@@ -284,6 +285,103 @@ describe('ProgramBuilder', () => {
             //validate was not called
             expect(stub.callCount).to.eql(0);
         });
+
+        it('skips validation when validate:false is set in bsconfig.json', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ validate: false }));
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+
+
+                files: ['source/**/*']
+            });
+            //validate was not called
+            expect(stub.callCount).to.eql(0);
+        });
+
+        it('prop-drilled validate:false takes precedence over this.options.validate:true', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            //pass validate:false explicitly - this should override even if the config would otherwise say true
+            await builder.run({
+                rootDir: rootDir,
+
+
+                validate: false,
+                files: ['source/**/*']
+            });
+            //validate was not called because the explicit false took precedence
+            expect(stub.callCount).to.eql(0);
+        });
+
+        it('language-server mode always skips validation on initial run and validates separately', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const validateStub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            //Simulate how the LSP Project.ts activates the builder: always passes validate:false for
+            //the initial run, then calls program.validate() directly in its own validate() method
+            await builder.run({
+                rootDir: rootDir,
+
+
+                validate: false,
+                showDiagnosticsInConsole: false,
+                files: ['source/**/*']
+            });
+            //the initial run should have skipped validation
+            expect(validateStub.callCount).to.eql(0);
+
+            //the lsp can still call program.validate() directly to do a cancellable async validation
+            const programValidateStub = sinon.stub(builder.program, 'validate').callsFake(() => Promise.resolve());
+            builder.program.validate();
+            expect(programValidateStub.callCount).to.eql(1);
+        });
+    });
+
+    describe('compilerOptions', () => {
+        it('warns when a deprecated top-level option is loaded from bsconfig.json', async () => {
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ sourceMap: true }));
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+                files: []
+            });
+
+            expectDiagnosticsIncludes(builder.getDiagnostics(), ['deprecated-bsconfig-option']);
+        });
+
+        it('does not warn when the option is only set via compilerOptions', async () => {
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ compilerOptions: { sourceMap: true } }));
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+                files: []
+            });
+
+            expectZeroDiagnostics(builder.getDiagnostics());
+        });
+
+        it('does not warn when the deprecated option is passed programmatically', async () => {
+            await builder.run({
+                rootDir: rootDir,
+                sourceMap: true,
+                files: []
+            });
+
+            expectZeroDiagnostics(builder.getDiagnostics());
+        });
     });
 
     it('uses a unique logger for each builder', async () => {
@@ -392,6 +490,62 @@ describe('ProgramBuilder', () => {
             builder['printDiagnostics']();
 
             expect(printStub.called).to.be.true;
+        });
+
+        it('calls reporters in bsconfig order', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                rootDir: rootDir,
+                diagnosticReporters: ['github-actions', '{file}: {message}', 'detailed']
+            } as BsConfig);
+            builder.options = util.normalizeAndResolveConfig({
+                cwd: rootDir,
+                project: s`${rootDir}/bsconfig.json`
+            });
+
+            const callOrder: string[] = [];
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            sinon.stub(diagnosticUtils, 'printDiagnosticGithubActions').callsFake(() => {
+                callOrder.push('github-actions');
+            });
+            sinon.stub(diagnosticUtils, 'createCustomDiagnosticReporter').callsFake(() => {
+                return () => {
+                    callOrder.push('custom');
+                };
+            });
+            sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => {
+                callOrder.push('detailed');
+            });
+
+            builder['printDiagnostics']();
+            expect(callOrder).to.eql(['github-actions', 'custom', 'detailed']);
+        });
+
+        it('calls reporters in cli option order', () => {
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                diagnosticReporters: ['detailed', 'github-actions', '{file}: {message}']
+            });
+
+            const callOrder: string[] = [];
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => {
+                callOrder.push('detailed');
+            });
+            sinon.stub(diagnosticUtils, 'printDiagnosticGithubActions').callsFake(() => {
+                callOrder.push('github-actions');
+            });
+            sinon.stub(diagnosticUtils, 'createCustomDiagnosticReporter').callsFake(() => {
+                return () => {
+                    callOrder.push('custom');
+                };
+            });
+
+            builder['printDiagnostics']();
+            expect(callOrder).to.eql(['detailed', 'github-actions', 'custom']);
         });
     });
 

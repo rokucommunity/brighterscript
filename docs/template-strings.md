@@ -36,7 +36,8 @@ line2
 `
 ```
 
-Transpiles to
+transpiles to
+
 ```BrightScript
 text = ("line1" + chr(10) + "line2" + chr(10))
 ```

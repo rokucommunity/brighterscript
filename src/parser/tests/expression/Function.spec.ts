@@ -1,11 +1,11 @@
 import { expect } from '../../../chai-config.spec';
 
-import { Parser } from '../../Parser';
+import { ParseMode, Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { util } from '../../../util';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, testLocatable } from '../../../testHelpers.spec';
 import type { AssignmentStatement } from '../../Statement';
 
 describe('parser', () => {
@@ -344,7 +344,7 @@ describe('parser', () => {
     });
 
     describe('usage', () => {
-        it('allows sub expressions in call arguments', () => {
+        it('allows sub expressions in call arguments in BrighterScript mode', () => {
             const { ast, diagnostics } = Parser.parse([
                 identifier('acceptsCallback'),
                 token(TokenKind.LeftParen, '('),
@@ -362,7 +362,7 @@ describe('parser', () => {
 
                 token(TokenKind.RightParen, ')'),
                 EOF
-            ]);
+            ], { mode: ParseMode.BrighterScript });
 
             expect(diagnostics).to.be.lengthOf(0);
             expect(ast.statements).to.be.length.greaterThan(0);
@@ -405,61 +405,61 @@ describe('parser', () => {
                 text: '_',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 0, 0, 1)
+                ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 2, 0, 3)
+                ...testLocatable(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.Sub,
                 text: 'sub',
                 leadingTrivia: [],
                 isReserved: true,
-                location: util.createLocation(0, 4, 0, 7)
+                ...testLocatable(0, 4, 0, 7)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 11, 0, 12)
+                ...testLocatable(0, 11, 0, 12)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 12, 0, 13)
+                ...testLocatable(0, 12, 0, 13)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 13, 0, 14)
+                ...testLocatable(0, 13, 0, 14)
             },
             {
                 kind: TokenKind.EndSub,
                 text: 'end sub',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 0, 2, 7)
+                ...testLocatable(2, 0, 2, 7)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 7, 2, 8)
+                ...testLocatable(2, 7, 2, 8)
             }
         ]);
 
         expectZeroDiagnostics(parser);
-        expect((parser.ast.statements[0] as AssignmentStatement).value.location.range).to.deep.include(
+        expect(util.getLocation((parser.ast.statements[0] as AssignmentStatement).value).range).to.deep.include(
             Range.create(0, 4, 2, 7)
         );
     });

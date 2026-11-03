@@ -1,12 +1,16 @@
+import { testLocatable } from '../../../testHelpers.spec';
 import { expect } from '../../../chai-config.spec';
 
 import { ParseMode, Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { FunctionStatement } from '../../Statement';
 import { ForEachStatement } from '../../Statement';
 import { VariableExpression } from '../../Expression';
 import util from '../../../util';
+import { DiagnosticMessages } from '../../../DiagnosticMessages';
+import { isFunctionStatement } from '../../../astUtils/reflection';
 
 describe('parser foreach loops', () => {
     it('requires a name and target', () => {
@@ -67,35 +71,35 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.ForEach,
                 text: 'for each',
                 isReserved: true,
-                location: util.createLocation(0, 0, 0, 8),
+                ...testLocatable(0, 0, 0, 8),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 isReserved: false,
-                location: util.createLocation(0, 9, 0, 10),
+                ...testLocatable(0, 9, 0, 10),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'in',
                 isReserved: true,
-                location: util.createLocation(0, 11, 0, 13),
+                ...testLocatable(0, 11, 0, 13),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 isReserved: false,
-                location: util.createLocation(0, 14, 0, 15),
+                ...testLocatable(0, 14, 0, 15),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 isReserved: false,
-                location: util.createLocation(0, 15, 0, 16),
+                ...testLocatable(0, 15, 0, 16),
                 leadingTrivia: []
             },
             // loop body isn't significant for location tracking, so helper functions are safe
@@ -108,7 +112,7 @@ describe('parser foreach loops', () => {
                 kind: TokenKind.EndFor,
                 text: 'end for',
                 isReserved: false,
-                location: util.createLocation(2, 0, 2, 7),
+                ...testLocatable(2, 0, 2, 7),
                 leadingTrivia: []
             },
             EOF
@@ -116,7 +120,7 @@ describe('parser foreach loops', () => {
 
         expect(diagnostics).to.be.lengthOf(0);
         expect(ast.statements).to.be.lengthOf(1);
-        expect(ast.statements[0].location.range).deep.include(
+        expect(util.getLocation(ast.statements[0]).range).deep.include(
             Range.create(0, 0, 2, 7)
         );
     });
@@ -150,5 +154,44 @@ describe('parser foreach loops', () => {
         expect(forEach.typeExpression?.getName()).to.equal('String');
         expect(forEach.target).to.be.instanceof(VariableExpression);
         expect((forEach.target as VariableExpression).tokens.name).to.deep.include(identifier('lipsum'));
+    });
+
+    describe('terminator recovery', () => {
+        it('emits a single targeted diagnostic for `for each ... end while`', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(1);
+            expect(parser.diagnostics[0].code).to.equal(DiagnosticMessages.mismatchedEndingToken().code);
+            expect((parser.diagnostics[0] as any).data).to.eql({ expected: ['end for', 'next'], found: 'end while' });
+        });
+
+        it('stores the bogus `end while` token on the ForEachStatement', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    end while
+                end sub
+            `);
+            const fn = parser.ast.findChild<FunctionStatement>(isFunctionStatement);
+            const forEachStmt = fn.func.body.statements[0] as ForEachStatement;
+            expect(forEachStmt.tokens.endFor.kind).to.equal(TokenKind.EndWhile);
+        });
+
+        it('does not regress on the canonical `for each ... next` form', () => {
+            const parser = Parser.parse(`
+                sub a()
+                    for each x in arr
+                        print x
+                    next
+                end sub
+            `);
+            expect(parser.diagnostics).to.be.lengthOf(0);
+        });
     });
 });

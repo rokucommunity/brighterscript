@@ -19,6 +19,44 @@ describe('SymbolTable', () => {
         parent = new SymbolTable('Parent');
     });
 
+    it('handles siblings/complement tables that were never added, without throwing', () => {
+        const st = new SymbolTable('Child', () => parent);
+        st.addSymbol('foo', null, new StringType(), SymbolTypeFlag.runtime);
+
+        expect(st.hasSymbol('foo', SymbolTypeFlag.runtime)).to.be.true;
+        expect(st.getSymbol('foo', SymbolTypeFlag.runtime)).to.have.lengthOf(1);
+        expect(st.getAllSymbols(SymbolTypeFlag.runtime)).to.have.lengthOf(1);
+        expect(st.mergeNamespaceSymbolTables(new SymbolTable('Other'))).to.eql([]);
+        expect(st['toJSON']().siblings).to.eql([]);
+    });
+
+    it('handles a symbolMap that was never populated, without throwing', () => {
+        const empty = new SymbolTable('Empty', () => parent);
+
+        expect(empty.hasSymbol('foo', SymbolTypeFlag.runtime)).to.be.false;
+        expect(empty.getSymbol('foo', SymbolTypeFlag.runtime)).not.to.be.ok;
+        expect(empty.getOwnSymbols(SymbolTypeFlag.runtime)).to.eql([]);
+        expect(empty.getAllSymbols(SymbolTypeFlag.runtime)).to.eql([]);
+        expect(() => empty.removeSymbol('foo')).not.to.throw();
+        expect(() => empty.clearSymbols()).not.to.throw();
+        expect(empty['toJSON']().symbols).to.eql([]);
+
+        const dest = new SymbolTable('Dest');
+        expect(() => dest.mergeSymbolTable(empty)).not.to.throw();
+        expect(dest.getOwnSymbols(SymbolTypeFlag.runtime)).to.eql([]);
+    });
+
+    it('handles a typeCache that was never populated, without throwing', () => {
+        const st = new SymbolTable('Child');
+        const options = { flags: SymbolTypeFlag.runtime };
+
+        expect(st.getCachedType('foo', options)).not.to.be.ok;
+
+        const stringType = new StringType();
+        st.setCachedType('foo', { type: stringType, flags: SymbolTypeFlag.runtime }, options);
+        expect(st.getCachedType('foo', options)?.type).to.equal(stringType);
+    });
+
     it('is case insensitive', () => {
         const st = new SymbolTable('Child');
         st.addSymbol('foo', null, new StringType(), SymbolTypeFlag.runtime);
@@ -75,6 +113,48 @@ describe('SymbolTable', () => {
         expect(table.hasSymbol('bar', SymbolTypeFlag.typetime)).to.be.true;
     });
 
+    describe('mutationCount', () => {
+        it('increments whenever something that could change a lookup result happens', () => {
+            const table = new SymbolTable('Table');
+            const other = new SymbolTable('Other');
+            other.addSymbol('bar', null, IntegerType.instance, SymbolTypeFlag.runtime);
+            const mutations: Array<[string, () => void]> = [
+                ['addSymbol', () => table.addSymbol('foo', null, StringType.instance, SymbolTypeFlag.runtime)],
+                ['removeSymbol', () => table.removeSymbol('foo')],
+                ['clearSymbols', () => table.clearSymbols()],
+                ['pushParentProvider', () => table.pushParentProvider(() => parent)],
+                ['popParentProvider', () => table.popParentProvider()],
+                ['addSibling', () => table.addSibling(other)],
+                ['removeSibling', () => table.removeSibling(other)],
+                ['addPocketTable', () => table.addPocketTable({ table: new SymbolTable('Pocket'), index: 0 })],
+                ['complementOtherTable', () => table.complementOtherTable(other)],
+                ['mergeSymbolTable', () => table.mergeSymbolTable(other)],
+                ['isOrdered', () => {
+                    table.isOrdered = true;
+                }]
+            ];
+            for (const [name, mutate] of mutations) {
+                const before = SymbolTable.mutationCount;
+                mutate();
+                expect(SymbolTable.mutationCount, name).to.be.greaterThan(before);
+            }
+        });
+
+        it('increments when the disposers returned by mutating methods are called', () => {
+            const table = new SymbolTable('Table');
+            const disposers = [
+                table.pushParentProvider(() => parent),
+                table.addSibling(new SymbolTable('Sibling')),
+                table.addPocketTable({ table: new SymbolTable('Pocket'), index: 0 })
+            ];
+            for (const dispose of disposers) {
+                const before = SymbolTable.mutationCount;
+                dispose();
+                expect(SymbolTable.mutationCount).to.be.greaterThan(before);
+            }
+        });
+    });
+
     describe('mergeSymbolTable', () => {
 
         it('adds each symbol to the table', () => {
@@ -84,6 +164,43 @@ describe('SymbolTable', () => {
             otherTable.addSymbol('bar', null, new IntegerType(), SymbolTypeFlag.runtime);
             otherTable.addSymbol('foo', null, new IntegerType(), SymbolTypeFlag.runtime);
             st.mergeSymbolTable(otherTable);
+        });
+
+        it('shares symbol object references with the source rather than cloning', () => {
+            const source = new SymbolTable('Source');
+            source.addSymbol('foo', null as any, new StringType(), SymbolTypeFlag.runtime);
+            const destination = new SymbolTable('Destination');
+            destination.mergeSymbolTable(source);
+
+            expect(destination.getSymbol('foo', SymbolTypeFlag.runtime)![0]).to.equal(source.getSymbol('foo', SymbolTypeFlag.runtime)![0]);
+        });
+
+        it('keeps destination isolated from later mutations to source', () => {
+            const source = new SymbolTable('Source');
+            source.addSymbol('foo', null as any, new StringType(), SymbolTypeFlag.runtime);
+            const destination = new SymbolTable('Destination');
+            destination.mergeSymbolTable(source);
+
+            //adding to source after the merge must not leak into destination
+            source.addSymbol('foo', null as any, new IntegerType(), SymbolTypeFlag.runtime);
+
+            expect(destination.getSymbol('foo', SymbolTypeFlag.runtime)!.length).to.eq(1);
+            expect(destination.getSymbol('foo', SymbolTypeFlag.runtime)![0].type.toString()).to.eq('string');
+        });
+
+        it('accumulates symbols when merging multiple sources sharing a key', () => {
+            const sourceA = new SymbolTable('SourceA');
+            sourceA.addSymbol('foo', null as any, new StringType(), SymbolTypeFlag.runtime);
+            const sourceB = new SymbolTable('SourceB');
+            sourceB.addSymbol('foo', null as any, new IntegerType(), SymbolTypeFlag.runtime);
+
+            const destination = new SymbolTable('Destination');
+            destination.mergeSymbolTable(sourceA);
+            destination.mergeSymbolTable(sourceB);
+
+            expect(
+                destination.getSymbol('foo', SymbolTypeFlag.runtime)!.map(symbol => symbol.type.toString())
+            ).to.eql(['string', 'integer']);
         });
     });
 

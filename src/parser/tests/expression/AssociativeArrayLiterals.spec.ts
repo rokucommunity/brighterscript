@@ -5,9 +5,9 @@ import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
-import type { AALiteralExpression, AAMemberExpression } from '../../Expression';
-import { isAALiteralExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../../../testHelpers.spec';
+import type { AAIndexedMemberExpression, AALiteralExpression, AAMemberExpression } from '../../Expression';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isAssignmentStatement, isDottedGetExpression, isLiteralExpression } from '../../../astUtils/reflection';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics, testLocatable } from '../../../testHelpers.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { util } from '../../../util';
 
@@ -196,7 +196,7 @@ describe('parser associative array literals', () => {
             }
         `);
         const commas = ((ast.statements[0] as AssignmentStatement).value as AALiteralExpression).elements
-            .map(s => !!s.tokens.comma);
+            .map(s => 'comma' in s.tokens && !!s.tokens.comma);
         expect(commas).to.deep.equal([
             true, // p1
             true, // p2
@@ -248,6 +248,81 @@ describe('parser associative array literals', () => {
         });
     });
 
+    describe('computed keys', () => {
+        it('parses [expr] computed key syntax', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                _ = {
+                    [someEnum.key]: "value"
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(isAALiteralExpression(aaLit)).to.be.true;
+            const member = aaLit.elements[0] as AAIndexedMemberExpression;
+            expect(isAAIndexedMemberExpression(member)).to.be.true;
+            expect(member.key).to.exist;
+            expect(isDottedGetExpression(member.key)).to.be.true;
+            expect(member.tokens.leftBracket).to.exist;
+            expect(member.tokens.rightBracket).to.exist;
+        });
+
+        it('parses [literal] computed key syntax', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                _ = {
+                    ["my-key"]: "value"
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const member = aaLit.elements[0] as AAIndexedMemberExpression;
+            expect(isAAIndexedMemberExpression(member)).to.be.true;
+            expect(member.key).to.exist;
+            expect(isLiteralExpression(member.key)).to.be.true;
+        });
+
+        it('errors on missing ] in computed key', () => {
+            const { diagnostics } = Parser.parse(`
+                _ = {
+                    [someEnum.key: "value"
+                }
+            `);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedToken(TokenKind.RightSquareBracket)
+            ]);
+        });
+
+        it('supports multiple computed keys in one AA', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                _ = {
+                    [myEnum.a]: 1,
+                    [myEnum.b]: 2
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
+            expect(aaLit.elements).to.have.lengthOf(2);
+            expect(isAAIndexedMemberExpression(aaLit.elements[0])).to.be.true;
+            expect(isAAIndexedMemberExpression(aaLit.elements[1])).to.be.true;
+        });
+
+        it('supports mixing computed and non-computed keys', () => {
+            const { ast, diagnostics } = Parser.parse(`
+                _ = {
+                    normalKey: 1,
+                    [myEnum.computed]: 2
+                }
+            `);
+            expectZeroDiagnostics(diagnostics);
+            const aaLit = (ast.statements[0] as AssignmentStatement).value as AALiteralExpression;
+            const first = aaLit.elements[0] as AAMemberExpression;
+            const second = aaLit.elements[1] as AAIndexedMemberExpression;
+            expect(isAAMemberExpression(first)).to.be.true;
+            expect(first.tokens.key).to.exist;
+            expect(isAAIndexedMemberExpression(second)).to.be.true;
+            expect(second.key).to.exist;
+        });
+    });
+
     it('location tracking', () => {
         /**
          *    0   0   0   1
@@ -266,99 +341,99 @@ describe('parser associative array literals', () => {
                 text: 'a',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 0, 0, 1)
+                ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 2, 0, 3)
+                ...testLocatable(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 4, 0, 5)
+                ...testLocatable(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 8, 0, 9)
+                ...testLocatable(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(0, 9, 0, 10)
+                ...testLocatable(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(1, 0, 1, 1)
+                ...testLocatable(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 0, 2, 1)
+                ...testLocatable(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 2, 2, 3)
+                ...testLocatable(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(2, 4, 2, 5)
+                ...testLocatable(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(3, 0, 3, 1)
+                ...testLocatable(3, 0, 3, 1)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(4, 0, 4, 1)
+                ...testLocatable(4, 0, 4, 1)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(5, 0, 5, 1)
+                ...testLocatable(5, 0, 5, 1)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
                 isReserved: false,
-                location: util.createLocation(5, 1, 5, 2)
+                ...testLocatable(5, 1, 5, 2)
             }
         ]);
 
         expectZeroDiagnostics(parser);
-        expect((parser.ast.statements[0] as AssignmentStatement).value.location.range).to.deep.include(
+        expect(util.getLocation((parser.ast.statements[0] as AssignmentStatement).value).range).to.deep.include(
             Range.create(0, 4, 0, 9)
         );
-        expect((parser.ast.statements[1] as AssignmentStatement).value.location.range).to.deep.include(
+        expect(util.getLocation((parser.ast.statements[1] as AssignmentStatement).value).range).to.deep.include(
             Range.create(2, 4, 5, 1)
         );
     });

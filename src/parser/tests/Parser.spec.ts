@@ -11,8 +11,10 @@ export function token(kind: TokenKind, text?: string): Token {
         kind: kind,
         text: text!,
         isReserved: ReservedWords.has((text ?? '').toLowerCase()),
-        location: null,
-        leadingWhitespace: '',
+        startPosition: undefined,
+        endPosition: undefined,
+        sourceInfo: undefined,
+        location: undefined,
         leadingTrivia: []
     };
 }

@@ -47,7 +47,7 @@ export class IntersectionType extends BscType {
         });
         let filteredTypes = reduceTypesForIntersectionType(typeFromMembers.map(t => t).filter(t => t !== undefined));
 
-        if (filteredTypes.length === 0 && this.types.some(isTypeWithPotentialDefaultDynamicMember)) {
+        if (filteredTypes.length === 0 && this.types.some(isTypeWithPotentialDefaultDynamicMember(options))) {
             const typesFromMembersWithDynamicAA = this.types.map((innerType) => {
                 return innerType?.getMemberType(name, options);
             });
@@ -83,7 +83,7 @@ export class IntersectionType extends BscType {
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         const referenceTypeInnerMemberTypes = this.getMemberTypeFromInnerTypes(name, options);
                         if (!referenceTypeInnerMemberTypes) {
-                            if (this.hasMemberTypeWithDefaultDynamicMember && !innerOptions.ignoreDefaultDynamicMembers) {
+                            if (this.hasMemberTypeWithDefaultDynamicMember(options) && !innerOptions.ignoreDefaultDynamicMembers) {
                                 return DynamicType.instance;
                             }
                             return undefined;
@@ -100,7 +100,7 @@ export class IntersectionType extends BscType {
             });
         }
         if (!innerTypesMemberType?.isResolvable()) {
-            const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember && !options.ignoreDefaultDynamicMembers;
+            const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember(options) && !options.ignoreDefaultDynamicMembers;
             if (shouldCreateDynamicAAMember) {
                 return new ReferenceTypeWithDefault(innerTypesMemberType, DynamicType.instance);
             }
@@ -119,7 +119,7 @@ export class IntersectionType extends BscType {
                     getSymbolType: (innerName: string, innerOptions: GetTypeOptions) => {
                         const referenceTypeInnerMemberType = this.getCallFuncFromInnerTypes(name, options);
                         if (!referenceTypeInnerMemberType) {
-                            if (this.hasMemberTypeWithDefaultDynamicMember && !innerOptions.ignoreDefaultDynamicMembers) {
+                            if (this.hasMemberTypeWithDefaultDynamicMember(options) && !innerOptions.ignoreDefaultDynamicMembers) {
                                 return DynamicType.instance;
                             }
                         }
@@ -136,7 +136,7 @@ export class IntersectionType extends BscType {
         }
 
         if (!resultCallFuncType?.isResolvable()) {
-            const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember && !options.ignoreDefaultDynamicMembers;
+            const shouldCreateDynamicAAMember = this.hasMemberTypeWithDefaultDynamicMember(options) && !options.ignoreDefaultDynamicMembers;
             if (shouldCreateDynamicAAMember) {
                 return new ReferenceTypeWithDefault(resultCallFuncType, DynamicType.instance);
             }
@@ -261,14 +261,14 @@ export class IntersectionType extends BscType {
 
 
     private _hasMemberTypeWithDefaultDynamicMember: boolean = undefined;
-    get hasMemberTypeWithDefaultDynamicMember(): boolean {
+    private hasMemberTypeWithDefaultDynamicMember(options: GetTypeOptions): boolean {
         if (this._hasMemberTypeWithDefaultDynamicMember !== undefined) {
             return this._hasMemberTypeWithDefaultDynamicMember;
         }
         this._hasMemberTypeWithDefaultDynamicMember = false;
 
         for (const type of this.types) {
-            if (isTypeWithPotentialDefaultDynamicMember(type)) {
+            if (isTypeWithPotentialDefaultDynamicMember(options)(type)) {
                 this._hasMemberTypeWithDefaultDynamicMember = true;
                 break;
             }

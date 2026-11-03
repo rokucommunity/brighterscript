@@ -1,21 +1,17 @@
-module.exports = async (suite, name, brighterscript, projectPath, options) => {
-    const { ProgramBuilder } = brighterscript;
+const { createBuilder, getConfig } = require('../helpers');
+
+module.exports = async (options) => {
+    const { suite, fullName, suiteOptions } = options;
 
     let builder;
-    suite.add(name, (deferred) => {
-        builder = new ProgramBuilder();
-        builder.run({
-            cwd: projectPath,
-            createPackage: false,
-            copyToStaging: false,
-            //disable diagnostic reporting (they still get collected)
-            diagnosticFilters: ['**/*'],
-            logLevel: 'error'
-        }).finally(() => {
+    suite.add(fullName, (deferred) => {
+        builder = createBuilder(options);
+        //full build, including emit
+        builder.run({ ...getConfig(options), noEmit: false, ...options.additionalConfig }).finally(() => {
             deferred.resolve();
         });
     }, {
-        ...options,
+        ...suiteOptions,
         'defer': true
     });
 };

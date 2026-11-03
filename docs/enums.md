@@ -137,6 +137,10 @@ end enum
 ```
 
 
+## Using enums as computed associative array keys
+
+String enum members can be used as computed keys in associative array literals. See [Computed Property Names](computed-property-names.md) for full details.
+
 ## Enum members must all be the same type
 Due to the BrightScript strict runtime type system, you cannot mix and match different enum member types, because the most common use case for enums is to compare one value to another, which might result in a runtime error when comparing string and float for example.
 ```vb

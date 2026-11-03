@@ -1,4 +1,5 @@
 import { assert, expect } from '../chai-config.spec';
+import * as path from 'path';
 import * as sinonImport from 'sinon';
 import { Position, Range } from 'vscode-languageserver';
 import type { Callable, CommentFlag, VariableDeclaration } from '../interfaces';
@@ -9,10 +10,10 @@ import { IntegerType } from '../types/IntegerType';
 import { StringType } from '../types/StringType';
 import { BrsFile } from './BrsFile';
 import { SourceMapConsumer } from 'source-map';
-import { TokenKind } from '../lexer/TokenKind';
+import { BrighterScriptSourceLiterals, TokenKind } from '../lexer/TokenKind';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util, { standardizePath as s } from '../util';
-import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
+import { expectDiagnostics, expectHasDiagnostics, expectTypeToBe, expectZeroDiagnostics, expectDiagnosticsIncludes, getTestGetTypedef, getTestTranspile, trim, trimMap } from '../testHelpers.spec';
 import { ParseMode, Parser } from '../parser/Parser';
 import { Block, FunctionStatement } from '../parser/Statement';
 import { ImportStatement, PrintStatement } from '../parser/Statement';
@@ -23,11 +24,12 @@ import { tempDir, rootDir } from '../testHelpers.spec';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { ClassType, EnumType, FloatType, InterfaceType } from '../types';
 import type { StandardizedFileEntry } from 'roku-deploy';
-import * as fileUrl from 'file-url';
-import type { AALiteralExpression } from '../parser/Expression';
+import type { AALiteralExpression, SourceLiteralExpression } from '../parser/Expression';
 import { CallExpression, FunctionExpression, LiteralExpression } from '../parser/Expression';
+import { BrsFileValidator, maximumLiteralsPerType } from '../bscPlugin/validation/BrsFileValidator';
+import { BrsTranspileState } from '../parser/BrsTranspileState';
 import { Logger } from '@rokucommunity/logger';
-import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile } from '../astUtils/reflection';
+import { isFunctionExpression, isAALiteralExpression, isBlock, isBrsFile, isSourceLiteralExpression } from '../astUtils/reflection';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 
 let sinon = sinonImport.createSandbox();
@@ -102,6 +104,18 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+
+        it('clears cached lookups', () => {
+            const file = program.setFile('source/main.bs', `sub main(): end sub`);
+            // prime lookup cache
+            void file['_cachedLookups'].functionStatements;
+            const cache = file['_cachedLookups']['cache'];
+            expect(cache.size).to.be.greaterThan(0);
+
+            file.dispose();
+
+            expect(cache.size).to.equal(0);
+        });
     });
 
     describe('allowBrighterScriptInBrightScript', () => {
@@ -125,6 +139,313 @@ describe('BrsFile', () => {
             program.validate();
             expectZeroDiagnostics(program);
         });
+    });
+
+    describe('line continuation', () => {
+        it('does not allow binary operator continuation in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('allows binary operator continuation in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles binary operator continuation in .bs files to a single line', async () => {
+            await testTranspile(`
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `, `
+                sub main()
+                    result = 1 + 2
+                end sub
+            `);
+        });
+
+        it('allows binary operator continuation in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('allows multi-line array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo([
+                        1,
+                        2
+                    ])
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line associative array literals as function call args in .brs files by default', () => {
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo({
+                        name: "bob",
+                        age: 1
+                    })
+                end sub
+                sub foo(arg)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows multi-line function call args in .bs files', () => {
+            program.setFile('source/main.bs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('transpiles multi-line function call args in .bs files to a single line', async () => {
+            await testTranspile(`
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `, `
+                sub main()
+                    foo(1, 2)
+                end sub
+
+                sub foo(a, b)
+                end sub
+            `);
+        });
+
+        it('allows multi-line function call args in .brs files when allowBrighterScriptInBrightScript is enabled', () => {
+            program.options.allowBrighterScriptInBrightScript = true;
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows binary operator continuation in .brs files when minFirmwareVersion is 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.3' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows binary operator continuation in .brs files when minFirmwareVersion is above 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '16.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow binary operator continuation in .brs files when minFirmwareVersion is below 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '11.0.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('allows multi-line function call args in .brs files when minFirmwareVersion is 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.3.0' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not allow multi-line function call args in .brs files when minFirmwareVersion is below 15.3', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '15.2.9' });
+            program.setFile('source/main.brs', `
+                sub main()
+                    foo(
+                        1,
+                        2
+                    )
+                end sub
+                sub foo(a, b)
+                end sub
+            `);
+            program.validate();
+            expectDiagnosticsIncludes(program, [
+                DiagnosticMessages.unexpectedToken('\n'),
+                DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                DiagnosticMessages.expectedStatement()
+            ]);
+        });
+
+        it('always allows binary operator continuation in .bs files regardless of minFirmwareVersion', () => {
+            program = new Program({ rootDir: rootDir, minFirmwareVersion: '10.0.0' });
+            program.setFile('source/main.bs', `
+                sub main()
+                    result = 1 +
+                             2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
+    it('does not show "missing function" diagnostic for `call().dottedGet` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().disabled
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                location: { range: util.createRange(2, 22, 2, 31) },
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Property').message
+            }
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()["indexedGet"]` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test()["disabled"]
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                location: { range: util.createRange(2, 22, 2, 34) },
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Index').message
+            }
+        ]);
+    });
+
+    it('does not show "missing function" diagnostic for `call()@xmlAttr` as a statement', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test()@disabled
+            end sub
+            sub test()
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            {
+                location: { range: util.createRange(2, 22, 2, 31) },
+                message: DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('XML attribute').message
+            }
+        ]);
+    });
+
+    it('does not flag two chained calls together', () => {
+        program.setFile(`source/main.brs`, `
+            sub main()
+                test().test()
+            end sub
+            function test()
+                print "test"
+                return {
+                    test: test
+                }
+            end function
+        `);
+        program.validate();
+        expectDiagnostics(program, []);
     });
 
     it('flags namespaces used as variables', () => {
@@ -566,6 +887,134 @@ describe('BrsFile', () => {
                 expectZeroDiagnostics(program);
             });
         });
+
+        describe('bs:disable / bs:enable block directives', () => {
+            it('a bare bs:disable with no closing bs:enable suppresses every diagnostic in the file', () => {
+                let file = program.setFile<BrsFile>({ src: `${rootDir}/source/main.brs`, dest: 'source/main.brs' }, `
+                    'bs:disable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                const blockFlag = file.commentFlags.find(flag => flag.codes === null && flag.affectedRange.end.line === Number.MAX_SAFE_INTEGER);
+                expect(blockFlag, 'a bs:disable flag should be emitted').to.exist;
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('suppresses only the listed codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 1083
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not suppress unlisted codes', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 9999
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+
+            it('honors a directive that follows other comment-only lines and blank lines', () => {
+                program.setFile('source/main.brs', `
+                    'leading comment
+                    'bs:disable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('a bs:enable closes the bs:disable block, leaving later code un-suppressed', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+
+            it('bs:enable: <code> after a bare bs:disable carves out an exception for that code', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable: 1083
+                    sub Main()
+                        name = "bob
+                    end sub
+                `);
+                //code 1083 is now re-enabled, so the diagnostic surfaces
+                program.validate();
+                expectHasDiagnostics(program);
+            });
+        });
+
+        describe('unknown diagnostic codes', () => {
+            it('reports an unknown-code warning for bs:disable-next-line: <unknown>', () => {
+                program.setFile('source/main.brs', `
+                    sub main()
+                        'bs:disable-next-line: 999999
+                        print "hi"
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('reports an unknown-code warning for bs:disable: <unknown> (block directive)', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable: 999999
+                    sub main()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('reports an unknown-code warning for bs:enable: <unknown>', () => {
+                program.setFile('source/main.brs', `
+                    'bs:disable
+                    'bs:enable: 999999
+                    sub main()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+
+            it('still suppresses the valid code when an unknown code is mixed in', () => {
+                program.setFile('source/main.brs', `
+                    sub Main()
+                        'bs:disable-next-line: 1083 999999
+                        name = "bob
+                    end sub
+                `);
+                program.validate();
+                //the unterminated string (1083) is suppressed; 999999 is still reported as unknown
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.unknownDiagnosticCode(999999)
+                }]);
+            });
+        });
     });
 
     describe('parse', () => {
@@ -756,7 +1205,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } },
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(8, 0, 9, 0) } }
+                ]);
             });
 
             it('supports single-word #elseif and #endif', () => {
@@ -771,7 +1223,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('supports multi-word #else if and #end if', () => {
@@ -786,7 +1240,9 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
+                ]);
             });
 
             it('does not choke on invalid code inside a false conditional compile', () => {
@@ -798,7 +1254,10 @@ describe('BrsFile', () => {
                     end sub
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                //no parse errors, just the hint that fades the branch
+                expectDiagnostics(program, [
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
+                ]);
             });
 
             it('detects syntax error in #if', () => {
@@ -811,7 +1270,9 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.hashConstDoesNotExist()
+                    DiagnosticMessages.hashConstDoesNotExist(),
+                    //an undeclared constant is false, so the branch is inactive
+                    { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(3, 0, 4, 0) } }
                 ]);
             });
 
@@ -854,12 +1315,13 @@ describe('BrsFile', () => {
                 ]);
             });
 
-            it('detects syntax error in #const', () => {
+            it('detects an invalid #const value', () => {
                 program.setFile('source/main.brs', `
                     sub main()
                         #const someConst = 123
                     end sub
                 `);
+                program.validate();
                 expectDiagnostics(program, [
                     DiagnosticMessages.invalidHashConstValue()
                 ]);
@@ -1823,6 +2285,29 @@ describe('BrsFile', () => {
 
         it('namespaced functions default param values in d.bs files are transpiled correctly', async () => {
             await testGetTypedef(`
+               namespace promises
+                    function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                        return true
+                    end function
+                end namespace
+                namespace promises.internal
+                    function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                    end function
+                end namespace
+            `, `
+               namespace promises
+                   function onThen(promise as dynamic, callback = promises.internal.defaultThenCallback as function, context = "__INVALID__" as object) as dynamic
+                   end function
+               end namespace
+               namespace promises.internal
+                   function defaultThenCallback(value = invalid as dynamic, _ = invalid as dynamic) as dynamic
+                   end function
+               end namespace
+            `);
+        });
+
+        it('namespaced functions default param values in d.bs files are transpiled correctly', async () => {
+            await testGetTypedef(`
                 namespace alpha
                     function beta()
                     end function
@@ -2037,7 +2522,7 @@ describe('BrsFile', () => {
             });
 
             it('handles source literals properly', () => {
-                const pathUrl = fileUrl(rootDir);
+                const pathUrl = util.fileUrl(rootDir);
                 let text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}`;
                 doTest(`
                     sub test()
@@ -2865,6 +3350,32 @@ describe('BrsFile', () => {
             `);
         });
 
+        describe('type designators', () => {
+            it('drops an `as` type that conflicts with the parameter type designator', async () => {
+                await testTranspile(`
+                    sub one(a$ as integer, c! as dynamic, d# as object, e& as float, b% = 1 as string)
+                    end sub
+                `, `
+                    sub one(a$, c!, d#, e&, b% = 1)
+                    end sub
+                `, 'trim', 'source/main.bs', false);
+            });
+
+            it('keeps an `as` type that matches the parameter type designator', async () => {
+                await testTranspile(`
+                    sub one(a$ as string, c! as float, d# as double, e& as LongInteger, b% = 1 as integer)
+                    end sub
+                `);
+            });
+
+            it('keeps `as` types on parameters without a type designator', async () => {
+                await testTranspile(`
+                    sub one(a as integer, c as dynamic, d as object, b = "" as string)
+                    end sub
+                `);
+            });
+        });
+
         it('discard return type when removeParameterTypes is true', async () => {
             program.options.removeParameterTypes = true;
             await testTranspile(`
@@ -3124,7 +3635,7 @@ describe('BrsFile', () => {
                         event.file.ast.walk(createVisitor({
                             AstNode: (node) => {
                                 //delete all trivia from the node
-                                for (let i = 0; i < (node.leadingTrivia.length ?? 0); i++) {
+                                for (let i = 0; i < (node.leadingTrivia?.length ?? 0); i++) {
                                     delete node.leadingTrivia[i];
                                 }
                                 for (let i = 0; i < (node.endTrivia.length ?? 0); i++) {
@@ -3155,6 +3666,21 @@ describe('BrsFile', () => {
                     print "main"
                 end sub
             `, undefined, 'source/main.bs');
+        });
+
+        it('does not crash when annotation has undefined leadingTrivia', async () => {
+            //the lexer emits leadingTrivia as `undefined` (rather than `[]`) when a token has no preceding trivia,
+            //so an `@annotation` whose `at` token has no preceding whitespace/comments/newlines produces
+            //`at.leadingTrivia === undefined`. `AnnotationExpression.transpile` forwards that directly to
+            //`state.transpileComments`, which must tolerate a nullish input rather than crashing on `.filter`
+            //of undefined. Feed source that starts at column 0 with no leading newline to ensure no trivia
+            //is attached to the `@` token.
+            program.setFile('source/main.bs', `@annotation\nsub main()\n    print "main"\nend sub`);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //this should not throw
+            const result = await program.getTranspiledFileContents('source/main.bs');
+            expect(result.code).to.include('sub main()');
         });
 
         it('includes annotation comments for class', async () => {
@@ -3356,6 +3882,48 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('replaces existing trailing sourceMappingURL comment instead of appending a second one', () => {
+            program.options.sourceMap = true;
+            //file already has a sourceMappingURL comment at the bottom (e.g. ingested from a previous build)
+            const file = program.setFile<BrsFile>('source/main.bs', undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./some-old-path.brs.map
+            `);
+            file.needsTranspiled = false;
+            const code = file.transpile().code;
+            //should only contain a single sourceMappingURL comment (the new one)
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`'//# sourceMappingURL=./main.brs.map`)).to.be.true;
+        });
+
+        it('does not crash when a non-transpiled file ends with a sourceMappingURL comment plus a trailing newline', () => {
+            //reproduces https://github.com/rokucommunity/brighterscript/issues/1818
+            program.options.sourceMap = true;
+            const file = program.setFile<BrsFile>('source/main.brs', 'sub p()\nend sub\n\'//# sourceMappingURL=./p.brs.map\n');
+            file.needsTranspiled = false;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code).to.eql(undent`
+                sub p()
+                end sub
+                '//# sourceMappingURL=./main.brs.map
+            `);
+        });
+
+        it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile<BrsFile>('source/main.bs', undent`
+                sub main()
+                end sub
+                '//# sourceMappingURL=./some-old-path.brs.map
+            `);
+            file.needsTranspiled = true;
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code.endsWith(`'//# sourceMappingURL=./main.brs.map`)).to.be.true;
+        });
+
         it('includes sourcemap.name property', () => {
             program.options.sourceMap = true;
             const file = program.setFile<BrsFile>('source/main.bs', `
@@ -3363,6 +3931,18 @@ describe('BrsFile', () => {
                 end sub
             `);
             expect(file.transpile().map.toJSON().file).to.eql('main.brs');
+        });
+
+        it('sourcemap sources array contains absolute path by default', () => {
+            program.options.sourceMap = true;
+            const file = program.setFile('source/main.bs', `
+                sub main()
+                end sub
+            `) as any;
+            const map = file.transpile().map.toJSON();
+            expect(map.sources).to.have.lengthOf(1);
+            expect(path.isAbsolute(map.sources[0])).to.be.true;
+            expect(s`${map.sources[0]}`).to.eql(s`${rootDir}/source/main.bs`);
         });
 
         it('handles sourcemap edge case', async () => {
@@ -3445,7 +4025,7 @@ describe('BrsFile', () => {
                 //remove newlines and EOF
                 //set each token to a different file
                 for (const token of file.parser.tokens) {
-                    token.location.uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
+                    util.getLocation(token).uri = util.pathToUri(s`${rootDir}/source/file${i++}.bs`);
                 }
 
                 const result = await program.getTranspiledFileContents(file.srcPath);
@@ -3456,8 +4036,8 @@ describe('BrsFile', () => {
                     let sourcemapResult = tokens.map(token => {
                         let originalPosition = consumer.originalPositionFor({
                             //convert token 0-based line to source-map 1-based line for the lookup
-                            line: token.location?.range.start.line + 1,
-                            column: token.location?.range.start.character
+                            line: util.getLocation(token)?.range.start.line + 1,
+                            column: util.getLocation(token)?.range.start.character
                         });
                         return {
                             kind: token.kind,
@@ -3472,8 +4052,8 @@ describe('BrsFile', () => {
                     expect(sourcemapResult).to.eql(
                         tokens.map(token => ({
                             kind: token.kind,
-                            start: token.location?.range.start,
-                            source: util.uriToPath(token.location.uri)
+                            start: util.getLocation(token)?.range.start,
+                            source: util.uriToPath(util.getLocation(token).uri)
                         }))
                     );
                 });
@@ -3541,6 +4121,312 @@ describe('BrsFile', () => {
             });
 
         });
+
+        /* eslint-disable no-template-curly-in-string */
+        describe('location boundaries', () => {
+            interface OriginalPosition {
+                line: number;
+                column: number;
+                source: string;
+            }
+
+            /**
+             * Transpile the file and look up the original position for each of the given generated positions.
+             * NOTE: all lines (generated and original) are 1-based, all columns are 0-based (source-map convention)
+             */
+            async function getOriginalPositions(pkgPath: string, generatedPositions: Array<[line: number, column: number]>) {
+                const result = await program.getTranspiledFileContents(s`${rootDir}/${pkgPath}`);
+                const positions = await SourceMapConsumer.with(result.map.toString(), null, (consumer) => {
+                    return generatedPositions.map(([line, column]) => {
+                        const position = consumer.originalPositionFor({ line: line, column: column });
+                        return {
+                            line: position.line,
+                            column: position.column,
+                            source: position.source
+                        } as OriginalPosition;
+                    });
+                });
+                return {
+                    code: result.code,
+                    positions: positions
+                };
+            }
+
+            it('maps tokens in a .bs file with CRLF, multi-line template strings, ternaries, emojis, and exitwhile', async () => {
+                program.options.sourceMap = true;
+                program.setFile('source/main.bs', [
+                    'sub main(cond)',
+                    '    msg = `line1',
+                    'line2 ${cond}',
+                    'end`',
+                    '    print msg',
+                    '    result = cond ? "yes" : "no"',
+                    '    print "😀" : print result',
+                    '    while true',
+                    '        exitwhile',
+                    '    end while',
+                    'end sub'
+                ].join('\r\n'));
+                const srcPath = s`${rootDir}/source/main.bs`;
+
+                const { code, positions } = await getOriginalPositions('source/main.bs', [
+                    //sub
+                    [1, 0],
+                    //cond
+                    [1, 9],
+                    //msg
+                    [2, 4],
+                    //"line1"
+                    [2, 11],
+                    //first chr(13) (the \r in the template string)
+                    [2, 21],
+                    //first chr(10) (the \n in the template string)
+                    [2, 31],
+                    //"line2 "
+                    [2, 41],
+                    //cond (inside the template expression)
+                    [2, 67],
+                    //second chr(13)
+                    [2, 75],
+                    //second chr(10)
+                    [2, 85],
+                    //"end"
+                    [2, 95],
+                    //print (after the multi-line template string)
+                    [3, 4],
+                    //msg
+                    [3, 10],
+                    //if (generated from the ternary)
+                    [4, 4],
+                    //cond
+                    [4, 7],
+                    //then (generated from the ternary)
+                    [4, 12],
+                    //result
+                    [5, 8],
+                    //=
+                    [5, 15],
+                    //"yes"
+                    [5, 17],
+                    //else (generated from the ternary)
+                    [6, 4],
+                    //result
+                    [7, 8],
+                    //"no"
+                    [7, 17],
+                    //end if (generated from the ternary)
+                    [8, 4],
+                    //print
+                    [9, 4],
+                    //"😀"
+                    [9, 10],
+                    //print (after the emoji)
+                    [10, 4],
+                    //result (after the emoji)
+                    [10, 10],
+                    //while
+                    [11, 4],
+                    //exit (first half of exitwhile)
+                    [12, 8],
+                    //while (second half of exitwhile)
+                    [12, 12],
+                    //end while
+                    [13, 4],
+                    //end sub
+                    [14, 0]
+                ]);
+
+                expect(code).to.eql([
+                    'sub main(cond)',
+                    '    msg = ("line1" + chr(13) + chr(10) + "line2 " + bslib_toString(cond) + chr(13) + chr(10) + "end")',
+                    '    print msg',
+                    '    if cond then',
+                    '        result = "yes"',
+                    '    else',
+                    '        result = "no"',
+                    '    end if',
+                    '    print "😀"',
+                    '    print result',
+                    '    while true',
+                    '        exitwhile',
+                    '    end while',
+                    'end sub',
+                    `'//# sourceMappingURL=./main.brs.map`
+                ].join('\n'));
+
+                expect(positions).to.eql([
+                    { line: 1, column: 0, source: srcPath },
+                    { line: 1, column: 9, source: srcPath },
+                    { line: 2, column: 4, source: srcPath },
+                    { line: 2, column: 11, source: srcPath },
+                    { line: 2, column: 16, source: srcPath },
+                    { line: 2, column: 17, source: srcPath },
+                    { line: 3, column: 0, source: srcPath },
+                    { line: 3, column: 8, source: srcPath },
+                    { line: 3, column: 13, source: srcPath },
+                    { line: 3, column: 14, source: srcPath },
+                    { line: 4, column: 0, source: srcPath },
+                    { line: 5, column: 4, source: srcPath },
+                    { line: 5, column: 10, source: srcPath },
+                    //if, cond, then
+                    { line: 6, column: 18, source: srcPath },
+                    { line: 6, column: 13, source: srcPath },
+                    { line: 6, column: 18, source: srcPath },
+                    //result = "yes"
+                    { line: 6, column: 4, source: srcPath },
+                    { line: 6, column: 11, source: srcPath },
+                    { line: 6, column: 20, source: srcPath },
+                    //else
+                    { line: 6, column: 18, source: srcPath },
+                    //result = "no"
+                    { line: 6, column: 4, source: srcPath },
+                    { line: 6, column: 28, source: srcPath },
+                    //end if
+                    { line: 6, column: 18, source: srcPath },
+                    //print "😀"
+                    { line: 7, column: 4, source: srcPath },
+                    { line: 7, column: 10, source: srcPath },
+                    //print result
+                    { line: 7, column: 17, source: srcPath },
+                    { line: 7, column: 23, source: srcPath },
+                    //while
+                    { line: 8, column: 4, source: srcPath },
+                    //exitwhile
+                    { line: 9, column: 8, source: srcPath },
+                    { line: 9, column: 12, source: srcPath },
+                    //end while
+                    { line: 10, column: 4, source: srcPath },
+                    //end sub
+                    { line: 11, column: 0, source: srcPath }
+                ]);
+            });
+
+            it('maps tokens in a .brs file mixing LF and CRLF with an emoji', async () => {
+                program.options.sourceMap = true;
+                program.options.allowBrighterScriptInBrightScript = true;
+                program.setFile('source/main.brs',
+                    'sub main()\r\n' +
+                    '    a = 1\n' +
+                    '    print a\r\n' +
+                    '    b = "😀" : print b\n' +
+                    '    while true\r\n' +
+                    '        exitwhile\r\n' +
+                    '    end while\n' +
+                    'end sub'
+                );
+                const srcPath = s`${rootDir}/source/main.brs`;
+
+                const { code, positions } = await getOriginalPositions('source/main.brs', [
+                    //a
+                    [2, 4],
+                    //1
+                    [2, 8],
+                    //a
+                    [3, 10],
+                    //b
+                    [4, 4],
+                    //"😀"
+                    [4, 8],
+                    //print (after the emoji)
+                    [5, 4],
+                    //b (after the emoji)
+                    [5, 10],
+                    //while
+                    [6, 4],
+                    //exit (first half of exitwhile)
+                    [7, 8],
+                    //while (second half of exitwhile)
+                    [7, 12],
+                    //end while
+                    [8, 4],
+                    //end sub (last token in the file, no trailing newline)
+                    [9, 0]
+                ]);
+
+                expect(code).to.eql([
+                    'sub main()',
+                    '    a = 1',
+                    '    print a',
+                    '    b = "😀"',
+                    '    print b',
+                    '    while true',
+                    '        exitwhile',
+                    '    end while',
+                    'end sub',
+                    `'//# sourceMappingURL=./main.brs.map`
+                ].join('\n'));
+
+                expect(positions).to.eql([
+                    { line: 2, column: 4, source: srcPath },
+                    { line: 2, column: 8, source: srcPath },
+                    { line: 3, column: 10, source: srcPath },
+                    { line: 4, column: 4, source: srcPath },
+                    { line: 4, column: 8, source: srcPath },
+                    { line: 4, column: 15, source: srcPath },
+                    { line: 4, column: 21, source: srcPath },
+                    { line: 5, column: 4, source: srcPath },
+                    { line: 6, column: 8, source: srcPath },
+                    { line: 6, column: 12, source: srcPath },
+                    { line: 7, column: 4, source: srcPath },
+                    { line: 8, column: 0, source: srcPath }
+                ]);
+            });
+
+            it('maps lines in an untranspiled .brs file mixing LF and CRLF', async () => {
+                program.options.sourceMap = true;
+                program.setFile('source/main.brs',
+                    'sub main()\r\n' +
+                    '    a = 1\n' +
+                    '    print a\r\n' +
+                    '    b = "😀" : print b\n' +
+                    'end sub'
+                );
+                const srcPath = s`${rootDir}/source/main.brs`;
+
+                const { positions } = await getOriginalPositions('source/main.brs', [
+                    [1, 0],
+                    [2, 0],
+                    [3, 0],
+                    [4, 0],
+                    [5, 0]
+                ]);
+
+                expect(positions).to.eql([
+                    { line: 1, column: 0, source: srcPath },
+                    { line: 2, column: 0, source: srcPath },
+                    { line: 3, column: 0, source: srcPath },
+                    { line: 4, column: 0, source: srcPath },
+                    { line: 5, column: 0, source: srcPath }
+                ]);
+            });
+
+            it('maps tokens to the correct source file when transpiling multiple files', async () => {
+                program.options.sourceMap = true;
+                program.setFile('source/alpha.bs', 'sub alpha()\r\n    print `a\r\nb`: print "alpha"\r\nend sub');
+                program.setFile('source/beta.bs', 'sub beta()\n    print "😀": print "beta"\nend sub');
+
+                const alpha = await getOriginalPositions('source/alpha.bs', [
+                    //print "alpha"
+                    [3, 4],
+                    [3, 10]
+                ]);
+                expect(alpha.positions).to.eql([
+                    { line: 3, column: 4, source: s`${rootDir}/source/alpha.bs` },
+                    { line: 3, column: 10, source: s`${rootDir}/source/alpha.bs` }
+                ]);
+
+                const beta = await getOriginalPositions('source/beta.bs', [
+                    //print "beta"
+                    [3, 4],
+                    [3, 10]
+                ]);
+                expect(beta.positions).to.eql([
+                    { line: 2, column: 16, source: s`${rootDir}/source/beta.bs` },
+                    { line: 2, column: 22, source: s`${rootDir}/source/beta.bs` }
+                ]);
+            });
+        });
+        /* eslint-enable no-template-curly-in-string */
 
         it('handles empty if block', async () => {
             await testTranspile(`
@@ -4292,6 +5178,34 @@ describe('BrsFile', () => {
                 `);
             });
 
+            it('does not inline an enum member when the first part of the expression is shadowed', async () => {
+                await testTranspile(`
+                    sub shadowed()
+                        direction = { up: "north" }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print direction.up
+                    end sub
+
+                    enum Direction
+                        up = "up"
+                    end enum
+                    `, `
+                    sub shadowed()
+                        direction = {
+                            up: "north"
+                        }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print "up"
+                    end sub
+                `);
+            });
+
             it('handles shadowed enum names in namespace', async () => {
                 await testTranspile(`
                     namespace alpha
@@ -4350,6 +5264,58 @@ describe('BrsFile', () => {
                         return output
                     end function
                 `);
+            });
+
+            it('handles this complicated typecast with intersection and inline interfaces', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub someFunc()
+                        typecast m as { top as roSGNode, optional subscreen as SomeInterface, mainGroup as roSGNodeCustomComponent, config as roAssociativeArray } and SomeOtherInterface
+                        print m.top.title
+                    end sub
+                `);
+
+                await testTranspile(file, `
+                    sub someFunc()
+                        'typecast m as { top as roSGNode, optional subscreen as SomeInterface, mainGroup as roSGNodeCustomComponent, config as roAssociativeArray } and SomeOtherInterface
+                        print m.top.title
+                    end sub
+                `, undefined, undefined, false);
+            });
+
+            it('handles typecasts to other complex types', async () => {
+                const file = program.setFile<BrsFile>('source/main.bs', `
+                    sub arrays()
+                        typecast m as SomeInterface[][]
+                        print m
+                    end sub
+
+                    sub unions()
+                        typecast m as (SomeInterface or SomeOtherInterface) and { name as string }
+                        print m
+                    end sub
+
+                    sub functions()
+                        typecast m as function(a as integer, b as SomeInterface) as string
+                        print m
+                    end sub
+                `);
+
+                await testTranspile(file, `
+                    sub arrays()
+                        'typecast m as SomeInterface[][]
+                        print m
+                    end sub
+
+                    sub unions()
+                        'typecast m as (SomeInterface or SomeOtherInterface) and { name as string }
+                        print m
+                    end sub
+
+                    sub functions()
+                        'typecast m as function(a as integer, b as SomeInterface) as string
+                        print m
+                    end sub
+                `, undefined, undefined, false);
             });
         });
     });
@@ -4673,6 +5639,100 @@ describe('BrsFile', () => {
                         sub new()
                         end sub
                     end class
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for function params/returns referencing a same-namespace class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Circle)
+                    end sub
+                    function getCircle() as Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for function params/returns referencing a fully-qualified class', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    sub defineCircle(newCircle as Shapes.Circle)
+                    end sub
+                    function getCircle() as Shapes.Circle
+                    end function
+                end namespace
+            `);
+        });
+
+        it('includes type alias statements', () => {
+            testTypedef(`
+                type fooFunc = function(a as string, b as integer) as boolean
+                function doFunc(f as fooFunc) as boolean
+                end function
+            `, trim`
+                type fooFunc = function (a as string, b as integer) as boolean
+                function doFunc(f as fooFunc) as boolean
+                end function
+            `);
+        });
+
+        it('includes namespaced type alias statements', () => {
+            testTypedef(`
+                namespace Shapes
+                    type fooFunc = function() as integer
+                    function doFunc(f as fooFunc) as integer
+                    end function
+                end namespace
+            `, trim`
+                namespace Shapes
+                    type fooFunc = function () as integer
+                    function doFunc(f as fooFunc) as integer
+                    end function
+                end namespace
+            `);
+        });
+
+        it('uses namespace-qualified type names for classes referenced by a type alias', () => {
+            testTypedef(`
+                namespace Shapes
+                    class Circle
+                    end class
+                    type circleMaker = function() as Circle
+                end namespace
+            `, trim`
+                namespace Shapes
+                    class Circle
+                        sub new()
+                        end sub
+                    end class
+                    type circleMaker = function () as Shapes.Circle
                 end namespace
             `);
         });
@@ -5230,9 +6290,272 @@ describe('BrsFile', () => {
                 end function
 
                 sub setLabelText( label as roSGNodeLabel, text as string)
-                    label.text = text
+                label.text = text
                 end sub
             `);
+            const validateFileEvent = {
+                program: program,
+                file: mainFile
+            };
+            program.plugins.emit('validateFile', validateFileEvent);
+
+            expect(mainFile.requiredSymbols.length).to.eq(0);
+        });
+
+        it('transpiles multi-dimension typed arrays to dynamic', async () => {
+            await testTranspile(`
+                sub main(param1 as float[][][])
+                end sub
+            `, `
+                sub main(param1 as dynamic)
+                end sub
+            `);
+        });
+
+        it('removes typecasts in transpiled code', async () => {
+            await testTranspile(`
+                sub main(myNode, myString)
+                    print (myNode as roSGNode).id
+                    print (myNode as roSGNode).getParent().id
+                    myNode2 = myNode as roSgNode
+                    print (myString as string).len()
+                    print (myString as string).right(3)
+                    myString2 = myString as string
+                end sub
+            `, `
+                sub main(myNode, myString)
+                    print myNode.id
+                    print myNode.getParent().id
+                    myNode2 = myNode
+                    print myString.len()
+                    print myString.right(3)
+                    myString2 = myString
+                end sub
+            `);
+        });
+
+        it('allows and removes multiple typecasts in transpiled code', async () => {
+            await testTranspile(`
+                sub main(myNode)
+                    print ((myNode as roSGNode as roSGNodeLabel).text as string as ifStringOps).len()
+                end sub
+            `, `
+                sub main(myNode)
+                    print myNode.text.len()
+                end sub
+            `);
+        });
+
+        it('allows built in objects as type names', async () => {
+            //v1 transpiles unknown / built-in roku types to `dynamic` instead of `object`
+            //so the typed-assignment story stays consistent (see "allows types on lhs of
+            //assignments" earlier in this file). Master used `object` here, but v1's design
+            //is `dynamic`.
+            await testTranspile(`
+                sub main(x as roSGNode, y as roSGNodeEvent, z as ifArray)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic, z as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows component names as types names', async () => {
+            await testTranspile(`
+                sub main(x as roSGNodeGroup, y as roSGNodeRowList, z as roSGNodeCustomComponent)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic, z as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for primitives', async () => {
+            await testTranspile(`
+                sub main(x as string or float, y as object or float or string)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for classes, interfaces', async () => {
+            await testTranspile(`
+                interface IFaceA
+                    name as string
+                    data as integer
+                end interface
+
+                interface IFaceB
+                    name as string
+                    value as float
+                end interface
+
+                sub main(x as IFaceA or IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types for classes, interfaces', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA or alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows union types of arrays', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] or alpha.beta.IFaceB[] or ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+
+        it('allows intersection types for primitives', async () => {
+            await testTranspile(`
+                sub main(x as string and float, y as object and float or string)
+                end sub
+            `, `
+                sub main(x as dynamic, y as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', async () => {
+            await testTranspile(`
+                interface IFaceA
+                    name as string
+                    data as integer
+                end interface
+
+                interface IFaceB
+                    name as string
+                    value as float
+                end interface
+
+                sub main(x as IFaceA and IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types for classes, interfaces', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA and alpha.beta.IFaceB)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows intersection types of arrays', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as alpha.beta.IFaceA[][] and alpha.beta.IFaceB[] and ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows grouped expression in types types', async () => {
+            await testTranspile(`
+                namespace alpha.beta
+                    interface IFaceA
+                        name as string
+                        data as integer
+                    end interface
+
+                    interface IFaceB
+                        name as string
+                        value as float
+                    end interface
+                end namespace
+
+                sub main(x as (alpha.beta.IFaceA and alpha.beta.IFaceB)[] or ifStringOps)
+                end sub
+            `, `
+                sub main(x as dynamic)
+                end sub
+            `);
+        });
+
+        it('allows built-in types for return values', async () => {
+            //v1 transpiles unknown / built-in roku types to `dynamic` instead of `object`
+            //(see "allows built in objects as type names" earlier in this file)
+            await testTranspile(`
+                function makeLabel(text as string) as roSGNodeLabel
+                   label = createObject("roSGNode", "Label")
+                   label.text = text
+                end function
+            `, `
+                function makeLabel(text as string) as dynamic
+                    label = createObject("roSGNode", "Label")
+                    label.text = text
+                end function
+            `);
+            const mainFile = program.getFile<BrsFile>('source/main.bs');
             const validateFileEvent = {
                 program: program,
                 file: mainFile
@@ -5969,7 +7292,7 @@ describe('BrsFile', () => {
                         west = "W"
                     end enum
                 `);
-                program.plugins.emit('validateFile', { program: program, file: mainFile });
+                validateFile(mainFile);
                 runtimeSymbols = mainFile.providedSymbols.symbolMap.get(SymbolTypeFlag.runtime);
                 expect(runtimeSymbols.size).to.eq(1);
                 let runtimeChanges = mainFile.providedSymbols.changes.get(SymbolTypeFlag.runtime);
@@ -6266,6 +7589,88 @@ describe('BrsFile', () => {
                 end sub
             `);
         });
+
+        describe('inline interfaces', () => {
+            it('transpiles to "dynamic"', async () => {
+                await testTranspile(`
+                    function foo(input as {name as string}) as {id as string}
+                        output as {id as string} = {id: input.name}
+                        return output
+                    end function
+                    `, `
+                    function foo(input as dynamic) as dynamic
+                        output = {
+                            id: input.name
+                        }
+                        return output
+                    end function
+                `);
+            });
+        });
+
+        describe('type statements interfaces', () => {
+            it('transpiles statement to nothing', async () => {
+                await testTranspile(`
+                     type number = integer or float
+
+                    sub foo()
+                        print "hello"
+                    end sub
+                `, `
+                    sub foo()
+                        print "hello"
+                    end sub
+                `);
+            });
+
+            it('transpiles type statement to dynamic', async () => {
+                //v1 transpiles unknown / composite types to `dynamic` (master used `object`)
+                //(see "allows union types for primitives" earlier in this file)
+                await testTranspile(`
+                     type number = integer or float
+
+                    sub foo(node as number)
+                        print node[m.keyProp]
+                    end sub
+                `, `
+                    sub foo(node as dynamic)
+                        print node[m.keyProp]
+                    end sub
+                `);
+            });
+        });
+
+        describe('for each loop with types', () => {
+            it('transpiles to untyped for each', async () => {
+                await testTranspile(`
+                    sub foo(items as string[])
+                        for each item as string in items
+                            print item
+                        end for
+                    end sub
+                `, `
+                    sub foo(items as dynamic)
+                        for each item in items
+                            print item
+                        end for
+                    end sub
+                `);
+            });
+        });
+
+        describe('typed functions in type expressions', () => {
+            it('transpiles to function', async () => {
+                await testTranspile(`
+                    function test(func as function(name as string, num as integer) as integer) as integer
+                        return func("hello", 123)
+                    end function
+                `, `
+                    function test(func as Function) as integer
+                        return func("hello", 123)
+                    end function
+                `);
+            });
+        });
     });
 
     it('allows up to 63 function params', () => {
@@ -6302,6 +7707,1316 @@ describe('BrsFile', () => {
             ...DiagnosticMessages.tooManyCallableParameters(65, 63),
             location: { range: util.createRange(1, 648, 1, 651) }
         }]);
+    });
+
+    describe('function variable limit', () => {
+        function buildLocals(prefix: string, count: number, indent = '') {
+            const lines = [] as string[];
+            for (let index = 0; index < count; index++) {
+                lines.push(`${indent}${prefix}${index} = ${index}`);
+            }
+            return lines;
+        }
+
+        function buildParameters(count: number) {
+            const names = [] as string[];
+            for (let index = 0; index < count; index++) {
+                names.push(`p${index}`);
+            }
+            return names.join(', ');
+        }
+
+        function buildFunction(options: { parameterCount?: number; localCount: number; extraLines?: string[]; name?: string }) {
+            return [
+                `function ${options.name ?? 'main'}(${buildParameters(options.parameterCount ?? 0)})`,
+                ...buildLocals('v', options.localCount),
+                ...options.extraLines ?? [],
+                'end function'
+            ].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 253 local variables', () => {
+            validateSource(buildFunction({ localCount: 253 }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 254 local variables', () => {
+            validateSource(buildFunction({ localCount: 254 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('counts parameters toward the limit', () => {
+            validateSource(buildFunction({ parameterCount: 63, localCount: 190 }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags parameters plus locals over the limit', () => {
+            validateSource(buildFunction({ parameterCount: 63, localCount: 191 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('counts case-insensitive duplicates and reassignments once', () => {
+            validateSource(buildFunction({
+                localCount: 253,
+                extraLines: ['V0 = 1', 'v0 = 2', 'v1 = v1 + 1', 'v2 += 1']
+            }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count member assignments', () => {
+            validateSource(buildFunction({
+                localCount: 253,
+                extraLines: ['m.foo = 1', 'm["bar"] = 2', 'm.baz.qux = 3']
+            }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts for and for each loop variables', () => {
+            const loopLines = ['for i = 0 to 1', 'end for', 'for each item in []', 'end for'];
+            validateSource(buildFunction({ localCount: 251, extraLines: loopLines }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags when for and for each loop variables push the count over', () => {
+            const loopLines = ['for i = 0 to 1', 'end for', 'for each item in []', 'end for'];
+            validateSource(buildFunction({ localCount: 252, extraLines: loopLines }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('counts catch variables', () => {
+            const tryLines = ['try', 'v0 = 1', 'catch e', 'end try'];
+            validateSource(buildFunction({ localCount: 252, extraLines: tryLines }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags when a catch variable pushes the count over', () => {
+            const tryLines = ['try', 'v0 = 1', 'catch e', 'end try'];
+            validateSource(buildFunction({ localCount: 253, extraLines: tryLines }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+
+        it('gives each anonymous function its own limit', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 252),
+                'f = function()',
+                ...buildLocals('a', 253),
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags an anonymous function over the limit inside the anonymous function', () => {
+            validateSource([
+                'function main()',
+                'f = function()',
+                ...buildLocals('a', 254),
+                'end function',
+                'end function'
+            ].join('\n'));
+            //line 0 is `function main()`, line 1 is `f = function()`, `a253` is the 254th local on line 255
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(255, 0, 255, 4) }
+            }]);
+        });
+
+        it('counts the variable an anonymous function is assigned to in the parent', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 253),
+                'f = function()',
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(254, 0, 254, 1) }
+            }]);
+        });
+
+        it('does not add nested function variables to the parent', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 252),
+                'f = function()',
+                ...buildLocals('a', 254),
+                'end function',
+                'end function'
+            ].join('\n'));
+            //only the nested function is over the limit, and `a253` is on line 507
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(507, 0, 507, 4) }
+            }]);
+        });
+
+        it('allows many functions that are each at the limit', () => {
+            const functions = [] as string[];
+            for (let index = 0; index < 5; index++) {
+                functions.push(buildFunction({ name: `func${index}`, localCount: 253 }));
+            }
+            validateSource(functions.join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('reports the range of the first variable over the limit', () => {
+            validateSource([
+                'function main()',
+                ...buildLocals('v', 253),
+                'overLimitFirst = 1',
+                'overLimitSecond = 2',
+                'end function'
+            ].join('\n'));
+            //`overLimitFirst` is the 254th variable, which sits on line 254
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyFunctionVariables(255, FunctionExpression.MaximumVariables),
+                location: { range: util.createRange(254, 0, 254, 14) }
+            }]);
+        });
+
+        it('counts a new dim variable', () => {
+            validateSource(buildFunction({ localCount: 252, extraLines: ['dim arr[5]'] }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a new dim variable over the limit', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['dim arr[5]'] }));
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('does not count dim of an existing variable', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['dim v1[3]'] }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a new incremented variable over the limit', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['newName++'] }));
+            expectDiagnosticsIncludes(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('does not count incrementing an existing variable', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['v1++'] }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags a new augmented assignment variable over the limit', () => {
+            validateSource(buildFunction({ localCount: 253, extraLines: ['newName += 1'] }));
+            expectDiagnosticsIncludes(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('counts a typecast catch variable', () => {
+            const tryLines = ['try', 'v0 = 1', 'catch e as roException', 'end try'];
+            validateSource(buildFunction({ localCount: 253, extraLines: tryLines }), 'source/main.bs');
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('checks class methods', () => {
+            validateSource([
+                'class Widget',
+                'sub run()',
+                ...buildLocals('v', 254),
+                'end sub',
+                'end class'
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('checks functions inside namespaces', () => {
+            validateSource([
+                'namespace alpha',
+                buildFunction({ localCount: 254 }),
+                'end namespace'
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)]);
+        });
+
+        it('does not count variables assigned only in a false conditional compile branch', () => {
+            validateSource(buildFunction({
+                localCount: 253,
+                extraLines: ['#if false', 'hiddenName = 1', '#end if']
+            }), 'source/main.bs');
+            //no variable limit error, just the hint that fades the branch
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(buildFunction({ localCount: 254 }), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyFunctionVariables(254, FunctionExpression.MaximumVariables)
+            ]);
+        });
+    });
+
+    describe('function goto label limit', () => {
+        function buildLabels(count: number, prefix = 'label') {
+            const lines = [] as string[];
+            for (let index = 0; index < count; index++) {
+                lines.push(`${prefix}${index}:`);
+            }
+            return lines;
+        }
+
+        function buildGotos(count: number, prefix = 'label') {
+            const lines = [] as string[];
+            for (let index = 0; index < count; index++) {
+                lines.push(`if flag then goto ${prefix}${index}`);
+            }
+            return lines;
+        }
+
+        function buildFunction(options: { labelCount: number; targetedCount: number; name?: string; extraLines?: string[] }) {
+            return [
+                `function ${options.name ?? 'main'}(flag)`,
+                ...buildGotos(options.targetedCount),
+                ...buildLabels(options.labelCount),
+                ...options.extraLines ?? [],
+                'end function'
+            ].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 256 targeted labels', () => {
+            validateSource(buildFunction({ labelCount: 256, targetedCount: 256 }));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 257 targeted labels', () => {
+            validateSource(buildFunction({ labelCount: 257, targetedCount: 257 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('does not count labels that are never targeted', () => {
+            validateSource([
+                'function main(flag)',
+                'if flag then goto label0',
+                'if flag then goto label1',
+                ...buildLabels(1000),
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('allows many gotos to the same label', () => {
+            const gotoLines = [] as string[];
+            for (let index = 0; index < 2000; index++) {
+                gotoLines.push('if flag then goto target');
+            }
+            validateSource([
+                'function main(flag)',
+                ...gotoLines,
+                'target:',
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts label name case variants once', () => {
+            validateSource([
+                'function main(flag)',
+                ...buildGotos(255),
+                'if flag then goto Label255',
+                'if flag then goto LABEL255',
+                'if flag then goto label255',
+                ...buildLabels(256),
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts the goto in an if block', () => {
+            validateSource([
+                'function main(flag)',
+                ...buildGotos(256),
+                'if flag then',
+                'goto label256',
+                'end if',
+                ...buildLabels(257),
+                'end function'
+            ].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('counts a label for each loop whose continue is transpiled into a goto', () => {
+            program.options.minFirmwareVersion = '11.0.0';
+            validateSource([
+                'function main(flag)',
+                ...buildGotos(255),
+                'for i = 0 to 1',
+                'continue for',
+                'end for',
+                'for j = 0 to 1',
+                'continue for',
+                'end for',
+                ...buildLabels(255),
+                'end function'
+            ].join('\n'), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('counts one label for a loop with several continues', () => {
+            program.options.minFirmwareVersion = '11.0.0';
+            validateSource([
+                'function main(flag)',
+                ...buildGotos(255),
+                'for i = 0 to 1',
+                'if flag then continue for',
+                'if flag then continue for',
+                'end for',
+                ...buildLabels(255),
+                'end function'
+            ].join('\n'), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count continue when the firmware supports it natively', () => {
+            program.options.minFirmwareVersion = '12.0.0';
+            validateSource([
+                'function main(flag)',
+                ...buildGotos(256),
+                'for i = 0 to 1',
+                'continue for',
+                'end for',
+                ...buildLabels(256),
+                'end function'
+            ].join('\n'), 'source/main.bs');
+            expectZeroDiagnostics(program);
+        });
+
+        it('counts nested anonymous functions separately', () => {
+            validateSource([
+                'function main(flag)',
+                ...buildGotos(256),
+                ...buildLabels(256),
+                'inner = function(flag)',
+                ...buildGotos(256, 'inner'),
+                ...buildLabels(256, 'inner'),
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags only the anonymous function that is over the limit', () => {
+            validateSource([
+                'function main(flag)',
+                'if flag then goto outerLabel',
+                'outerLabel:',
+                'inner = function(flag)',
+                ...buildGotos(257, 'inner'),
+                ...buildLabels(257, 'inner'),
+                'end function',
+                'end function'
+            ].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('does not count gotos in a false conditional compile block', () => {
+            validateSource(buildFunction({
+                labelCount: 257,
+                targetedCount: 256,
+                extraLines: ['#if false', 'if flag then goto label256', '#end if']
+            }), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(buildFunction({ labelCount: 257, targetedCount: 257 }), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+
+        it('reports the label token of the first goto to the 257th distinct label', () => {
+            validateSource([
+                'function main(flag)',
+                ...buildGotos(256),
+                'if flag then goto label5',
+                'if flag then goto label256',
+                'if flag then goto label256',
+                ...buildLabels(257),
+                'end function'
+            ].join('\n'));
+            // line 0 is the function, gotos 0-255 are lines 1-256, label5 is line 257, first label256 is line 258
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyGotoLabels(257, FunctionExpression.MaximumGotoLabels),
+                location: { range: util.createRange(258, 18, 258, 26) }
+            }]);
+        });
+
+        it('reports a total other than 257', () => {
+            validateSource(buildFunction({ labelCount: 300, targetedCount: 300 }));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyGotoLabels(300, FunctionExpression.MaximumGotoLabels)
+            ]);
+        });
+    });
+
+    describe('file literal limit', function() {
+        this.timeout(10000);
+        const limit = maximumLiteralsPerType;
+
+        function buildAssignments(count: number, buildValue: (index: number) => string, startIndex = 0) {
+            const lines = [] as string[];
+            for (let index = startIndex; index < startIndex + count; index++) {
+                lines.push(`v = ${buildValue(index)}`);
+            }
+            return lines;
+        }
+
+        function wrapInFunction(lines: string[], functionName = 'main') {
+            return [`function ${functionName}()`, ...lines, 'end function'].join('\n');
+        }
+
+        function validateSource(source: string, fileName = 'source/main.brs') {
+            program.setFile(fileName, source);
+            program.validate();
+        }
+
+        it('allows 65535 distinct integers', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `${index}`)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags 65536 distinct integers', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('counts repeated values once', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                ...buildAssignments(100, index => `${index}`)
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('treats decimal and hex spellings of the same integer as one value', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = &h1',
+                'v = &hFFFE',
+                'v = 1%'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('keeps the pools for different types separate', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = "text"',
+                'v = 1.5',
+                'v = 1.5#',
+                'v = 1&'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags the string pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `"s${index}"`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        it('allows the string pool at its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `"s${index}"`)));
+            expectZeroDiagnostics(program);
+        });
+
+        it('treats strings that differ only by case as distinct', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit - 1, index => `"s${index}"`),
+                'v = "a"',
+                'v = "A"'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        it('allows the float pool at its limit and flags one more', () => {
+            validateSource(wrapInFunction(buildAssignments(limit, index => `${index}.5`)));
+            expectZeroDiagnostics(program);
+
+            program.setFile('source/main.brs', wrapInFunction(buildAssignments(limit + 1, index => `${index}.5`)));
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'float', limit)
+            ]);
+        });
+
+        it('flags the double pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}.5#`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'double', limit)
+            ]);
+        });
+
+        it('flags the longinteger pool over its limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}&`)));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'longinteger', limit)
+            ]);
+        });
+
+        it('does not count true, false, or invalid', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'v = true',
+                'v = false',
+                'v = invalid'
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('shares the pool between functions in a file', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(32767, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(32768, index => `${index}`, 32767), 'second')
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('flags functions whose distinct values sum past the limit', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(32768, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(32768, index => `${index}`, 32768), 'second')
+            ].join('\n'));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('counts the same values in two functions once', () => {
+            validateSource([
+                wrapInFunction(buildAssignments(limit, index => `${index}`), 'first'),
+                wrapInFunction(buildAssignments(limit, index => `${index}`), 'second')
+            ].join('\n'));
+            expectZeroDiagnostics(program);
+        });
+
+        it('shares the pool with anonymous functions', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                'f = function()',
+                'v = 70000',
+                'end function'
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('keeps separate files independent', () => {
+            program.setFile('source/first.brs', wrapInFunction(buildAssignments(limit, index => `${index}`), 'first'));
+            program.setFile('source/second.brs', wrapInFunction(buildAssignments(limit, index => `${index}`), 'second'));
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        describe('default parameter values', () => {
+            const tooManyIntegers = () => [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)];
+            const tooManyStrings = () => [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)];
+
+            it('counts a new integer default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `${index}`, 1000)),
+                    'function b(p = 70000)',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count an integer default already in the pool', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `${index}`, 1000)),
+                    'function b(p = 1000)',
+                    'end function'
+                ].join('\n'));
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a new string default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit, index => `"s${index}"`)),
+                    'function c(s = "brandNewDefault")',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts the default of an anonymous function', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'f = function(p = 70001)',
+                    'end function'
+                ]));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the literals of an expression default', () => {
+                validateSource([
+                    wrapInFunction(buildAssignments(limit - 1, index => `${index}`, 1000)),
+                    'function d(p = 70002 + 1)',
+                    'end function'
+                ].join('\n'));
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts a nested function default once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'f = function(a = 70000)',
+                    'end function'
+                ]));
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        it('counts equal float values written differently once', () => {
+            validateSource(wrapInFunction([
+                'v = 1.5',
+                'v = 1.50',
+                'v = 15e-1',
+                ...buildAssignments(limit - 1, index => `${index + 2}.5`)
+            ]));
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not count literals in a false conditional compile branch', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `${index}`),
+                '#if false',
+                'v = 70000',
+                '#end if'
+            ]), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.inactiveConditionalCompileBranch()
+            ]);
+        });
+
+        describe('brighterscript source literals', () => {
+            const tooManyIntegers = () => [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)];
+            const tooManyStrings = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'string', limit)];
+
+            it('counts SOURCE_LINE_NUM as a new integer', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count SOURCE_LINE_NUM when its line number is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = SOURCE_LINE_NUM',
+                    ...buildAssignments(limit, index => `${index}`)
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts two SOURCE_LINE_NUM on the same line once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'v = [SOURCE_LINE_NUM, SOURCE_LINE_NUM]'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts SOURCE_LINE_NUM on different lines separately', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`),
+                    'v = SOURCE_LINE_NUM',
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts SOURCE_FILE_PATH as new strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_FILE_PATH'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings(65537));
+            });
+
+            it('counts PKG_PATH as a new string', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = PKG_PATH'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count PKG_PATH when its value is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "pkg:/source/main.brs"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'v = PKG_PATH'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the string part of PKG_LOCATION', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = PKG_LOCATION'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts SOURCE_LOCATION as new strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_LOCATION'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings(65537));
+            });
+
+            it('counts FUNCTION_NAME and SOURCE_FUNCTION_NAME as strings', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = SOURCE_FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count FUNCTION_NAME when the function name is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "main"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'v = FUNCTION_NAME'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count source literals in a false conditional compile branch', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    '#if false',
+                    'v = SOURCE_LINE_NUM',
+                    '#end if'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.inactiveConditionalCompileBranch()
+                ]);
+            });
+
+            it('counts a source literal in an anonymous function once, in the shared pool', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'f = function()',
+                    'v = SOURCE_LINE_NUM',
+                    'end function'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts LINE_NUM as a new integer in a .bs file', () => {
+                validateSource(wrapInFunction([
+                    'v = LINE_NUM',
+                    ...buildAssignments(limit, index => `${index}`, 1000)
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the line number of PKG_LOCATION as an integer', () => {
+                validateSource(wrapInFunction([
+                    'v = PKG_LOCATION',
+                    ...buildAssignments(limit, index => `${index}`, 1000)
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count PKG_LOCATION again when its line number is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = PKG_LOCATION',
+                    ...buildAssignments(limit, index => `${index}`, 2)
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            describe('LINE_NUM in a .brs file', () => {
+                it('counts LINE_NUM as a new integer', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit, index => `${index}`, 1000)
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+
+                it('counts two LINE_NUM on the same line once', () => {
+                    validateSource(wrapInFunction([
+                        'x = [LINE_NUM, LINE_NUM]',
+                        ...buildAssignments(limit - 1, index => `${index}`, 1000)
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('counts LINE_NUM on different lines separately', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit - 1, index => `${index}`, 1000)
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+
+                it('does not count LINE_NUM when its line number is already in the pool', () => {
+                    validateSource(wrapInFunction([
+                        'x = LINE_NUM',
+                        ...buildAssignments(limit, index => `${index}`, 2)
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('stores the line number modulo 65536', () => {
+                    //the last fill value sits on line 65536, so LINE_NUM on line 65537 stores 1, which is already in the pool
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit, index => `${index}`, 1),
+                        'x = LINE_NUM'
+                    ]));
+                    expectZeroDiagnostics(program);
+                });
+
+                it('stores 0 for LINE_NUM on line 65536', () => {
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit - 1, index => `${index}`, 1),
+                        'x = LINE_NUM'
+                    ]));
+                    expectZeroDiagnostics(program);
+
+                    validateSource(wrapInFunction([
+                        ...buildAssignments(limit - 1, index => `${index}`, 1),
+                        'x = LINE_NUM : y = 70000'
+                    ]));
+                    expectDiagnostics(program, tooManyIntegers());
+                });
+            });
+
+            it('does not count source literals in a .brs file, where they are not replaced', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = SOURCE_LINE_NUM'
+                ]), 'source/main.brs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindName('SOURCE_LINE_NUM')
+                ]);
+            });
+
+            it('counts the same literals that transpile emits', () => {
+                const sourceLiteralLines = [
+                    'v = SOURCE_FILE_PATH',
+                    'v = SOURCE_LINE_NUM',
+                    'v = FUNCTION_NAME',
+                    'v = SOURCE_FUNCTION_NAME',
+                    'v = SOURCE_NAMESPACE_NAME',
+                    'v = SOURCE_NAMESPACE_ROOT_NAME',
+                    'v = SOURCE_LOCATION',
+                    'v = PKG_PATH',
+                    'v = PKG_LOCATION',
+                    'v = LINE_NUM'
+                ];
+                const file = program.setFile<BrsFile>('source/main.bs', [
+                    'function main()',
+                    ...sourceLiteralLines,
+                    '    f = function()',
+                    ...sourceLiteralLines,
+                    '        g = function()',
+                    ...sourceLiteralLines,
+                    '        end function',
+                    '    end function',
+                    'end function',
+                    'namespace alpha.beta',
+                    '    function inNamespace()',
+                    ...sourceLiteralLines,
+                    '        f = function()',
+                    ...sourceLiteralLines,
+                    '        end function',
+                    '    end function',
+                    '    class Widget',
+                    '        sub method()',
+                    ...sourceLiteralLines,
+                    '        end sub',
+                    '    end class',
+                    'end namespace'
+                ].join('\n'));
+                program.validate();
+
+                const sourceLiterals = file.ast.findChildren<SourceLiteralExpression>(isSourceLiteralExpression, { walkMode: WalkMode.visitAllRecursive });
+                expect(sourceLiterals).to.have.lengthOf(sourceLiteralLines.length * 6);
+                //make sure every source literal kind is covered, so a new one can't silently skip this check
+                expect(
+                    [...new Set(sourceLiterals.map(x => x.tokens.value.kind))].sort()
+                ).to.eql(
+                    [...BrighterScriptSourceLiterals, TokenKind.LineNumLiteral].sort()
+                );
+
+                const validator = new BrsFileValidator({ program: program, file: file });
+                for (const sourceLiteral of sourceLiterals) {
+                    const transpiled = sourceLiteral.transpile(new BrsTranspileState(file)).map(x => x.toString()).join('');
+                    const parts = validator['getSourceLiteralReplacements'](sourceLiteral, file);
+                    let expected = parts.length > 0
+                        ? parts.map(part => (part.type === 'string' ? `"${part.value}"` : `${part.value}`)).join(' + ')
+                        : sourceLiteral.tokens.value.text;
+                    if (sourceLiteral.tokens.value.kind === TokenKind.PkgLocationLiteral) {
+                        expected += ' + str(LINE_NUM)';
+                    }
+                    expect(expected, `${sourceLiteral.tokens.value.text} on line ${sourceLiteral.location.range.start.line + 1}`).to.eql(transpiled);
+                }
+            });
+        });
+
+        describe('string keys and indexes', () => {
+            function fillStringPool() {
+                return buildAssignments(limit, index => `"s${index}"`);
+            }
+
+            it('counts a quoted associative array key with a new string', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "newQuotedKey": 1 }']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('does not count an unquoted associative array key', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { newKeyName: 1 }']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count a quoted associative array key that reuses an existing string', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "s5": 1 }']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('dedupes a quoted key against a string literal', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = { "s5": "s6" }', 'v = "s7"']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a string used as an index in a get', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'v = m["brandNewKey"]']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('counts a string used as an index in a set', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'm["brandNewKey2"] = true']));
+                expectDiagnostics(program, [
+                    DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+                ]);
+            });
+
+            it('does not count a dotted property name', () => {
+                validateSource(wrapInFunction([...fillStringPool(), 'o = {}', 'o.someNewProp = 1']));
+                expectZeroDiagnostics(program);
+            });
+
+            it('does not count quoted keys in a false conditional compile branch', () => {
+                validateSource(wrapInFunction([
+                    ...fillStringPool(),
+                    '#if false',
+                    'v = { "newQuotedKey": 1 }',
+                    '#end if'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [
+                    DiagnosticMessages.inactiveConditionalCompileBranch()
+                ]);
+            });
+        });
+
+        it('counts template string text parts in a .bs file', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit, index => `"s${index}"`),
+                'v = `template`'
+            ]), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
+
+        /* eslint-disable no-template-curly-in-string */
+        describe('template strings and tagged templates', () => {
+            const tooManyIntegers = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'integer', limit)];
+            const tooManyStrings = (distinctCount = 65536) => [DiagnosticMessages.tooManyLiterals(distinctCount, 'string', limit)];
+            //integers 1000 and up, so the char codes of the escapes below are not already in the pool
+            const fillIntegers = () => buildAssignments(limit, index => `${index}`, 1000);
+            const fillStrings = (count = limit) => buildAssignments(count, index => `"s${index}"`);
+            const validateWithTag = (lines: string[]) => {
+                validateSource(wrapInFunction(lines) + '\nfunction tag(strings, values)\nend function', 'source/main.bs');
+            };
+
+            it('does not count the empty text around an expression in a template string', () => {
+                //`${x}` transpiles to `(bslib_toString(x))`, with no empty strings
+                validateSource(wrapInFunction([
+                    ...fillStrings(),
+                    'x = 1',
+                    'v = `${x}`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the text on both sides of an expression in a template string', () => {
+                validateSource(wrapInFunction([
+                    ...fillStrings(limit - 1),
+                    'x = 1',
+                    'v = `before${x}after`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts a string literal inside a template string expression', () => {
+                validateSource(wrapInFunction([
+                    ...fillStrings(),
+                    'v = `${"inner"}`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts an escape in a template string as its char code integer', () => {
+                //`\n` transpiles to `chr(10)`
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `a\\nb`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('does not count an escape whose char code is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`),
+                    'v = `a\\nb`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts the same escape twice once', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit - 1, index => `${index}`, 1000),
+                    'v = `a\\nb\\nc`'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts a quote in a template string as chr(34)', () => {
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `say "hi"`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts a newline in a multiline template string as chr(10)', () => {
+                validateSource(wrapInFunction([
+                    ...fillIntegers(),
+                    'v = `one',
+                    'two`'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, tooManyIntegers());
+            });
+
+            it('counts the text of a tagged template', () => {
+                validateWithTag([
+                    ...fillStrings(),
+                    'v = tag`tagged text`'
+                ]);
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('counts the empty strings a tagged template keeps', () => {
+                //tag`${x}` transpiles to `tag(["", ""], [x])`
+                validateWithTag([
+                    ...fillStrings(),
+                    'x = 1',
+                    'v = tag`${x}`'
+                ]);
+                expectDiagnostics(program, tooManyStrings());
+            });
+
+            it('does not count the empty strings of a tagged template when "" is already in the pool', () => {
+                validateWithTag([
+                    'v = ""',
+                    ...fillStrings(limit - 1),
+                    'x = 1',
+                    'v = tag`${x}`'
+                ]);
+                expectZeroDiagnostics(program);
+            });
+
+            it('counts an escape in a tagged template as its char code integer', () => {
+                validateWithTag([
+                    ...fillIntegers(),
+                    'v = tag`a\\nb`'
+                ]);
+                expectDiagnostics(program, tooManyIntegers());
+            });
+        });
+
+        /* eslint-enable no-template-curly-in-string */
+
+        describe('regex literals', () => {
+            it('counts roRegex, the pattern, and the flags as strings', () => {
+                //`/abc/i` transpiles to `CreateObject("roRegex", "abc", "i")`
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'v = /abc/i'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65538, 'string', limit)]);
+            });
+
+            it('counts the empty flags string of a regex without flags', () => {
+                validateSource(wrapInFunction([
+                    'v = "roRegex"',
+                    'v = "abc"',
+                    ...buildAssignments(limit - 2, index => `"s${index}"`),
+                    'v = /abc/'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)]);
+            });
+
+            it('counts a quote in a regex pattern as chr(34)', () => {
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `${index}`, 1000),
+                    'v = /a"b/'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)]);
+            });
+        });
+
+        describe('callfunc', () => {
+            it('counts the callfunc method name as a string', () => {
+                //`m.node@.doThing()` transpiles to `m.node.callfunc("doThing")`
+                validateSource(wrapInFunction([
+                    ...buildAssignments(limit, index => `"s${index}"`),
+                    'm.node@.doThing()'
+                ]), 'source/main.bs');
+                expectDiagnostics(program, [DiagnosticMessages.tooManyLiterals(65536, 'string', limit)]);
+            });
+
+            it('does not count the method name when it is already in the pool', () => {
+                validateSource(wrapInFunction([
+                    'v = "doThing"',
+                    ...buildAssignments(limit - 1, index => `"s${index}"`),
+                    'm.node@.doThing()'
+                ]), 'source/main.bs');
+                expectZeroDiagnostics(program);
+            });
+        });
+
+        it('counts the same literals in a .bs file as the device sees in its transpiled output', async () => {
+            //the device compiles the transpiled .brs, so the .bs pools must match the pools of that output
+            const getPools = (targetProgram: Program, file: BrsFile) => {
+                const validator = new BrsFileValidator({ program: targetProgram, file: file });
+                validator.process();
+                const pools = validator['literalPools'];
+                return Object.keys(pools).sort().map(poolName => {
+                    return { poolName: poolName, values: [...pools[poolName].values].sort() };
+                });
+            };
+            const bsFile = program.setFile<BrsFile>('source/main.bs', `
+                function main()
+                    x = 1
+                    v = \`plain text\`
+                    v = \`a\${x}b\`
+                    v = \`\${x}\`
+                    v = \`line1\\nline2\`
+                    v = \`say "hi"\`
+                    v = \`one
+                    two\`
+                    v = tag\`a\${x}b\`
+                    v = tag\`\\n\${x}\`
+                    v = tag\`\`
+                    v = /abc/ix
+                    v = /a"b/
+                    v = /"start and end"/m
+                    m.node@.doThing(1)
+                    m.node@.doOther()
+                    v = x = 1 ? "yes" : "no"
+                    v = x ?? "fallback"
+                    v = m?.a?["key"]
+                end function
+                function tag(strings, values)
+                end function
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            const transpiledProgram = new Program({ rootDir: rootDir });
+            try {
+                const brsFile = transpiledProgram.setFile<BrsFile>('source/main.brs', (await program.getTranspiledFileContents(bsFile.srcPath)).code);
+                transpiledProgram.validate();
+                expect(getPools(program, bsFile)).to.eql(getPools(transpiledProgram, brsFile));
+            } finally {
+                transpiledProgram.dispose();
+            }
+        });
+
+        it('reports the limit for a .bs file', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 1, index => `${index}`)), 'source/main.bs');
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit)
+            ]);
+        });
+
+        it('reports the range of the first literal over the limit', () => {
+            validateSource(wrapInFunction(buildAssignments(limit + 2, index => `${index}`)));
+            //line 0 is the function line, so the 65536th distinct value (index 65535) sits on line 65536
+            expectDiagnostics(program, [{
+                ...DiagnosticMessages.tooManyLiterals(65537, 'integer', limit),
+                location: { range: util.createRange(limit + 1, 4, limit + 1, 4 + `${limit}`.length) }
+            }]);
+        });
+
+        it('reports one diagnostic per type that is over', () => {
+            validateSource(wrapInFunction([
+                ...buildAssignments(limit + 1, index => `${index}`),
+                ...buildAssignments(limit + 1, index => `"s${index}"`)
+            ]));
+            expectDiagnostics(program, [
+                DiagnosticMessages.tooManyLiterals(65536, 'integer', limit),
+                DiagnosticMessages.tooManyLiterals(65536, 'string', limit)
+            ]);
+        });
     });
 
     it('handles deprecated .setPort() on rourltransfer', () => {
@@ -6343,6 +9058,51 @@ describe('BrsFile', () => {
             `);
             expect(file.getClosestExpression({ line: 3, character: 34 })).to.be.instanceOf(LiteralExpression);
         });
+    });
+
+    describe('token lookups', () => {
+        function getFile(newline: string) {
+            return program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    abc = 1',
+                '',
+                '    xyz = 2',
+                'end sub'
+            ].join(newline));
+        }
+
+        for (const [name, newline] of [['LF', '\n'], ['CRLF', '\r\n']]) {
+            describe(name, () => {
+                it('getTokenAt finds the token at, or touching, the position', () => {
+                    const file = getFile(newline);
+                    expect(file.getTokenAt(util.createPosition(1, 4)).text).to.eql('abc');
+                    //the end of a token is inclusive
+                    expect(file.getTokenAt(util.createPosition(1, 7)).text).to.eql('abc');
+                    //the first token on a line, not the previous line's newline
+                    expect(file.getTokenAt(util.createPosition(3, 4)).text).to.eql('xyz');
+                    expect(file.getTokenAt(util.createPosition(4, 0)).kind).to.eql(TokenKind.EndSub);
+                    //an empty line has only its newline
+                    expect(file.getTokenAt(util.createPosition(2, 0)).kind).to.eql(TokenKind.Newline);
+                    //past the end of the file
+                    expect(file.getTokenAt(util.createPosition(99, 0))).to.be.undefined;
+                });
+
+                it('getCurrentOrNextTokenAt finds the next token after the position', () => {
+                    const file = getFile(newline);
+                    expect(file.getCurrentOrNextTokenAt(util.createPosition(1, 0)).text).to.eql('abc');
+                    expect(file.getCurrentOrNextTokenAt(util.createPosition(1, 4)).text).to.eql('=');
+                });
+
+                it('getClosestToken finds the token at the position, or the one before it', () => {
+                    const file = getFile(newline);
+                    expect(file.getClosestToken(util.createPosition(1, 5)).text).to.eql('abc');
+                    //in the leading whitespace of a line, so the previous token is the newline before it
+                    expect(file.getClosestToken(util.createPosition(3, 1)).kind).to.eql(TokenKind.Newline);
+                    //past the end of the file
+                    expect(file.getClosestToken(util.createPosition(99, 0)).kind).to.eql(TokenKind.Eof);
+                });
+            });
+        }
     });
 
 });

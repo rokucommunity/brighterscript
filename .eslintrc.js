@@ -54,8 +54,7 @@ module.exports = {
         '@typescript-eslint/no-parameter-properties': 'off',
         //had to add this rule to prevent eslint from crashing
         '@typescript-eslint/no-restricted-imports': ['off', {}],
-        //mitigating this sometimes results in undesirably verbose code. Should investigate enabling again in the future.
-        '@typescript-eslint/no-unsafe-argument': 'off',
+        '@typescript-eslint/no-unsafe-argument': 'error',
         'object-curly-spacing': 'off',
         '@typescript-eslint/object-curly-spacing': [
             'error',
@@ -199,6 +198,15 @@ module.exports = {
     },
     //disable some rules for certain files
     overrides: [{
+        //the reflection type guards intentionally accept `any`: their entire purpose is to take an
+        //arbitrary value and determine what it is. Narrowing their parameters would defeat that, so
+        //passing those `any` values along to the checks that validate them is expected here.
+        files: ['src/astUtils/reflection.ts'],
+        rules: {
+            '@typescript-eslint/no-unsafe-argument': 'off'
+        }
+    },
+    {
         //these files are getting deleted soon, so ingore the eslint warnings for now
         files: ['src/brsTypes/**/*.ts'],
         rules: {

@@ -10,7 +10,7 @@ import { createSandbox } from 'sinon';
 import { ComponentType } from './types/ComponentType';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import { AssociativeArrayType } from './types/AssociativeArrayType';
-import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, StringType, TypedFunctionType, UnionType } from './types';
+import { ArrayType, BooleanType, DoubleType, DynamicType, FloatType, IntegerType, InterfaceType, StringType, TypedFunctionType, UnionType } from './types';
 const sinon = createSandbox();
 
 describe('XmlScope', () => {
@@ -77,7 +77,7 @@ describe('XmlScope', () => {
             `);
             const definition = program.getDefinition(childXmlFile.srcPath, Position.create(1, 48));
             expect(definition).to.be.lengthOf(1);
-            expect(definition[0].uri).to.equal(util.pathToUri(parentXmlFile.srcPath));
+            expect((definition[0] as any).uri).to.equal(util.pathToUri(parentXmlFile.srcPath));
         });
     });
 
@@ -388,6 +388,45 @@ describe('XmlScope', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+
+            it('allows custom types inside compound types', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.bs"/>
+                        <interface>
+                            <field id="items" type="DefinedType[]" />
+                            <field id="item" type="DefinedType or string" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/Widget.bs', trim`
+                    interface DefinedType
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+                const widgetType = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime }) as ComponentType;
+                const itemsType = widgetType.getMemberType('items', { flags: SymbolTypeFlag.runtime }) as ArrayType;
+                expectTypeToBe(itemsType, ArrayType);
+                expectTypeToBe(itemsType.defaultType, InterfaceType);
+            });
+
+            it('disallows unknown types inside compound types', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <interface>
+                            <field id="items" type="UnknownType[]" />
+                        </interface>
+                    </component>
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlInvalidFieldType('UnknownType[]')
+                ]);
             });
 
             it('allows inline interface types', () => {

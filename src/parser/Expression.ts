@@ -1,24 +1,23 @@
 /* eslint-disable no-bitwise */
-import type { Token, Identifier } from '../lexer/Token';
+import type { Token, Identifier, Locatable, SourceInfo } from '../lexer/Token';
 import type { PrintSeparatorToken } from '../lexer/TokenKind';
 import { TokenKind } from '../lexer/TokenKind';
 import type { Block, NamespaceStatement } from './Statement';
-import type { Location } from 'vscode-languageserver';
 import util from '../util';
 import type { BrsTranspileState } from './BrsTranspileState';
 import { ParseMode } from './Parser';
-import * as fileUrl from 'file-url';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isCallableType, isCallExpression, isCallfuncExpression, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
-import type { GetTypeOptions, TranspileResult, TypedefProvider } from '../interfaces';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
 import type { BscType } from '../types/BscType';
 import type { AstNode } from './AstNode';
 import { AstNodeKind, Expression } from './AstNode';
+import type { BscSymbol } from '../SymbolTable';
 import { SymbolTable } from '../SymbolTable';
 import { SourceNode } from 'source-map';
 import type { TranspileState } from './TranspileState';
@@ -34,8 +33,10 @@ import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import { FunctionType } from '../types/FunctionType';
 import type { BaseFunctionType } from '../types/BaseFunctionType';
 import { brsDocParser } from './BrightScriptDocParser';
+import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
+import type { BrsFile } from '../files/BrsFile';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -51,7 +52,7 @@ export class BinaryExpression extends Expression {
         };
         this.left = options.left;
         this.right = options.right;
-        this.location = util.createBoundingLocation(this.left, this.tokens.operator, this.right);
+        util.setBounds(this, this.left, this.tokens.operator, this.right);
     }
     readonly tokens: {
         readonly operator: Token;
@@ -62,7 +63,9 @@ export class BinaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.BinaryExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState): TranspileResult {
         return [
@@ -141,7 +144,7 @@ export class CallExpression extends Expression {
         };
         this.callee = options.callee;
         this.args = options.args ?? [];
-        this.location = util.createBoundingLocation(this.callee, this.tokens.openingParen, ...this.args ?? [], this.tokens.closingParen);
+        util.setBounds(this, this.callee, this.tokens.openingParen, this.args, this.tokens.closingParen);
     }
 
     readonly callee: Expression;
@@ -156,7 +159,14 @@ export class CallExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /** `a.b()` -> `a.b` (not the args) */
+    public get previousInChain() {
+        return this.callee;
+    }
 
     transpile(state: BrsTranspileState, nameOverride?: string) {
         let result: TranspileResult = [];
@@ -250,6 +260,18 @@ export class CallExpression extends Expression {
 }
 
 export class FunctionExpression extends Expression implements TypedefProvider {
+    /**
+     * The maximum number of distinct variables a single function can hold. Parameters count toward this limit.
+     * Each function, including anonymous functions, has its own limit.
+     */
+    static readonly MaximumVariables = 253;
+
+    /**
+     * The maximum number of distinct labels a single function can target with `goto`. Only labels that are the target of a goto count,
+     * labels that are never jumped to are unlimited. Each function, including anonymous functions, has its own limit.
+     */
+    static readonly MaximumGotoLabels = 256;
+
     constructor(options: {
         functionType?: Token;
         leftParen?: Token;
@@ -276,6 +298,16 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             this.body.parent = this;
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
+        const signature = util.setBounds({} as Locatable,
+            this.tokens.functionType,
+            this.tokens.leftParen,
+            ...this.parameters ?? [],
+            this.tokens.rightParen,
+            this.tokens.as,
+            this.returnTypeExpression
+        );
+        util.setBounds(this, signature, this.tokens.endFunctionType);
+        this.body?.setBoundsBetween(signature, this.tokens.endFunctionType);
     }
 
     public readonly kind = AstNodeKind.FunctionExpression;
@@ -300,21 +332,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return this.tokens.endFunctionType?.leadingTrivia;
     }
 
-    /**
-     * The range of the function, starting at the 'f' in function or 's' in sub (or the open paren if the keyword is missing),
-     * and ending with the last n' in 'end function' or 'b' in 'end sub'
-     */
-    public get location(): Location {
-        return util.createBoundingLocation(
-            this.tokens.functionType,
-            this.tokens.leftParen,
-            ...this.parameters ?? [],
-            this.tokens.rightParen,
-            this.tokens.as,
-            this.returnTypeExpression,
-            this.tokens.endFunctionType
-        );
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
         let results = [] as TranspileResult;
@@ -365,7 +385,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             let body = this.body.transpile(state);
             hasBody = body.length > 0;
             state.lineage.shift();
-            results.push(...body);
+            util.pushAll(results, body);
         }
 
         const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
@@ -375,7 +395,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         return results;
     }
 
-    getTypedef(state: BrsTranspileState) {
+    getTypedef(state: BrsTranspileState): TranspileResult {
         let results = [
             new SourceNode(1, 0, null, [
                 //'function'|'sub'
@@ -425,11 +445,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         //if there's a defined return type, use that
         let returnType: BscType;
 
-        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+        const docs = getFunctionDocs(this);
+
+        // resolve return and param types with their own typeChain and data, so they don't leak into this function's (eg. hover name and description)
+        const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: {} });
 
         returnType = util.chooseTypeFromCodeOrDocComment(
-            this.returnTypeExpression?.getType({ ...options, typeChain: undefined }),
-            docs.getReturnBscType({ ...options, tableProvider: () => this.getSymbolTable() }),
+            this.returnTypeExpression?.getType(innerOptions()),
+            docs.getReturnBscType({ ...innerOptions(), tableProvider: () => this.getSymbolTable() }),
             options
         );
 
@@ -442,7 +465,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
         for (let param of this.parameters) {
-            resultType.addParameter(param.tokens.name.text, param.getType({ ...options, typeChain: undefined }), !!param.defaultValue);
+            resultType.addParameter(param.tokens.name.text, param.getType(innerOptions()), !!param.defaultValue);
         }
         // Figure out this function's name if we can
         let funcName = '';
@@ -531,6 +554,13 @@ export class FunctionParameterExpression extends Expression {
         };
         this.defaultValue = options.defaultValue;
         this.typeExpression = options.typeExpression;
+        util.setBounds(this,
+            this.tokens.name,
+            this.tokens.as,
+            this.typeExpression,
+            this.tokens.equals,
+            this.defaultValue
+        );
     }
 
     public readonly kind = AstNodeKind.FunctionParameterExpression;
@@ -544,11 +574,35 @@ export class FunctionParameterExpression extends Expression {
     public readonly defaultValue?: Expression;
     public readonly typeExpression?: TypeExpression;
 
+    /**
+     * If this parameter has a type designator (i.e. `name$`) and an `as` type that doesn't match it (i.e. `name$ as integer`),
+     * get the type the designator implies. The device compiler rejects such a mismatch, so the designator wins:
+     * it determines the parameter's type, and the conflicting `as` clause is dropped at transpile.
+     * Parameters of function type annotations (i.e. `callback as function(name$ as integer) as void`) are never emitted, so they are ignored.
+     * @returns the designator's type when it conflicts with the declared `as` type, otherwise `undefined`
+     */
+    public getMismatchedTypeDesignatorType(): BscType | undefined {
+        if (!this.typeExpression || isTypedFunctionTypeExpression(this.parent)) {
+            return undefined;
+        }
+        const designatorType = util.getTypeDesignatorType(this.tokens.name?.text);
+        if (!designatorType) {
+            return undefined;
+        }
+        const declaredType = this.typeExpression.getName(ParseMode.BrighterScript);
+        if (declaredType?.toLowerCase() === designatorType.toString()) {
+            return undefined;
+        }
+        return designatorType;
+    }
+
     public getType(options: GetTypeOptions) {
-        const docs = brsDocParser.parseNode(this.findAncestor(isFunctionStatement));
+        const docs = getFunctionDocs(this.parent);
         const paramName = this.tokens.name.text;
 
-        let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+        //a type designator that conflicts with the `as` type wins, since that's what the device uses
+        let paramTypeFromCode = this.getMismatchedTypeDesignatorType() ??
+            this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             util.getDefaultTypeFromValueType(this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }));
         if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
             paramTypeFromCode = undefined;
@@ -565,15 +619,9 @@ export class FunctionParameterExpression extends Expression {
         return paramType;
     }
 
-    public get location(): Location | undefined {
-        return util.createBoundingLocation(
-            this.tokens.name,
-            this.tokens.as,
-            this.typeExpression,
-            this.tokens.equals,
-            this.defaultValue
-        );
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState) {
         let result: TranspileResult = [
@@ -585,8 +633,8 @@ export class FunctionParameterExpression extends Expression {
             result.push(' = ');
             result.push(this.defaultValue.transpile(state));
         }
-        //type declaration
-        if (this.typeExpression && !state.options.removeParameterTypes) {
+        //type declaration (omitted when it conflicts with the type designator, since the device rejects that and the designator wins)
+        if (this.typeExpression && !state.options.removeParameterTypes && !this.getMismatchedTypeDesignatorType()) {
             result.push(' ');
             result.push(state.transpileToken(this.tokens.as, 'as'));
             result.push(' ');
@@ -660,7 +708,7 @@ export class DottedGetExpression extends Expression {
         };
         this.obj = options.obj;
 
-        this.location = util.createBoundingLocation(this.obj, this.tokens.dot, this.tokens.name);
+        util.setBounds(this, this.obj, this.tokens.dot, this.tokens.name);
     }
 
     readonly tokens: {
@@ -669,9 +717,30 @@ export class DottedGetExpression extends Expression {
     };
     readonly obj: Expression;
 
+    /**
+     * @deprecated use `tokens.name` instead
+     */
+    public get name(): Identifier {
+        return this.tokens.name;
+    }
+
+    /**
+     * @deprecated use `tokens.dot` instead
+     */
+    public get dot(): Token | undefined {
+        return this.tokens.dot;
+    }
+
     public readonly kind = AstNodeKind.DottedGetExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /** `a.b` -> `a` */
+    public get previousInChain() {
+        return this.obj;
+    }
 
     transpile(state: BrsTranspileState) {
         //if the callee starts with a namespace name, transpile the name
@@ -692,7 +761,7 @@ export class DottedGetExpression extends Expression {
     getTypedef(state: BrsTranspileState) {
         //always transpile the dots for typedefs
         return [
-            ...this.obj.transpile(state),
+            ...(this.obj.getTypedef ? this.obj.getTypedef(state) : this.obj.transpile(state)),
             state.transpileToken(this.tokens.dot),
             state.transpileToken(this.tokens.name)
         ];
@@ -716,7 +785,7 @@ export class DottedGetExpression extends Expression {
             name: this.tokens.name?.text,
             type: result,
             data: options.data,
-            location: this.tokens.name?.location ?? this.location,
+            locatable: this.tokens.name,
             astNode: this
         }));
         if (result ||
@@ -762,7 +831,7 @@ export class XmlAttributeGetExpression extends Expression {
         super();
         this.obj = options.obj;
         this.tokens = { at: options.at, name: options.name };
-        this.location = util.createBoundingLocation(this.obj, this.tokens.at, this.tokens.name);
+        util.setBounds(this, this.obj, this.tokens.at, this.tokens.name);
     }
 
     public readonly kind = AstNodeKind.XmlAttributeGetExpression;
@@ -774,7 +843,14 @@ export class XmlAttributeGetExpression extends Expression {
 
     public readonly obj: Expression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /** `a@b` -> `a` */
+    public get previousInChain() {
+        return this.obj;
+    }
 
     transpile(state: BrsTranspileState) {
         return [
@@ -825,7 +901,7 @@ export class IndexedGetExpression extends Expression {
         };
         this.obj = options.obj;
         this.indexes = options.indexes;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.obj,
             this.tokens.openingSquare,
             this.tokens.questionDot,
@@ -849,7 +925,35 @@ export class IndexedGetExpression extends Expression {
         readonly questionDot?: Token; //  ? or ?.
     };
 
-    public readonly location: Location | undefined;
+    /**
+     * @deprecated use `tokens.questionDot` instead
+     */
+    public get questionDotToken(): Token | undefined {
+        return this.tokens.questionDot;
+    }
+
+    /**
+     * @deprecated use `tokens.openingSquare` instead
+     */
+    public get openingSquare(): Token | undefined {
+        return this.tokens.openingSquare;
+    }
+
+    /**
+     * @deprecated use `indexes[0]` instead
+     */
+    public get index(): Expression | undefined {
+        return this.indexes?.[0];
+    }
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /** `a[i]` -> `a` (not the index) */
+    public get previousInChain() {
+        return this.obj;
+    }
 
     transpile(state: BrsTranspileState) {
         const result = [];
@@ -920,7 +1024,7 @@ export class GroupingExpression extends Expression {
             leftParen: options.leftParen
         };
         this.expression = options.expression;
-        this.location = util.createBoundingLocation(this.tokens.leftParen, this.expression, this.tokens.rightParen);
+        util.setBounds(this, this.tokens.leftParen, this.expression, this.tokens.rightParen);
     }
 
     public readonly tokens: {
@@ -931,7 +1035,9 @@ export class GroupingExpression extends Expression {
 
     public readonly kind = AstNodeKind.GroupingExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         if (isTypecastExpression(this.expression)) {
@@ -978,6 +1084,7 @@ export class LiteralExpression extends Expression {
         this.tokens = {
             value: options.value
         };
+        util.setBounds(this, this.tokens.value);
     }
 
     public readonly tokens: {
@@ -986,9 +1093,9 @@ export class LiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.LiteralExpression;
 
-    public get location() {
-        return this.tokens.value.location;
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getType(options?: GetTypeOptions) {
         return util.tokenToBscType(this.tokens.value);
@@ -1044,7 +1151,7 @@ export class PrintSeparatorExpression extends Expression {
         this.tokens = {
             separator: options.separator
         };
-        this.location = this.tokens.separator.location;
+        util.setBounds(this, this.tokens.separator);
     }
 
     public readonly tokens: {
@@ -1053,11 +1160,13 @@ export class PrintSeparatorExpression extends Expression {
 
     public readonly kind = AstNodeKind.PrintSeparatorExpression;
 
-    public location: Location;
+    public startPosition: number;
+    public endPosition: number;
+    public sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
-            ...this.tokens.separator.leadingWhitespace ?? [],
+            util.getLeadingWhitespace(this.tokens.separator),
             ...state.transpileToken(this.tokens.separator)
         ];
     }
@@ -1088,7 +1197,7 @@ export class EscapedCharCodeLiteralExpression extends Expression {
     }) {
         super();
         this.tokens = { value: options.value };
-        this.location = util.cloneLocation(this.tokens.value.location);
+        util.setBounds(this, this.tokens.value);
     }
 
     public readonly kind = AstNodeKind.EscapedCharCodeLiteralExpression;
@@ -1097,7 +1206,9 @@ export class EscapedCharCodeLiteralExpression extends Expression {
         readonly value: Token & { charCode: number };
     };
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         return [
@@ -1130,7 +1241,7 @@ export class ArrayLiteralExpression extends Expression {
             close: options.close
         };
         this.elements = options.elements;
-        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
+        util.setBounds(this, this.tokens.open, this.elements, this.tokens.close);
     }
 
     public readonly elements: Array<Expression>;
@@ -1142,7 +1253,9 @@ export class ArrayLiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.ArrayLiteralExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
@@ -1183,7 +1296,16 @@ export class ArrayLiteralExpression extends Expression {
     }
 
     getType(options: GetTypeOptions): BscType {
-        const innerTypes = this.elements.map(expr => expr.getType(options));
+        const innerTypes: BscType[] = [];
+        for (const element of this.elements) {
+            const type = element.getType(options);
+            //a spread array contributes its element types, not the array type itself
+            if (isSpreadExpression(element) && isArrayType(type)) {
+                innerTypes.push(...type.innerTypes);
+            } else {
+                innerTypes.push(type);
+            }
+        }
         return new ArrayType(...innerTypes);
     }
     get leadingTrivia(): Token[] {
@@ -1221,12 +1343,14 @@ export class AAMemberExpression extends Expression {
             comma: options.comma
         };
         this.value = options.value;
-        this.location = util.createBoundingLocation(this.tokens.key, this.tokens.colon, this.value);
+        util.setBounds(this, this.tokens.key, this.tokens.colon, this.value);
     }
 
     public readonly kind = AstNodeKind.AAMemberExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly key: Token;
@@ -1238,7 +1362,6 @@ export class AAMemberExpression extends Expression {
     public readonly value: Expression;
 
     transpile(state: BrsTranspileState) {
-        //TODO move the logic from AALiteralExpression loop into this function
         return [];
     }
 
@@ -1266,22 +1389,87 @@ export class AAMemberExpression extends Expression {
     }
 }
 
+export class AAIndexedMemberExpression extends Expression {
+    constructor(options: {
+        leftBracket?: Token;
+        key: Expression;
+        rightBracket?: Token;
+        colon?: Token;
+        /** The expression evaluated to determine the member's initial value. */
+        value: Expression;
+        comma?: Token;
+    }) {
+        super();
+        this.key = options.key;
+        this.tokens = {
+            leftBracket: options.leftBracket,
+            rightBracket: options.rightBracket,
+            colon: options.colon,
+            comma: options.comma
+        };
+        this.value = options.value;
+        util.setBounds(this, this.tokens.leftBracket, this.key, this.tokens.rightBracket, this.tokens.colon, this.value, this.tokens.comma);
+    }
+
+    public readonly tokens: {
+        readonly leftBracket?: Token;
+        readonly rightBracket?: Token;
+        readonly colon?: Token;
+        readonly comma?: Token;
+    };
+
+    public key: Expression;
+    /** The expression evaluated to determine the member's initial value. */
+    public value: Expression;
+
+
+    public readonly kind = AstNodeKind.AAIndexedMemberExpression;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    transpile(state: BrsTranspileState) {
+        return [];
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        walk(this, 'key', visitor, options);
+        walk(this, 'value', visitor, options);
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AAIndexedMemberExpression({
+                leftBracket: util.cloneToken(this.tokens.leftBracket),
+                key: this.key?.clone(),
+                rightBracket: util.cloneToken(this.tokens.rightBracket),
+                colon: util.cloneToken(this.tokens.colon),
+                value: this.value?.clone(),
+                comma: util.cloneToken(this.tokens.comma)
+            }),
+            ['key', 'value']
+        );
+    }
+}
+
 export class AALiteralExpression extends Expression {
     constructor(options: {
-        elements: Array<AAMemberExpression>;
-        open?: Token;
-        close?: Token;
-    }) {
+        readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression>;
+        readonly open?: Token;
+        readonly close?: Token;
+    }
+    ) {
         super();
         this.tokens = {
             open: options.open,
             close: options.close
         };
         this.elements = options.elements;
-        this.location = util.createBoundingLocation(this.tokens.open, ...this.elements ?? [], this.tokens.close);
+        util.setBounds(this, this.tokens.open, this.elements, this.tokens.close);
     }
 
-    public readonly elements: Array<AAMemberExpression>;
+    public readonly elements: Array<AAMemberExpression | AAIndexedMemberExpression | SpreadExpression>;
     public readonly tokens: {
         readonly open?: Token;
         readonly close?: Token;
@@ -1289,7 +1477,9 @@ export class AALiteralExpression extends Expression {
 
     public readonly kind = AstNodeKind.AALiteralExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
@@ -1297,16 +1487,24 @@ export class AALiteralExpression extends Expression {
         result.push(
             state.transpileToken(this.tokens.open, '{')
         );
-        let hasChildren = this.elements.length > 0;
-        //add newline if the object has children and the first child isn't a comment starting on the same line as opening curly
-        if (hasChildren && !util.isLeadingCommentOnSameLine(this.tokens.open, this.elements[0])) {
-            result.push('\n');
-        }
         state.blockDepth++;
-        for (let i = 0; i < this.elements.length; i++) {
-            let element = this.elements[i];
-            let previousElement = this.elements[i - 1];
-            let nextElement = this.elements[i + 1];
+        //the most recently transpiled member (spread members are skipped, so this is not necessarily `elements[i - 1]`)
+        let previousElement: AAMemberExpression | AAIndexedMemberExpression | undefined;
+        for (const element of this.elements) {
+            //spread members are lowered to statements before transpile; any left over were already flagged by validation
+            if (isSpreadExpression(element)) {
+                continue;
+            }
+
+            if (!previousElement) {
+                //add newline if the first child isn't a comment starting on the same line as opening curly
+                if (!util.isLeadingCommentOnSameLine(this.tokens.open, element)) {
+                    result.push('\n');
+                }
+            } else if (!util.isLeadingCommentOnSameLine(previousElement, element)) {
+                //add a newline between members (skipped when this member is a same-line comment)
+                result.push('\n');
+            }
 
             //don't indent if comment is same-line
             if (util.isLeadingCommentOnSameLine(this.tokens.open, element) ||
@@ -1318,9 +1516,14 @@ export class AALiteralExpression extends Expression {
             }
 
             //key
-            result.push(
-                state.transpileToken(element.tokens.key)
-            );
+            if (isAAIndexedMemberExpression(element)) {
+                //computed key: transpile the resolved expression (pre-transpile overrides it to a literal)
+                result.push(...element.key.transpile(state));
+            } else {
+                result.push(
+                    state.transpileToken(element.tokens.key)
+                );
+            }
             //colon
             result.push(
                 state.transpileToken(element.tokens.colon, ':'),
@@ -1329,16 +1532,12 @@ export class AALiteralExpression extends Expression {
             //value
             result.push(...element.value.transpile(state));
 
-            //if next element is a same-line comment, skip the newline
-            if (nextElement && !util.isLeadingCommentOnSameLine(element, nextElement)) {
-                //add a newline between statements
-                result.push('\n');
-            }
+            previousElement = element;
         }
         state.blockDepth--;
 
-        const lastElement = this.elements[this.elements.length - 1] ?? this.tokens.open;
-        result.push(...state.transpileEndBlockToken(lastElement, this.tokens.close, '}', hasChildren));
+        const hasChildren = !!previousElement;
+        result.push(...state.transpileEndBlockToken(previousElement ?? this.tokens.open, this.tokens.close, '}', hasChildren));
 
         return result;
     }
@@ -1352,6 +1551,14 @@ export class AALiteralExpression extends Expression {
     getType(options: GetTypeOptions): BscType {
         const resultType = new AssociativeArrayType();
         resultType.addBuiltInInterfaces();
+        //once a spread is involved, a later key replaces an earlier one (as it does at runtime) instead of widening it
+        let sawSpread = false;
+        const setMember = (name: string, data: ExtraSymbolData, type: BscType) => {
+            if (sawSpread) {
+                resultType.getMemberTable().removeSymbol(name);
+            }
+            resultType.addMember(name, data, type, SymbolTypeFlag.runtime);
+        };
         for (const element of this.elements) {
             if (isAAMemberExpression(element)) {
                 let memberName = element.tokens?.key?.text ?? '';
@@ -1359,7 +1566,21 @@ export class AALiteralExpression extends Expression {
                     memberName = memberName.replace(/"/g, ''); // remove quotes if it was a stringLiteral
                 }
                 if (memberName) {
-                    resultType.addMember(memberName, { definingNode: element }, element.getType(options), SymbolTypeFlag.runtime);
+                    setMember(memberName, { definingNode: element }, element.getType(options));
+                }
+            } else if (isSpreadExpression(element)) {
+                //a spread contributes the known members of the AA or interface being spread
+                sawSpread = true;
+                const spreadType = element.getType(options);
+                let members: BscSymbol[] = [];
+                if (isAssociativeArrayType(spreadType)) {
+                    //own members only: the built-in roAssociativeArray methods already come from addBuiltInInterfaces
+                    members = spreadType.getMemberTable().getOwnSymbols(SymbolTypeFlag.runtime);
+                } else if (isInterfaceType(spreadType)) {
+                    members = spreadType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+                }
+                for (const member of members) {
+                    setMember(member.name, member.data, member.type);
                 }
             }
         }
@@ -1386,6 +1607,60 @@ export class AALiteralExpression extends Expression {
     }
 }
 
+export class SpreadExpression extends Expression {
+    constructor(options: {
+        dotDotDot: Token;
+        expression: Expression;
+    }) {
+        super();
+        this.tokens = {
+            dotDotDot: options.dotDotDot
+        };
+        this.expression = options.expression;
+        util.setBounds(this, this.tokens.dotDotDot, this.expression);
+    }
+
+    public readonly kind = AstNodeKind.SpreadExpression;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public readonly tokens: {
+        readonly dotDotDot: Token;
+    };
+
+    public readonly expression: Expression;
+
+    transpile(state: BrsTranspileState) {
+        return this.expression.transpile(state);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    getType(options: GetTypeOptions): BscType {
+        return this.expression.getType(options);
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.dotDotDot.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new SpreadExpression({
+                dotDotDot: util.cloneToken(this.tokens.dotDotDot),
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
+    }
+}
+
 export class UnaryExpression extends Expression {
     constructor(options: {
         operator: Token;
@@ -1396,12 +1671,14 @@ export class UnaryExpression extends Expression {
             operator: options.operator
         };
         this.right = options.right;
-        this.location = util.createBoundingLocation(this.tokens.operator, this.right);
+        util.setBounds(this, this.tokens.operator, this.right);
     }
 
     public readonly kind = AstNodeKind.UnaryExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly operator: Token;
@@ -1411,9 +1688,9 @@ export class UnaryExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let separatingWhitespace: string | undefined;
         if (isVariableExpression(this.right)) {
-            separatingWhitespace = this.right.tokens.name.leadingWhitespace;
+            separatingWhitespace = util.getLeadingWhitespace(this.right.tokens.name);
         } else if (isLiteralExpression(this.right)) {
-            separatingWhitespace = this.right.tokens.value.leadingWhitespace;
+            separatingWhitespace = util.getLeadingWhitespace(this.right.tokens.value);
         } else {
             separatingWhitespace = ' ';
         }
@@ -1458,7 +1735,7 @@ export class VariableExpression extends Expression {
         this.tokens = {
             name: options.name
         };
-        this.location = util.cloneLocation(this.tokens.name?.location);
+        util.setBounds(this, this.tokens.name);
     }
 
     public readonly tokens: {
@@ -1467,7 +1744,16 @@ export class VariableExpression extends Expression {
 
     public readonly kind = AstNodeKind.VariableExpression;
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /**
+     * @deprecated use `tokens.name` instead
+     */
+    public get name(): Identifier {
+        return this.tokens.name;
+    }
 
     public getName(parseMode?: ParseMode) {
         return this.tokens.name.text;
@@ -1476,8 +1762,8 @@ export class VariableExpression extends Expression {
     transpile(state: BrsTranspileState) {
         let result: TranspileResult = [];
         const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
-        //if the callee is the name of a known namespace function
-        if (namespace && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
+        //if the callee is the name of a known namespace function (but not a namespaced const's reference to the outer symbol of the same name)
+        if (namespace && !util.getSelfNamedConstOfInitializer(this) && util.isCalleeMemberOfNamespace(this.tokens.name.text, this, namespace)) {
             result.push(
                 //transpile leading comments since the token isn't being transpiled directly
                 ...state.transpileLeadingCommentsForAstNode(this),
@@ -1511,12 +1797,14 @@ export class VariableExpression extends Expression {
         let resultType: BscType = util.tokenToBscType(this.tokens.name);
         const nameKey = this.getName();
         if (!resultType) {
-            const symbolTable = this.getSymbolTable();
+            //a namespaced const can't refer to itself by name (i.e. `namespace promises: const chain = chain`), so look up the outer symbol instead
+            const getTable = util.getSelfNamedConstOfInitializer(this) ? () => this.getRoot().getSymbolTable() : () => this.getSymbolTable();
+            const symbolTable = getTable();
             resultType = symbolTable?.getSymbolType(nameKey, {
                 ...options,
                 statementIndex: this.statementIndex,
                 fullName: nameKey,
-                tableProvider: () => this.getSymbolTable()
+                tableProvider: getTable
             });
 
             if (util.isClassUsedAsFunction(resultType, this, options)) {
@@ -1549,10 +1837,12 @@ export class SourceLiteralExpression extends Expression {
         this.tokens = {
             value: options.value
         };
-        this.location = util.cloneLocation(this.tokens.value?.location);
+        util.setBounds(this, this.tokens.value);
     }
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly kind = AstNodeKind.SourceLiteralExpression;
 
@@ -1579,7 +1869,7 @@ export class SourceLiteralExpression extends Expression {
     }
 
     private getFunctionName(state: BrsTranspileState, parseMode: ParseMode) {
-        let func = this.findAncestor<FunctionExpression>(isFunctionExpression);
+        let func = this.findAncestor(isFunctionExpression);
         let nameParts = [] as TranspileResult;
         let parentFunction: FunctionExpression;
         while ((parentFunction = func.findAncestor<FunctionExpression>(isFunctionExpression))) {
@@ -1602,8 +1892,8 @@ export class SourceLiteralExpression extends Expression {
     private getClosestLineNumber() {
         let node: AstNode = this;
         while (node) {
-            if (node.location?.range) {
-                return node.location.range.start.line + 1;
+            if (util.getLocation(node)?.range) {
+                return util.getLocation(node).range.start.line + 1;
             }
             node = node.parent;
         }
@@ -1614,7 +1904,7 @@ export class SourceLiteralExpression extends Expression {
         let text: string;
         switch (this.tokens.value.kind) {
             case TokenKind.SourceFilePathLiteral:
-                const pathUrl = fileUrl(state.srcPath);
+                const pathUrl = util.fileUrl(state.srcPath);
                 text = `"${pathUrl.substring(0, 4)}" + "${pathUrl.substring(4)}"`;
                 break;
             case TokenKind.SourceLineNumLiteral:
@@ -1641,7 +1931,7 @@ export class SourceLiteralExpression extends Expression {
                 text = `"${rootNamespace}"`;
                 break;
             case TokenKind.SourceLocationLiteral:
-                const locationUrl = fileUrl(state.srcPath);
+                const locationUrl = util.fileUrl(state.srcPath);
                 //TODO find first parent that has range, or default to -1
                 text = `"${locationUrl.substring(0, 4)}" + "${locationUrl.substring(4)}:${this.getClosestLineNumber()}"`;
                 break;
@@ -1695,12 +1985,14 @@ export class NewExpression extends Expression {
             new: options.new
         };
         this.call = options.call;
-        this.location = util.createBoundingLocation(this.tokens.new, this.call);
+        util.setBounds(this, this.tokens.new, this.call);
     }
 
     public readonly kind = AstNodeKind.NewExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly new?: Token;
@@ -1716,8 +2008,14 @@ export class NewExpression extends Expression {
         return this.call.callee as (VariableExpression | DottedGetExpression);
     }
 
+
+    /** `new Alpha.Beta()` -> `Alpha.Beta()` */
+    public get previousInChain() {
+        return this.call;
+    }
+
     public transpile(state: BrsTranspileState) {
-        const namespace = this.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        const namespace = this.findAncestor(isNamespaceStatement);
         const cls = state.file.getClassFileLink(
             this.className.getName(ParseMode.BrighterScript),
             namespace?.getName(ParseMode.BrighterScript)
@@ -1779,7 +2077,7 @@ export class CallfuncExpression extends Expression {
         this.callee = options.callee;
         this.args = options.args ?? [];
 
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.callee,
             this.tokens.operator,
             this.tokens.methodName,
@@ -1801,7 +2099,14 @@ export class CallfuncExpression extends Expression {
 
     public readonly kind = AstNodeKind.CallfuncExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    /** `a@.b()` -> `a` (not the args) */
+    public get previousInChain() {
+        return this.callee;
+    }
 
     public transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -1874,7 +2179,7 @@ export class TemplateStringQuasiExpression extends Expression {
     }) {
         super();
         this.expressions = options.expressions;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             ...this.expressions ?? []
         );
     }
@@ -1882,7 +2187,9 @@ export class TemplateStringQuasiExpression extends Expression {
     public readonly expressions: Array<LiteralExpression | EscapedCharCodeLiteralExpression>;
     public readonly kind = AstNodeKind.TemplateStringQuasiExpression;
 
-    readonly location: Location | undefined;
+    readonly startPosition: number;
+    readonly endPosition: number;
+    readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState, skipEmptyStrings = true) {
         let result = [] as TranspileResult;
@@ -1932,7 +2239,7 @@ export class TemplateStringExpression extends Expression {
         };
         this.quasis = options.quasis;
         this.expressions = options.expressions;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.openingBacktick,
             this.quasis?.[0],
             this.quasis?.[this.quasis?.length - 1],
@@ -1949,7 +2256,9 @@ export class TemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public getType(options: GetTypeOptions) {
         return StringType.instance;
@@ -1960,10 +2269,10 @@ export class TemplateStringExpression extends Expression {
         if (this.expressions.length === 0 && this.quasis.length === 1 && this.quasis[0].expressions.length === 1) {
             return this.quasis[0].transpile(state);
         }
-        let result = ['('];
+        let result: TranspileResult = ['('];
         let plus = '';
         //helper function to figure out when to include the plus
-        function add(...items) {
+        function add(...items: TranspileResult) {
             if (items.length > 0) {
                 result.push(
                     plus,
@@ -2053,7 +2362,7 @@ export class TaggedTemplateStringExpression extends Expression {
         this.quasis = options.quasis;
         this.expressions = options.expressions;
 
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.tagName,
             this.tokens.openingBacktick,
             this.quasis?.[0],
@@ -2073,7 +2382,9 @@ export class TaggedTemplateStringExpression extends Expression {
     public readonly quasis: TemplateStringQuasiExpression[];
     public readonly expressions: Expression[];
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2158,6 +2469,8 @@ export class AnnotationExpression extends Expression {
         };
         this.call = options.call;
         this.name = this.tokens.name.text;
+        //the parser assigns `call` after construction (since the call needs this annotation as its callee), and updates the bounds then
+        util.setBounds(this, this.tokens.at, this.tokens.name, this.call);
     }
 
     public readonly kind = AstNodeKind.AnnotationExpression;
@@ -2167,13 +2480,9 @@ export class AnnotationExpression extends Expression {
         readonly name: Token;
     };
 
-    public get location(): Location | undefined {
-        return util.createBoundingLocation(
-            this.tokens.at,
-            this.tokens.name,
-            this.call
-        );
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly name: string;
 
@@ -2237,7 +2546,7 @@ export class TernaryExpression extends Expression {
         this.test = options.test;
         this.consequent = options.consequent;
         this.alternate = options.alternate;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.test,
             this.tokens.questionMark,
             this.consequent,
@@ -2248,7 +2557,9 @@ export class TernaryExpression extends Expression {
 
     public readonly kind = AstNodeKind.TernaryExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly questionMark?: Token;
@@ -2362,7 +2673,7 @@ export class NullCoalescingExpression extends Expression {
         };
         this.consequent = options.consequent;
         this.alternate = options.alternate;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.consequent,
             this.tokens.questionQuestion,
             this.alternate
@@ -2371,7 +2682,9 @@ export class NullCoalescingExpression extends Expression {
 
     public readonly kind = AstNodeKind.NullCoalescingExpression;
 
-    public readonly location: Location | undefined;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public readonly tokens: {
         readonly questionQuestion?: Token;
@@ -2379,6 +2692,17 @@ export class NullCoalescingExpression extends Expression {
 
     public readonly consequent: Expression;
     public readonly alternate: Expression;
+
+    /**
+     * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
+     * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
+     */
+    public hasMutatingExpression(file: BrsFile) {
+        return [
+            ...util.getExpressionInfo(this.consequent, file).expressions,
+            ...util.getExpressionInfo(this.alternate, file).expressions
+        ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+    }
 
     transpile(state: BrsTranspileState) {
         let result = [] as TranspileResult;
@@ -2392,12 +2716,7 @@ export class NullCoalescingExpression extends Expression {
             return !nonReferenceableFunctions.includes(name.toLowerCase());
         });
 
-        let hasMutatingExpression = [
-            ...consequentInfo.expressions,
-            ...alternateInfo.expressions
-        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
-
-        if (hasMutatingExpression) {
+        if (this.hasMutatingExpression(state.file)) {
             result.push(
                 `(function(`,
                 //write all the scope variables as parameters.
@@ -2476,6 +2795,7 @@ export class RegexLiteralExpression extends Expression {
         this.tokens = {
             regexLiteral: options.regexLiteral
         };
+        util.setBounds(this, this.tokens.regexLiteral);
     }
 
     public readonly kind = AstNodeKind.RegexLiteralExpression;
@@ -2483,9 +2803,9 @@ export class RegexLiteralExpression extends Expression {
         readonly regexLiteral: Token;
     };
 
-    public get location(): Location {
-        return this.tokens?.regexLiteral?.location;
-    }
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         let text = this.tokens.regexLiteral?.text ?? '';
@@ -2532,6 +2852,16 @@ export class RegexLiteralExpression extends Expression {
 // eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style
 type ExpressionValue = string | number | boolean | Expression | ExpressionValue[] | { [key: string]: ExpressionValue } | null;
 
+/**
+ * Doc comment of the function or method that declares `func`.
+ * Anonymous functions and function type expressions have none, rather than inheriting an enclosing function's.
+ */
+function getFunctionDocs(func: AstNode): BrightScriptDoc {
+    const declaration = func?.parent;
+    const isDeclared = isFunctionStatement(declaration) || isMethodStatement(declaration);
+    return brsDocParser.parseNode(isDeclared ? declaration : undefined);
+}
+
 function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     if (!expr) {
         return null;
@@ -2556,7 +2886,9 @@ function expressionToValue(expr: Expression, strict: boolean): ExpressionValue {
     }
     if (isAALiteralExpression(expr)) {
         return expr.elements.reduce((acc, e) => {
-            acc[e.tokens.key.text] = expressionToValue(e.value, strict);
+            if (isAAMemberExpression(e)) {
+                acc[e.tokens.key.text] = expressionToValue(e.value, strict);
+            }
             return acc;
         }, {});
     }
@@ -2583,10 +2915,17 @@ export class TypeExpression extends Expression implements TypedefProvider {
          * The standard AST expression that represents the type for this TypeExpression.
          */
         expression: Expression;
+        /**
+         * An already-known type for this TypeExpression, bypassing resolution of `expression`
+         * via symbol table lookup. Useful when `expression` is not attached to (or can't resolve
+         * against) a real symbol table - e.g. a type reference synthesized for a detached AST node.
+         */
+        resolvedType?: BscType;
     }) {
         super();
         this.expression = options.expression;
-        this.location = util.cloneLocation(this.expression?.location);
+        this.resolvedType = options.resolvedType;
+        util.setBounds(this, this.expression);
     }
 
     public readonly kind = AstNodeKind.TypeExpression;
@@ -2596,9 +2935,24 @@ export class TypeExpression extends Expression implements TypedefProvider {
      */
     public readonly expression: Expression;
 
-    public readonly location: Location;
+    /**
+     * An already-known type for this TypeExpression. When set, `getType()` returns this
+     * directly instead of resolving `expression` via symbol table lookup.
+     */
+    public readonly resolvedType?: BscType;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
+        //roku built-in names (rosgnode*, etc.) collapse to `dynamic` at transpile.
+        //Check before isNativeType, since unresolved built-ins resolve to DynamicType
+        //(a native type) which would otherwise pass-through their original text.
+        const name = this.getName(ParseMode.BrighterScript);
+        if (name && util.isBuiltInType(name)) {
+            return ['dynamic'];
+        }
         const exprType = this.getType({ flags: SymbolTypeFlag.typetime });
         if (isNativeType(exprType)) {
             return this.expression.transpile(state);
@@ -2612,17 +2966,32 @@ export class TypeExpression extends Expression implements TypedefProvider {
     }
 
     public getType(options: GetTypeOptions): BscType {
-        return this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
+        return this.resolvedType ?? this.expression.getType({ ...options, flags: SymbolTypeFlag.typetime });
     }
 
     getTypedef(state: TranspileState): TranspileResult {
+        // classes and enums always know their own fully-namespace-qualified name, regardless
+        // of how they were referenced in source (bare same-namespace shorthand, fully-qualified,
+        // etc.) - use that instead of the raw written text, which would otherwise be flattened
+        // to the type's compiled runtime symbol name (e.g. `Namespace_Type`) for class references
+        const exprType = this.getType({ flags: SymbolTypeFlag.typetime });
+        if (isClassType(exprType) || isEnumType(exprType)) {
+            return [exprType.toString()];
+        }
         // TypeDefs should pass through any valid type names
-        return this.expression.transpile(state as BrsTranspileState);
+        return this.expression.getTypedef
+            ? this.expression.getTypedef(state as BrsTranspileState)
+            : this.expression.transpile(state as BrsTranspileState);
     }
 
     getName(parseMode = ParseMode.BrighterScript): string {
-        //TODO: this may not support Complex Types, eg. generics or Unions
-        return util.getAllDottedGetPartsAsString(this.expression, parseMode);
+        const dottedName = util.getAllDottedGetPartsAsString(this.expression, parseMode);
+        if (dottedName !== undefined) {
+            return dottedName;
+        }
+        //complex types (unions/intersections, inline interfaces, typed arrays, typed function
+        //types, groupings) aren't dotted-get chains, so reconstruct their written name instead
+        return util.getTypeExpressionName(this.expression, parseMode);
     }
 
     getNameParts(): string[] {
@@ -2633,7 +3002,8 @@ export class TypeExpression extends Expression implements TypedefProvider {
     public clone() {
         return this.finalizeClone(
             new TypeExpression({
-                expression: this.expression?.clone()
+                expression: this.expression?.clone(),
+                resolvedType: this.resolvedType
             }),
             ['expression']
         );
@@ -2652,7 +3022,7 @@ export class TypecastExpression extends Expression {
         };
         this.obj = options.obj;
         this.typeExpression = options.typeExpression;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.obj,
             this.tokens.as,
             this.typeExpression
@@ -2669,7 +3039,9 @@ export class TypecastExpression extends Expression {
 
     public typeExpression?: TypeExpression;
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return this.obj.transpile(state);
@@ -2717,7 +3089,7 @@ export class TypedArrayExpression extends Expression {
             rightBracket: options.rightBracket
         };
         this.innerType = options.innerType;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.innerType,
             this.tokens.leftBracket,
             this.tokens.rightBracket
@@ -2733,10 +3105,14 @@ export class TypedArrayExpression extends Expression {
 
     public readonly kind = AstNodeKind.TypedArrayExpression;
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
-        return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+        //typed arrays (e.g. `float[]`, `float[][][]`) collapse to `dynamic` since
+        //BrightScript has no array-of-T type at the language level.
+        return ['dynamic'];
     }
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {
@@ -2773,7 +3149,7 @@ export class InlineInterfaceExpression extends Expression {
             close: options.close
         };
         this.members = options.members;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.open,
             ...this.members,
             this.tokens.close
@@ -2789,7 +3165,9 @@ export class InlineInterfaceExpression extends Expression {
 
     public readonly kind = AstNodeKind.InlineInterfaceExpression;
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     get leadingTrivia(): Token[] {
         return this.tokens.open?.leadingTrivia;
@@ -2850,7 +3228,7 @@ export class InlineInterfaceMemberExpression extends Expression {
             optional: options.optional
         };
         this.typeExpression = options.typeExpression;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.optional,
             this.tokens.name,
             this.tokens.as,
@@ -2868,7 +3246,9 @@ export class InlineInterfaceMemberExpression extends Expression {
 
     public readonly typeExpression?: TypeExpression;
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     get leadingTrivia(): Token[] {
         return this.tokens.optional?.leadingTrivia ?? this.tokens.name.leadingTrivia;
@@ -2924,7 +3304,7 @@ export class TypedFunctionTypeExpression extends Expression {
         };
         this.params = options.params;
         this.returnType = options.returnType;
-        this.location = util.createBoundingLocation(
+        util.setBounds(this,
             this.tokens.functionType,
             this.tokens.leftParen,
             ...this.params,
@@ -2946,10 +3326,18 @@ export class TypedFunctionTypeExpression extends Expression {
     public readonly params: FunctionParameterExpression[];
     public readonly returnType?: TypeExpression;
 
-    public readonly location: Location;
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
 
     public transpile(state: BrsTranspileState): TranspileResult {
         return [this.getType({ flags: SymbolTypeFlag.typetime }).toTypeString()];
+    }
+
+    public getTypedef(state: BrsTranspileState): TranspileResult {
+        //preserve the full signature (param names/types, return type) in typedefs,
+        //rather than the generic runtime type name used by `transpile()`
+        return [this.getType({ flags: SymbolTypeFlag.typetime }).toString()];
     }
 
     public walk(visitor: WalkVisitor, options: WalkOptions) {

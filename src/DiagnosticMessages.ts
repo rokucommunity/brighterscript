@@ -1,6 +1,6 @@
 import type { Position } from 'vscode-languageserver';
-import { DiagnosticSeverity } from 'vscode-languageserver';
-import type { BsDiagnostic, TypeCompatibilityData } from './interfaces';
+import { DiagnosticSeverity, DiagnosticTag } from 'vscode-languageserver';
+import type { BsDiagnostic, DiagnosticCode, TypeCompatibilityData } from './interfaces';
 import { TokenKind } from './lexer/TokenKind';
 import util from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
@@ -99,9 +99,12 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Warning,
         code: 'variable-shadows-function'
     }),
-    scriptImportCaseMismatch: (correctFilePath: string) => ({
+    scriptImportCaseMismatch: (correctFilePath: string, correctUri?: string) => ({
         message: `Script import path does not match casing of actual file path '${correctFilePath}'.`,
         legacyCode: 1012,
+        data: {
+            correctFilePath: correctUri ?? correctFilePath
+        },
         severity: DiagnosticSeverity.Warning,
         code: 'import-case-mismatch'
     }),
@@ -373,7 +376,7 @@ export let DiagnosticMessages = {
         code: 'expected-loop-expression'
     }),
     unexpectedColonBeforeIfStatement: () => ({
-        message: `Colon before 'if' statement is not allowed`,
+        message: `Colon before a multi-line 'if' statement is not allowed`,
         legacyCode: 1054,
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-leading-colon'
@@ -462,11 +465,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'unexpected-tag'
     }),
-    __unused20: () => ({
-        message: `Expected statement or function call but instead found expression`,
+    expectedStatementOrFunctionCallButReceivedExpression: (expressionType = 'expression') => ({
+        message: `Expected statement or function call but instead found ${expressionType}`,
         legacyCode: 1066,
         severity: DiagnosticSeverity.Error,
-        code: 'expected-statement-not-expression'
+        code: 'expected-statement-or-function-call-not-expression'
     }),
     xmlFunctionNotFound: (name: string) => ({
         message: `Cannot find function with name '${name}' in component scope`,
@@ -629,7 +632,7 @@ export let DiagnosticMessages = {
         code: 'const-alias-does-not-exist'
     }),
     invalidHashConstValue: () => ({
-        message: '#const declarations can only have values of `true`, `false`, or other #const names',
+        message: '#const value must be `true` or `false`',
         legacyCode: 1089,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-hash-const-value'
@@ -641,7 +644,7 @@ export let DiagnosticMessages = {
         code: 'hash-const-does-not-exist'
     }),
     invalidHashIfValue: () => ({
-        message: `#if conditionals can only be 'true', 'false', or other #const names`,
+        message: '#if and #else if conditions must be `true`, `false`, or a #const name, optionally preceded by `not`',
         legacyCode: 1091,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-hash-if-value'
@@ -739,11 +742,11 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'local-var-same-name-as-class'
     }),
-    __unused45: () => ({
+    unnecessaryCodebehindScriptImport: () => ({
         message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
         legacyCode: 1107,
         severity: DiagnosticSeverity.Warning,
-        code: 'unnecessary-import'
+        code: 'unnecessary-codebehind-script-import'
     }),
     __unused37: () => ({
         message: `Expected '(' to follow callfunc identifier`,
@@ -976,19 +979,16 @@ export let DiagnosticMessages = {
     assignmentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Type '${actualTypeString}' is not compatible with type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)}`,
         data: data,
-        legacyCode: 1143,
         severity: DiagnosticSeverity.Error,
         code: 'assignment-type-mismatch'
     }),
     operatorTypeMismatch: (operatorString: string, firstType: string, secondType = '') => ({
         message: `Operator '${operatorString}' cannot be applied to type${secondType ? 's' : ''} '${firstType}'${secondType ? ` and '${secondType}'` : ''}`,
-        legacyCode: 1144,
         severity: DiagnosticSeverity.Error,
         code: 'operator-type-mismatch'
     }),
     incompatibleSymbolDefinition: (symbol: string, options: { scopes?: string[]; isUnion?: boolean; types?: BscType[]; data?: TypeCompatibilityData } = {}) => ({
         message: `'${symbol}' is incompatible${incompatibleSymbolMessage(symbol, options)}`,
-        legacyCode: 1145,
         severity: DiagnosticSeverity.Error,
         code: 'incompatible-definition'
     }),
@@ -1014,46 +1014,39 @@ export let DiagnosticMessages = {
 
         return {
             message: `Member '${memberName}' is ${accessModName}${accessAdditionalInfo}`, // TODO: Add scopes where it was defined
-            legacyCode: 1146,
             severity: DiagnosticSeverity.Error,
             code: 'member-access-violation'
         };
     },
     invalidTypecastStatementApplication: (foundApplication: string, isInFunctionBlock: boolean) => ({
         message: `'typecast' statement can only be applied to ${!isInFunctionBlock ? '\'m\'' : 'variables'}, but was applied to '${foundApplication}'`,
-        legacyCode: 1148,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-typecast-target'
     }),
     itemCannotBeUsedAsType: (typeText: string) => ({
         message: `'${typeText}' cannot be used as a type`,
-        legacyCode: 1149,
         severity: DiagnosticSeverity.Error,
         code: 'invalid-type-reference'
     }),
     unsafeUnmatchedTerminatorInConditionalCompileBlock: (terminator: string) => ({
         message: `Unsafe unmatched terminator '${terminator}' in conditional compilation block`,
-        legacyCode: 1150,
         severity: DiagnosticSeverity.Error,
         code: 'inconsistent-conditional-compile-nesting'
     }),
     returnTypeCoercionMismatch: (returnType = 'string') => ({
         message: `Function has no return statement and will return 'invalid': '${returnType}' cannot be coerced into 'invalid'`,
-        legacyCode: 1151,
         severity: DiagnosticSeverity.Error,
         code: 'return-type-coercion-mismatch'
     }),
     argumentTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Argument of type '${actualTypeString}' is not compatible with parameter of type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} `,
         data: data,
-        legacyCode: 1152,
         severity: DiagnosticSeverity.Error,
         code: 'argument-type-mismatch'
     }),
     returnTypeMismatch: (actualTypeString: string, expectedTypeString: string, data?: TypeCompatibilityData) => ({
         message: `Type '${actualTypeString}' is not compatible with declared return type '${expectedTypeString}'${typeCompatibilityMessage(actualTypeString, expectedTypeString, data)} '`,
         data: data,
-        legacyCode: 1153,
         severity: DiagnosticSeverity.Error,
         code: 'return-type-mismatch'
     }),
@@ -1065,7 +1058,6 @@ export let DiagnosticMessages = {
             typeName: typeName,
             isCallfunc: true
         },
-        legacyCode: 1154,
         severity: DiagnosticSeverity.Error,
         code: 'cannot-find-callfunc'
     }),
@@ -1078,6 +1070,341 @@ export let DiagnosticMessages = {
         message: `Type '${typeName}' is not iterable`,
         severity: DiagnosticSeverity.Error,
         code: 'not-iterable'
+    }),
+    propAccessNotPermittedAfterFunctionCallInExpressionStatement: (accessDescription: string) => ({
+        message: `${accessDescription} access not permitted after a function call when used in an expression statement`,
+        legacyCode: 1143,
+        severity: DiagnosticSeverity.Error,
+        code: 'invalid-access'
+    }),
+    computedPropertyKeyMustBeConstantExpression: () => ({
+        message: `Computed property keys must be a compile-time constant (enum member or const value)`,
+        legacyCode: 1144,
+        severity: DiagnosticSeverity.Error,
+        code: 'computed-property-key-not-constant'
+    }),
+    computedAAKeyMustBeStringExpression: () => ({
+        message: `Computed associative array keys must resolve to a string value`,
+        legacyCode: 1145,
+        severity: DiagnosticSeverity.Error,
+        code: 'computed-property-key-not-string'
+    }),
+    featureRequiresMinFirmwareVersion: (featureName: string, minimumVersion: string, configuredVersion: string) => ({
+        message: `'${featureName}' requires Roku firmware version ${minimumVersion} or higher (current target is ${configuredVersion})`,
+        legacyCode: 1146,
+        severity: DiagnosticSeverity.Error,
+        code: 'requires-min-firmware-version'
+    }),
+    reservedBuiltinUsedAsValue: (name: string) => ({
+        message: `'${name}' is a reserved builtin and can only be used as a function call (e.g. '${name}(...)')`,
+        legacyCode: 1147,
+        severity: DiagnosticSeverity.Error,
+        code: 'reserved-builtin-used-as-value'
+    }),
+    /**
+     * Emitted when a block recovers from a wrong terminator (e.g. `while ... next` or `for ... end while`).
+     * `expected` lists the legal terminators in preferred-first order; `found` is the actual text.
+     * Quick fixes consume the structured `data` to build "Convert '<found>' to '<expected[i]>'" actions.
+     */
+    mismatchedEndingToken: (expected: string[] = [], found = '') => {
+        const expectedList = Array.isArray(expected) ? expected : [];
+        return {
+            message: `Expected ${expectedList.map(text => `'${text}'`).join(' or ')} but found '${found}'`,
+            legacyCode: 1148,
+            data: {
+                expected: expectedList,
+                found: found
+            },
+            severity: DiagnosticSeverity.Error,
+            code: 'mismatched-ending-token'
+        };
+    },
+    /**
+     * Callable was marked removed in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call is a hard error on device.
+     */
+    globalCallableRemoved: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is removed in ${formatAvailabilityAxis(axis, threshold)} or higher (current target is ${current})`,
+        legacyCode: 1149,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Error,
+        code: 'global-callable-removed'
+    }),
+    /**
+     * Callable was marked deprecated in `availability.os` or `availability.rsg`, and the project's
+     * effective firmware/rsg_version meets that threshold. The call still works but should
+     * be migrated.
+     */
+    globalCallableDeprecated: (name = '', axis: AvailabilityAxis = 'os', threshold = '', current = '') => ({
+        message: `'${name}' is deprecated as of ${formatAvailabilityAxis(axis, threshold)} (current target is ${current})`,
+        legacyCode: 1150,
+        data: { name: name, axis: axis, threshold: threshold, current: current },
+        severity: DiagnosticSeverity.Warning,
+        code: 'global-callable-deprecated'
+    }),
+    rsgVersionRequiresMinFirmware: (rsgVersion: string, requiredFirmware: string, configuredFirmware: string) => ({
+        message: `rsg_version=${rsgVersion} requires Roku firmware version ${requiredFirmware} or higher (current target is ${configuredFirmware})`,
+        legacyCode: 1151,
+        severity: DiagnosticSeverity.Error,
+        code: 'rsg-version-requires-min-firmware'
+    }),
+    invalidRsgVersionFormat: (value: string) => ({
+        message: `'${value}' is not a valid rsg_version (expected value like '1.2' or '1.3')`,
+        legacyCode: 1152,
+        severity: DiagnosticSeverity.Warning,
+        code: 'invalid-rsg-version-format'
+    }),
+    rsgVersionDeprecated: (rsgVersion: string, suggestedReplacement: string) => ({
+        message: `rsg_version=${rsgVersion} is deprecated; consider upgrading to rsg_version=${suggestedReplacement}`,
+        legacyCode: 1153,
+        severity: DiagnosticSeverity.Warning,
+        code: 'rsg-version-deprecated'
+    }),
+    rsgVersionRemoved: (rsgVersion: string, removedAt: string, replacement: string) => ({
+        message: `rsg_version=${rsgVersion} was removed in firmware ${removedAt}; use rsg_version=${replacement}`,
+        legacyCode: 1154,
+        severity: DiagnosticSeverity.Error,
+        code: 'rsg-version-removed'
+    }),
+    deprecatedBsConfigOption: (optionName: string) => ({
+        message: `'${optionName}' is deprecated at the top level of bsconfig.json. Move it into 'compilerOptions.${optionName}' instead`,
+        legacyCode: 1155,
+        severity: DiagnosticSeverity.Warning,
+        code: 'deprecated-bsconfig-option'
+    }),
+    diagnosticFilterLooksLikeFilePath: (value: string) => ({
+        message: `Diagnostic filter "${value}" looks like a file path or glob, not a diagnostic code. To filter diagnostics by file, use the "files" property instead: { "files": ["${value}"] }`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'diagnostic-filter-looks-like-file-path'
+    }),
+    xmlTagMismatch: (openingTag: string, closingTag: string) => ({
+        message: `Mismatched closing tag: expected '</${openingTag}>' but found '</${closingTag}>'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'xml-tag-mismatch'
+    }),
+    /**
+     * @param name the full name of the function, including namespace
+     * @param length the actual length of `name`
+     * @param maxLength the maximum length a function name may be before it gets truncated by the device at runtime
+     */
+    functionNameTooLong: (name: string, length: number, maxLength: number) => ({
+        message: `Function name '${name}' is ${length} characters long, which exceeds the maximum of ${maxLength}. It will be truncated when converted with ToStr()`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'function-name-too-long'
+    }),
+    xmlTagWrongCase: (actualTag: string, expectedTag: string) => ({
+        message: `Tag '${actualTag}' must be all lower case. Use '${expectedTag}' instead`,
+        severity: DiagnosticSeverity.Error,
+        code: 'xml-tag-wrong-case'
+    }),
+    classConstructorNotAllowedInConditionalCompile: () => ({
+        message: `Class constructor 'new' cannot be declared inside a conditional compile ('#if') block`,
+        severity: DiagnosticSeverity.Error,
+        code: 'class-constructor-in-conditional-compile'
+    }),
+    spreadOperatorNotAllowedHere: () => ({
+        message: `Spread operator is only supported in array and associative array literals assigned directly to a variable, property, or index`,
+        severity: DiagnosticSeverity.Error,
+        code: 'spread-operator-not-allowed-here'
+    }),
+    spreadValueTypeMismatch: (valueType: string, literalKind: 'array' | 'associative array') => ({
+        message: `Cannot spread '${valueType}' into an ${literalKind} literal`,
+        severity: DiagnosticSeverity.Error,
+        code: 'spread-value-type-mismatch'
+    }),
+    selectCaseMissingCaseElse: () => ({
+        message: `'select case' statement has no 'case else' branch, so values that match no case are silently ignored`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-missing-case-else'
+    }),
+    expectedExpressionAfterSelectCase: () => ({
+        message: `Expected expression after 'select case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-select-case-expression'
+    }),
+    expectedCaseValue: (after: string) => ({
+        message: `Expected a case value after '${after}'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'expected-case-value'
+    }),
+    statementBeforeFirstCase: () => ({
+        message: `Statements are not allowed between 'select case' and the first 'case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'statement-before-first-case'
+    }),
+    caseElseMustBeLast: () => ({
+        message: `'case else' must be the last case in a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'case-else-must-be-last'
+    }),
+    duplicateCaseElse: () => ({
+        message: `A 'select case' statement may only have one 'case else'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-case-else'
+    }),
+    caseOutsideSelectCase: () => ({
+        message: `'case' can only be used inside a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'case-outside-select-case'
+    }),
+    endSelectWithoutSelectCase: () => ({
+        message: `Found 'end select' without a matching 'select case'`,
+        severity: DiagnosticSeverity.Error,
+        code: 'end-select-without-select-case'
+    }),
+    duplicateCaseValue: (value: string, line: number) => ({
+        message: `Duplicate case value '${value}'. The case on line ${line} always matches first, so this value is unreachable`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'duplicate-case-value'
+    }),
+    caseValueTypeMismatch: (actualType: string, expectedType: string) => ({
+        message: `Case value is a ${actualType} but this 'select case' compares against a ${expectedType}. Comparing mismatched types with '=' causes a 'Type Mismatch' crash at runtime`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'case-value-type-mismatch'
+    }),
+    emptyCaseDoesNotFallThrough: () => ({
+        message: `Empty case does nothing: cases do not fall through to the next case. To share one body, list the values together (i.e. 'case 1, 2'), or add 'exit select' if doing nothing is intended`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'empty-case-does-not-fall-through'
+    }),
+    selectCaseHasNoCases: () => ({
+        message: `'select case' statement has no cases`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-has-no-cases'
+    }),
+    /**
+     * @param enumName the name of the enum the `select case` subject belongs to
+     * @param missingMembers the names of the enum members that no case handles
+     */
+    selectCaseMissingEnumMembers: (enumName: string, missingMembers: string[]) => ({
+        message: `'select case' on '${enumName}' does not handle: ${[].concat(missingMembers ?? []).join(', ')}`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'select-case-missing-enum-members'
+    }),
+    caseValueEnumMismatch: (actualEnumName: string, expectedEnumName: string) => ({
+        message: `Case value is a member of enum '${actualEnumName}' but this 'select case' compares against enum '${expectedEnumName}'`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'case-value-enum-mismatch'
+    }),
+    exitSelectOutsideSelectCase: () => ({
+        message: `'exit select' can only be used inside a 'select case' statement`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exit-select-outside-select-case'
+    }),
+    exitSelectInLoop: () => ({
+        message: `'exit select' cannot be used inside a loop within a case. Use 'exit for' or 'exit while' to leave the loop first`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exit-select-in-loop'
+    }),
+    tooManyPrintItems: (count: number, max: number) => ({
+        message: `Print statement has ${count} expressions (commas count too), max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-print-items'
+    }),
+    /**
+     * @param actual the number of variables found in the function
+     * @param max the maximum number of variables Roku allows in a single function
+     */
+    tooManyFunctionVariables: (actual: number, max: number) => ({
+        message: `Function has too many variables: ${actual} found, but Roku allows at most ${max} per function (parameters count toward this limit).`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-variable-count'
+    }),
+    /**
+     * @param count the number of distinct literals of this type found in the file
+     * @param typeName the literal type, one of `integer`, `string`, `float`, `double`, or `longinteger`
+     * @param max the maximum number of distinct literals of one type Roku allows in a single file
+     */
+    tooManyLiterals: (count: number, typeName: string, max: number) => ({
+        message: `File has ${count} distinct ${typeName} literals, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-literal-count'
+    }),
+    labelInTryBlock: (name = '') => ({
+        message: `Label '${name}' cannot be declared inside a 'try' block`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-in-try'
+    }),
+    duplicateLabel: (name = '') => ({
+        message: `Label '${name}' is already declared in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'duplicate-label'
+    }),
+    labelNotFound: (name = '') => ({
+        message: `Cannot find label '${name}' in this function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'label-not-found'
+    }),
+    gotoIntoForLoop: (name = '') => ({
+        message: `'goto ${name}' jumps into a 'for' loop from outside it, which skips the loop setup`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'goto-into-for-loop'
+    }),
+    /**
+     * The body of an `#if` / `#else if` / `#else` branch that is not compiled with the current constants.
+     * Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     */
+    inactiveConditionalCompileBranch: () => ({
+        message: 'Inactive conditional compile branch: this code is not compiled with the current constants',
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'inactive-conditional-compile-branch'
+    }),
+    /**
+     * Code that control flow can never reach. Reported as a hint with the `Unnecessary` tag so editors fade it instead of underlining it.
+     * @param message the complete message, which names why the code is unreachable
+     */
+    unreachableCode: (message = 'Unreachable code') => ({
+        message: message,
+        severity: DiagnosticSeverity.Hint,
+        tags: [DiagnosticTag.Unnecessary],
+        code: 'unreachable-code'
+    }),
+    /**
+     * A regex literal pattern that PCRE (the engine behind `roRegex`) would fail to compile
+     * @param reason why the pattern is invalid (i.e. `missing closing ')' for group`)
+     */
+    invalidRegexPattern: (reason: string) => ({
+        message: `Invalid regular expression: ${reason}`,
+        severity: DiagnosticSeverity.Error,
+        code: 'invalid-regex-pattern'
+    }),
+    unknownRegexFlag: (flag: string) => ({
+        message: `Unknown regular expression flag '${flag}'. roRegex only supports 'i', 'm', 's', and 'x'`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'unknown-regex-flag'
+    }),
+    /**
+     * The function name passed as the callback to `observeField`/`observeFieldScoped` doesn't exist in the component
+     * @param callbackName the callback name as written in the string literal
+     * @param componentName the name of the component whose scope was searched
+     * @param suggestedName the name the function actually has at runtime, when the callback was written with its namespaced name (i.e. `alpha_onChange` for `alpha.onChange`)
+     */
+    observerCallbackNotFound: (callbackName: string, componentName: string, suggestedName?: string) => ({
+        message: `Cannot find function '${callbackName}' to use as an observer callback in component '${componentName}'` +
+            (suggestedName ? `. Namespaced functions must be referenced by their transpiled name: '${suggestedName}'` : ''),
+        severity: DiagnosticSeverity.Warning,
+        code: 'observer-callback-not-found'
+    }),
+    /**
+     * A parameter has both a type designator (i.e. `name$`) and an `as` type that isn't the designator's type, which fails to compile on device
+     * @param paramName the parameter name, including its designator (i.e. `name$`)
+     * @param designatorType the type the designator implies (i.e. `string`)
+     * @param declaredType the type written after `as`
+     */
+    typeDesignatorMismatch: (paramName: string, designatorType: string, declaredType: string) => ({
+        message: `Parameter '${paramName}' is declared 'as ${declaredType}', but its type designator makes it '${designatorType}'. Use 'as ${designatorType}' or remove the type designator`,
+        data: {
+            designatorType: designatorType,
+            declaredType: declaredType
+        },
+        severity: DiagnosticSeverity.Error,
+        code: 'type-designator-mismatch'
+    }),
+    tooManyGotoLabels: (count: number, max: number) => ({
+        message: `Function has ${count} labels used by goto, max is ${max}.`,
+        severity: DiagnosticSeverity.Error,
+        code: 'exceeds-max-goto-label-count'
     })
 };
 export const defaultMaximumTruncationLength = 160;
@@ -1173,14 +1500,25 @@ export function incompatibleSymbolMessage(symbolName: string, options: { scopes?
     return message;
 }
 
+export type AvailabilityAxis = 'os' | 'rsg';
+
+function formatAvailabilityAxis(axis: AvailabilityAxis, version: string): string {
+    return axis === 'os' ? `Roku OS ${version}` : `rsg_version=${version}`;
+}
+
 export const DiagnosticCodeMap = {} as Record<keyof (typeof DiagnosticMessages), string>;
 export const DiagnosticLegacyCodeMap = {} as Record<keyof (typeof DiagnosticMessages), number>;
-export let diagnosticCodes = [] as string[];
+export let diagnosticCodes = [] as DiagnosticCode[];
 for (let key in DiagnosticMessages) {
-    diagnosticCodes.push(DiagnosticMessages[key]().code);
-    diagnosticCodes.push(DiagnosticMessages[key]().legacyCode);
-    DiagnosticCodeMap[key] = DiagnosticMessages[key]().code;
-    DiagnosticLegacyCodeMap[key] = DiagnosticMessages[key]().legacyCode;
+    const typedKey = key as keyof typeof DiagnosticMessages;
+    //every factory returns an object with `code`/`legacyCode` properties regardless of its specific (possibly required)
+    //arguments, so it's safe to call each one with no arguments purely to read those codes off the result
+    const getCodes = DiagnosticMessages[typedKey] as () => { code: string; legacyCode?: number };
+    const codes = getCodes();
+    diagnosticCodes.push(codes.code);
+    diagnosticCodes.push(codes.legacyCode);
+    DiagnosticCodeMap[typedKey] = codes.code;
+    DiagnosticLegacyCodeMap[typedKey] = codes.legacyCode;
 }
 
 export interface DiagnosticInfo {
@@ -1198,3 +1536,14 @@ export type DiagnosticMessageType<K extends keyof D, D extends Record<string, (.
     ReturnType<D[K]> &
     //include the missing properties from BsDiagnostic
     Pick<BsDiagnostic, 'code' | 'location' | 'relatedInformation' | 'tags'>;
+
+/**
+ * Refines a diagnostic to its concrete `DiagnosticMessageType<K>` shape (including the typed `data`
+ * payload) when its code matches `DiagnosticCodeMap[key]`.
+ */
+export function isDiagnosticOfType<K extends keyof typeof DiagnosticMessages>(
+    diagnostic: { code?: number | string },
+    key: K
+): diagnostic is DiagnosticMessageType<K> {
+    return diagnostic.code === DiagnosticCodeMap[key];
+}

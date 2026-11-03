@@ -4,7 +4,7 @@ import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGI
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
-import type { BscType } from '../types';
+import type { TypeExpression } from './Expression';
 
 export interface SGToken {
     text: string;
@@ -325,7 +325,15 @@ export class SGElement {
             chunks.push(
                 state.indentText,
                 state.transpileToken(this.tokens.endTagOpen, '</'),
-                state.transpileToken(this.tokens.endTagName ?? this.tokens.startTagName),
+                //always emit the opening tag's name. A mismatched closing tag (i.e.
+                //`<Group></LayoutGroup>`) is a hard compile error on device, so emit valid
+                //xml rather than faithfully reproducing the broken closing tag. The mismatch
+                //itself is reported by XmlFileValidator.
+                state.transpileToken(
+                    this.tokens.endTagName
+                        ? createSGToken(this.tokens.startTagName.text, this.tokens.endTagName.location)
+                        : this.tokens.startTagName
+                ),
                 state.transpileToken(this.tokens.endTagClose, '>'),
                 state.newline
             );
@@ -453,7 +461,10 @@ export class SGInterfaceField extends SGElement {
         this.setAttributeValue('alwaysNotify', value);
     }
 
-    bscType: BscType;
+    /**
+     * The field's `type` parsed as a BrighterScript type expression. Only set for types that aren't built-in SceneGraph field types
+     */
+    typeExpression?: TypeExpression;
 }
 
 export enum SGFieldType {

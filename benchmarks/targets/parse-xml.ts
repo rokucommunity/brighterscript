@@ -1,22 +1,13 @@
-import type { BsConfig } from '../../src';
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig } from '../helpers';
 
 module.exports = async (options: TargetOptions) => {
     const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
-    const { ProgramBuilder, XmlFile } = brighterscript;
+    const { XmlFile } = brighterscript;
 
-    const builder = new ProgramBuilder();
+    const builder = createBuilder(options);
     //run the first run
-    await builder.run({
-        cwd: projectPath,
-        createPackage: false,
-        copyToStaging: false,
-        noEmit: true,
-        //disable diagnostic reporting (they still get collected)
-        diagnosticFilters: ['**/*'],
-        logLevel: 'error',
-        ...options.additionalConfig
-    } as BsConfig & Record<string, any>);
+    await builder.run(getConfig(options));
     //collect all the XML file contents
     const xmlFiles = Object.values(builder.program!.files).filter(x => (x as any)?.extension === '.xml').map(x => ({
         srcPath: x.srcPath ?? (x as any).pathAbsolute,

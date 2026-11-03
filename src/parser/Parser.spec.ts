@@ -4,12 +4,12 @@ import { ReservedWords, TokenKind } from '../lexer/TokenKind';
 import type { AAMemberExpression, BinaryExpression, GroupingExpression, InlineInterfaceExpression, LiteralExpression, TypecastExpression, TypeExpression, UnaryExpression } from './Expression';
 import { TernaryExpression, NewExpression, IndexedGetExpression, DottedGetExpression, XmlAttributeGetExpression, CallfuncExpression, AnnotationExpression, CallExpression, FunctionExpression, VariableExpression } from './Expression';
 import { Parser, ParseMode } from './Parser';
-import type { AliasStatement, AssignmentStatement, Block, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ConditionalCompileStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement, TypeStatement } from './Statement';
-import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement } from './Statement';
+import type { AliasStatement, AssignmentStatement, ClassStatement, ConditionalCompileConstStatement, ConditionalCompileErrorStatement, ExitStatement, ForStatement, IfStatement, InterfaceStatement, ReturnStatement, TypecastStatement, TypeStatement } from './Statement';
+import { PrintStatement, FunctionStatement, NamespaceStatement, ImportStatement, Block, ConditionalCompileStatement } from './Statement';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import { isAliasStatement, isAssignmentStatement, isBinaryExpression, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isDottedGetExpression, isExitStatement, isExpression, isExpressionStatement, isFunctionStatement, isGroupingExpression, isIfStatement, isIndexedGetExpression, isInlineInterfaceExpression, isInterfaceStatement, isLiteralExpression, isNamespaceStatement, isPrintStatement, isTypecastExpression, isTypecastStatement, isTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression } from '../astUtils/reflection';
-import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, rootDir } from '../testHelpers.spec';
+import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, getDiagnosticRange, rootDir } from '../testHelpers.spec';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import type { Expression, Statement } from './AstNode';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
@@ -17,7 +17,7 @@ import { IntegerType } from '../types/IntegerType';
 import { FloatType } from '../types/FloatType';
 import { StringType } from '../types/StringType';
 import { ArrayType, DynamicType, UnionType } from '../types';
-import { standardizePath as s } from '../util';
+import { standardizePath as s, util } from '../util';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 
 describe('parser', () => {
@@ -169,7 +169,7 @@ describe('parser', () => {
                 sub main()
                     call()a
                 end sub
-            `).diagnostics.map(x => rangeToArray(x.location.range))).to.eql([
+            `).diagnostics.map(x => rangeToArray(getDiagnosticRange(x)))).to.eql([
                 [2, 26, 2, 27],
                 [2, 27, 2, 28]
             ]);
@@ -185,7 +185,7 @@ describe('parser', () => {
                 DiagnosticMessages.expectedStatement().message
             );
 
-            expect(diagnostics[0]?.location.range).to.eql(
+            expect(getDiagnosticRange(diagnostics[0])).to.eql(
                 Range.create(3, 20, 3, 32)
             );
         });
@@ -996,6 +996,63 @@ describe('parser', () => {
                 let { diagnostics } = Parser.parse(tokens);
                 expect(diagnostics, `assigning to reserved word "${reservedWord}" should have been an error`).to.be.length.greaterThan(0);
             }
+        });
+
+        describe('unreferencable builtins as parameter names', () => {
+            it('flags `function f(Box)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Box)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Box')]);
+            });
+
+            it('flags `function f(CreateObject)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(CreateObject)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('CreateObject')]);
+            });
+
+            it('flags `function f(GetGlobalAA)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetGlobalAA)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetGlobalAA')]);
+            });
+
+            it('flags `function f(GetLastRunCompileError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunCompileError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunCompileError')]);
+            });
+
+            it('flags `function f(GetLastRunRunTimeError)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(GetLastRunRunTimeError)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('GetLastRunRunTimeError')]);
+            });
+
+            it('flags `function f(ObjFun)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(ObjFun)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('ObjFun')]);
+            });
+
+            it('flags `function f(Pos)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Pos)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Pos')]);
+            });
+
+            it('flags `function f(Run)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Run)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Run')]);
+            });
+
+            it('flags `function f(Tab)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(Tab)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('Tab')]);
+            });
+
+            it('flags `function f(type)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(type)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('type')]);
+            });
+
+            it('flags `function f(eval)` (parameter name)', () => {
+                let { diagnostics } = parse(`function f(eval)\nend function`);
+                expectDiagnostics(diagnostics, [DiagnosticMessages.cannotUseReservedWordAsIdentifier('eval')]);
+            });
         });
     });
 
@@ -2458,7 +2515,7 @@ describe('parser', () => {
             ]);
         });
 
-        it('has no diagnostics from false blocks', () => {
+        it('keeps the diagnostics from inactive blocks, because validation decides which branches are inactive', () => {
             let { diagnostics } = parse(`
                 sub foo()
                 #if DEBUG
@@ -2470,7 +2527,78 @@ describe('parser', () => {
                 #end if
                 end sub
             `, ParseMode.BrighterScript, { debug: false });
+            expect(diagnostics.map(diagnostic => getDiagnosticRange(diagnostic).start.line)).to.include.members([3, 7]);
+        });
+
+        it('allows a chain with #else if to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if', ParseMode.BrighterScript, { A: true, B: false });
             expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows a chain with #else if and #else to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#else\nz = 3\n#end if', ParseMode.BrighterScript, { A: true, B: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows a chain with #elseif and #endif to end at end of file without a trailing newline', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#elseif B\ny = 2\n#endif', ParseMode.BrighterScript, { A: true, B: false });
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('parses a statement on the line after #end if at the top level', () => {
+            const { ast, diagnostics } = parse('#if bla\n#end if \ndoesThisStillWork()\n', ParseMode.BrighterScript, { bla: false });
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements).to.be.lengthOf(2);
+            expect(isConditionalCompileStatement(ast.statements[0])).to.be.true;
+            expect(isExpressionStatement(ast.statements[1])).to.be.true;
+        });
+
+        for (const [description, directives] of [
+            ['#if', '#if bla\n#end if '],
+            ['an #else if chain', '#if bla\n#else if foo\n#end if '],
+            ['an #else if and #else chain', '#if bla\n#else if foo\n#else\n#end if ']
+        ]) {
+            it(`parses a statement on the line after the #end if of ${description} in a function`, () => {
+                const { ast, diagnostics } = parse(`sub main()\n${directives}\ndoesThisStillWork()\nend sub\n`, ParseMode.BrighterScript, { bla: false, foo: true });
+                expectZeroDiagnostics(diagnostics);
+                const statements = (ast.statements[0] as FunctionStatement).func.body.statements;
+                expect(statements).to.be.lengthOf(2);
+                expect(isConditionalCompileStatement(statements[0])).to.be.true;
+                expect(isExpressionStatement(statements[1])).to.be.true;
+            });
+        }
+
+        it('gives each branch a location from the end of its opening directive to the start of its closing directive', () => {
+            const { ast } = parse(`#if A\n    x = 1\n#else if B\n#else\n    ' only a comment\n#end if\n`, ParseMode.BrighterScript, { A: false, B: false });
+            const statement = ast.statements[0] as ConditionalCompileStatement;
+            const elseIf = statement.elseBranch as ConditionalCompileStatement;
+            expect(statement.thenBranch.location.range).to.eql({ start: { line: 0, character: 5 }, end: { line: 2, character: 0 } });
+            //an empty branch
+            expect(elseIf.thenBranch.location.range).to.eql({ start: { line: 2, character: 10 }, end: { line: 3, character: 0 } });
+            //a branch with only a comment, which is not a statement
+            expect((elseIf.elseBranch as Block).location.range).to.eql({ start: { line: 3, character: 5 }, end: { line: 5, character: 0 } });
+        });
+
+        it('gives the branches of a statement built without the parser their locations once it is linked', () => {
+            const { ast } = parse(`#if A\n    x = 1\n#else\n    y = 2\n#end if\n`, ParseMode.BrighterScript, { A: false });
+            const parsed = ast.statements[0] as ConditionalCompileStatement;
+            const built = new ConditionalCompileStatement({
+                hashIf: parsed.tokens.hashIf,
+                condition: parsed.tokens.condition,
+                hashElse: parsed.tokens.hashElse,
+                hashEndIf: parsed.tokens.hashEndIf,
+                thenBranch: new Block({ statements: [] }),
+                elseBranch: new Block({ statements: [] })
+            });
+            ast.statements[0] = built;
+            ast.link();
+            expect(built.thenBranch.location.range).to.eql({ start: { line: 0, character: 5 }, end: { line: 2, character: 0 } });
+            expect((built.elseBranch as Block).location.range).to.eql({ start: { line: 2, character: 5 }, end: { line: 4, character: 0 } });
+        });
+
+        it('reports junk after the #end if of a chain', () => {
+            const { diagnostics } = parse('#if A\nx = 1\n#else if B\ny = 2\n#end if x\n', ParseMode.BrighterScript, { A: true, B: false });
+            expect(diagnostics).to.not.be.empty;
         });
 
         it('allows #if not bs_const', () => {
@@ -2545,13 +2673,12 @@ describe('parser', () => {
                 ]);
             });
 
-            it('has diagnostic if invalid lhs', () => {
-                let { diagnostics } = parse(`
+            it('parses a value that is not true or false without a diagnostic, because the value is validated later', () => {
+                let { ast, diagnostics } = parse(`
                     #const test = 4
                 `, ParseMode.BrighterScript);
-                expectDiagnostics(diagnostics, [
-                    DiagnosticMessages.invalidHashConstValue().message
-                ]);
+                expectZeroDiagnostics(diagnostics);
+                expect(isConditionalCompileConstStatement(ast.statements[0])).to.be.true;
             });
         });
 
@@ -2864,7 +2991,7 @@ describe('parser', () => {
                 end sub
             `, ParseMode.BrightScript);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('inline interface')
             ]);
         });
 
@@ -2875,7 +3002,7 @@ describe('parser', () => {
                 end function
             `, ParseMode.BrightScript);
             expectDiagnosticsIncludes(diagnostics, [
-                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('custom types')
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('inline interface')
             ]);
         });
 
@@ -3138,6 +3265,457 @@ describe('parser', () => {
             expectZeroDiagnostics(diagnostics);
         });
     });
+
+    describe('type statement', () => {
+        it('allows type statement ', () => {
+            let { ast, diagnostics } = parse(`
+                TYPE x = string
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('TYPE');
+            expect(stmt.value).to.exist;
+        });
+
+        it('is disallowed in brightscript mode', () => {
+            let { diagnostics } = parse(`
+                type x = string
+            `, ParseMode.BrightScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('type statements')
+            ]);
+        });
+
+        it('disallows `type` for function name', () => {
+            let { diagnostics } = parse(`
+                function type() as integer
+                    return 1
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('disallows `type` for variable name', () => {
+            let { diagnostics } = parse(`
+                function foo() as integer
+                    type = 1
+                    return type
+                end function
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotUseReservedWordAsIdentifier('type').message
+            ]);
+        });
+
+        it('has error when rhs is not a type', () => {
+            let { diagnostics } = parse(`
+                type x = 123
+            `, ParseMode.BrighterScript);
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.expectedIdentifier('=').message
+            ]);
+        });
+
+        it('allows type statement with complicated type', () => {
+            let { ast, diagnostics } = parse(`
+                type x = string or CustomKlass or roAssociativeArray
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(isTypeStatement(ast.statements[0])).to.be.true;
+            const stmt = ast.statements[0] as TypeStatement;
+            expect(stmt.tokens.type.text).to.eq('type');
+            expect(stmt.value).to.exist;
+        });
+    });
+
+
+    describe('inline interfaces (more)', () => {
+        it('inline interface as return type', () => {
+            let { ast, diagnostics } = parse(`
+               function test() as {x as string}
+                    print {x: "hello"}
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+        });
+
+        it('parses a big inline interface as param type', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(foo as {
+                    x as string,
+                    y as {a as integer}
+                    z})
+                    print foo.x + y.a.toStr()
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+        });
+
+        it('allows optional members', () => {
+            let { ast, diagnostics } = parse(`
+                sub test(p as {x as string, optional y})
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            expect(ast.statements.length).to.eq(1);
+        });
+
+        it('is allowed as typecast', () => {
+            let { diagnostics } = parse(`
+                sub test(p)
+                    print (p as {name as string}).name
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('is allowed as class and interface field', () => {
+            let { diagnostics } = parse(`
+                class Klass
+                    x as {name as string}
+                end class
+                interface Iface
+                    y as {age as integer}
+                end interface
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have custom type as member type', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                   name as string
+                end interface
+                function test(z as {foo as IFace})
+                    return z.foo.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have per-member doc comment', () => {
+            let { diagnostics } = parse(`
+                interface IFace
+                    inline as {
+                        ' comment 1
+                        name as string
+                        ' comment 2
+                        age as integer
+                    }
+                end interface
+                function test(z as {foo as IFace})
+                    return z.foo.inline.name
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('can have string literals as members', () => {
+            let { diagnostics } = parse(`
+                function test(z as {"this is a stringliteral" as string})
+                    return z["this is a stringliteral"]
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('for each with types', () => {
+        it('parses without errors', () => {
+            let { diagnostics } = parse(`
+                function main()
+                    for each item as string in ["a", "b", "c"]
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+
+        it('allows complicated expressions', () => {
+            let { diagnostics } = parse(`
+                function main(data)
+                    for each item as {a as integer or boolean, b as SomeInterface[], c as {id as string} } or string in data
+                        print item
+                    end for
+                end function
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+        });
+    });
+
+    describe('line continuation', () => {
+        describe('binary operator continuation', () => {
+            it('is allowed after arithmetic operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x +
+                            y
+                        b = x -
+                            y
+                        c = x *
+                            y
+                        d = x /
+                            y
+                        e = x \\
+                            y
+                        f = x mod
+                            y
+                        g = x ^
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after boolean operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = isValid and
+                            isEnabled
+                        b = isValid or
+                            isEnabled
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is allowed after relational operators in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        a = x =
+                            y
+                        b = x <>
+                            y
+                        c = x >
+                            y
+                        d = x >=
+                            y
+                        e = x <
+                            y
+                        f = x <=
+                            y
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatement()
+                ]);
+            });
+        });
+
+        describe('function call argument continuation', () => {
+            it('is not allowed in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                    DiagnosticMessages.expectedStatement()
+                ]);
+            });
+
+            it('is allowed in BrighterScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `, ParseMode.BrighterScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not affect inline objects passed as arguments in BrightScript mode', () => {
+                let { diagnostics } = parse(`
+                    sub main()
+                        foo({
+                            key: "value"
+                        })
+                    end sub
+                    sub foo(a)
+                    end sub
+                `, ParseMode.BrightScript);
+                expectZeroDiagnostics(diagnostics);
+            });
+        });
+
+        describe('minFirmwareVersion >= 15.3 in BrightScript mode', () => {
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('allows binary operator continuation in BrightScript mode when minFirmwareVersion is above 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '16.0.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow binary operator continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = value1 +
+                                 value2
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '11.0.0'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.expectedStatement()
+                ]);
+            });
+
+            it('allows function call argument continuation in BrightScript mode when minFirmwareVersion is 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.3.0'
+                });
+                expectZeroDiagnostics(diagnostics);
+            });
+
+            it('does not allow function call argument continuation in BrightScript mode when minFirmwareVersion is below 15.3', () => {
+                let { tokens } = Lexer.scan(`
+                    sub main()
+                        result = foo(
+                            arg1,
+                            arg2
+                        )
+                    end sub
+                    sub foo(a, b)
+                    end sub
+                `);
+                let { diagnostics } = Parser.parse(tokens, {
+                    mode: ParseMode.BrightScript,
+                    minFirmwareVersion: '15.2.9'
+                });
+                expectDiagnosticsIncludes(diagnostics, [
+                    DiagnosticMessages.unexpectedToken('\n'),
+                    DiagnosticMessages.unmatchedLeftToken('(', 'function call arguments'),
+                    DiagnosticMessages.expectedStatement()
+                ]);
+            });
+        });
+    });
+
+    /* eslint-disable no-template-curly-in-string */
+    describe('location boundaries', () => {
+        const srcPath = s`${rootDir}/source/main.bs`;
+        const uri = util.pathToUri(srcPath);
+
+        function parseDiagnostics(text: string, mode = ParseMode.BrighterScript) {
+            return Parser.parse(text, {
+                srcPath: srcPath,
+                mode: mode
+            }).diagnostics;
+        }
+
+        it('flags a CRLF newline token at the end of a line', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    print 1 +\r\nend sub', ParseMode.BrightScript), [{
+                ...DiagnosticMessages.unexpectedToken('\r\n'),
+                location: { uri: uri, range: Range.create(1, 13, 1, 15) }
+            }]);
+        });
+
+        it('flags a LF newline token at the end of a line after a surrogate-pair emoji', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    print "😀" +\nend sub', ParseMode.BrightScript), [{
+                ...DiagnosticMessages.unexpectedToken('\n'),
+                location: { uri: uri, range: Range.create(1, 16, 1, 17) }
+            }]);
+        });
+
+        it('flags a token at column 0 after a multi-line template string containing CRLF', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    x = `a\r\n${1}\n` +\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('end sub'),
+                location: { uri: uri, range: Range.create(4, 0, 4, 7) }
+            }]);
+        });
+
+        it('flags a token inside a template string expression', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    x = `a ${1 +}`\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('}'),
+                location: { uri: uri, range: Range.create(1, 16, 1, 17) }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later line of the template', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    x = `😀 ${1}\r\n  and ${1 +}`\r\nend sub'), [{
+                ...DiagnosticMessages.unexpectedToken('}'),
+                location: { uri: uri, range: Range.create(2, 11, 2, 12) }
+            }]);
+        });
+
+        it('flags the end of a file with no trailing newline', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\n    print 1\nend sub\nsub'), [{
+                ...DiagnosticMessages.expectedIdentifier('sub'),
+                location: { uri: uri, range: Range.create(3, 3, 3, 4) }
+            }]);
+        });
+
+        it('flags an unmatched token at the end of a file with no trailing newline', () => {
+            expectDiagnostics(parseDiagnostics('sub main()\r\n    print 1\r\nend sub\r\nprint (1'), [{
+                ...DiagnosticMessages.unmatchedLeftToken('(', 'expression'),
+                location: { uri: uri, range: Range.create(3, 8, 3, 9) }
+            }]);
+        });
+    });
+    /* eslint-enable no-template-curly-in-string */
 });
 
 export function parse(text: string, mode?: ParseMode, bsConsts: Record<string, boolean> = {}) {
@@ -3172,5 +3750,5 @@ function expectCommentWithText(stat: Statement, text: string) {
 }
 
 export function failStatementType(stat: Statement, type: string) {
-    assert.fail(`Statement ${stat.constructor.name} line ${stat.location?.range.start.line} is not a ${type}`);
+    assert.fail(`Statement ${stat.constructor.name} line ${util.getLocation(stat)?.range.start.line} is not a ${type}`);
 }

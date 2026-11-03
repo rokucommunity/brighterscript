@@ -48,39 +48,84 @@ While there are no restrictions on plugin names, it helps others to find your pl
 
 ## Compiler events
 
-Full compiler lifecycle:
+### When does BrighterScript run?
+Most events come in three phases: `before<Event>`, `<event>` (the "during" phase), and `after<Event>`. Every plugin's handler for a phase runs before the next phase starts.
+
+BrighterScript's own built-in work (parsing, validation, hovers, completions, transpiling, writing files, etc.) is the **last participant in the "during" phase** of every event. So:
+
+- `before<Event>`: runs before BrighterScript has done anything for this event.
+- `<event>`: runs before BrighterScript. Use this to contribute results alongside BrighterScript or to handle something yourself first. For example, providing a file in `provideFile` keeps BrighterScript from providing that file, and adding a file to `processedFiles` in `writeFile` keeps BrighterScript from writing it.
+- `after<Event>`: runs after BrighterScript. BrighterScript's results are available here, so this is the place to inspect, modify, or remove them.
+
+There are two exceptions, where BrighterScript goes first in the "during" phase:
+
+- `validateFile`: BrighterScript registers the file's declarations (functions, classes, variables, etc.) first, so your `validateFile` handler can look up the file's symbols and types. BrighterScript's file diagnostics are still added in `afterValidateFile`.
+- `validateScope`: BrighterScript validates scopes first, so your `validateScope` handler runs after BrighterScript's scope validation.
+
+Full compiler lifecycle (_\<BrighterScript ...\>_ marks where BrighterScript's own work happens):
 
 - `beforeProvideProgram`
+- `provideProgram`
 - `afterProvideProgram`
     - `afterProvideScope` ("source" scope)
     - For each physical file:
         - `beforeProvideFile`
-        - `onProvideFile`
+        - `provideFile`
+        - _\<BrighterScript provides the file\>_
         - `afterProvideFile`
     - For each physical and virtual file
         - `beforeAddFile`
+        - `addFile`
         - `afterAddFile`
+        - `beforeProvideScope` (component scope)
+        - `provideScope` (component scope)
         - `afterProvideScope` (component scope)
     - `beforeValidateProgram`
+    - `validateProgram`
     - For each file:
         - `beforeValidateFile`
+        - _\<BrighterScript registers the file's declarations\>_
         - `validateFile`
+        - _\<BrighterScript validates the file\>_
         - `afterValidateFile`
     - For each scope:
         - `beforeValidateScope`
+        - _\<BrighterScript validates the scope\>_
         - `validateScope`
         - `afterValidateScope`
+    - _\<BrighterScript validates the program\>_
     - `afterValidateProgram`
-- `beforePrepublish`
-- `afterPrepublish`
-- `beforeSerializeProgram`
-    - `beforeBuildProgram`
+- _\<BrighterScript prepares the build\>_
+- `beforeBuildProgram`
+- `buildProgram`
+    - `beforePrepareProgram`
+    - `prepareProgram`
     - For each file:
         - `beforePrepareFile`
+        - `prepareFile`
+        - _\<BrighterScript prepares the file\>_
         - `afterPrepareFile`
-    - `afterBuildProgram`
-- `afterSerializeProgram`
+    - `afterPrepareProgram`
+    - `beforeSerializeProgram`
+    - `serializeProgram`
+    - For each file:
+        - `beforeSerializeFile`
+        - `serializeFile`
+        - _\<BrighterScript serializes the file\>_
+        - `afterSerializeFile`
+    - `afterSerializeProgram`
+    - `beforeWriteProgram`
+    - `writeProgram`
+    - For each serialized file:
+        - `beforeWriteFile`
+        - `writeFile`
+        - _\<BrighterScript writes the file\>_
+        - `afterWriteFile`
+    - `afterWriteProgram`
+- `afterBuildProgram`
 - `beforeRemoveProgram`
+- `removeProgram`
+- `afterRemoveProgram`
 
 ### Language server
 
@@ -499,6 +544,20 @@ Plugins are JavaScript modules dynamically loaded by the compiler. Their entry p
 
 To walk/modify the AST, a number of helpers are provided in `brighterscript/dist/parser/ASTUtils`.
 
+### Conditional compilation
+Walks skip the inactive branches of `#if` / `#else if` / `#else` statements, unless the walk mode includes `InternalWalkMode.visitFalseConditionalCompilationBlocks`. Which branches are active depends on the `bs_const` values from the manifest, and on the `#const` declarations that precede each `#if`.
+
+The walk works out which branches are active and stores the answers on the AST, much like it sets `node.parent`:
+
+- **Only a full walk from the root computes the answers.** A full walk starts at the file's `ast` and walks statements and expressions and steps into functions (for example `ast.link()`, or the walk during validation). It starts from the manifest `bs_const` values (`ast.bsConsts`), adds each active `#const` as it reaches it in source order, and stores the result of each `#if` on the statement (`isConditionTrue`, `isConditionDeclared`). Like `parent`, a full walk that is cancelled part way (such as `findChild`, which stops at the first match) only updates the nodes it reached.
+- **Every other walk follows the stored answers.** A walk that starts below the root (such as `callExpression.walk(...)`) or skips part of the tree (such as one that does not step into functions) has not seen every `#const` before the nodes it visits, so it can't work out the conditions itself. An `#if` / `#else if` / `#else` / `#end if` chain compiles exactly one of its branches. When this walk reaches a chain, it doesn't check the conditions again: it goes into the branch the last full walk chose (from each statement's stored `isConditionTrue`), and skips the others, along with any `#if` or `#const` inside them.
+- **Every walk sets `node.isActive`** from the parent's value and the parent's `#if` result. Like `parent`, it is `undefined` until the node has been walked. A full walk also marks the nodes of the inactive branches, even though the visitor never sees them. The compiler treats `undefined` as active, so nodes a plugin creates are included until a walk says otherwise. Check `isActive === false` to find inactive code.
+- **Class members follow `isActive` too.** `ClassStatement.methods`, `fields` and `members` list the members of every branch, since every branch is transpiled. `memberMap` prefers a member that is not inactive when branches declare the same name.
+- **Edits apply at the next full walk.** A plugin that wants to change a constant should insert a `#const` statement into the AST. That, like any other edit to the AST (such as a changed `#if` condition or an inserted `#if` statement), applies at the next full walk, such as the one when the file is validated. Until then, the stored answers describe the AST as it was. An `#if` that no full walk has reached yet has no stored answer, and is walked as if its condition were false.
+- **Don't pass `bsConsts` in the walk options.** The full walk fills it in itself as it moves through the tree. If a walk is given a `bsConsts` map, it evaluates every `#if` and `#const` it reaches against that map and overwrites the stored answers. The rest of the program (validation, transpile, editor features) then uses those answers until the next full walk. A walk that starts below the root also misses any `#const` above where it starts, so its answers can be wrong even for the constants you gave it. To change the constants, set `ast.bsConsts` or insert a `#const` statement, and let the next full walk apply it.
+
+Lexer and parser diagnostics inside an inactive branch are not reported, since the device never compiles that code. Instead, each inactive branch body gets an `inactive-conditional-compile-branch` diagnostic with `Hint` severity and the `Unnecessary` tag, which editors show by fading the code. Plugin tests that expect zero diagnostics on code with an inactive `#if` will see these hints.
+
 ### Working with TypeScript
 
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
@@ -568,8 +627,7 @@ export default function () {
                             event.program.diagnostics.register([{
                                 code: 9000,
                                 message: 'Do not use underscores in function names',
-                                range: funcStmt.tokens.name.range,
-                                file
+                                location: util.getLocation(funcStmt.tokens.name)
                             }]);
                         }
                     }
@@ -581,6 +639,30 @@ export default function () {
     } as CompilerPlugin;
 };
 ```
+
+## Locations
+To keep memory down, tokens and AST nodes don't store a `Location`. Instead, each one stores where it starts and ends, counted from the start of the file (`startPosition` and `endPosition`), plus a reference to info about the file it was parsed from (`sourceInfo`), which is shared by everything from the same parse. `sourceInfo.linePositions` holds where each line of the file starts, which is how positions get converted to lines and characters.
+
+Positions are the gaps between characters, like an editor cursor (and like an LSP `Position`). For a file that starts with `print`, the `print` token's `startPosition` is `0` (before the `p`) and its `endPosition` is `5` (after the `t`), so `endPosition - startPosition` is its length.
+
+Build the line/character `Location` on demand with `util.getLocation()`:
+
+```typescript
+const location = util.getLocation(funcStmt.tokens.name); // { uri, range }
+```
+
+A node's bounds are computed once, when it's constructed, from the children and tokens it's given. They describe where the node came from in the original source, so they don't change if a plugin edits the AST afterwards (i.e. adding statements to a block doesn't move the block).
+
+`util.getLocation()` returns `undefined` for synthetic tokens and nodes (ones that were created in code rather than parsed from a file), since they have no position. A synthetic node won't get a source map entry, and diagnostics can't point at it.
+
+A position describes where the code came from in the original source, so it's used as-is for source maps and diagnostics. Don't change the position of a parsed token or node. Only give one to a synthetic token or node you're creating:
+- **Borrow it from a real token or node in the same file** (preferred): `util.setBounds(node, someToken)`. This shares the file's real `sourceInfo`, so the node combines correctly with the rest of that file's AST. The `create*` functions do the same when given a token or node: `createToken(TokenKind.Identifier, 'name', someToken)`.
+- **From a `Location` in a file**: `util.setLocation(node, location, file.sourceInfo)`. This maps the location into that file, so the node combines with the rest of its AST. If the location is in a different file (or its lines aren't in the file), the node is left without a position. To pass one to a `create*` function, convert it first: `createToken(TokenKind.Identifier, 'name', util.setLocation({} as Locatable, location, file.sourceInfo))`.
+- **From a `Location` without the file's source**: the `create*` functions also accept a `Location` directly, and assigning `node.location` or `token.location` moves an item to that location (see `util.assignLocation()`). When the file's source isn't known, the position goes in a placeholder source for the location's uri. `util.getLocation()` gives back the same location, and items placed this way combine with each other, but not with the file's parsed AST, so prefer the options above when you can.
+
+Code parsed from a snippet (i.e. `Parser.parse('...')` without a `srcPath`) has positions, but no uri. Those positions aren't in the file the code is added to, so lookups by position in that file (hover, definition, etc.) skip it, it isn't included in the bounds of nodes that also contain code from a file, and it doesn't get source map entries.
+
+`Location` is only used for language server output (diagnostics, hovers, etc.), so use `util.getLocation()` when you need one. Tokens and nodes still have `location` and `range` properties to help existing plugins migrate, but they're deprecated and will be removed in a future release. They build a new `Location` on every read (so don't compare them with `===`). Tokens created by hand (i.e. `{ kind: ..., text: ... }` or `{ ...token }`) don't have them, so create tokens with `createToken()` or `util.cloneToken()` instead.
 
 ## Modifying code
 Sometimes plugins will want to modify code before the project is transpiled. While you can technically edit the AST directly at any point in the file's lifecycle, this is not recommended as those changes will remain changed as long as that file exists in memory and could cause issues with file validation if the plugin is used in a language-server context (i.e. inside vscode).

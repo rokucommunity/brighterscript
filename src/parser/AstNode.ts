@@ -1,27 +1,55 @@
 import type { WalkVisitor, WalkOptions } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
-import type { Location, Position } from 'vscode-languageserver';
+import type { Location, Position, Range } from 'vscode-languageserver';
 import { CancellationTokenSource } from 'vscode-languageserver';
 import { InternalWalkMode } from '../astUtils/visitors';
 import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
 import type { GetTypeOptions, TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
-import util from '../util';
 import { DynamicType } from '../types/DynamicType';
+import util from '../util';
 import type { BscType } from '../types/BscType';
-import type { Token } from '../lexer/Token';
+import type { Locatable, SourceInfo, Token } from '../lexer/Token';
 import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
  */
-export abstract class AstNode {
+export abstract class AstNode implements Locatable {
     public abstract kind: AstNodeKind;
     /**
-     *  The starting and ending location of the node.
+     * Where this node starts, counted from the start of its source (see `Locatable.startPosition`).
+     * Use `util.getLocation()` to get the line/character `Location`
      */
-    public abstract location?: Location | undefined;
+    public abstract startPosition: number;
+    /**
+     * Where this node ends: the gap just after its last character (see `Locatable.endPosition`)
+     */
+    public abstract endPosition: number;
+    /**
+     * Info about the source this node was parsed from. `undefined` for synthetic nodes
+     */
+    public abstract sourceInfo: SourceInfo | undefined;
+
+    /**
+     * The starting and ending location of the node. Assigning it moves the node to that location (see `util.assignLocation()`).
+     * @deprecated use `util.getLocation(node)`. This is computed on every read
+     */
+    public get location(): Location | undefined {
+        return util.getLocation(this);
+    }
+
+    public set location(value: Location | undefined) {
+        util.assignLocation(this, value, this.sourceInfo);
+    }
+
+    /**
+     * @deprecated use `util.getLocation(node)?.range`. This is computed on every read
+     */
+    public get range(): Range | undefined {
+        return util.getLocation(this)?.range;
+    }
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
 
@@ -78,6 +106,8 @@ export abstract class AstNode {
      * @param matcher a function called for each node. If you return true, this function returns the specified node. If you return a node, that node is returned. all other return values continue the loop
      *                The function's second parameter is a cancellation token. If you'd like to short-circuit the walk, call `cancellationToken.cancel()`, then this function will return `undefined`
      */
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode) => node is TNode): TNode | undefined;
+    public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationToken: CancellationTokenSource) => boolean | AstNode | undefined | void): TNode | undefined;
     public findAncestor<TNode extends AstNode = AstNode>(matcher: (node: AstNode, cancellationToken: CancellationTokenSource) => boolean | AstNode | undefined | void): TNode | undefined {
         let node = this.parent;
 
@@ -142,9 +172,16 @@ export abstract class AstNode {
      * FInd the deepest child that includes the given position
      */
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
+        //a position only means something within one source (the one this search starts from), so only nodes from that source can match.
+        //Nodes without a source (i.e. a synthetic `if` wrapping real code) or from another source (i.e. code parsed from a snippet) never match
+        //on their own, but the walk still steps into them, so the real code inside them can still be found
+        const searchSource = this.sourceInfo;
         return this.findChild<TNodeType>((node) => {
-            //if the current node includes this range, keep that node
-            if (util.rangeContains(node?.location.range, position)) {
+            if (!node?.sourceInfo || (searchSource && node.sourceInfo !== searchSource)) {
+                return;
+            }
+            const offset = util.getOffset(node.sourceInfo, position);
+            if (offset !== undefined && node.startPosition <= offset && offset <= node.endPosition) {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);
@@ -199,15 +236,82 @@ export abstract class AstNode {
         return [];
     }
 
-    public getBsConsts() {
+    /**
+     * False when this node is inside an `#if` / `#else if` / `#else` branch that was not selected. The device discards that code before compiling.
+     * Undefined until a walk reaches the node, such as a node a plugin just created. The compiler treats undefined as active,
+     * so only code known to be in an inactive branch is left out. Check `isActive === false` to find inactive code.
+     *
+     * Every walk sets this from the parent, but only a full walk from the root re-evaluates the `#if` conditions.
+     */
+    public isActive?: boolean;
+
+    public getBsConsts(): Map<string, boolean> | undefined {
         return this.bsConsts ?? this.parent?.getBsConsts?.();
+    }
+
+    /**
+     * The previous step in this expression, or undefined if this node doesn't build on another
+     * expression. Overridden by dotted/indexed gets, calls, and other chaining nodes.
+     *
+     * Each node in a chain spans a whole prefix of the source, so this walks to the next-shorter
+     * prefix. Given `a.b.c`, there are only three nodes:
+     * ```
+     * a.b.c   .previousInChain -> a.b
+     * a.b     .previousInChain -> a
+     * a       .previousInChain -> undefined
+     * ```
+     *
+     * This walks toward the AST *child*, since chains are stored inverted: the full expression is
+     * the top node and its base is the deepest descendant. It is not `parent` reversed though -
+     * arguments and index values have a `parent`, but are never anything's `previousInChain`,
+     * because they're separate expressions that merely sit inside this one:
+     * ```
+     * a.b(arg)   //CallExpression.previousInChain is `a.b`, NOT `arg`
+     * a[i]       //IndexedGetExpression.previousInChain is `a`, NOT `i`
+     * ```
+     */
+    public get previousInChain(): AstNode | undefined {
+        return undefined;
+    }
+
+    /**
+     * Is this node a complete expression, rather than one step inside a longer one?
+     *
+     * True when nothing chains onto this node. Statements are always terminal. Use this to find
+     * whole expressions while walking, instead of also matching every prefix inside them.
+     *
+     * ```
+     * print a.b.c(arg)
+     *
+     * //a.b.c(arg)   yes - the whole expression
+     * //a.b.c        no  - a.b.c(arg) chains onto it
+     * //a.b          no  - a.b.c chains onto it
+     * //a            no  - a.b chains onto it
+     * //arg          yes - an argument, so an expression of its own
+     * ```
+     *
+     * An argument is terminal no matter how long it is, because nothing chains onto it. Both of
+     * these are terminal, even though they sit inside the call:
+     * ```
+     * print doSomething(x.y, 1 + 2)
+     *
+     * //x.y          yes
+     * //1 + 2        yes
+     * ```
+     *
+     * Requires `parent` to be set, so the node must already be linked (see `link()`). An
+     * unlinked node has no parent, so it reports `true`.
+     */
+    public isTerminal(): boolean {
+        //walk up, then back down: if we don't land on ourselves, nothing chains onto us
+        return this.parent === undefined || this.parent.previousInChain !== this;
     }
 
     /**
      * Clone this node and all of its children. This creates a completely detached and identical copy of the AST.
      * All tokens, statements, expressions, range, and location are cloned.
      */
-    public abstract clone();
+    public abstract clone(): AstNode;
 
     /**
      * Helper function for creating a clone. This will clone any attached annotations, as well as reparent the cloned node's children to the clone
@@ -225,14 +329,9 @@ export abstract class AstNode {
             const children = (Array.isArray(clone?.[key]) ? clone[key] : [clone?.[key]]) as any[];
             for (let child of children ?? []) {
                 if (child) {
-                    (clone[key as any] as AstNode).parent = clone;
+                    (child as AstNode).parent = clone;
                 }
             }
-        }
-
-        //reapply the location if we have one but the clone doesn't
-        if (!clone.location && this.location) {
-            clone.location = util.cloneLocation(this.location);
         }
         return clone;
     }
@@ -281,6 +380,8 @@ export abstract class Expression extends AstNode {
      * When being considered by the walk visitor, this describes what type of element the current class is.
      */
     public visitMode = InternalWalkMode.visitExpressions;
+
+    public abstract clone(): Expression;
 }
 
 export enum AstNodeKind {
@@ -299,7 +400,9 @@ export enum AstNodeKind {
     ArrayLiteralExpression = 'ArrayLiteralExpression',
     AAMemberExpression = 'AAMemberExpression',
     AALiteralExpression = 'AALiteralExpression',
+    AAIndexedMemberExpression = 'AAIndexedMemberExpression',
     UnaryExpression = 'UnaryExpression',
+    SpreadExpression = 'SpreadExpression',
     VariableExpression = 'VariableExpression',
     SourceLiteralExpression = 'SourceLiteralExpression',
     NewExpression = 'NewExpression',
@@ -343,6 +446,8 @@ export enum AstNodeKind {
     ClassFieldStatement = 'ClassFieldStatement',
     TryCatchStatement = 'TryCatchStatement',
     CatchStatement = 'CatchStatement',
+    SelectCaseStatement = 'SelectCaseStatement',
+    CaseStatement = 'CaseStatement',
     ThrowStatement = 'ThrowStatement',
     EnumStatement = 'EnumStatement',
     EnumMemberStatement = 'EnumMemberStatement',

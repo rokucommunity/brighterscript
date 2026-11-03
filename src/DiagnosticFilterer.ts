@@ -1,7 +1,8 @@
 import type { BsDiagnostic } from './interfaces';
+import { DiagnosticSeverity } from 'vscode-languageserver-protocol';
 import * as path from 'path';
-import * as minimatch from 'minimatch';
-import type { BsConfig } from './BsConfig';
+import * as micromatch from 'micromatch';
+import type { BsConfig, BsDiagnosticSeverity } from './BsConfig';
 import util, { standardizePath as s } from './util';
 import { URI } from 'vscode-uri';
 import type { Program } from './Program';
@@ -15,6 +16,7 @@ interface NormalizedFilter {
     src?: string;
     dest?: string;
     codes?: (number | string)[];
+    minSeverity?: BsDiagnosticSeverity;
     isNegative: boolean;
 }
 
@@ -71,15 +73,35 @@ export class DiagnosticFilterer {
      * Should this file be completely ignored?
      * If the file diagnostics are ignored, we do not need to validate this file
      */
-    public isFileFiltered(file: { srcPath: string; destPath: string }) {
+    public isFileCompletelyFiltered(file: { srcPath: string; destPath: string }) {
         if (!this.options || !this.filters) {
             return false;
         }
+        //this gets asked for every file in every scope, and the glob matching isn't cheap
+        if (this.completelyFilteredCacheOptions !== this.options || this.completelyFilteredCacheFilters !== this.filters) {
+            this.completelyFilteredCache.clear();
+            this.completelyFilteredCacheOptions = this.options;
+            this.completelyFilteredCacheFilters = this.filters;
+        }
+        const cacheKey = `${file.srcPath}|${file.destPath}`;
+        let isMatch = this.completelyFilteredCache.get(cacheKey);
+        if (isMatch === undefined) {
+            isMatch = this.getIsFileCompletelyFiltered(file);
+            this.completelyFilteredCache.set(cacheKey, isMatch);
+        }
+        return isMatch;
+    }
+
+    private completelyFilteredCache = new Map<string, boolean>();
+    private completelyFilteredCacheOptions: BsConfig;
+    private completelyFilteredCacheFilters: NormalizedFilter[];
+
+    private getIsFileCompletelyFiltered(file: { srcPath: string; destPath: string }) {
         this.rootDir = this.options.rootDir;
         let isMatch = false;
         //filter each matched file
         for (let filter of this.filters) {
-            if (filter.codes?.length > 0) {
+            if (filter.codes?.length > 0 || filter.minSeverity !== undefined) {
                 continue;
             }
             let srcMatch = false;
@@ -162,17 +184,30 @@ export class DiagnosticFilterer {
             path.isAbsolute(filter.src) ? filter.src : `${this.rootDir}/${filter.src}`
         );
 
-        let matchedFileUris = minimatch.match(fileUris, src, {
+        //micromatch (picomatch) treats backslashes as escape chars, but standardizePath produces
+        //backslashes on Windows. Match against forward-slash-normalized copies of the paths (and pattern),
+        //then map the matches back to the original paths.
+        const originalByNormalized = new Map<string, string>();
+        for (const filePath of fileUris) {
+            originalByNormalized.set(filePath.replace(/\\/g, '/'), filePath);
+        }
+        let matchedFileUris = micromatch([...originalByNormalized.keys()], src.replace(/\\/g, '/'), {
             nocase: true
-        }).map(src => util.pathToUri(src).toLowerCase());
+        }).map(normalized => util.pathToUri(originalByNormalized.get(normalized)).toLowerCase());
 
         return matchedFileUris;
     }
 
     private matchFileDestUris(filter: NormalizedFilter, fileUris: string[]): string[] {
-        let matchedFileUris = minimatch.match(fileUris, filter.dest, {
+        //micromatch (picomatch) treats backslashes as escape chars; normalize both the paths and the
+        //pattern to forward slashes, then map the matches back to the original dest paths.
+        const originalByNormalized = new Map<string, string>();
+        for (const destPath of fileUris) {
+            originalByNormalized.set(destPath.replace(/\\/g, '/'), destPath);
+        }
+        let matchedFileUris = micromatch([...originalByNormalized.keys()], filter.dest.replace(/\\/g, '/'), {
             nocase: true
-        });
+        }).map(normalized => originalByNormalized.get(normalized));
         return matchedFileUris;
     }
 
@@ -209,24 +244,75 @@ export class DiagnosticFilterer {
         //if the filter is not negative we're turning diagnostics off
         const isSuppressing = !filter.isNegative;
         const lowerFileUri = fileUri.toLowerCase();
-        //if there is no code, set isSuppressed on every diagnostic in this file
-        if (!filter.codes) {
+        const hasCodes = Array.isArray(filter.codes);
+        const hasMinSeverity = filter.minSeverity !== undefined;
+        //if there is no code or minSeverity filter, set isSuppressed on every diagnostic in this file
+        if (!hasCodes && !hasMinSeverity) {
             this.byFile[lowerFileUri].forEach(diagnostic => {
                 diagnostic.isSuppressed = isSuppressing;
             });
 
-            //set isSuppressed for any diagnostics with matching codes
+            //set isSuppressed for any diagnostics with matching codes and/or minSeverity
         } else {
             let fileDiagnostics = this.byFile[lowerFileUri];
             for (const diagnostic of fileDiagnostics) {
-                if (filter.codes.includes(diagnostic.diagnostic.code!) ||
-                    (diagnostic.diagnostic.legacyCode &&
-                        (filter.codes.includes(diagnostic.diagnostic.legacyCode) ||
-                            filter.codes.includes(diagnostic.diagnostic.legacyCode.toString())))) {
+                const codeMatches = hasCodes ? this.matchesCode(filter, diagnostic.diagnostic) : true;
+                const severityMatches = hasMinSeverity ? this.matchesSeverity(filter, diagnostic.diagnostic) : true;
+                if (codeMatches && severityMatches) {
                     diagnostic.isSuppressed = isSuppressing;
                 }
             }
         }
+    }
+
+    private matchesCode(filter: NormalizedFilter, diagnostic: BsDiagnostic): boolean {
+        return !!(
+            filter.codes?.includes(diagnostic.code!) ||
+            (diagnostic.legacyCode &&
+                (filter.codes?.includes(diagnostic.legacyCode) ||
+                    filter.codes?.includes(diagnostic.legacyCode.toString())))
+        );
+    }
+
+    private matchesSeverity(filter: NormalizedFilter, diagnostic: BsDiagnostic): boolean {
+        const diagnosticSeverity = this.toDiagnosticSeverity(diagnostic.severity) ?? DiagnosticSeverity.Error;
+        const minSeverity = this.toDiagnosticSeverity(filter.minSeverity);
+        if (minSeverity === undefined) {
+            return false;
+        }
+        if (filter.isNegative) {
+            return diagnosticSeverity <= minSeverity;
+        }
+        return diagnosticSeverity > minSeverity;
+    }
+
+    private toDiagnosticSeverity(value: unknown): DiagnosticSeverity | undefined {
+        if (typeof value === 'number') {
+            if (
+                value === DiagnosticSeverity.Error ||
+                value === DiagnosticSeverity.Warning ||
+                value === DiagnosticSeverity.Information ||
+                value === DiagnosticSeverity.Hint
+            ) {
+                return value;
+            }
+            return undefined;
+        }
+        if (typeof value === 'string') {
+            switch (value.toLowerCase()) {
+                case 'error':
+                    return DiagnosticSeverity.Error;
+                case 'warn':
+                case 'warning':
+                    return DiagnosticSeverity.Warning;
+                case 'info':
+                case 'information':
+                    return DiagnosticSeverity.Information;
+                case 'hint':
+                    return DiagnosticSeverity.Hint;
+            }
+        }
+        return undefined;
     }
 
     public getDiagnosticFilters(config: BsConfig) {
@@ -262,12 +348,21 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            //code-only filter
-            if ('codes' in filter && !('files' in filter) && Array.isArray(filter.codes)) {
-                result.push({
-                    codes: filter.codes,
+            const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
+            const hasMinSeverity = 'minSeverity' in filter && this.toDiagnosticSeverity(filter.minSeverity) !== undefined;
+
+            //code/minSeverity-only filter
+            if (!('files' in filter) && (hasCodes || hasMinSeverity)) {
+                const normalized: NormalizedFilter = {
                     isNegative: false
-                });
+                };
+                if (hasCodes) {
+                    normalized.codes = filter.codes;
+                }
+                if (hasMinSeverity) {
+                    normalized.minSeverity = filter.minSeverity;
+                }
+                result.push(normalized);
                 continue;
             }
 
@@ -340,12 +435,21 @@ export class DiagnosticFilterer {
                 continue;
             }
 
-            //code-only filter
-            if ('codes' in filter && !('src' in filter) && Array.isArray(filter.codes)) {
-                result.push({
-                    codes: filter.codes,
+            const hasCodes = 'codes' in filter && Array.isArray(filter.codes);
+            const hasMinSeverity = 'minSeverity' in filter && this.toDiagnosticSeverity(filter.minSeverity) !== undefined;
+
+            //code/minSeverity-only filter
+            if (!('src' in filter) && (hasCodes || hasMinSeverity)) {
+                const normalized: NormalizedFilter = {
                     isNegative: false
-                });
+                };
+                if (hasCodes) {
+                    normalized.codes = filter.codes;
+                }
+                if (hasMinSeverity) {
+                    normalized.minSeverity = filter.minSeverity;
+                }
+                result.push(normalized);
                 continue;
             }
 
@@ -353,55 +457,93 @@ export class DiagnosticFilterer {
                 const isNegative = filter.src.startsWith('!');
                 const trimmedFilter = isNegative ? filter.src.slice(1) : filter.src;
 
+                const normalized: NormalizedFilter = {
+                    src: trimmedFilter,
+                    isNegative: isNegative
+                };
                 if ('codes' in filter) {
-                    result.push({
-                        src: trimmedFilter,
-                        codes: filter.codes,
-                        isNegative: isNegative
-                    });
-                } else {
-                    result.push({
-                        src: trimmedFilter,
-                        isNegative: isNegative
-                    });
+                    normalized.codes = filter.codes;
                 }
+                if (hasMinSeverity) {
+                    normalized.minSeverity = filter.minSeverity;
+                }
+                result.push(normalized);
             }
         }
         return result;
     }
 
 
-    private getNormalizedFilter(fileGlob: string, filter: { files: string } | { codes?: (number | string)[] }, locationKey: 'src' | 'dest' = 'src'): NormalizedFilter {
+    private getNormalizedFilter(
+        fileGlob: string,
+        filter: { files?: any; codes?: (number | string)[]; minSeverity?: BsDiagnosticSeverity },
+        locationKey: 'src' | 'dest' = 'src'
+    ): NormalizedFilter {
         const isNegative = fileGlob.startsWith('!');
         const trimmedFilter = isNegative ? fileGlob.slice(1) : fileGlob;
-        if (locationKey === 'src') {
-            if ('codes' in filter && Array.isArray(filter.codes)) {
-                return {
-                    src: trimmedFilter,
-                    codes: filter.codes,
-                    isNegative: isNegative
-                };
-            } else {
-                return {
-                    src: trimmedFilter,
-                    isNegative: isNegative
-                };
+        const normalized: NormalizedFilter = {
+            [locationKey]: trimmedFilter,
+            isNegative: isNegative
+        };
+        if ('codes' in filter && Array.isArray(filter.codes)) {
+            normalized.codes = filter.codes;
+        }
+        if ('minSeverity' in filter && this.toDiagnosticSeverity(filter.minSeverity) !== undefined) {
+            normalized.minSeverity = filter.minSeverity;
+        }
+        return normalized;
+    }
+
+    /**
+     * Does this diagnostic filter "code" value look like a file path/glob instead of a diagnostic code?
+     * v0-style `diagnosticFilters` entries were file globs, but v1 treats bare string/number entries as codes.
+     * This heuristic catches the common glob patterns left over from a v0-style config, as well as any value
+     * that exactly matches the destPath of a file actually in the project (if `knownDestPaths` is provided).
+     */
+    public isCodeValuePathLike(value: number | string, knownDestPaths?: Set<string>): boolean {
+        if (typeof value !== 'string') {
+            return false;
+        }
+        const lowerValue = value.toLowerCase();
+        if (knownDestPaths?.has(lowerValue.replace(/\\/g, '/'))) {
+            return true;
+        }
+        return (
+            value.includes('./') ||
+            value.includes('.\\') ||
+            value.includes('**') ||
+            lowerValue.endsWith('.bs') ||
+            lowerValue.endsWith('.brs') ||
+            lowerValue.endsWith('.xml')
+        );
+    }
+
+    /**
+     * Scan the (non-v0-compat) `diagnosticFilters` config for entries that look like file paths/globs
+     * rather than diagnostic codes, to help teams migrating from the v0-style config.
+     * @param config the program config, containing the `diagnosticFilters` to scan
+     * @param knownDestPaths the lower-cased, forward-slash destPaths of files actually in the project. When
+     * provided, a filter entry that exactly matches one of these paths is flagged even if it doesn't match
+     * the glob-like heuristics (e.g. a bare `source/main.json`).
+     */
+    public getPathLikeDiagnosticFilterCodes(config: BsConfig, knownDestPaths?: Set<string>): (number | string)[] {
+        if (config.diagnosticFiltersV0Compatibility) {
+            return [];
+        }
+        const result = new Set<number | string>();
+        for (let filter of config.diagnosticFilters ?? []) {
+            if ((typeof filter === 'string' || typeof filter === 'number') && this.isCodeValuePathLike(filter, knownDestPaths)) {
+                result.add(filter);
+                continue;
             }
-        } else {
-            // dest
-            if ('codes' in filter && Array.isArray(filter.codes)) {
-                return {
-                    dest: trimmedFilter,
-                    codes: filter.codes,
-                    isNegative: isNegative
-                };
-            } else {
-                return {
-                    dest: trimmedFilter,
-                    isNegative: isNegative
-                };
+            if (filter && typeof filter === 'object' && 'codes' in filter && Array.isArray(filter.codes)) {
+                for (const code of filter.codes) {
+                    if (this.isCodeValuePathLike(code, knownDestPaths)) {
+                        result.add(code);
+                    }
+                }
             }
         }
-
+        return [...result];
     }
 }
