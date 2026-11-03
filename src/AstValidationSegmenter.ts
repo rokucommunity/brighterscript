@@ -1,7 +1,8 @@
 import type { DottedGetExpression, TypeExpression, VariableExpression } from './parser/Expression';
 import { isAliasStatement, isArrayType, isBinaryExpression, isBlock, isBody, isClassStatement, isConditionalCompileStatement, isDottedGetExpression, isInterfaceStatement, isNamespaceStatement, isTypecastStatement, isTypeExpression, isTypeStatement, isVariableExpression } from './astUtils/reflection';
 import { ChildrenSkipper, WalkMode, createVisitor } from './astUtils/visitors';
-import type { ExtraSymbolData, GetTypeOptions, TypeChainEntry } from './interfaces';
+import type { GetTypeOptions, TypeChainEntry } from './interfaces';
+import { createExtraSymbolData } from './interfaces';
 import type { AstNode, Expression } from './parser/AstNode';
 import { util } from './util';
 import type { ClassStatement, NamespaceStatement } from './parser/Statement';
@@ -91,7 +92,7 @@ export class AstValidationSegmenter {
     private addUnresolvedSymbol(segment: AstNode, expression: Expression, assignedSymbolsNames?: Set<string>) {
         const flag = util.isInTypeExpression(expression) ? SymbolTypeFlag.typetime : SymbolTypeFlag.runtime;
         let typeChain: TypeChainEntry[] = [];
-        const extraData = {} as ExtraSymbolData;
+        const extraData = createExtraSymbolData();
         const options: GetTypeOptions = { flags: flag, onlyCacheResolvedTypes: true, typeChain: typeChain, data: extraData };
         let nodeType = expression.getType(options);
         if (isArrayType(nodeType)) {
@@ -264,7 +265,12 @@ export class AstValidationSegmenter {
             walkMode: InsideSegmentWalkMode,
             skipChildren: skipper
         });
-        this.assignedTokensInSegment.set(segment, assignedSymbols);
+        //most segments assign nothing, so only keep the ones that do (an empty Set costs ~150 bytes)
+        if (assignedSymbols.size > 0) {
+            this.assignedTokensInSegment.set(segment, assignedSymbols);
+        } else {
+            this.assignedTokensInSegment.delete(segment);
+        }
         if (!foundUnresolvedInSegment) {
             this.singleValidationSegments.add(segment);
         }

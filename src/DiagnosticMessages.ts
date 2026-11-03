@@ -1394,6 +1394,10 @@ export let DiagnosticMessages = {
      */
     typeDesignatorMismatch: (paramName: string, designatorType: string, declaredType: string) => ({
         message: `Parameter '${paramName}' is declared 'as ${declaredType}', but its type designator makes it '${designatorType}'. Use 'as ${designatorType}' or remove the type designator`,
+        data: {
+            designatorType: designatorType,
+            declaredType: declaredType
+        },
         severity: DiagnosticSeverity.Error,
         code: 'type-designator-mismatch'
     }),

@@ -3690,14 +3690,19 @@ export class FieldStatement extends Statement implements TypedefProvider {
      * Defaults to `DynamicType`
      */
     getType(options: GetTypeOptions) {
+        //only resolve whichever one decides the type: resolving both would add both of their type chains to `options.typeChain`
+        const typeFromTypeExpression = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime });
+        if (typeFromTypeExpression) {
+            return typeFromTypeExpression;
+        }
+
         let initialValueType = this.initialValue?.getType({ ...options, flags: SymbolTypeFlag.runtime });
 
         if (isInvalidType(initialValueType) || isVoidType(initialValueType) || isUninitializedType(initialValueType)) {
             initialValueType = undefined;
         }
 
-        return this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime }) ??
-            util.getDefaultTypeFromValueType(initialValueType) ??
+        return util.getDefaultTypeFromValueType(initialValueType) ??
             DynamicType.instance;
     }
 
