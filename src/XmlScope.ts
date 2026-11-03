@@ -8,6 +8,8 @@ import { DynamicType } from './types/DynamicType';
 import type { BaseFunctionType } from './types/BaseFunctionType';
 import { ComponentType } from './types/ComponentType';
 import type { ExtraSymbolData } from './interfaces';
+import type { BscType } from './types/BscType';
+import type { SGInterfaceField } from './parser/SGTypes';
 
 export class XmlScope extends Scope {
     constructor(
@@ -65,12 +67,22 @@ export class XmlScope extends Scope {
         //add fields
         for (const field of iface.fields ?? []) {
             if (field.id) {
-                const actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable) : DynamicType.instance;
                 //TODO: add documentation - need to get previous comment from XML
-                result.addMember(field.id, {}, actualFieldType, SymbolTypeFlag.runtime);
+                result.addMember(field.id, {}, this.getFieldType(field), SymbolTypeFlag.runtime);
             }
         }
         return result;
+    }
+
+    /**
+     * Get the type of an interface field. Custom types (i.e. interfaces, unions) are looked up in this scope
+     */
+    public getFieldType(field: SGInterfaceField): BscType {
+        if (field.typeExpression) {
+            field.typeExpression.symbolTable = this.symbolTable;
+            return field.typeExpression.getType({ flags: SymbolTypeFlag.typetime });
+        }
+        return field.type ? util.getNodeFieldType(field.type, this.symbolTable) : DynamicType.instance;
     }
 
     public getAllFiles() {

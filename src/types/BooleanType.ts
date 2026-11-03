@@ -29,6 +29,10 @@ export class BooleanType extends BscType {
         return this.toString();
     }
 
+    public toSceneGraphTypeString() {
+        return 'boolean';
+    }
+
     isEqual(targetType: BscType): boolean {
         return isBooleanType(targetType);
     }

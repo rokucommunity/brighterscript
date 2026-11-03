@@ -26,8 +26,8 @@ import { ParseMode } from '../../parser/Parser';
 import { BsClassValidator } from '../../validators/ClassValidator';
 import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
+import type { SGInterfaceField } from '../../parser/SGTypes';
 import type { XmlFile } from '../../files/XmlFile';
-import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
 import { getAllTypesFromCompoundType } from '../../types/helpers';
 import { BscTypeKind } from '../../types/BscTypeKind';
@@ -1993,11 +1993,18 @@ export class ScopeValidator {
                         location: field.tokens.startTagName.location
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
-            } else if (!SGFieldTypes.includes(type.toLowerCase())) {
-                this.addDiagnostic({
-                    ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    location: field.getAttribute('type')?.tokens.value.location
-                }, ScopeValidatorDiagnosticTag.XMLInterface);
+            } else if (field.typeExpression) {
+                if (!this.isFieldTypeResolvable(scope, field)) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.xmlInvalidFieldType(type),
+                        location: field.getAttribute('type')?.tokens.value.location
+                    }, ScopeValidatorDiagnosticTag.XMLInterface);
+                } else if (!scope.getFieldType(field).toSceneGraphTypeString()) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.xmlFieldTypeNotSupported(type),
+                        location: field.getAttribute('type')?.tokens.value.location
+                    }, ScopeValidatorDiagnosticTag.XMLInterface);
+                }
             }
             if (onChange) {
                 if (!callableContainerMap.has(onChange.toLowerCase())) {
@@ -2030,6 +2037,22 @@ export class ScopeValidator {
     /**
      * Detect when a child has imported a script that an ancestor also imported
      */
+    /**
+     * Can every type in a field's custom `type` (i.e. `MyInterface`, `MyInterface[]`) be found in this scope?
+     */
+    private isFieldTypeResolvable(scope: XmlScope, field: SGInterfaceField) {
+        if (!scope.getFieldType(field).isResolvable()) {
+            return false;
+        }
+        //some compound types (like arrays) don't check their inner types, so check each type name directly
+        const unresolvedTypeName = field.typeExpression.findChild(node => {
+            return (isVariableExpression(node) || isDottedGetExpression(node)) &&
+                !isDottedGetExpression(node.parent) &&
+                !node.getType({ flags: SymbolTypeFlag.typetime }).isResolvable();
+        }, { walkMode: WalkMode.visitExpressionsRecursive });
+        return !unresolvedTypeName;
+    }
+
     private diagnosticDetectDuplicateAncestorScriptImports(scope: XmlScope) {
         this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(scope.xmlFile?.srcPath), tag: ScopeValidatorDiagnosticTag.XMLImports });
         if (scope.xmlFile.parentComponent) {

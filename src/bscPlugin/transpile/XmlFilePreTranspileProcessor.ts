@@ -5,6 +5,7 @@ import type { XmlFile } from '../../files/XmlFile';
 import type { AfterPrepareFileEvent } from '../../interfaces';
 import type { SGScript } from '../../parser/SGTypes';
 import util from '../../util';
+import type { XmlScope } from '../../XmlScope';
 
 export class XmlFilePreTranspileProcessor {
     public constructor(
@@ -39,6 +40,21 @@ export class XmlFilePreTranspileProcessor {
                     'value',
                     uri.value.replace(/\.bs/i, '.brs')
                 );
+            }
+        }
+
+        this.transpileFieldTypes();
+    }
+
+    /**
+     * Replace custom field types (i.e. `MyInterface`) with the SceneGraph field type they're stored as (i.e. `assocarray`)
+     */
+    private transpileFieldTypes() {
+        const scope = this.event.program.getScopeByName(this.event.file.destPath) as XmlScope;
+        for (const field of this.event.file.ast?.componentElement?.interfaceElement?.fields ?? []) {
+            const sceneGraphType = field.typeExpression && scope?.getFieldType(field).toSceneGraphTypeString();
+            if (sceneGraphType) {
+                this.event.editor.setProperty(field.getAttribute('type'), 'value', sceneGraphType);
             }
         }
     }

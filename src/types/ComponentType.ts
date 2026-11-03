@@ -17,6 +17,10 @@ export class ComponentType extends CallFuncableType {
 
     public readonly kind = BscTypeKind.ComponentType;
 
+    public toSceneGraphTypeString() {
+        return 'node';
+    }
+
     public get parentComponent() {
         return this.parentType as ComponentType;
     }

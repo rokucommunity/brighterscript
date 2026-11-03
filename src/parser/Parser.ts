@@ -244,7 +244,17 @@ export class Parser {
         this.selectCaseDepth = 0;
         this.pendingAnnotations = [];
 
-        this.ast = this.body();
+        if (options.typeOnly) {
+            this.ast = new Body({ statements: [this.typeExpression()] });
+            if (!this.isAtEnd()) {
+                this.diagnostics.push({
+                    ...DiagnosticMessages.unexpectedToken(this.peek().text),
+                    location: this.peek()
+                });
+            }
+        } else {
+            this.ast = this.body();
+        }
         this.ast.bsConsts = options.bsConsts;
         //now that we've built the AST, link every node to its parent
         this.ast.link();
@@ -1607,7 +1617,7 @@ export class Parser {
     private identifyingExpression(allowedTokenKinds?: TokenKind[]): DottedGetExpression | VariableExpression {
         allowedTokenKinds = allowedTokenKinds ?? this.allowedLocalIdentifiers;
         let firstIdentifier = this.consume(
-            DiagnosticMessages.expectedIdentifier(this.previous().text),
+            DiagnosticMessages.expectedIdentifier(this.previous()?.text),
             TokenKind.Identifier,
             ...allowedTokenKinds
         ) as Identifier;
@@ -4220,6 +4230,12 @@ export interface ParseOptions {
      * Should be a semver-compatible string (e.g. '15.3.0').
      */
     minFirmwareVersion?: string;
+    /**
+     * When true, the parser will only parse types, and will not attempt to parse expressions or statements.
+     * This is used when parsing the type of field in XML.
+     * In this case, there will be one TypeExpression in the Ast.statements array
+     */
+    typeOnly?: boolean;
 }
 
 

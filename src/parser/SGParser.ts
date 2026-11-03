@@ -2,10 +2,13 @@ import type { AttributeCstNode, ContentCstNode, DocumentCstNode, ElementCstNode 
 import * as parser from '@xml-tools/parser';
 import { DiagnosticMessages } from '../DiagnosticMessages';
 import util from '../util';
-import { SGAst, SGProlog, SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGAttribute } from './SGTypes';
+import { SGAst, SGProlog, SGChildren, SGComponent, SGInterfaceField, SGInterfaceFunction, SGInterface, SGNode, SGScript, SGAttribute, SGFieldTypes } from './SGTypes';
 import type { SGElement, SGToken, SGReferences } from './SGTypes';
 import { isSGComponent } from '../astUtils/xml';
-import type { BsDiagnostic } from '../interfaces';
+import { isTypeExpression } from '../astUtils/reflection';
+import type { BsDiagnosticInput } from '../interfaces';
+import { ParseMode, Parser } from './Parser';
+import type { TypeExpression } from './Expression';
 import type { Location, Range } from 'vscode-languageserver';
 
 export default class SGParser {
@@ -20,7 +23,7 @@ export default class SGParser {
     /**
      * The list of diagnostics found during the parse process
      */
-    public diagnostics = [] as BsDiagnostic[];
+    public diagnostics = [] as BsDiagnosticInput[];
 
     /**
      * The options used to parse the file
@@ -215,7 +218,9 @@ export default class SGParser {
                         ...DiagnosticMessages.xmlUnexpectedChildren(startTagName.text)
                     });
                 }
-                return new SGInterfaceField(constructorOptions);
+                const field = new SGInterfaceField(constructorOptions);
+                field.typeExpression = this.parseFieldType(field);
+                return field;
             case 'function':
                 if (this.hasElements(content)) {
                     this.diagnostics.push({
@@ -396,6 +401,35 @@ export default class SGParser {
             token.endLine - 1,
             token.endColumn
         );
+    }
+
+    /**
+     * Parse a field's `type` attribute as a BrighterScript type expression (i.e. `MyInterface`, `string or integer`).
+     * Built-in SceneGraph field types are skipped, since they don't need it
+     */
+    private parseFieldType(field: SGInterfaceField): TypeExpression {
+        const type = field.type;
+        if (!type || SGFieldTypes.includes(type.toLowerCase())) {
+            return undefined;
+        }
+        const { ast, diagnostics } = Parser.parse(type, { mode: ParseMode.BrighterScript, typeOnly: true });
+
+        //the type was parsed on its own, so move its diagnostics to where the type attribute's value is in this file
+        const valueStart = field.getAttribute('type').tokens.value.location.range.start;
+        for (const diagnostic of diagnostics) {
+            const { start, end } = ('range' in diagnostic.location ? diagnostic.location : util.getLocation(diagnostic.location)).range;
+            this.diagnostics.push({
+                ...diagnostic,
+                location: this.getLocationFromRange(util.createRange(
+                    valueStart.line + start.line,
+                    (start.line === 0 ? valueStart.character : 0) + start.character,
+                    valueStart.line + end.line,
+                    (end.line === 0 ? valueStart.character : 0) + end.character
+                ))
+            });
+        }
+        const typeExpression = ast.statements[0];
+        return isTypeExpression(typeExpression) ? typeExpression : undefined;
     }
 
     private emptySGReferences(): SGReferences {

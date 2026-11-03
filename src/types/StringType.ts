@@ -34,6 +34,10 @@ export class StringType extends BscType {
         return this.toString();
     }
 
+    public toSceneGraphTypeString() {
+        return 'string';
+    }
+
     public isEqual(targetType: BscType): boolean {
         return isStringTypeLike(targetType);
     }

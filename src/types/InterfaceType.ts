@@ -7,6 +7,19 @@ import { isUnionTypeCompatible } from './helpers';
 import type { ReferenceType } from './ReferenceType';
 import { CallFuncableType } from './CallFuncableType';
 
+/**
+ * The built-in objects that can be stored in a SceneGraph field, and the field type they're stored as
+ */
+const builtInSceneGraphTypes: Record<string, string> = {
+    roassociativearray: 'assocarray',
+    roarray: 'array',
+    rostring: 'string',
+    roint: 'integer',
+    rolonginteger: 'longinteger',
+    rofloat: 'float',
+    roboolean: 'boolean'
+};
+
 export class InterfaceType extends CallFuncableType {
     public constructor(
         public name: string,
@@ -40,6 +53,14 @@ export class InterfaceType extends CallFuncableType {
             return true;
         }
         return this.checkCompatibilityBasedOnMembers(targetType, SymbolTypeFlag.runtime, data);
+    }
+
+    public toSceneGraphTypeString() {
+        //interfaces describe associative arrays, but built-in ones (i.e. `roDateTime`) are native objects that can't be stored in fields
+        if (!this.isBuiltIn) {
+            return 'assocarray';
+        }
+        return builtInSceneGraphTypes[this.name.toLowerCase()];
     }
 
     /**

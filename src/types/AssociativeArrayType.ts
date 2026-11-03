@@ -39,6 +39,10 @@ export class AssociativeArrayType extends BscType {
         return 'object';
     }
 
+    public toSceneGraphTypeString() {
+        return 'assocarray';
+    }
+
     getMemberType(name: string, options: GetTypeOptions) {
         // if a member has specifically been added, cool. otherwise, assume dynamic
         const memberType = super.getMemberType(name, options);

@@ -4,6 +4,7 @@ import { createSGAttribute, createSGInterface, createSGInterfaceField, createSGI
 import type { FileReference, TranspileResult } from '../interfaces';
 import util from '../util';
 import type { TranspileState } from './TranspileState';
+import type { TypeExpression } from './Expression';
 
 export interface SGToken {
     text: string;
@@ -459,6 +460,11 @@ export class SGInterfaceField extends SGElement {
     set alwaysNotify(value: string) {
         this.setAttributeValue('alwaysNotify', value);
     }
+
+    /**
+     * The field's `type` parsed as a BrighterScript type expression. Only set for types that aren't built-in SceneGraph field types
+     */
+    typeExpression?: TypeExpression;
 }
 
 export enum SGFieldType {

@@ -12,6 +12,17 @@ import { unionTypeFactory } from './UnionType';
 import { getUniqueType, isUnionTypeCompatible } from './helpers';
 import { util } from '../util';
 
+/**
+ * SceneGraph field types for arrays whose items are all one SceneGraph field type (any other array is just `array`)
+ */
+const sceneGraphArrayTypes: Record<string, string> = {
+    integer: 'intarray',
+    float: 'floatarray',
+    boolean: 'boolarray',
+    string: 'stringarray',
+    node: 'nodearray'
+};
+
 export class ArrayType extends BscType {
     constructor(...innerTypes: BscType[]) {
         super();
@@ -80,6 +91,14 @@ export class ArrayType extends BscType {
         //typed arrays have no first-class representation in BrightScript; collapse to
         //`dynamic` at transpile so the runtime accepts arbitrary array values.
         return 'dynamic';
+    }
+
+    public toSceneGraphTypeString() {
+        if (isDynamicType(this.defaultType)) {
+            return 'array';
+        }
+        const innerType = this.defaultType.toSceneGraphTypeString();
+        return innerType && (sceneGraphArrayTypes[innerType] ?? 'array');
     }
 
     public isEqual(targetType: BscType): boolean {

@@ -28,6 +28,10 @@ export class TypeStatementType extends BscType {
         return this.wrappedType.toTypeString();
     }
 
+    public toSceneGraphTypeString() {
+        return this.wrappedType.toSceneGraphTypeString();
+    }
+
     public isEqual(targetType: BscType) {
         return this.wrappedType.isEqual(targetType);
     }

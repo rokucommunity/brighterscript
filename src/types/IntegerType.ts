@@ -31,6 +31,10 @@ export class IntegerType extends BscType {
         return this.toString();
     }
 
+    public toSceneGraphTypeString() {
+        return 'integer';
+    }
+
     isEqual(otherType: BscType) {
         return isIntegerTypeLike(otherType);
     }
