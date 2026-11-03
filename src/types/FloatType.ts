@@ -33,6 +33,10 @@ export class FloatType extends BscType {
         return this.toString();
     }
 
+    public toSceneGraphTypeString() {
+        return 'float';
+    }
+
     public isEqual(targetType: BscType): boolean {
         return isFloatTypeLike(targetType);
     }

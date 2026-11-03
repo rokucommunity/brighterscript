@@ -335,7 +335,7 @@ describe('XmlScope', () => {
                 expectTypeToBe(labelNodeType.getMemberType('text', { flags: SymbolTypeFlag.runtime }), StringType);
             });
 
-            it('allows unions of primitive types as field types', () => {
+            it('types fields with unions of primitive types, but flags them as unsupported field types', () => {
                 program.setFile('components/Widget.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <component name="Widget" extends="Group">
@@ -345,7 +345,9 @@ describe('XmlScope', () => {
                     </component>
                 `);
                 program.validate();
-                expectZeroDiagnostics(program);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlFieldTypeNotSupported('integer or string')
+                ]);
                 const widgetTypeResult = program.globalScope.symbolTable.getSymbolType('roSGNodeWidget', { flags: SymbolTypeFlag.typetime });
                 expectTypeToBe(widgetTypeResult, ComponentType);
                 const widgetType = widgetTypeResult as ComponentType;
@@ -397,7 +399,6 @@ describe('XmlScope', () => {
                         <script uri="Widget.bs"/>
                         <interface>
                             <field id="items" type="DefinedType[]" />
-                            <field id="item" type="DefinedType or string" />
                         </interface>
                     </component>
                 `);
@@ -427,6 +428,51 @@ describe('XmlScope', () => {
                 expectDiagnostics(program, [
                     DiagnosticMessages.xmlInvalidFieldType('UnknownType[]')
                 ]);
+            });
+
+            it('flags types that have no matching SceneGraph field type', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.bs"/>
+                        <interface>
+                            <field id="klass" type="MyClass" />
+                            <field id="classes" type="MyClass[]" />
+                            <field id="dateTime" type="roDateTime" />
+                            <field id="num" type="double" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/Widget.bs', trim`
+                    class MyClass
+                    end class
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.xmlFieldTypeNotSupported('MyClass'),
+                    DiagnosticMessages.xmlFieldTypeNotSupported('MyClass[]'),
+                    DiagnosticMessages.xmlFieldTypeNotSupported('roDateTime'),
+                    DiagnosticMessages.xmlFieldTypeNotSupported('double')
+                ]);
+            });
+
+            it('allows unions whose types are stored as the same field type', () => {
+                program.setFile('components/Widget.xml', trim`
+                    <?xml version="1.0" encoding="utf-8" ?>
+                    <component name="Widget" extends="Group">
+                        <script uri="Widget.bs"/>
+                        <interface>
+                            <field id="data" type="DefinedType or roAssociativeArray" />
+                        </interface>
+                    </component>
+                `);
+                program.setFile('components/Widget.bs', trim`
+                    interface DefinedType
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
             });
 
             it('allows inline interface types', () => {

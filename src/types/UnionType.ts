@@ -160,6 +160,14 @@ export class UnionType extends BscType {
         return 'dynamic';
     }
 
+    /**
+     * A union can only be stored in a field when all of its types are stored as the same field type
+     */
+    toSceneGraphTypeString() {
+        const uniqueTypeStrings = new Set(getAllTypesFromCompoundType(this).map(t => t.toSceneGraphTypeString()));
+        return uniqueTypeStrings.size === 1 ? uniqueTypeStrings.values().next().value : undefined;
+    }
+
     checkAllMemberTypes(predicate: (BscType) => boolean) {
         return this.types.reduce((acc, type) => {
             return acc && predicate(type);

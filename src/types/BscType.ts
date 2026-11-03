@@ -107,6 +107,13 @@ export abstract class BscType {
         throw new Error('Method not implemented.');
     }
 
+    /**
+     * The SceneGraph `<field type="...">` this type is stored as, or `undefined` if it can't be stored in a field
+     */
+    toSceneGraphTypeString(): string | undefined {
+        return undefined;
+    }
+
     isEqual(targetType: BscType, data: TypeCompatibilityData = {}): boolean {
         throw new Error('Method not implemented.');
     }

@@ -1405,6 +1405,15 @@ export let DiagnosticMessages = {
         message: `Function has ${count} labels used by goto, max is ${max}.`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-goto-label-count'
+    }),
+    /**
+     * A component field's custom type has no matching SceneGraph field type (i.e. a class, function or `double`), so the field can't be transpiled
+     * @param typeName the type as written in the field's `type` attribute
+     */
+    xmlFieldTypeNotSupported: (typeName: string) => ({
+        message: `Type '${typeName}' cannot be used as a field type because it has no matching SceneGraph field type`,
+        severity: DiagnosticSeverity.Error,
+        code: 'unsupported-field-type'
     })
 };
 export const defaultMaximumTruncationLength = 160;

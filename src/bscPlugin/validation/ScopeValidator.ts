@@ -1992,11 +1992,18 @@ export class ScopeValidator {
                         location: field.tokens.startTagName.location
                     }, ScopeValidatorDiagnosticTag.XMLInterface);
                 }
-            } else if (field.typeExpression && !this.isFieldTypeResolvable(scope, field)) {
-                this.addDiagnostic({
-                    ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    location: field.getAttribute('type')?.tokens.value.location
-                }, ScopeValidatorDiagnosticTag.XMLInterface);
+            } else if (field.typeExpression) {
+                if (!this.isFieldTypeResolvable(scope, field)) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.xmlInvalidFieldType(type),
+                        location: field.getAttribute('type')?.tokens.value.location
+                    }, ScopeValidatorDiagnosticTag.XMLInterface);
+                } else if (!scope.getFieldType(field).toSceneGraphTypeString()) {
+                    this.addDiagnostic({
+                        ...DiagnosticMessages.xmlFieldTypeNotSupported(type),
+                        location: field.getAttribute('type')?.tokens.value.location
+                    }, ScopeValidatorDiagnosticTag.XMLInterface);
+                }
             }
             if (onChange) {
                 if (!callableContainerMap.has(onChange.toLowerCase())) {

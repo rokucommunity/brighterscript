@@ -31,6 +31,10 @@ export class LongIntegerType extends BscType {
         return this.toString();
     }
 
+    public toSceneGraphTypeString() {
+        return 'longinteger';
+    }
+
     isEqual(targetType: BscType): boolean {
         return isLongIntegerTypeLike(targetType);
     }

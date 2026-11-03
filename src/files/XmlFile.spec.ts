@@ -1304,6 +1304,52 @@ end sub`);
             `, 'none', 'components/SimpleScene.xml');
         });
 
+        it('transpiles custom field types to SceneGraph field types', async () => {
+            program.setFile('components/Widget.bs', `
+                interface DefinedType
+                    name as string
+                end interface
+                enum Direction
+                    up = "up"
+                    down = "down"
+                end enum
+            `);
+            await testTranspile(trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs"/>
+                    <interface>
+                        <field id="plain" type="string" />
+                        <field id="data" type="DefinedType" />
+                        <field id="inline" type="{ id as string }" />
+                        <field id="items" type="DefinedType[]" />
+                        <field id="names" type="string[]" />
+                        <field id="labels" type="roSGNodeLabel[]" />
+                        <field id="label" type="roSGNodeLabel" />
+                        <field id="direction" type="Direction" />
+                        <field id="count" type="roInt" />
+                    </interface>
+                </component>
+            `, trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.brs" type="text/brightscript" />
+                    <script type="text/brightscript" uri="pkg:/source/bslib.brs" />
+                    <interface>
+                        <field id="plain" type="string" />
+                        <field id="data" type="assocarray" />
+                        <field id="inline" type="assocarray" />
+                        <field id="items" type="array" />
+                        <field id="names" type="stringarray" />
+                        <field id="labels" type="nodearray" />
+                        <field id="label" type="node" />
+                        <field id="direction" type="string" />
+                        <field id="count" type="integer" />
+                    </interface>
+                </component>
+            `, 'none', 'components/Widget.xml');
+        });
+
         it('does not fail on missing script type', async () => {
             program.setFile('components/SimpleScene.brs', '');
             await testTranspile(trim`

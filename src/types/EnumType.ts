@@ -42,6 +42,10 @@ export class EnumType extends BscType {
         return 'dynamic';
     }
 
+    public toSceneGraphTypeString() {
+        return this.underlyingType.toSceneGraphTypeString();
+    }
+
     public isEqual(targetType: BscType, data?: TypeCompatibilityData): boolean {
         return isEnumType(targetType) &&
             targetType?.name.toLowerCase() === this.name.toLowerCase() &&
@@ -114,6 +118,10 @@ export class EnumMemberType extends BscType {
 
     public toTypeString(): string {
         return 'dynamic';
+    }
+
+    public toSceneGraphTypeString() {
+        return this.underlyingType.toSceneGraphTypeString();
     }
 
     public isEqual(targetType: BscType): boolean {
