@@ -1220,7 +1220,7 @@ export class ScopeValidator {
         // Do a complete type check on all DottedGet and Variable expressions
         // this will create a diagnostic if an invalid member is accessed
         const typeChain: TypeChainEntry[] = [];
-        const typeData = {} as ExtraSymbolData;
+        const typeData = createExtraSymbolData();
         let exprType = this.getNodeTypeWrapper(file, expression, {
             flags: symbolType,
             typeChain: typeChain,
