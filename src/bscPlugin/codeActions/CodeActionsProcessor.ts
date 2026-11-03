@@ -38,8 +38,6 @@ export class CodeActionsProcessor {
                 this.suggestNonVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
-                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
                 this.suggestScriptImportCasingQuickFixes([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
             } else if (diagnostic.code === DiagnosticCodeMap.missingOverrideKeyword) {
@@ -66,8 +64,6 @@ export class CodeActionsProcessor {
                 } else if (code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                     this.suggestRemoveOverrideFromConstructorQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                    this.suggestRemoveScriptImportQuickFixes(allInFile);
-                } else if (code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
                     this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.scriptImportCaseMismatch) {
                     this.suggestScriptImportCasingQuickFixes(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
@@ -601,13 +597,9 @@ export class CodeActionsProcessor {
     // ---- script import fixes ----
 
     /**
-     * Adds code actions to delete one or more unnecessary or broken script import lines.
+     * Adds code actions to delete one or more broken script import lines.
      */
     private suggestRemoveScriptImportQuickFixes(diagnostics: BsDiagnostic[]) {
-        const titles: Record<string, [string, string]> = {
-            [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
-        };
-        const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code] ?? ['Remove script import', 'Fix all: Remove script imports'];
         const changes = diagnostics.map<DeleteChange>(diagnostic => {
             return {
                 type: 'delete',
@@ -620,7 +612,7 @@ export class CodeActionsProcessor {
                 )
             };
         });
-        this.emitOrFixAll(singleTitle, fixAllTitle, changes, diagnostics[0]);
+        this.emitOrFixAll('Remove script import', 'Fix all: Remove script imports', changes, diagnostics[0]);
     }
 
     /**

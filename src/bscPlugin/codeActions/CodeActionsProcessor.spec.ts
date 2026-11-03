@@ -701,20 +701,6 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
-    describe('unnecessaryCodebehindScriptImport', () => {
-        it('offers to remove the unnecessary codebehind import', () => {
-            const file = program.setFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/comp1.brs" />
-                </component>
-            `);
-            program.setFile('components/comp1.brs', '');
-            // uri on line 2
-            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Remove unnecessary codebehind import']);
-        });
-    });
-
     describe('scriptImportCaseMismatch', () => {
         it('offers to fix the casing of the script import path', () => {
             const file = program.setFile('components/comp1.xml', trim`
