@@ -122,7 +122,7 @@ describe('CommentFlagProcessor', () => {
         it('tokenizes bs:disable comment with codes', () => {
             const token = Lexer.scan(`'bs:disable:1 2 3`).tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.location.range)
+                processor['tokenize'](token.text, util.getLocation(token).range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'disable',
@@ -143,7 +143,7 @@ describe('CommentFlagProcessor', () => {
             const tokens = Lexer.scan(`print "hi" 'bs:disable-line: 123456 999999   aaaab`).tokens;
             const token = tokens[2].leadingTrivia[1];
             expect(
-                processor['tokenize'](token.text, token.location.range)
+                processor['tokenize'](token.text, util.getLocation(token).range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',
@@ -163,7 +163,7 @@ describe('CommentFlagProcessor', () => {
         it('tokenizes bs:disable-line comment with codes', () => {
             const token = Lexer.scan(`'bs:disable-line:1 2 3`).tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.location?.range)
+                processor['tokenize'](token.text, util.getLocation(token)?.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',
@@ -184,7 +184,7 @@ describe('CommentFlagProcessor', () => {
             const tokens = Lexer.scan(`' bs:disable-line:1`).tokens;
             const token = tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.location?.range)
+                processor['tokenize'](token.text, util.getLocation(token)?.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',
@@ -199,7 +199,7 @@ describe('CommentFlagProcessor', () => {
             const tokens = Lexer.scan(`'\tbs:disable-line:1`).tokens;
             const token = tokens[0].leadingTrivia[0];
             expect(
-                processor['tokenize'](token.text, token.location?.range)
+                processor['tokenize'](token.text, util.getLocation(token)?.range)
             ).to.eql({
                 commentTokenText: `'`,
                 directive: 'line',

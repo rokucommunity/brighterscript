@@ -10,9 +10,10 @@ import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
 import { isBrsFile, isFunctionExpression, isMethodStatement, isVoidType, isXmlFile } from '../../astUtils/reflection';
-import type { FunctionExpression } from '../../parser/Expression';
+import type { FunctionExpression, FunctionParameterExpression } from '../../parser/Expression';
 import type { MethodStatement } from '../../parser/Statement';
-import { WalkMode } from '../../astUtils/visitors';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import type { Locatable } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { getMissingExtendsInsertPosition } from './codeActionHelpers';
@@ -54,6 +55,8 @@ export class CodeActionsProcessor {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
             } else if (isDiagnosticOfType(diagnostic, 'mismatchedEndingToken')) {
                 this.suggestMismatchedEndingTokenQuickFixes([diagnostic]);
+            } else if (isDiagnosticOfType(diagnostic, 'typeDesignatorMismatch')) {
+                this.suggestTypeDesignatorMismatchQuickFixes([diagnostic]);
             }
         }
 
@@ -83,6 +86,8 @@ export class CodeActionsProcessor {
                     this.suggestMissingOverrideQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.mismatchedEndingToken) {
                     this.suggestMismatchedEndingTokenQuickFixes(allInFile as DiagnosticMessageType<'mismatchedEndingToken'>[]);
+                } else if (code === DiagnosticCodeMap.typeDesignatorMismatch) {
+                    this.suggestTypeDesignatorMismatchQuickFixes(allInFile as DiagnosticMessageType<'typeDesignatorMismatch'>[]);
                 }
             }
         }
@@ -264,7 +269,7 @@ export class CodeActionsProcessor {
             for (const commentToken of commentTokens) {
                 //`tokens` is an `any[]` union of brs/xml token shapes (see declaration above)
                 //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-                const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : commentToken.location.range;
+                const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : util.getLocation(commentToken).range;
                 const tokenText: string = isXml ? commentToken.image : commentToken.text;
                 const parsed = parseDisableComment(tokenText);
                 if (!parsed) {
@@ -353,7 +358,7 @@ export class CodeActionsProcessor {
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = (this.event.file as BrsFile)['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of files) {
@@ -410,7 +415,7 @@ export class CodeActionsProcessor {
         const file = this.event.file;
         // eslint-disable-next-line @typescript-eslint/dot-notation
         const importStatements = file['_cachedLookups'].importStatements;
-        const insertPosition = importStatements[importStatements.length - 1]?.tokens.import.location.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? util.createPosition(0, 0);
 
         const changes: InsertChange[] = [];
         const addedPaths = new Set<string>();
@@ -542,9 +547,9 @@ export class CodeActionsProcessor {
                         kind: CodeActionKind.QuickFix,
                         changes: [
                             //function
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.functionType.location.range, newText: functionTypeText },
+                            { type: 'replace', filePath: this.event.file.srcPath, range: util.getLocation(func.tokens.functionType).range, newText: functionTypeText },
                             //end function
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.tokens.endFunctionType.location.range, newText: endFunctionTypeText }
+                            { type: 'replace', filePath: this.event.file.srcPath, range: util.getLocation(func.tokens.endFunctionType).range, newText: endFunctionTypeText }
                         ]
                     })
                 );
@@ -606,7 +611,7 @@ export class CodeActionsProcessor {
             if (!fn) {
                 continue;
             }
-            const fnKey = `${fn.location.range.start.line}:${fn.location.range.start.character}`;
+            const fnKey = `${util.getLocation(fn).range.start.line}:${util.getLocation(fn).range.start.character}`;
             if (seenFunctions.has(fnKey)) {
                 continue;
             }
@@ -618,7 +623,7 @@ export class CodeActionsProcessor {
                 addVoidChanges.push({
                     type: 'insert',
                     filePath: this.event.file.srcPath,
-                    position: fn.tokens.rightParen.location.range.end,
+                    position: util.getLocation(fn.tokens.rightParen).range.end,
                     newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
                 });
             }
@@ -647,8 +652,8 @@ export class CodeActionsProcessor {
                     diagnostics: [diagnostics[0]],
                     kind: CodeActionKind.QuickFix,
                     changes: [
-                        { type: 'replace', filePath: file.srcPath, range: func.tokens.functionType.location.range, newText: subText ?? 'sub' },
-                        { type: 'replace', filePath: file.srcPath, range: func.tokens.endFunctionType.location.range, newText: endSubText ?? 'end sub' }
+                        { type: 'replace', filePath: file.srcPath, range: util.getLocation(func.tokens.functionType).range, newText: subText ?? 'sub' },
+                        { type: 'replace', filePath: file.srcPath, range: util.getLocation(func.tokens.endFunctionType).range, newText: endSubText ?? 'end sub' }
                     ]
                 })
             );
@@ -723,10 +728,10 @@ export class CodeActionsProcessor {
             file.ast.walk((node) => {
                 if (
                     isMethodStatement(node) &&
-                    node.location?.range?.start?.line === diagnostic.location.range.start.line &&
-                    node.location?.range?.start?.character === diagnostic.location.range.start.character
+                    util.getLocation(node)?.range?.start?.line === diagnostic.location.range.start.line &&
+                    util.getLocation(node)?.range?.start?.character === diagnostic.location.range.start.character
                 ) {
-                    insertPosition = (node as MethodStatement).func.tokens.functionType?.location?.range?.start;
+                    insertPosition = util.getLocation((node as MethodStatement).func.tokens.functionType)?.range?.start;
                 }
             }, { walkMode: WalkMode.visitStatementsRecursive });
 
@@ -770,6 +775,68 @@ export class CodeActionsProcessor {
                 index === 0
             );
         }
+    }
+
+    // ---- type designator fixes ----
+
+    /**
+     * Adds code actions to resolve a `typeDesignatorMismatch` diagnostic (i.e. `name$ as integer`):
+     *   - change the `as` type to the designator's type (`name$ as string`)
+     *   - remove the ` as <type>` clause entirely (`name$`), leaving the designator to determine the type
+     */
+    private suggestTypeDesignatorMismatchQuickFixes(diagnostics: DiagnosticMessageType<'typeDesignatorMismatch'>[]) {
+        if (!isBrsFile(this.event.file)) {
+            return;
+        }
+        const file = this.event.file;
+        //the diagnostic spans the whole parameter, so index the file's parameters by their range to find each one
+        const paramsByRange = new Map<string, FunctionParameterExpression>();
+        file.ast.walk(createVisitor({
+            FunctionParameterExpression: (param) => {
+                const range = util.getLocation(param)?.range;
+                if (range) {
+                    paramsByRange.set(util.rangeToString(range), param);
+                }
+            }
+        }), { walkMode: WalkMode.visitAllRecursive });
+
+        const changeTypeChanges: ReplaceChange[] = [];
+        const removeAsChanges: DeleteChange[] = [];
+        for (const diagnostic of diagnostics) {
+            const param = diagnostic.location?.range && paramsByRange.get(util.rangeToString(diagnostic.location.range));
+            const typeRange = util.getLocation(param?.typeExpression)?.range;
+            if (!typeRange || !diagnostic.data?.designatorType) {
+                continue;
+            }
+            changeTypeChanges.push({
+                type: 'replace',
+                filePath: file.srcPath,
+                range: typeRange,
+                newText: diagnostic.data.designatorType
+            });
+            //the ` as <type>` clause starts right after whatever precedes the `as` (the default value, or else the name)
+            const asClauseStart = util.getLocation(util.firstLocatable<Locatable>(param.defaultValue, param.tokens.name))?.range.end;
+            if (asClauseStart) {
+                removeAsChanges.push({
+                    type: 'delete',
+                    filePath: file.srcPath,
+                    range: util.createRangeFromPositions(asClauseStart, typeRange.end)
+                });
+            }
+        }
+        const { designatorType, declaredType } = diagnostics[0]?.data ?? {};
+        this.emitOrFixAll(
+            `Change type to '${designatorType}'`,
+            `Fix all: Change types to match their type designators`,
+            changeTypeChanges,
+            diagnostics[0]
+        );
+        this.emitOrFixAll(
+            `Remove 'as ${declaredType}'`,
+            `Fix all: Remove 'as' types that conflict with their type designators`,
+            removeAsChanges,
+            diagnostics[0]
+        );
     }
 
     /**
@@ -824,10 +891,10 @@ export class CodeActionsProcessor {
             filePath: this.event.file.srcPath,
             // )| as <type>|
             range: util.createRange(
-                func.tokens.rightParen.location.range.start.line,
-                func.tokens.rightParen.location.range.start.character + 1,
-                func.returnTypeExpression.location.range.end.line,
-                func.returnTypeExpression.location.range.end.character
+                util.getLocation(func.tokens.rightParen).range.start.line,
+                util.getLocation(func.tokens.rightParen).range.start.character + 1,
+                util.getLocation(func.returnTypeExpression).range.end.line,
+                util.getLocation(func.returnTypeExpression).range.end.character
             )
         };
     }

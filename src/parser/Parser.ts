@@ -1,4 +1,4 @@
-import type { Token, Identifier } from '../lexer/Token';
+import type { Token, Identifier, Locatable } from '../lexer/Token';
 import { isToken } from '../lexer/Token';
 import type { BlockTerminator, PrintSeparatorToken } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
@@ -109,8 +109,9 @@ import { createLogger } from '../logging';
 import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
-import type { BsDiagnostic, DeepWriteable } from '../interfaces';
+import type { BsDiagnosticInput, DeepWriteable } from '../interfaces';
 import { getFirmwareCapabilities } from '../RokuConstants';
+import { TokenObject } from '../lexer/TokenObject';
 
 const declarableTypesLower = DeclarableTypes.map(tokenKind => tokenKind.toLowerCase());
 
@@ -147,7 +148,7 @@ export class Parser {
     /**
      * The list of diagnostics found during the parse process
      */
-    public diagnostics: BsDiagnostic[];
+    public diagnostics: BsDiagnosticInput[];
 
     /**
      * The depth of the calls to function declarations. Helps some checks know if they are at the root or not.
@@ -255,7 +256,7 @@ export class Parser {
     private body() {
         const parentAnnotations = this.enterAnnotationBlock();
 
-        let body = new Body({ statements: [] });
+        const statements: Statement[] = [];
         if (this.tokens.length > 0) {
             this.consumeStatementSeparators(true);
 
@@ -270,7 +271,7 @@ export class Parser {
                     if (dec) {
                         if (!isAnnotationExpression(dec)) {
                             this.consumePendingAnnotations(dec);
-                            body.statements.push(dec);
+                            statements.push(dec);
                             //ensure statement separator
                             this.consumeStatementSeparators(false);
                         } else {
@@ -285,7 +286,8 @@ export class Parser {
         }
 
         this.exitAnnotationBlock(parentAnnotations);
-        return body;
+        //construct the body once all of its statements are known, so its bounds are computed from them
+        return new Body({ statements: statements });
     }
 
     private sanitizeParseOptions(options: ParseOptions) {
@@ -311,7 +313,7 @@ export class Parser {
         if (this.options.mode !== ParseMode.BrighterScript) {
             let diagnostic = {
                 ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles(featureName),
-                location: this.peek().location
+                location: this.peek()
             };
             this.diagnostics.push(diagnostic);
         }
@@ -452,7 +454,7 @@ export class Parser {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedIdentifier(asToken.text),
-                        location: asToken.location
+                        location: asToken
                     });
                 }
                 //consume the statement separator
@@ -461,7 +463,7 @@ export class Parser {
                 if (!ignoreDiagnostics) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedIdentifier(asToken.text),
-                        location: asToken.location
+                        location: asToken
                     });
                 }
             } else {
@@ -488,7 +490,7 @@ export class Parser {
                 if (params.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
-                        location: this.peek().location
+                        location: this.peek()
                     });
                 }
 
@@ -535,7 +537,7 @@ export class Parser {
             if (this.checkEndOfStatement()) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedIdentifier(extendsToken.text),
-                    location: extendsToken.location
+                    location: extendsToken
                 });
             } else {
                 parentInterfaceName = this.typeExpression();
@@ -690,7 +692,7 @@ export class Parser {
             if (this.checkEndOfStatement()) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedIdentifier(extendsKeyword.text),
-                    location: extendsKeyword.location
+                    location: extendsKeyword
                 });
             } else {
                 parentClassName = this.typeExpression();
@@ -721,7 +723,7 @@ export class Parser {
         if (endingKeyword.kind !== TokenKind.EndClass) {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('class'),
-                location: endingKeyword.location
+                location: endingKeyword
             });
         }
 
@@ -774,7 +776,7 @@ export class Parser {
             if (overrideKeyword && funcDeclaration.tokens.name.text.toLowerCase() === 'new') {
                 this.diagnostics.push({
                     ...DiagnosticMessages.cannotUseOverrideKeywordOnConstructorFunction(),
-                    location: overrideKeyword.location
+                    location: overrideKeyword
                 });
             }
 
@@ -794,7 +796,7 @@ export class Parser {
             if (overrideKeyword) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.classFieldCannotBeOverridden(),
-                    location: overrideKeyword.location
+                    location: overrideKeyword
                 });
             }
 
@@ -851,7 +853,7 @@ export class Parser {
         //found something that is neither a class member nor a conditional compile terminator (i.e. `end class`)
         this.diagnostics.push({
             ...DiagnosticMessages.unsafeUnmatchedTerminatorInConditionalCompileBlock(this.peek().text),
-            location: this.peek().location
+            location: this.peek()
         });
         throw this.lastDiagnosticAsError();
     }
@@ -934,17 +936,18 @@ export class Parser {
             } else {
                 this.diagnostics.push({
                     ...DiagnosticMessages.missingCallableKeyword(),
-                    location: this.peek().location
+                    location: this.peek()
                 });
                 //TODO we should probably eliminate this entirely, since it's not present in the source code
-                functionType = {
-                    kind: TokenKind.Function,
-                    text: 'function',
-                    isReserved: true,
-                    //zero-length location means derived
-                    location: this.peek().location,
-                    leadingTrivia: []
-                };
+                functionType = new TokenObject(
+                    TokenKind.Function,
+                    'function',
+                    true,
+                    this.peek().startPosition,
+                    this.peek().endPosition,
+                    this.peek().sourceInfo,
+                    []
+                );
             }
             let isSub = functionType?.kind === TokenKind.Sub;
             let functionTypeText = isSub ? 'sub' : 'function';
@@ -973,7 +976,7 @@ export class Parser {
                     //don't throw this error; let the parser continue
                     this.diagnostics.push({
                         ...DiagnosticMessages.invalidIdentifier(name.text, lastChar),
-                        location: name.location
+                        location: name
                     });
                 }
 
@@ -981,7 +984,7 @@ export class Parser {
                 if (checkIdentifier && DisallowedFunctionIdentifiersText.has(name.text.toLowerCase())) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
-                        location: name.location
+                        location: name
                     });
                 }
             }
@@ -1028,7 +1031,7 @@ export class Parser {
             if (endFunctionType.kind !== expectedEndKind) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.closingKeywordMismatch(functionTypeText, endFunctionType.text),
-                    location: endFunctionType.location
+                    location: endFunctionType
                 });
             }
 
@@ -1064,7 +1067,7 @@ export class Parser {
         if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -1077,7 +1080,7 @@ export class Parser {
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
             this.diagnostics.push({
                 ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
-                location: name.location
+                location: name
             });
         }
 
@@ -1112,7 +1115,7 @@ export class Parser {
             if (haveFoundOptional && !param.defaultValue) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.requiredParameterMayNotFollowOptionalParameter(param.tokens.name.text),
-                    location: param.location
+                    location: param
                 });
             }
 
@@ -1126,7 +1129,7 @@ export class Parser {
         if (DisallowedLocalIdentifiersText.has(name.text.toLowerCase())) {
             this.diagnostics.push({
                 ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(name.text),
-                location: name.location
+                location: name
             });
         }
         let asToken: Token;
@@ -1262,7 +1265,7 @@ export class Parser {
             const token = this.advance();
             this.diagnostics.push({
                 ...(token.kind === TokenKind.Case ? DiagnosticMessages.caseOutsideSelectCase() : DiagnosticMessages.endSelectWithoutSelectCase()),
-                location: token.location
+                location: token
             });
             throw this.lastDiagnosticAsError();
         }
@@ -1397,13 +1400,13 @@ export class Parser {
             //emit a targeted diagnostic and consume the `next` so the rest of the file parses cleanly.
             this.diagnostics.push({
                 ...DiagnosticMessages.mismatchedEndingToken(['end while'], 'next'),
-                location: this.peek()?.location
+                location: this.peek()
             });
             endWhile = this.advance();
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('while'),
-                location: this.peek()?.location
+                location: this.peek()
             });
             if (!whileBlock) {
                 throw this.lastDiagnosticAsError();
@@ -1426,23 +1429,13 @@ export class Parser {
 
             const exitText = exitToken.text.substring(0, 4);
             const whileText = exitToken.text.substring(4);
-            const originalRange = exitToken.location?.range;
-            const originalStart = originalRange?.start;
+            const originalToken = exitToken;
 
-            const exitRange = util.createRange(
-                originalStart.line,
-                originalStart.character,
-                originalStart.line,
-                originalStart.character + 4);
-            const whileRange = util.createRange(
-                originalStart.line,
-                originalStart.character + 4,
-                originalStart.line,
-                originalStart.character + exitToken.text.length);
-
-            exitToken = createToken(TokenKind.Exit, exitText, util.createLocationFromRange(exitToken.location.uri, exitRange));
+            exitToken = createToken(TokenKind.Exit, exitText, originalToken);
+            exitToken.endPosition = exitToken.startPosition + 4;
             this.tokens[this.current - 1] = exitToken;
-            const newLoopToken = createToken(TokenKind.While, whileText, util.createLocationFromRange(exitToken.location.uri, whileRange));
+            const newLoopToken = createToken(TokenKind.While, whileText, originalToken);
+            newLoopToken.startPosition += 4;
             this.tokens.splice(this.current, 0, newLoopToken);
         }
 
@@ -1485,13 +1478,13 @@ export class Parser {
             //recover: a stray `end while` is a common mistake when the user means `end for`.
             this.diagnostics.push({
                 ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
-                location: this.peek()?.location
+                location: this.peek()
             });
             endForToken = this.advance();
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forToken.text),
-                location: this.peek()?.location
+                location: this.peek()
             });
             if (!body) {
                 throw this.lastDiagnosticAsError();
@@ -1530,7 +1523,7 @@ export class Parser {
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedToken(TokenKind.In),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -1540,7 +1533,7 @@ export class Parser {
         if (!target) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedExpressionAfterForEachIn(),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -1555,13 +1548,13 @@ export class Parser {
             //recover: a stray `end while` is a common mistake when the user means `end for`.
             this.diagnostics.push({
                 ...DiagnosticMessages.mismatchedEndingToken(['end for', 'next'], 'end while'),
-                location: this.peek()?.location
+                location: this.peek()
             });
             endFor = this.advance();
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedEndForOrNextToTerminateForLoop(forEach.text),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -1598,7 +1591,7 @@ export class Parser {
             //the `end namespace` keyword is missing. add a diagnostic, but keep parsing
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('namespace'),
-                location: keyword.location
+                location: keyword
             });
         }
 
@@ -1611,8 +1604,6 @@ export class Parser {
             endNamespace: endKeyword
         });
 
-        //cache the range property so that plugins can't affect it
-        result.cacheLocation();
         result.body.symbolTable.name += `: namespace '${result.name}'`;
         return result;
     }
@@ -1671,7 +1662,7 @@ export class Parser {
             let token = this.advance();
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedToken(token.text),
-                location: token.location
+                location: token
             });
         }
     }
@@ -1744,10 +1735,7 @@ export class Parser {
         }
         this.diagnostics.push({
             ...DiagnosticMessages.expectedIdentifier('typecast'),
-            location: {
-                uri: typecastToken.location.uri,
-                range: util.createBoundingRange(typecastToken, this.peek())
-            }
+            location: util.setBounds({} as Locatable, typecastToken, this.peek())
         });
         throw this.lastDiagnosticAsError();
     }
@@ -1813,6 +1801,8 @@ export class Parser {
         if (this.check(TokenKind.LeftParen)) {
             let leftParen = this.advance();
             annotation.call = this.finishCall(leftParen, annotation, false);
+            //the call needs the annotation as its callee, so it can't be passed to the constructor. Include it in the bounds now that it exists
+            util.setBounds(annotation, annotation.tokens.at, annotation.tokens.name, annotation.call);
         }
         return annotation;
     }
@@ -1924,10 +1914,7 @@ export class Parser {
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unterminatedTemplateExpression(),
-                        location: {
-                            uri: openingBacktick.location.uri,
-                            range: util.createBoundingRange(openingBacktick, this.peek())
-                        }
+                        location: util.setBounds({} as Locatable, openingBacktick, this.peek())
                     });
                     throw this.lastDiagnosticAsError();
                 }
@@ -1943,10 +1930,7 @@ export class Parser {
             //error - missing backtick
             this.diagnostics.push({
                 ...DiagnosticMessages.unterminatedTemplateString(),
-                location: {
-                    uri: openingBacktick.location.uri,
-                    range: util.createBoundingRange(openingBacktick, this.peek())
-                }
+                location: util.setBounds({} as Locatable, openingBacktick, this.peek())
             });
             throw this.lastDiagnosticAsError();
 
@@ -2046,7 +2030,7 @@ export class Parser {
             if (this.checkEndOfStatement()) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedExpressionAfterSelectCase(),
-                    location: util.createBoundingLocation(selectToken, caseToken)
+                    location: util.setBounds({} as Locatable, selectToken, caseToken)
                 });
             } else {
                 subject = this.tryExpressionForRestOfLine();
@@ -2061,7 +2045,7 @@ export class Parser {
                 for (const statement of leadingBlock.statements) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.statementBeforeFirstCase(),
-                        location: statement.location
+                        location: statement
                     });
                 }
             }
@@ -2078,7 +2062,7 @@ export class Parser {
         } else {
             this.diagnostics.push({
                 ...DiagnosticMessages.couldNotFindMatchingEndKeyword('select'),
-                location: selectToken.location
+                location: selectToken
             });
             //we hit the end of the enclosing function. Give back the statement separator so the function can end cleanly
             if (this.checkAny(TokenKind.EndSub, TokenKind.EndFunction) && this.checkAnyPrevious(TokenKind.Newline, TokenKind.Colon)) {
@@ -2113,7 +2097,7 @@ export class Parser {
             if (!this.tryCaseValuesOnNextLine(values)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedCaseValue(caseToken.text),
-                    location: caseToken.location
+                    location: caseToken
                 });
             }
 
@@ -2181,7 +2165,7 @@ export class Parser {
             if (this.isAtEnd() || this.check(TokenKind.Colon) || this.checkSelectCaseTerminator() || this.checkAny(TokenKind.EndSub, TokenKind.EndFunction)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedCaseValue(comma.text),
-                    location: comma.location
+                    location: comma
                 });
                 break;
             }
@@ -2217,7 +2201,7 @@ export class Parser {
         if (peek.kind !== TokenKind.Catch) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedCatchBlockInTryCatch(),
-                location: this.peek()?.location
+                location: this.peek()
             });
         } else {
             const catchToken = this.advance();
@@ -2242,7 +2226,7 @@ export class Parser {
         if (this.peek().kind !== TokenKind.EndTry) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedTerminator('end try', 'try-catch'),
-                location: this.peek().location
+                location: this.peek()
             });
         } else {
             endTryToken = this.advance();
@@ -2264,7 +2248,7 @@ export class Parser {
         if (this.checkAny(TokenKind.Newline, TokenKind.Colon)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.missingExceptionExpressionAfterThrowKeyword(),
-                location: throwToken.location
+                location: throwToken
             });
         } else {
             expression = this.expression();
@@ -2302,7 +2286,7 @@ export class Parser {
         if (expressions.length === 0) {
             this.diagnostics.push({
                 ...DiagnosticMessages.missingExpressionsInDimStatement(),
-                location: this.peek().location
+                location: this.peek()
             });
         }
         let rightSquareBracket = this.tryConsume(DiagnosticMessages.unmatchedLeftToken('[', 'dim identifier'), TokenKind.RightSquareBracket);
@@ -2349,7 +2333,7 @@ export class Parser {
         if (colonBeforeIf && !isInlineIfThen) {
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedColonBeforeIfStatement(),
-                location: colonBeforeIf.location
+                location: colonBeforeIf
             });
         }
 
@@ -2364,7 +2348,7 @@ export class Parser {
             if (!thenBranch) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedStatement(ifToken.text, 'statement'),
-                    location: this.peek().location
+                    location: this.peek()
                 });
                 throw this.lastDiagnosticAsError();
             } else {
@@ -2383,7 +2367,7 @@ export class Parser {
                     if (!elseBranch.isInline) {
                         this.diagnostics.push({
                             ...DiagnosticMessages.expectedInlineIfStatement(),
-                            location: elseBranch.location
+                            location: elseBranch
                         });
                     }
 
@@ -2391,7 +2375,7 @@ export class Parser {
                     //expecting inline else branch
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedInlineIfStatement(),
-                        location: this.peek().location
+                        location: this.peek()
                     });
                     throw this.lastDiagnosticAsError();
                 } else {
@@ -2406,7 +2390,7 @@ export class Parser {
                     //missing `else` branch
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedStatement('else', 'statement'),
-                        location: this.peek().location
+                        location: this.peek()
                     });
                     throw this.lastDiagnosticAsError();
                 }
@@ -2424,7 +2408,7 @@ export class Parser {
                     //newline is required
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedFinalNewline(),
-                        location: this.peek().location
+                        location: this.peek()
                     });
                 }
             }
@@ -2461,7 +2445,7 @@ export class Parser {
                     //missing endif
                     this.diagnostics.push({
                         ...DiagnosticMessages.expectedTerminator('end if', 'if'),
-                        location: ifToken.location
+                        location: ifToken
                     });
                 }
             }
@@ -2497,7 +2481,7 @@ export class Parser {
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedTerminator(['end if', 'else if', 'else'], 'then', 'block'),
-                location: ifToken.location
+                location: ifToken
             });
             throw this.lastDiagnosticAsError();
         }
@@ -2521,7 +2505,7 @@ export class Parser {
         if (!this.checkAny(TokenKind.True, TokenKind.False, TokenKind.Identifier)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.invalidHashIfValue(),
-                location: this.peek()?.location
+                location: this.peek()
             });
         }
 
@@ -2560,7 +2544,7 @@ export class Parser {
                 //missing #endif
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedTerminator('#end if', '#if'),
-                    location: hashIfToken.location
+                    location: hashIfToken
                 });
             }
         }
@@ -2594,7 +2578,7 @@ export class Parser {
             //this whole if statement is bogus...add error to the if token and hard-fail
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedTerminator(['#end if', '#else if', '#else'], 'conditional compilation', 'block'),
-                location: hashIfToken.location
+                location: hashIfToken
             });
             throw this.lastDiagnosticAsError();
         }
@@ -2670,7 +2654,7 @@ export class Parser {
             ) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unsafeUnmatchedTerminatorInConditionalCompileBlock(peek.text),
-                    location: peek.location
+                    location: peek
                 });
                 throw this.lastDiagnosticAsError();
             } else {
@@ -2689,7 +2673,7 @@ export class Parser {
         if (ReservedWords.has(constName?.text.toLowerCase())) {
             this.diagnostics.push({
                 ...DiagnosticMessages.cannotUseReservedWordAsIdentifier(constName?.text),
-                location: constName?.location
+                location: constName
             });
 
             this.lastDiagnosticAsError();
@@ -2701,7 +2685,7 @@ export class Parser {
             if (assignment.tokens.as || assignment.typeExpression) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedToken(assignment.tokens.as?.text || assignment.typeExpression?.getName(ParseMode.BrighterScript)),
-                    location: assignment.tokens.as?.location ?? assignment.typeExpression?.location
+                    location: util.firstLocatable<Locatable>(assignment.tokens.as, assignment.typeExpression)
                 });
                 this.lastDiagnosticAsError();
             }
@@ -2712,7 +2696,7 @@ export class Parser {
         if (!this.check(TokenKind.Newline)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedToken(this.peek().text),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -2732,7 +2716,7 @@ export class Parser {
         if (!this.check(TokenKind.Newline)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.unexpectedToken(this.peek().text),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -2744,7 +2728,7 @@ export class Parser {
             if (!silent) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedNewlineOrColon(),
-                    location: this.peek().location
+                    location: this.peek()
                 });
             }
             return false;
@@ -2758,7 +2742,7 @@ export class Parser {
             if (isIfStatement(stat) && !stat.isInline) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedInlineIfStatement(),
-                    location: stat.location
+                    location: stat
                 });
             }
         }
@@ -2795,7 +2779,7 @@ export class Parser {
                 const colon = this.previous();
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedToken(colon.text),
-                    location: colon.location
+                    location: colon
                 });
             }
         }
@@ -2811,13 +2795,13 @@ export class Parser {
             if (this.checkAny(TokenKind.PlusPlus, TokenKind.MinusMinus)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedOperator(),
-                    location: this.peek().location
+                    location: this.peek()
                 });
                 throw this.lastDiagnosticAsError();
             } else if (isCallExpression(expr)) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedOperator(),
-                    location: expressionStart.location
+                    location: expressionStart
                 });
                 throw this.lastDiagnosticAsError();
             }
@@ -2839,7 +2823,7 @@ export class Parser {
         if (isDottedGetExpression(expr)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Property'),
-                location: util.createBoundingLocation(expr.tokens.dot, expr.tokens.name)
+                location: util.setBounds({} as Locatable, expr.tokens.dot, expr.tokens.name)
             });
             //we can recover gracefully here even though it's invalid syntax
             return new ExpressionStatement({ expression: expr });
@@ -2848,7 +2832,7 @@ export class Parser {
         } else if (isIndexedGetExpression(expr)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('Index'),
-                location: util.createBoundingLocation(expr.tokens.openingSquare, ...expr.indexes, expr.tokens.closingSquare)
+                location: util.setBounds({} as Locatable, expr.tokens.openingSquare, ...expr.indexes, expr.tokens.closingSquare)
             });
             //we can recover gracefully here even though it's invalid syntax
             return new ExpressionStatement({ expression: expr });
@@ -2856,7 +2840,7 @@ export class Parser {
         } else if (isXmlAttributeGetExpression(expr)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.propAccessNotPermittedAfterFunctionCallInExpressionStatement('XML attribute'),
-                location: util.createBoundingLocation(expr.tokens.at, expr.tokens.name)
+                location: util.setBounds({} as Locatable, expr.tokens.at, expr.tokens.name)
             });
             //we can recover gracefully here even though it's invalid syntax
             return new ExpressionStatement({ expression: expr });
@@ -2866,7 +2850,7 @@ export class Parser {
         //at this point, it's probably an error. However, we recover a little more gracefully by creating an assignment
         this.diagnostics.push({
             ...DiagnosticMessages.expectedStatement(),
-            location: expressionStart.location
+            location: expressionStart
         });
         return new ExpressionStatement({ expression: expr });
     }
@@ -2933,7 +2917,7 @@ export class Parser {
 
         //print statements can be empty, so look for empty print conditions
         if (!values.length) {
-            const endOfStatementLocation = util.createBoundingLocation(printKeyword, this.peek());
+            const endOfStatementLocation = util.setBounds({} as Locatable, printKeyword, this.peek());
             let emptyStringLiteral = createStringLiteral('', endOfStatementLocation);
             values.push(emptyStringLiteral);
         }
@@ -3116,7 +3100,7 @@ export class Parser {
             for (const annotation of this.pendingAnnotations) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unusedAnnotation(),
-                    location: annotation.location
+                    location: annotation
                 });
             }
         }
@@ -3263,7 +3247,7 @@ export class Parser {
             if (this.options.mode !== ParseMode.BrighterScript) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.bsFeatureNotSupportedInBrsFiles('arrow functions'),
-                    location: arrow.location
+                    location: arrow
                 });
             }
             this.validateParameterOrder(params);
@@ -3272,7 +3256,7 @@ export class Parser {
             if (!value) {
                 this.diagnostics.push({
                     ...DiagnosticMessages.expectedExpressionAfterArrow(),
-                    location: arrow.location
+                    location: arrow
                 });
                 throw this.lastDiagnosticAsError();
             }
@@ -3451,7 +3435,7 @@ export class Parser {
         if (!leftParen) {
             // new expression without a following call expression
             // wrap the name in an expression
-            const endOfStatementLocation = util.createBoundingLocation(newToken, this.peek());
+            const endOfStatementLocation = util.setBounds({} as Locatable, newToken, this.peek());
             const exprStmt = nameExpr ?? createStringLiteral('', endOfStatementLocation);
             return new ExpressionStatement({ expression: exprStmt });
         }
@@ -3558,7 +3542,7 @@ export class Parser {
                 if (args.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.tooManyCallableArguments(args.length, CallExpression.MaximumArguments),
-                        location: this.peek()?.location
+                        location: this.peek()
                     });
                     throw this.lastDiagnosticAsError();
                 }
@@ -3753,7 +3737,7 @@ export class Parser {
                 if (params.length >= CallExpression.MaximumArguments) {
                     this.diagnostics.push({
                         ...DiagnosticMessages.tooManyCallableParameters(params.length, CallExpression.MaximumArguments),
-                        location: this.peek().location
+                        location: this.peek()
                     });
                 }
 
@@ -3798,7 +3782,7 @@ export class Parser {
         if (!this.check(TokenKind.RightCurlyBrace)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedParameterNameButFound(this.peek().text),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -3837,7 +3821,7 @@ export class Parser {
         if (!this.checkAny(TokenKind.Identifier, ...this.allowedLocalIdentifiers, TokenKind.StringLiteral)) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedIdentifier(this.peek().text),
-                location: this.peek().location
+                location: this.peek()
             });
             throw this.lastDiagnosticAsError();
         }
@@ -3901,7 +3885,7 @@ export class Parser {
             case this.checkSelectCaseTerminator() && this.checkAnyPrevious(TokenKind.Newline, TokenKind.Colon):
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedToken(this.peek().text),
-                    location: this.peek().location
+                    location: this.peek()
                 });
                 throw this.lastDiagnosticAsError();
 
@@ -3944,7 +3928,7 @@ export class Parser {
                 } else {
                     this.diagnostics.push({
                         ...DiagnosticMessages.unexpectedToken(this.peek().text),
-                        location: this.peek()?.location
+                        location: this.peek()
                     });
                     throw this.lastDiagnosticAsError();
                 }
@@ -4023,7 +4007,7 @@ export class Parser {
             } else {
                 this.diagnostics.push({
                     ...DiagnosticMessages.unexpectedAAKey(),
-                    location: this.peek().location
+                    location: this.peek()
                 });
                 throw this.lastDiagnosticAsError();
             }
@@ -4172,7 +4156,7 @@ export class Parser {
         }
         this.diagnostics.push({
             ...diagnostic,
-            location: this.peek()?.location
+            location: this.peek()
         });
     }
 
@@ -4196,7 +4180,7 @@ export class Parser {
         if (!optional && !consumed) {
             this.diagnostics.push({
                 ...DiagnosticMessages.expectedNewlineOrColon(),
-                location: this.peek()?.location
+                location: this.peek()
             });
         }
         return consumed;
