@@ -178,9 +178,8 @@ describe('parser with expression', () => {
 
         //a plain variable target is used as-is; anything else is evaluated into a local, numbered by how many
         //enclosing blocks also needed one
-        expect(outer.usesTempVariable()).to.be.false;
-        expect(inner.usesTempVariable()).to.be.true;
-        expect(inner.getTempVariableName()).to.eql('__bsc_tmp_with0');
+        expect(outer.getContextName()).to.eql('target');
+        expect(inner.getContextName()).to.eql('__bsc_tmp_with0');
     });
 
     it('flags a leading-dot member inside a function nested in the with block', () => {
@@ -267,7 +266,7 @@ describe('parser with expression', () => {
         expect(withOf(statements[1]).expression.kind).to.eql('GroupingExpression');
         expect(withOf(statements[2]).expression.kind).to.eql('ArrayLiteralExpression');
         //none of these are plain variables, so each needs a local
-        expect(statements.map(withOf).every(x => x.usesTempVariable())).to.be.true;
+        expect(statements.map(x => withOf(x).getContextName())).to.eql(['__bsc_tmp_with0', '__bsc_tmp_with0', '__bsc_tmp_with0', '__bsc_tmp_with0']);
     });
 
     it('flags a missing `end with`', () => {
@@ -454,10 +453,9 @@ describe('parser with expression', () => {
             expect(assignment.tokens.name.text).to.eql('scene');
             const withExpression = assignment.value as WithExpression;
             expect(withExpression).to.be.instanceof(WithExpression);
-            expect(withExpression.isAssignmentValue()).to.be.true;
             expect(withExpression.body.statements).to.be.lengthOf(2);
             //the assigned variable holds the target, so no temp local is needed
-            expect(withExpression.usesTempVariable()).to.be.false;
+            expect(withExpression.getContextName()).to.eql('scene');
         });
 
         it('parses a with expression as the value of a typed assignment', () => {
@@ -484,8 +482,7 @@ describe('parser with expression', () => {
             expect(returnStatement.kind).to.eql('ReturnStatement');
             const withExpression = returnStatement.value as WithExpression;
             expect(withExpression).to.be.instanceof(WithExpression);
-            expect(withExpression.isReturnValue()).to.be.true;
-            expect(withExpression.usesTempVariable()).to.be.true;
+            expect(withExpression.getContextName()).to.eql('__bsc_tmp_with0');
         });
 
         it('resolves leading-dot members to the with expression in every position', () => {

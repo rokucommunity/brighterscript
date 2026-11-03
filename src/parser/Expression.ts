@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isWithContextExpression, isWithExpression, isAssignmentStatement, isReturnStatement } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isWithContextExpression, isWithExpression, isAssignmentStatement } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -756,15 +756,8 @@ export class WithExpression extends Expression {
      * Is this the entire value of an assignment (`x = with <target> ... end with`)? If so, the target is assigned straight
      * into that variable and the body refers to it.
      */
-    public isAssignmentValue() {
+    private isAssignmentValue() {
         return isAssignmentStatement(this.parent) && this.parent.value === this;
-    }
-
-    /**
-     * Is this the entire value of a return statement (`return with <target> ... end with`)?
-     */
-    public isReturnValue() {
-        return isReturnStatement(this.parent) && this.parent.value === this;
     }
 
     /**
@@ -789,7 +782,7 @@ export class WithExpression extends Expression {
      * being assigned. Anything else (a property chain, a call, a literal, a nested `.member`) is evaluated once into a local
      * so the expression doesn't run again for every member access.
      */
-    public usesTempVariable(state?: BrsTranspileState) {
+    private usesTempVariable(state?: BrsTranspileState) {
         return !this.isAssignmentValue() && !this.isPlainVariableTarget(state);
     }
 
@@ -798,7 +791,7 @@ export class WithExpression extends Expression {
      * Nested blocks that each need a local get distinct names (suffixed by how many such blocks enclose this one)
      * so an inner block doesn't clobber the outer target; sibling blocks reuse the same name.
      */
-    public getTempVariableName(state?: BrsTranspileState) {
+    private getTempVariableName(state?: BrsTranspileState) {
         let depth = 0;
         let node = this.parent;
         while (node && !isFunctionExpression(node)) {
