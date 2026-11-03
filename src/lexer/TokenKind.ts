@@ -42,6 +42,7 @@ export enum TokenKind {
     GreaterEqual = 'GreaterEqual', // >=
     Equal = 'Equal', // =
     LessGreater = 'LessGreater', // BrightScript uses `<>` for "not equal"
+    Arrow = 'Arrow', // => (arrow function)
 
     // literals
     Identifier = 'Identifier',
@@ -836,6 +837,7 @@ export const FixedTokenText: Partial<Record<TokenKind, string>> = {
     [TokenKind.GreaterEqual]: '>=',
     [TokenKind.Equal]: '=',
     [TokenKind.LessGreater]: '<>',
+    [TokenKind.Arrow]: '=>',
     [TokenKind.Dot]: '.',
     [TokenKind.DotDotDot]: '...',
     [TokenKind.Comma]: ',',
