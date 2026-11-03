@@ -148,6 +148,7 @@ export default class PluginInterface<T extends Plugin = Plugin> {
             afterProgramCreate: 'afterProvideProgram',
             beforeProgramValidate: 'beforeValidateProgram',
             onProgramValidate: 'validateProgram',
+            afterProgramValidate: 'afterValidateProgram',
             beforeProgramDispose: 'beforeRemoveProgram',
             afterScopeCreate: 'afterProvideScope',
             beforeScopeDispose: 'beforeRemoveScope',

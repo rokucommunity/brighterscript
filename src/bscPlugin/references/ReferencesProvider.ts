@@ -49,12 +49,12 @@ export class ReferencesProvider {
                 file.ast.walk(createVisitor({
                     AssignmentStatement: (s) => {
                         if (s.tokens.name?.text?.toLowerCase() === searchFor) {
-                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), s.tokens.name.location?.range));
+                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(s.tokens.name)?.range));
                         }
                     },
                     VariableExpression: (e) => {
                         if (e.tokens.name.text.toLowerCase() === searchFor) {
-                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), e.location?.range));
+                            this.event.references.push(util.createLocationFromRange(util.pathToUri(file.srcPath), util.getLocation(e)?.range));
                         }
                     }
                 }), {

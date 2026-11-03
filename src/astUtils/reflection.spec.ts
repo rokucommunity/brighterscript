@@ -189,8 +189,11 @@ describe('reflection', () => {
         const charCode: Token & { charCode: number } = {
             kind: TokenKind.EscapedCharCodeLiteral,
             text: '0',
-            location: undefined,
             isReserved: false,
+            startPosition: undefined,
+            endPosition: undefined,
+            sourceInfo: undefined,
+            location: undefined,
             charCode: 0,
             leadingTrivia: []
         };

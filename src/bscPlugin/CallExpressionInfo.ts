@@ -96,7 +96,7 @@ export class CallExpressionInfo {
         if (!this.callExpression) {
             return false;
         }
-        let boundingRange = util.createBoundingRange(this.callExpression.tokens.openingParen?.location, this.callExpression.tokens.closingParen?.location);
+        let boundingRange = util.createBoundingRange(util.getLocation(this.callExpression.tokens.openingParen), util.getLocation(this.callExpression.tokens.closingParen));
         return util.rangeContains(boundingRange, this.position);
     }
 
@@ -159,7 +159,7 @@ export class CallExpressionInfo {
         }
         for (let i = this.callExpression.args.length - 1; i > -1; i--) {
             let argExpression = this.callExpression.args[i];
-            let comparison = util.comparePositionToRange(this.position, argExpression.location?.range);
+            let comparison = util.comparePositionToRange(this.position, util.getLocation(argExpression)?.range);
             if (comparison >= 0) {
                 return i + comparison;
             }

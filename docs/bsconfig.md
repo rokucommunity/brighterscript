@@ -123,7 +123,7 @@ If present, overrides the current working directory when invoking `bsc`. Default
 
 ## `diagnosticFilters`
 
-Type: `Array<string | number | {files: string | Array<string | {src: string} | {dest: string}>; codes?: Array<number | string>}`
+Type: `Array<string | number | {files?: string | Array<string | {src: string} | {dest: string}>; codes?: Array<number | string>; minSeverity?: 'error' | 'warn' | 'info' | 'hint'}>`
 
 A list of filters used to hide diagnostics.
 
@@ -137,7 +137,7 @@ A list of filters used to hide diagnostics.
   ]
   ```
 
-- An object can also be provided to filter specific diagnostic codes for a file pattern. If no `files` property is included, any diagnostic that matches the values in the `codes` will b e suppressed. If a `string` if given for the `files` property, it is treated as a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well. For example,
+- An object can also be provided to filter specific diagnostic codes and/or set a minimum severity threshold (`minSeverity`) for a file pattern. If no `files` property is included, any diagnostic that matches the values in `codes` and/or has a severity lower than `minSeverity` will be suppressed globally. If a `string` is given for the `files` property, it is treated as a relative-to-root-dir or absolute file path or glob pattern of the files that should be excluded. These file paths refer to the location of the source files pre-compilation and are relative to [`rootDir`](#rootdir). Absolute file paths may be used as well. For example,
 
   ```jsonc
   "diagnosticFilters": [{
@@ -154,9 +154,39 @@ A list of filters used to hide diagnostics.
           "vendor/**/*", // all vendor files will be suppressed
           { "src": "themes/theme1/**/*"}, // all files coming from `themes/theme1/` will be suppressed
           { "dest": "source/common/**/*"}, // all files from `source/common/` will be suppressed
-      ]
+      ],
       "codes": ["cannot-find-name", "mismatch-argument-count"] //ignore these specific codes
   }]
+  ```
+
+- An object with `minSeverity` can be used to filter out diagnostics below a minimum severity threshold (`"error"`, `"warn"`, `"info"`, `"hint"`), either globally (when `files` is omitted) or for specific `files` patterns:
+
+  ```jsonc
+  "diagnosticFilters": [
+      // filter out hint and info diagnostics in components (keep warn and error)
+      {
+          "files": "components/**/*",
+          "minSeverity": "warn"
+      },
+      // filter out warnings, info, and hint diagnostics in vendor files (keep only errors)
+      {
+          "files": "vendor/**/*",
+          "minSeverity": "error"
+      }
+  ]
+  ```
+
+- When an object specifies both `codes` and `minSeverity`, a diagnostic is suppressed only when it matches **both** a code in `codes` **and** has a severity lower than `minSeverity` (logical AND). To suppress diagnostics that match either condition (logical OR), use separate filter objects:
+
+  ```jsonc
+  "diagnosticFilters": [
+      // suppress cannot-find-name in vendor files when its severity is below error
+      {
+          "files": "vendor/**/*",
+          "codes": ["cannot-find-name"],
+          "minSeverity": "error"
+      }
+  ]
   ```
 
 - A file glob may be prefixed with `!` to make it a negative pattern which "un-ignores" the files it matches. (See examples below).
@@ -171,7 +201,7 @@ If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify `
 
 ### Negative patterns in `diagnosticFilters`
 
-A negative pattern can be used to un-ignore some files or codes which were previously ignored. For example,
+A negative pattern can be used to un-ignore some files, codes, or severities which were previously ignored. For example,
 
 ```jsonc
 "diagnosticFilters": [
@@ -180,12 +210,13 @@ A negative pattern can be used to un-ignore some files or codes which were previ
 ]
 ```
 
-A specific error code can be unignored in multiple places by using a pattern which matches everything under `rootDir`. For example,
+A specific error code or severity threshold can be unignored in multiple places by using a pattern which matches everything under `rootDir`. For example,
 
 ```jsonc
 "diagnosticFilters": [
-    { "files": "vendor/**/*" }, //ignore all errors from vendor libraries
-    { "files": "!*/**/*", "codes": ["name-collision"] } //EXCEPT do show this particular code everywhere
+    { "files": "vendor/**/*" }, //ignore all diagnostics from vendor libraries
+    { "files": "!*/**/*", "codes": ["name-collision"] }, //EXCEPT do show this particular code everywhere
+    { "files": "!vendor/**/*", "minSeverity": "error" } //AND still show errors from vendor libraries
 ]
 ```
 

@@ -7,27 +7,48 @@ import type { SymbolTable } from '../SymbolTable';
 import type { BrsTranspileState } from './BrsTranspileState';
 import type { GetTypeOptions, TranspileResult } from '../interfaces';
 import type { AnnotationExpression } from './Expression';
-import util from '../util';
 import { DynamicType } from '../types/DynamicType';
+import util from '../util';
 import type { BscType } from '../types/BscType';
-import type { Token } from '../lexer/Token';
+import type { Locatable, SourceInfo, Token } from '../lexer/Token';
 import { isBlock, isBody, isFunctionParameterExpression } from '../astUtils/reflection';
 
 /**
  * A BrightScript AST node
  */
-export abstract class AstNode {
+export abstract class AstNode implements Locatable {
     public abstract kind: AstNodeKind;
     /**
-     *  The starting and ending location of the node.
+     * Where this node starts, counted from the start of its source (see `Locatable.startPosition`).
+     * Use `util.getLocation()` to get the line/character `Location`
      */
-    public abstract location?: Location | undefined;
+    public abstract startPosition: number;
+    /**
+     * Where this node ends: the gap just after its last character (see `Locatable.endPosition`)
+     */
+    public abstract endPosition: number;
+    /**
+     * Info about the source this node was parsed from. `undefined` for synthetic nodes
+     */
+    public abstract sourceInfo: SourceInfo | undefined;
 
     /**
-     * @deprecated use `location.range` instead
+     * The starting and ending location of the node. Assigning it moves the node to that location (see `util.assignLocation()`).
+     * @deprecated use `util.getLocation(node)`. This is computed on every read
+     */
+    public get location(): Location | undefined {
+        return util.getLocation(this);
+    }
+
+    public set location(value: Location | undefined) {
+        util.assignLocation(this, value, this.sourceInfo);
+    }
+
+    /**
+     * @deprecated use `util.getLocation(node)?.range`. This is computed on every read
      */
     public get range(): Range | undefined {
-        return this.location?.range;
+        return util.getLocation(this)?.range;
     }
 
     public abstract transpile(state: BrsTranspileState): TranspileResult;
@@ -151,9 +172,16 @@ export abstract class AstNode {
      * FInd the deepest child that includes the given position
      */
     public findChildAtPosition<TNodeType extends AstNode = AstNode>(position: Position, options?: WalkOptions): TNodeType | undefined {
+        //a position only means something within one source (the one this search starts from), so only nodes from that source can match.
+        //Nodes without a source (i.e. a synthetic `if` wrapping real code) or from another source (i.e. code parsed from a snippet) never match
+        //on their own, but the walk still steps into them, so the real code inside them can still be found
+        const searchSource = this.sourceInfo;
         return this.findChild<TNodeType>((node) => {
-            //if the current node includes this range, keep that node
-            if (util.rangeContains(node?.location.range, position)) {
+            if (!node?.sourceInfo || (searchSource && node.sourceInfo !== searchSource)) {
+                return;
+            }
+            const offset = util.getOffset(node.sourceInfo, position);
+            if (offset !== undefined && node.startPosition <= offset && offset <= node.endPosition) {
                 return node.findChildAtPosition(position, options) ?? node;
             }
         }, options);
@@ -304,11 +332,6 @@ export abstract class AstNode {
                     (child as AstNode).parent = clone;
                 }
             }
-        }
-
-        //reapply the location if we have one but the clone doesn't
-        if (!clone.location && this.location) {
-            clone.location = util.cloneLocation(this.location);
         }
         return clone;
     }

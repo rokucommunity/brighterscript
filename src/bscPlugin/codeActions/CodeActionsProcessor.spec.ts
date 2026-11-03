@@ -1136,6 +1136,102 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
+    describe('typeDesignatorMismatch', () => {
+        /**
+         * Apply the (single-line) edits of the code action with the given title, and return the resulting line
+         */
+        function applyAction(fileText: string, actions: CodeAction[], title: string) {
+            const action = actions.find(a => a.title === title);
+            expect(action, `expected an action titled "${title}"`).to.exist;
+            const lines = fileText.split(/\r?\n/);
+            const edits = Object.values(action.edit.changes)[0];
+            //apply from the end of the line backwards so earlier edits don't shift later ones
+            for (const edit of [...edits].sort((a, b) => b.range.start.character - a.range.start.character)) {
+                expect(edit.range.start.line).to.equal(edit.range.end.line);
+                const line = lines[edit.range.start.line];
+                lines[edit.range.start.line] = line.substring(0, edit.range.start.character) + edit.newText + line.substring(edit.range.end.character);
+            }
+            return lines;
+        }
+
+        it('offers to change the type or remove the `as` clause', () => {
+            const file = program.setFile('source/main.brs', `
+                sub foo(name$ as integer)
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(1, 25, 1, 25), [
+                `Change type to 'string'`,
+                `Remove 'as integer'`
+            ]);
+        });
+
+        it('replaces the `as` type with the type designator type', () => {
+            const text = `
+                sub foo(name$ as integer, count% as dynamic)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            program.validate();
+            let lines = applyAction(text, program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25)), `Change type to 'string'`);
+            expect(lines[1]).to.equal(`                sub foo(name$ as string, count% as dynamic)`);
+
+            lines = applyAction(text, program.getCodeActions(file.srcPath, util.createRange(1, 45, 1, 45)), `Change type to 'integer'`);
+            expect(lines[1]).to.equal(`                sub foo(name$ as integer, count% as integer)`);
+        });
+
+        it('removes the ` as <type>` clause including its leading whitespace', () => {
+            const text = `
+                sub foo(name$   as   object, other as string)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            program.validate();
+            const lines = applyAction(text, program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25)), `Remove 'as object'`);
+            expect(lines[1]).to.equal(`                sub foo(name$, other as string)`);
+        });
+
+        it('removes the `as` clause after a default value', () => {
+            const text = `
+                sub foo(name$ = "bob" as integer)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            program.validate();
+            let actions = program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25));
+            expect(applyAction(text, actions, `Remove 'as integer'`)[1]).to.equal(`                sub foo(name$ = "bob")`);
+            expect(applyAction(text, actions, `Change type to 'string'`)[1]).to.equal(`                sub foo(name$ = "bob" as string)`);
+        });
+
+        it('offers fix-all variants when there are multiple mismatches in the file', () => {
+            const text = `
+                sub foo(name$ as integer, count% as string)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            testGetCodeActions(file, util.createRange(1, 25, 1, 25), [
+                `Change type to 'string'`,
+                `Fix all: Change types to match their type designators`,
+                `Fix all: Remove 'as' types that conflict with their type designators`,
+                `Remove 'as integer'`
+            ]);
+            const actions = program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25));
+            expect(
+                applyAction(text, actions, `Fix all: Change types to match their type designators`)[1]
+            ).to.equal(`                sub foo(name$ as string, count% as integer)`);
+            expect(
+                applyAction(text, actions, `Fix all: Remove 'as' types that conflict with their type designators`)[1]
+            ).to.equal(`                sub foo(name$, count%)`);
+        });
+
+        it('does not offer the quick fixes when the `as` type matches the type designator', () => {
+            const file = program.setFile('source/main.brs', `
+                sub foo(name$ as string)
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(1, 25, 1, 25), []);
+        });
+    });
+
     describe('disable diagnostic actions', () => {
         const findLineAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this line`));
         const findFileAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this file`));
