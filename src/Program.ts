@@ -9,6 +9,7 @@ import { Scope } from './Scope';
 import type { NamespaceContainer, NamespaceFileContribution } from './Scope';
 import { SymbolTable } from './SymbolTable';
 import { DiagnosticMessages } from './DiagnosticMessages';
+import type { RsgProject } from './rsg/RsgProject';
 import type { BsDiagnostic, FileObj, SemanticToken, FileLink, ProvideHoverEvent, ProvideCompletionsEvent, Hover, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent, BeforeAddFileEvent, BeforeRemoveFileEvent, PrepareFileEvent, PrepareProgramEvent, ProvideFileEvent, SerializedFile, SerializeFileEvent, ScopeValidationOptions, ExtraSymbolData, ProvideSelectionRangesEvent, ProvideInlayHintsEvent, ProvideSourceFixAllCodeActionsEvent } from './interfaces';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
@@ -152,6 +153,11 @@ export class Program {
 
     public options: FinalizedBsConfig;
     public logger: Logger;
+
+    /**
+     * The RSG 2.0 SDK app discovered from the `rokuConfig` option (if set)
+     */
+    public rsgProject?: RsgProject;
 
     /**
      * An editor that plugins can use to modify program-level things during the build flow. Don't use this to edit files (they have their own `.editor`)
@@ -1745,7 +1751,8 @@ export class Program {
                 standardizedPath
             ] as T;
         } else if (util.isUriLike(filePath)) {
-            const path = URI.parse(filePath).fsPath;
+            //`virtual:/` paths become `file:///virtual%3A/...` uris, so drop the leading slash to get the `virtual:/` path back
+            const path = URI.parse(filePath).fsPath.replace(/^[\/\\](virtual:[\/\\])/i, '$1');
             const standardizedPath = (normalizePath ? util.standardizePath(path) : path).toLowerCase();
             this.getFilePathCache.set(filePath, { path: standardizedPath });
 
@@ -2481,6 +2488,9 @@ export class Program {
             });
 
             await this.plugins.emitAsync('buildProgram', event);
+
+            //files flagged as `excludeFromOutput` are never transpiled, copied, or written
+            event.files = event.files.filter(x => x.excludeFromOutput !== true);
 
             //prepare the program (and files) for building
             event.files = await this.prepare(event.files);
