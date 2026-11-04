@@ -600,7 +600,7 @@ describe('Program', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('shows warning when a child component imports the same script as its parent', () => {
+        it('does not warn when a child component imports the same script as its parent', () => {
             program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
@@ -617,9 +617,7 @@ describe('Program', () => {
 
             program.setFile('lib.brs', `'comment`);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.unnecessaryScriptImportInChildFromParent('ParentScene')
-            ]);
+            expectZeroDiagnostics(program);
         });
 
         it('adds info diag when child component method shadows parent component method', () => {
@@ -1680,11 +1678,6 @@ describe('Program', () => {
             expectZeroDiagnostics(
                 program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code)
             );
-
-            //the children all include a redundant import of lib.brs file which is imported by the parent.
-            expect(
-                program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code)
-            ).to.be.lengthOf(childCount);
         });
 
         it('detects script import changes', () => {
