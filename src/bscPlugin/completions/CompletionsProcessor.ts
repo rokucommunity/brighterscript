@@ -1,4 +1,4 @@
-import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
+import { isAliasStatement, isBrsFile, isCallableType, isClassStatement, isClassType, isComponentType, isConstStatement, isEnumMemberType, isEnumType, isFunctionExpression, isInterfaceType, isWithContextExpression, isMethodStatement, isNamespaceStatement, isNamespaceType, isNativeType, isTypedFunctionType, isTypeStatementType, isXmlFile, isXmlScope } from '../../astUtils/reflection';
 import type { ExtraSymbolData, FileReference, ProvideCompletionsEvent } from '../../interfaces';
 import type { BscFile } from '../../files/BscFile';
 import { AllowedTriviaTokens, DeclarableTypes, Keywords, TokenKind } from '../../lexer/TokenKind';
@@ -206,8 +206,15 @@ export class CompletionsProcessor {
 
         if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
             const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Dot);
-            beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
+            //a leading dot inside a `with` block (`.|`) has no expression before it: the dot itself is the
+            //implicit target of the block, so look the members up on that
+            const expressionAtDot = file.getClosestExpression(util.getLocation(dotToken)?.range.start);
+            if (isWithContextExpression(expressionAtDot)) {
+                expression = expressionAtDot;
+            } else {
+                beforeDotToken = file.getTokenBefore(dotToken);
+                expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
+            }
             shouldLookForMembers = true;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc)) {
             const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Callfunc);

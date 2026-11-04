@@ -1,4 +1,4 @@
-import { isBlock, isBody, isCaseStatement, isClassStatement, isConditionalCompileStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInvalidType, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isVariableExpression, isVoidType } from '../../astUtils/reflection';
+import { isBlock, isBody, isCaseStatement, isClassStatement, isConditionalCompileStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isInvalidType, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isTypecastExpression, isTypecastStatement, isTypedFunctionTypeExpression, isVariableExpression, isVoidType, isWithExpression } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
@@ -268,7 +268,7 @@ export class BrsFileLinker {
                         index: node.parent.statementIndex,
                         table: blockSymbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
-                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || this.isAlwaysExecutedCase(node.parent)
+                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || isWithExpression(node.parent) || this.isAlwaysExecutedCase(node.parent)
                     });
 
                     //the loop variable is scoped to the loop body
