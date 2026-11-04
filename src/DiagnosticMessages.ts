@@ -1405,6 +1405,15 @@ export let DiagnosticMessages = {
         message: `Function has ${count} labels used by goto, max is ${max}.`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-goto-label-count'
+    }),
+    /**
+     * Assigning to a member of an associative array read from a node field. Reading the field returns a copy, so the assignment is discarded
+     * @param fieldName the name of the node field (i.e. `metadata`)
+     */
+    nodeFieldAssociativeArrayMemberAssignmentHasNoEffect: (fieldName: string) => ({
+        message: `Assignment has no effect: '${fieldName}' is an associative array field on a node, and reading it returns a copy. Read it into a local variable, modify it, then assign it back to the node`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'node-field-aa-member-assignment-no-effect'
     })
 };
 export const defaultMaximumTruncationLength = 160;
