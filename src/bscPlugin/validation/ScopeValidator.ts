@@ -1,12 +1,12 @@
 import * as path from 'path';
 import { DiagnosticTag } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIndexedGetExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { BsDiagnosticInput, CallableContainer, ExtraSymbolData, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, IndexedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -222,6 +222,12 @@ export class ScopeValidator {
                     DottedSetStatement: (dottedSetStmt) => {
                         this.addValidationKindMetric('DottedSetStatement', () => {
                             this.validateDottedSetStatement(file, dottedSetStmt);
+                            this.validateNodeFieldAssociativeArrayMemberAssignment(file, dottedSetStmt);
+                        });
+                    },
+                    IndexedSetStatement: (indexedSetStmt) => {
+                        this.addValidationKindMetric('IndexedSetStatement', () => {
+                            this.validateNodeFieldAssociativeArrayMemberAssignment(file, indexedSetStmt);
                         });
                     },
                     BinaryExpression: (binaryExpr) => {
@@ -963,6 +969,29 @@ export class ScopeValidator {
                 ...DiagnosticMessages.assignmentTypeMismatch(actualRHSType?.toString() ?? 'unknown', expectedLHSType?.toString() ?? 'unknown', compatibilityData),
                 location: dottedSetStmt
             });
+        }
+    }
+
+    /**
+     * Detect assignments to a member of an associative array that was read from a node field (i.e. `m.top.metadata.a = 1`).
+     * Reading an AA field from a node returns a copy, so the assignment is discarded at runtime.
+     * This applies anywhere in the chain (i.e. `m.config.someNode.metadata.title.text = "x"`)
+     */
+    private validateNodeFieldAssociativeArrayMemberAssignment(file: BrsFile, setStmt: DottedSetStatement | IndexedSetStatement) {
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+        let expr = setStmt.obj;
+        while (isDottedGetExpression(expr) || isIndexedGetExpression(expr)) {
+            if (isDottedGetExpression(expr) &&
+                isAssociativeArrayType(this.getNodeTypeWrapper(file, expr, getTypeOpts)) &&
+                isComponentType(this.getNodeTypeWrapper(file, expr.obj, getTypeOpts))
+            ) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect(expr.tokens.name.text),
+                    location: setStmt.location
+                });
+                return;
+            }
+            expr = expr.obj;
         }
     }
 
