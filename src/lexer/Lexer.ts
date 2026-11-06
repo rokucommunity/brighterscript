@@ -1079,7 +1079,7 @@ export class Lexer {
      * Determine if this token is a trivia token
      */
     private isTrivia(token: Token) {
-        return AllowedTriviaTokens.includes(token.kind);
+        return AllowedTriviaTokens.has(token.kind);
     }
 
     /**

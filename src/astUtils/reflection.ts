@@ -578,14 +578,14 @@ export function isBuiltInType(value: any, name: string): value is InterfaceType 
         (isTypeStatementType(value) && isBuiltInType(value.wrappedType, name));
 }
 
-const nativeTypeKinds = [
+const nativeTypeKinds: ReadonlySet<BscTypeKind> = new Set([
     BscTypeKind.DynamicType,
     BscTypeKind.ObjectType,
     BscTypeKind.VoidType,
     BscTypeKind.FunctionType
-];
+]);
 export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType | InterfaceType {
-    return isPrimitiveType(value) || nativeTypeKinds.includes(value?.kind);
+    return isPrimitiveType(value) || nativeTypeKinds.has(value?.kind);
 }
 
 export function isTypeStatementTypeOf(value: any, typeGuard: (val: any) => boolean) {
