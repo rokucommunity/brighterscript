@@ -82,14 +82,12 @@ describe('parser return statements', () => {
             {
                 kind: TokenKind.Return,
                 text: 'return',
-                isReserved: true,
                 ...testLocatable(1, 2, 1, 8),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
-                isReserved: false,
                 ...testLocatable(1, 9, 1, 10),
                 leadingTrivia: []
             },

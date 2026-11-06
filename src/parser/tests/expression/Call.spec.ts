@@ -154,49 +154,42 @@ describe('parser call expressions', () => {
                 kind: TokenKind.Identifier,
                 text: 'foo',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 3, 0, 4)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"bar"`,
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 4, 0, 9)
             },
             {
                 kind: TokenKind.Comma,
                 text: ',',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"baz"`,
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 11, 0, 16)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 16, 0, 17)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 17, 0, 18)
             }
         ]);

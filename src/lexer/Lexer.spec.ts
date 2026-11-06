@@ -1317,11 +1317,11 @@ describe('lexer', () => {
         });
     });
 
-    describe('isReserved', () => {
+    describe('reserved words', () => {
         it('is true only for reserved words, not for other keywords or identifiers', () => {
             //`if`/`sub` are reserved; `tab`/`as` are keywords but not reserved (see Keywords doc comment)
             let { tokens } = Lexer.scan('if sub tab as somevar');
-            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+            expect(tokens.map(t => ReservedTokenKinds.has(t.kind))).to.deep.equal([
                 true, //if
                 true, //sub
                 false, //tab
@@ -1333,7 +1333,7 @@ describe('lexer', () => {
 
         it('is true for multi-word reserved keywords regardless of casing', () => {
             let { tokens } = Lexer.scan('END WHILE end sub');
-            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+            expect(tokens.map(t => ReservedTokenKinds.has(t.kind))).to.deep.equal([
                 true, //end while
                 true, //end sub
                 false //eof
@@ -1350,7 +1350,6 @@ describe('lexer', () => {
                 let { tokens } = Lexer.scan(text);
                 //some entries are multi-word (e.g. 'end if'), which lex to a single token plus Eof
                 expect(tokens[0].kind, `token kind for keyword text '${text}'`).to.equal(kind);
-                expect(tokens[0].isReserved, `isReserved for keyword text '${text}'`).to.equal(ReservedTokenKinds.has(kind));
             }
         });
     });
