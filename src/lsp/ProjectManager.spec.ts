@@ -1566,6 +1566,131 @@ describe('ProjectManager', () => {
         });
     });
 
+    describe('lazy project activation', () => {
+        const lazyWorkspaceSettings = {
+            ...workspaceSettings,
+            languageServer: {
+                ...workspaceSettings.languageServer,
+                lazyProjectActivation: true
+            }
+        };
+
+        beforeEach(() => {
+            fsExtra.outputFileSync(`${rootDir}/project1/bsconfig.json`, '');
+            fsExtra.outputFileSync(`${rootDir}/project1/source/main.brs`, `sub main()\nend sub`);
+            fsExtra.outputFileSync(`${rootDir}/project2/bsconfig.json`, '');
+            fsExtra.outputFileSync(`${rootDir}/project2/source/main.brs`, `sub main()\nend sub`);
+        });
+
+        async function openFile(srcPath: string, contents: string) {
+            await manager.handleFileOpen({ srcPath: srcPath });
+            await manager.handleFileChanges([{
+                srcPath: srcPath,
+                type: FileChangeType.Changed,
+                fileContents: contents,
+                allowStandaloneProject: true
+            }]);
+        }
+
+        it('activates every project when the setting is disabled', async () => {
+            await manager.syncProjects([workspaceSettings]);
+            expect(manager.projects.map(x => x.projectKey).sort()).to.eql([
+                s`${rootDir}/project1/bsconfig.json`,
+                s`${rootDir}/project2/bsconfig.json`
+            ]);
+            expect(manager['dormantProjects'].size).to.eql(0);
+        });
+
+        it('leaves projects dormant when none of their files are open', async () => {
+            await manager.syncProjects([lazyWorkspaceSettings]);
+            expect(manager.projects).to.be.empty;
+            expect([...manager['dormantProjects'].keys()].sort()).to.eql([
+                s`${rootDir}/project1/bsconfig.json`,
+                s`${rootDir}/project2/bsconfig.json`
+            ]);
+        });
+
+        it('activates the only project even when the setting is enabled', async () => {
+            fsExtra.removeSync(`${rootDir}/project2`);
+            await manager.syncProjects([lazyWorkspaceSettings]);
+            expect(manager.projects.map(x => x.projectKey)).to.eql([
+                s`${rootDir}/project1/bsconfig.json`
+            ]);
+            expect(manager['dormantProjects'].size).to.eql(0);
+        });
+
+        it('activates a dormant project when one of its files is opened', async () => {
+            await manager.syncProjects([lazyWorkspaceSettings]);
+
+            await openFile(s`${rootDir}/project1/source/main.brs`, `sub main()\n    doesNotExist()\nend sub`);
+            await manager.onIdle();
+
+            expect(manager.projects.map(x => x.projectKey)).to.eql([
+                s`${rootDir}/project1/bsconfig.json`
+            ]);
+            expect([...manager['dormantProjects'].keys()]).to.eql([
+                s`${rootDir}/project2/bsconfig.json`
+            ]);
+            //the file was handled by the woken project, so no standalone project should exist
+            expect(manager['standaloneProjects'].size).to.eql(0);
+
+            //the woken project was validated using the in-memory contents of the opened file
+            const diagnostics = await onNextDiagnostics();
+            expectDiagnostics(diagnostics, [
+                DiagnosticMessages.cannotFindFunction('doesNotExist').message
+            ]);
+        });
+
+        it('activates projects that have an open file during sync', async () => {
+            await manager.handleFileOpen({ srcPath: s`${rootDir}/project2/source/main.brs` });
+            await manager.syncProjects([lazyWorkspaceSettings]);
+            expect(manager.projects.map(x => x.projectKey)).to.eql([
+                s`${rootDir}/project2/bsconfig.json`
+            ]);
+            expect([...manager['dormantProjects'].keys()]).to.eql([
+                s`${rootDir}/project1/bsconfig.json`
+            ]);
+        });
+
+        it('creates a standalone project for an open file that no dormant project owns', async () => {
+            await manager.syncProjects([lazyWorkspaceSettings]);
+            await openFile(s`${rootDir}/loose.brs`, `sub loose()\nend sub`);
+            await manager.onIdle();
+            expect(manager['dormantProjects'].size).to.eql(2);
+            expect(manager['standaloneProjects'].size).to.eql(1);
+        });
+
+        it('activates dormant projects when the setting gets disabled', async () => {
+            await manager.syncProjects([lazyWorkspaceSettings]);
+            expect(manager.projects).to.be.empty;
+
+            await manager.syncProjects([workspaceSettings]);
+            expect(manager.projects.map(x => x.projectKey).sort()).to.eql([
+                s`${rootDir}/project1/bsconfig.json`,
+                s`${rootDir}/project2/bsconfig.json`
+            ]);
+            expect(manager['dormantProjects'].size).to.eql(0);
+        });
+
+        it('uses the files array from bsconfig.json to decide which project owns an opened file', async () => {
+            fsExtra.outputFileSync(`${rootDir}/project2/bsconfig.json`, JSON.stringify({
+                rootDir: 'app',
+                files: ['source/**/*']
+            }));
+            fsExtra.outputFileSync(`${rootDir}/project2/app/source/main.brs`, `sub main()\nend sub`);
+            await manager.syncProjects([lazyWorkspaceSettings]);
+
+            //this file is outside of project2's rootDir, so it should not wake project2
+            await openFile(s`${rootDir}/project2/source/main.brs`, `sub main()\nend sub`);
+            await manager.onIdle();
+            expect(manager['dormantProjects'].has(s`${rootDir}/project2/bsconfig.json`)).to.be.true;
+
+            await openFile(s`${rootDir}/project2/app/source/main.brs`, `sub main()\nend sub`);
+            await manager.onIdle();
+            expect(manager.projects.map(x => x.projectKey)).to.include(s`${rootDir}/project2/bsconfig.json`);
+        });
+    });
+
     it('completes promise when project is disposed in the middle of a flow', async function () {
         //this test enables real threading without a warm-up hook, so it pays the full worker-thread
         //cold-boot cost itself. That boot has been measured at ~18s on macOS CI runners, so give it
