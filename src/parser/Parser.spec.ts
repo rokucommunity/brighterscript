@@ -1175,6 +1175,39 @@ describe('parser', () => {
             expect(stat.annotations![0]).to.be.instanceof(AnnotationExpression);
         });
 
+        it('attaches annotations on the same line as a statement inside a function body', () => {
+            let { ast, diagnostics } = parse(`
+                sub init()
+                    @inject m.someChild = {}
+                    @inject("name") m.otherChild = {}
+                    @inject @observe("itemSelected", "itemFocused") m.someComponent = {}
+                    @inject @observe("itemSelected")
+                    m.lastComponent = {}
+                end sub
+            `, ParseMode.BrighterScript);
+            expectZeroDiagnostics(diagnostics);
+            const statements = (ast.statements[0] as FunctionStatement).func.body.statements;
+            expect(
+                statements.map(x => x.annotations?.map(a => a.name))
+            ).to.eql([
+                ['inject'],
+                ['inject'],
+                ['inject', 'observe'],
+                ['inject', 'observe']
+            ]);
+        });
+
+        it('still requires a separator between statements that follow a same-line annotation', () => {
+            let { diagnostics } = parse(`
+                sub init()
+                    @inject m.someChild = {} m.otherChild = {}
+                end sub
+            `, ParseMode.BrighterScript);
+            expectDiagnosticsIncludes(diagnostics, [
+                DiagnosticMessages.expectedNewlineOrColon()
+            ]);
+        });
+
         it('attaches multiple annotations to next statement', () => {
             let { ast, diagnostics } = parse(`
                 @meta1
