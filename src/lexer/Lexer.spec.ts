@@ -1911,7 +1911,7 @@ describe('lexer', () => {
         function stringify(tokens: Token[]) {
             return tokens
                 //exclude the explicit triva tokens since they'll be included in the leading/trailing arrays
-                .filter(x => !AllowedTriviaTokens.includes(x.kind))
+                .filter(x => !AllowedTriviaTokens.has(x.kind))
                 .flatMap(x => [...x.leadingTrivia ?? [], x])
                 .map(x => x.text)
                 .join('');
@@ -1957,7 +1957,7 @@ describe('lexer', () => {
 
 
         function expectTrivia(text: string, expected: Array<{ text: string; leadingTrivia?: string[]; trailingTrivia?: string[] }>) {
-            const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.includes(x.kind));
+            const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.has(x.kind));
             expect(
                 tokens.map(x => {
                     return {

@@ -2581,7 +2581,7 @@ export class TernaryExpression extends Expression {
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
         //discard names of global functions that cannot be passed by reference
         allUniqueVarNames = allUniqueVarNames.filter(name => {
-            return !nonReferenceableFunctions.includes(name.toLowerCase());
+            return !nonReferenceableFunctions.has(name.toLowerCase());
         });
 
         let mutatingExpressions = [
@@ -2714,7 +2714,7 @@ export class NullCoalescingExpression extends Expression {
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
         //discard names of global functions that cannot be passed by reference
         allUniqueVarNames = allUniqueVarNames.filter(name => {
-            return !nonReferenceableFunctions.includes(name.toLowerCase());
+            return !nonReferenceableFunctions.has(name.toLowerCase());
         });
 
         if (this.hasMutatingExpression(state.file)) {
@@ -3387,7 +3387,7 @@ export class TypedFunctionTypeExpression extends Expression {
  * variable, property, or passed as an argument. (i.e. `type` or `createobject`).
  * Names are stored in lower case.
  */
-const nonReferenceableFunctions = [
+const nonReferenceableFunctions: ReadonlySet<string> = new Set([
     'createobject',
     'type',
     'getglobalaa',
@@ -3398,4 +3398,4 @@ const nonReferenceableFunctions = [
     'getlastrunruntimeerror',
     'tab',
     'pos'
-];
+]);

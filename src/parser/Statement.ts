@@ -3367,11 +3367,11 @@ export class ClassStatement extends Statement implements TypedefProvider {
     }
 }
 
-const accessModifiers = [
+const accessModifiers: ReadonlySet<TokenKind> = new Set([
     TokenKind.Public,
     TokenKind.Protected,
     TokenKind.Private
-];
+]);
 export class MethodStatement extends FunctionStatement {
     constructor(
         options: {
@@ -3410,7 +3410,7 @@ export class MethodStatement extends FunctionStatement {
     };
 
     public get accessModifier() {
-        return this.modifiers.find(x => accessModifiers.includes(x.kind));
+        return this.modifiers.find(x => accessModifiers.has(x.kind));
     }
 
     public readonly startPosition: number;
