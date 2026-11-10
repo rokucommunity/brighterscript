@@ -3,7 +3,7 @@ import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
 import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
+import type { OnPrepareFileEvent } from '../../interfaces';
 import type { Identifier, Locatable, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
@@ -16,6 +16,7 @@ import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
+import { createExtraSymbolData } from '../../interfaces';
 
 /**
  * When at least this many plain array elements follow a spread, they are appended as one literal
@@ -609,13 +610,15 @@ export class BrsFilePreTranspileProcessor {
             // skip any changes in an Alias Statement
             return;
         }
-        let containingNamespaceStmt = this.event.file.getNamespaceStatementForPosition(util.getLocation(expression)?.range.start);
-        let containingNamespace = containingNamespaceStmt?.getName(ParseMode.BrighterScript);
+        let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);
         const processedNames: string[] = [];
         let isAlias = false;
         let isCall = isCallExpression(expression) || isCallfuncExpression(expression);
+        //the expression's first part and its name, for the shadowing check
+        let firstPartToCheck: Expression;
+        let firstPartName: string;
         for (let part of parts) {
             let entityName: string;
 
@@ -635,9 +638,9 @@ export class BrsFilePreTranspileProcessor {
                 return;
             }
 
-            if (!currentPartIsAlias && firstPart && util.isVariableShadowingSomething(entityName, part)) {
-                // this expression starts with a variable that has been redefined, so skip it
-                return;
+            if (!currentPartIsAlias && firstPart) {
+                firstPartToCheck = part;
+                firstPartName = entityName;
             }
 
             let value: Expression;
@@ -665,6 +668,11 @@ export class BrsFilePreTranspileProcessor {
             }
 
             if (value && !isCircular) {
+                //only now check for shadowing, since it resolves types and most expressions don't refer to anything we'd replace
+                if (firstPartToCheck && util.isVariableShadowingSomething(firstPartName, firstPartToCheck)) {
+                    // this expression starts with a variable that has been redefined, so skip it
+                    return;
+                }
                 //If the const's value is a complex expression (e.g. an aa literal containing
                 //enum refs), recursively process inner refs so they're inlined too. Without
                 //this step, cross-file const usage leaves nested enum/const refs unresolved
@@ -783,7 +791,7 @@ export class BrsFilePreTranspileProcessor {
 
         if (isVariableExpression(potentiallyAliased) && potentialAliasedTextsLower.includes(potentiallyAliased.getName().toLowerCase())) {
             //check if it is an alias
-            let data = {} as ExtraSymbolData;
+            let data = createExtraSymbolData();
 
             potentiallyAliased.getSymbolTable().getSymbolType(potentiallyAliased.getName(), {
                 data: data,

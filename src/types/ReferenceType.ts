@@ -286,9 +286,9 @@ export class ReferenceType extends BscType {
     }
 
     private hasCachedResolvedType = false;
-    private cachedResolvedType: BscType;
-    private cachedResolvedTypeToken: string;
-    private cachedResolvedTypeMutationCount: number;
+    private cachedResolvedType: BscType = undefined;
+    private cachedResolvedTypeToken: string = undefined;
+    private cachedResolvedTypeMutationCount: number = undefined;
 
     private resolveFromTable(symbolTable: SymbolTypeGetter): BscType {
         // Look for circular references
@@ -358,11 +358,11 @@ export class ReferenceType extends BscType {
 
     //these are all lazy -- most ReferenceTypes resolve directly and never need any of them
 
-    private referenceChain: Set<BscType> | undefined;
+    private referenceChain: Set<BscType> | undefined = undefined;
 
     private propertyTypeReference: Map<string, TypePropertyReferenceType> | undefined;
 
-    private memberTypeReferences: Map<string, ReferenceType> | undefined;
+    private memberTypeReferences: Map<string, ReferenceType> | undefined = undefined;
     private callFuncMemberTypeReferences: Map<string, ReferenceType> | undefined;
 
     /**
@@ -372,7 +372,7 @@ export class ReferenceType extends BscType {
         this._futureMemberTableProvider ??= this.createFutureMemberTableProvider();
         return this._futureMemberTableProvider;
     }
-    private _futureMemberTableProvider: SymbolTypeGetterProvider;
+    private _futureMemberTableProvider: SymbolTypeGetterProvider = undefined;
 
     private get futureCallFuncMemberTableProvider() {
         this._futureCallFuncMemberTableProvider ??= this.createFutureCallFuncMemberTableProvider();
