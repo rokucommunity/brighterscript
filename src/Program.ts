@@ -2318,13 +2318,20 @@ export class Program {
         //until every file in the list has been prepared exactly once.
         const preparedFiles = new Set<BscFile>();
         let filesToPrepare = [...programEvent.files];
+        //linking a scope's symbol tables does work for every file in the scope, so keep it linked while consecutive files share it
+        let linkedScope: Scope | undefined;
         while (filesToPrepare.length > 0) {
             for (const file of filesToPrepare) {
                 preparedFiles.add(file);
 
                 const scope = this.getFirstScopeForFile(file);
-                //link the symbol table for all the files in this scope
-                scope?.linkSymbolTable();
+                //relink if a plugin unlinked the scope while handling the previous file
+                if (scope !== linkedScope || (scope && !scope.isSymbolTableLinked)) {
+                    linkedScope?.unlinkSymbolTable();
+                    //link the symbol table for all the files in this scope
+                    scope?.linkSymbolTable();
+                    linkedScope = scope;
+                }
 
                 //if the file doesn't have an editor yet, assign one now
                 if (!file.editor) {
@@ -2341,10 +2348,10 @@ export class Program {
                 await this.plugins.emitAsync('beforePrepareFile', event);
                 await this.plugins.emitAsync('prepareFile', event);
                 await this.plugins.emitAsync('afterPrepareFile', event);
-
-                //unlink the symbolTable so the next loop iteration can link theirs
-                scope?.unlinkSymbolTable();
             }
+            //unlink before the next pass, since plugins may have added files to the scope
+            linkedScope?.unlinkSymbolTable();
+            linkedScope = undefined;
             //pick up any files the plugins added during this pass
             filesToPrepare = programEvent.files.filter(x => !preparedFiles.has(x));
         }
@@ -2395,6 +2402,8 @@ export class Program {
         this.assignEditors(files);
 
         // serialize each file
+        //linking a scope's symbol tables does work for every file in the scope, so keep it linked while consecutive files share it
+        let linkedScope: Scope | undefined;
         for (const file of files) {
             let scope = this.getFirstScopeForFile(file);
 
@@ -2405,8 +2414,13 @@ export class Program {
                 scope.getOwnFiles = scope.getAllFiles;
             }
 
-            //link the symbol table for all the files in this scope
-            scope?.linkSymbolTable();
+            //relink if a plugin unlinked the scope while handling the previous file
+            if (scope !== linkedScope || !scope.isSymbolTableLinked) {
+                linkedScope?.unlinkSymbolTable();
+                //link the symbol table for all the files in this scope
+                scope.linkSymbolTable();
+                linkedScope = scope;
+            }
             const event: SerializeFileEvent = {
                 program: this,
                 file: file,
@@ -2416,9 +2430,8 @@ export class Program {
             await this.plugins.emitAsync('beforeSerializeFile', event);
             await this.plugins.emitAsync('serializeFile', event);
             await this.plugins.emitAsync('afterSerializeFile', event);
-            //unlink the symbolTable so the next loop iteration can link theirs
-            scope?.unlinkSymbolTable();
         }
+        linkedScope?.unlinkSymbolTable();
 
         this.plugins.emit('afterSerializeProgram', serializeProgramEvent);
 
