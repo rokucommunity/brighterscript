@@ -681,7 +681,7 @@ class Runner {
      * https://developer.roku.com/dev/docs/developer-program/getting-started/architecture/content-metadata.md
      */
     private async buildContentNodeFields() {
-        const manager = await new TokenManager().process(s`${this.docsDir}/docs/DEVELOPER/getting-started/architecture/content-metadata.md`);
+        const manager = await new TokenManager().process(s`${this.docsDir}/${contentMetadataDocPath}`);
 
         const fields: SceneGraphNodeField[] = [
             ...this.getContentNodeFields(manager, ['attributes', 'type', 'values', 'example'], 2),
@@ -974,7 +974,7 @@ class Runner {
      * `{ BrightScript: { Components, Interfaces, Events }, SceneGraph: { [category]: { [name]: path } } }`
      */
     private loadReferences() {
-        const referencesDir = s`${this.docsDir}/docs/REFERENCES`;
+        const referencesDir = s`${this.docsDir}/${referencesDocPath}`;
         const titles = getProperNamesFromLinks(getMarkdownFiles(referencesDir));
 
         const getDocs = (dir: string) => {
@@ -1829,6 +1829,16 @@ function getMemberChanges(previous: Record<string, any>, next: Record<string, an
 const devDocRepoUrl = 'https://gitlab.com/rokudev/dev-doc.git';
 const devDocBranch = 'v2.0';
 const docUrlBase = 'https://developer.roku.com/dev/docs/';
+const referencesDocPath = 'docs/REFERENCES';
+//ContentNode fields live in a separate doc outside of REFERENCES
+const contentMetadataDocPath = 'docs/DEVELOPER/getting-started/architecture/content-metadata.md';
+
+/**
+ * Get the paths the scraper needs that are missing from a dev-doc checkout
+ */
+function getMissingDocPaths(docsDir: string) {
+    return [referencesDocPath, contentMetadataDocPath].filter(x => !fsExtra.pathExistsSync(s`${docsDir}/${x}`));
+}
 
 /**
  * Make sure there's a local copy of the roku dev-doc repo (https://gitlab.com/rokudev/dev-doc), and return its path.
@@ -1841,8 +1851,9 @@ function ensureDocsRepo() {
     const docsDirIndex = args.indexOf('--docs-dir');
     if (docsDirIndex > -1) {
         const docsDir = path.resolve(args[docsDirIndex + 1] ?? '');
-        if (!fsExtra.pathExistsSync(s`${docsDir}/docs/REFERENCES`)) {
-            throw new Error(`--docs-dir "${docsDir}" does not contain a docs/REFERENCES folder`);
+        const missing = getMissingDocPaths(docsDir);
+        if (missing.length > 0) {
+            throw new Error(`--docs-dir "${docsDir}" is missing ${missing.join(', ')}`);
         }
         return docsDir;
     }
@@ -1851,14 +1862,14 @@ function ensureDocsRepo() {
     if (args.includes('--refresh')) {
         fsExtra.removeSync(docsDir);
     }
-    if (!fsExtra.pathExistsSync(s`${docsDir}/docs/REFERENCES`)) {
+    if (getMissingDocPaths(docsDir).length > 0) {
         fsExtra.removeSync(docsDir);
         console.log(`Cloning ${devDocRepoUrl}#${devDocBranch} into ${docsDir}`);
         try {
             const run = (command: string) => execSync(command, { cwd: docsDir, stdio: 'inherit' });
             fsExtra.ensureDirSync(docsDir);
             run(`git clone --depth 1 --branch ${devDocBranch} --filter=blob:none --sparse ${devDocRepoUrl} .`);
-            run('git sparse-checkout set docs/REFERENCES docs/DEVELOPER/getting-started/architecture');
+            run(`git sparse-checkout set ${referencesDocPath} ${path.posix.dirname(contentMetadataDocPath)}`);
         } catch (e) {
             fsExtra.removeSync(docsDir);
             throw new Error(`Unable to clone ${devDocRepoUrl}. Check your network connection, or pass --docs-dir <path> to use an existing checkout of the roku dev-doc repo.\n${e?.message}`);
@@ -1873,6 +1884,11 @@ function ensureDocsRepo() {
         } catch (e) {
             console.warn(`Unable to update the cached docs, so using them as-is (run with --refresh to re-clone).\n${e?.message}`);
         }
+    }
+    //if these are missing now, roku probably moved them and this script needs updating
+    const missing = getMissingDocPaths(docsDir);
+    if (missing.length > 0) {
+        throw new Error(`The dev-doc repo is missing ${missing.join(', ')}. Roku may have moved these docs, so scripts/scrape-roku-docs.ts needs to be updated with their new location.`);
     }
     const commit = execSync('git rev-parse HEAD', { cwd: docsDir }).toString().trim();
     console.log(`Using dev-doc commit ${commit}`);
