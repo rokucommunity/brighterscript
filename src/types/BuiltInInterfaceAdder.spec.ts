@@ -13,6 +13,9 @@ import { ArrayType } from './ArrayType';
 import { expect } from 'chai';
 import { EnumMemberType, EnumType } from './EnumType';
 import { AssociativeArrayType } from './AssociativeArrayType';
+import { SymbolTable } from '../SymbolTable';
+//registers SymbolTable.referenceTypeFactory, used to build the not-yet-known return type
+import './ReferenceType';
 
 describe('BuiltInInterfaceAdder', () => {
 
@@ -134,6 +137,28 @@ describe('BuiltInInterfaceAdder', () => {
         expect(enumTrim).to.be.undefined;
         const memberTrim = myEnumMember.getMemberType('trim', { flags: SymbolTypeFlag.runtime });
         expectTypeToBe(memberTrim, TypedFunctionType);
+    });
+
+    it('resolves cached method return types against the current lookup table', () => {
+        const originalGetLookupTable = BuiltInInterfaceAdder.getLookupTable;
+        try {
+            //the method is cached while the lookup table does not know about its return type yet
+            const firstTable = new SymbolTable('first');
+            BuiltInInterfaceAdder.getLookupTable = () => firstTable;
+            const method = { name: 'getThing', description: '', params: [], returnType: 'SomeCustomType', isVariadic: false };
+            const methodType = (BuiltInInterfaceAdder as any).buildMethodFromDocData(method) as TypedFunctionType;
+            expect(methodType.returnType.isResolvable()).to.be.false;
+
+            //a newer lookup table (i.e. from a newer program) declares the type
+            const secondTable = new SymbolTable('second');
+            secondTable.addSymbol('SomeCustomType', {}, new ClassType('SomeCustomType'), SymbolTypeFlag.typetime);
+            BuiltInInterfaceAdder.getLookupTable = () => secondTable;
+
+            expect(methodType.returnType.isResolvable()).to.be.true;
+            expect(methodType.returnType.toString()).to.equal('SomeCustomType');
+        } finally {
+            BuiltInInterfaceAdder.getLookupTable = originalGetLookupTable;
+        }
     });
 
     it('does not throw when getLookupTable is not set', () => {

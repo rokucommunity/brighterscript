@@ -91,13 +91,13 @@ export function isStatement(element: AstNode | undefined): element is Statement 
 }
 
 export function isBody(element: AstNode | undefined): element is Body {
-    return element?.constructor?.name === 'Body';
+    return element?.kind === AstNodeKind.Body;
 }
 export function isAssignmentStatement(element: AstNode | undefined): element is AssignmentStatement {
     return element?.kind === AstNodeKind.AssignmentStatement;
 }
 export function isBlock(element: AstNode | undefined): element is Block {
-    return element?.constructor?.name === 'Block';
+    return element?.kind === AstNodeKind.Block;
 }
 export function isExpressionStatement(element: AstNode | undefined): element is ExpressionStatement {
     return element?.kind === AstNodeKind.ExpressionStatement;

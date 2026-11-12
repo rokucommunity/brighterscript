@@ -24,6 +24,13 @@ const builtInSymbolData: ExtraSymbolData = {
     isBuiltIn: true
 };
 
+/**
+ * Get the lookup table of the most recently created program
+ */
+function currentLookupTable() {
+    return BuiltInInterfaceAdder.getLookupTable?.();
+}
+
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class BuiltInInterfaceAdder {
 
@@ -144,7 +151,9 @@ export class BuiltInInterfaceAdder {
             if (!this.getLookupTable) {
                 throw new Error(`Unable to find type instance '${typeName}'`);
             }
-            return this.getLookupTable()?.getSymbolType(typeName, { flags: SymbolTypeFlag.typetime, fullName: typeName, tableProvider: this.getLookupTable });
+            //the types built here are cached across every program (see `builtInMethodCache`), so the provider must look up the current
+            //program's table each time instead of holding onto this one's (which would also keep this whole program in memory)
+            return this.getLookupTable()?.getSymbolType(typeName, { flags: SymbolTypeFlag.typetime, fullName: typeName, tableProvider: currentLookupTable });
         }
 
         return returnType;

@@ -315,7 +315,7 @@ export class ScopeValidator {
                     },
                     AstNode: (node) => {
                         //check for doc comments
-                        if (!node.leadingTrivia || node.leadingTrivia.filter(triviaToken => triviaToken.kind === TokenKind.Comment).length === 0) {
+                        if (!node.leadingTrivia?.some(triviaToken => triviaToken.kind === TokenKind.Comment)) {
                             return;
                         }
                         this.addValidationKindMetric('AstNode', () => {
@@ -361,15 +361,16 @@ export class ScopeValidator {
     }
 
     private addValidationKindMetric(name: string, funcToTime: () => void) {
-        if (!this.validationKindsMetrics.has(name)) {
-            this.validationKindsMetrics.set(name, { timeMs: 0, count: 0 });
+        //this runs for every validated node, so update the entry in place rather than allocating a stopwatch and a new entry each time
+        let timeData = this.validationKindsMetrics.get(name);
+        if (!timeData) {
+            timeData = { timeMs: 0, count: 0 };
+            this.validationKindsMetrics.set(name, timeData);
         }
-        const timeData = this.validationKindsMetrics.get(name);
-        const validationKindStopWatch = new Stopwatch();
-        validationKindStopWatch.start();
+        const start = performance.now();
         funcToTime();
-        validationKindStopWatch.stop();
-        this.validationKindsMetrics.set(name, { timeMs: timeData.timeMs + validationKindStopWatch.totalMilliseconds, count: timeData.count + 1 });
+        timeData.timeMs += performance.now() - start;
+        timeData.count++;
     }
 
 
