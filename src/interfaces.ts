@@ -11,7 +11,7 @@ import type { AstNode, Expression } from './parser/AstNode';
 import type { TranspileState } from './parser/TranspileState';
 import type { SourceNode } from 'source-map';
 import type { BscType } from './types/BscType';
-import type { Token } from './lexer/Token';
+import type { Locatable, Token } from './lexer/Token';
 import type { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver';
 import type { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { Editor } from './astUtils/Editor';
@@ -21,6 +21,7 @@ import type { LazyFileData } from './files/LazyFileData';
 import { TokenKind } from './lexer/TokenKind';
 import type { BscTypeKind } from './types/BscTypeKind';
 import { createToken } from './astUtils/creators';
+import { util } from './util';
 import type { SourceFixAllCodeAction } from './CodeActionUtil';
 import type { Availability } from './RokuConstants';
 
@@ -88,9 +89,29 @@ export interface DiagnosticContext {
 }
 
 export interface DiagnosticContextPair {
-    diagnostic: BsDiagnostic;
+    diagnostic: BsDiagnosticInput;
     context?: DiagnosticContext;
 }
+
+/**
+ * A location as accepted by the `DiagnosticManager`: either an already-resolved `Location`, or a `Locatable` that is resolved
+ * into a `Location` only when diagnostics are retrieved
+ */
+export type DiagnosticLocationInput = Location | Locatable;
+
+export interface BsDiagnosticRelatedInformationInput {
+    message: string;
+    location: DiagnosticLocationInput;
+}
+
+/**
+ * A diagnostic as accepted by `DiagnosticManager.register()`. Locations may be `Locatable`s (such as a node or token),
+ * which are not retained: only their position details are kept until `getDiagnostics()` resolves them
+ */
+export type BsDiagnosticInput = Omit<BsDiagnostic, 'location' | 'relatedInformation'> & {
+    location: DiagnosticLocationInput;
+    relatedInformation?: BsDiagnosticRelatedInformationInput[];
+};
 
 export interface Callable {
     file: BscFile;
@@ -935,7 +956,7 @@ export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
     file: T;
 }
-export type AfterValidateFileEvent<T extends BscFile = BscFile> = ValidateFileEvent;
+export type AfterValidateFileEvent<T extends BscFile = BscFile> = ValidateFileEvent<T>;
 
 export interface ValidateFileEvent<T extends BscFile = BscFile> {
     program: Program;
@@ -1253,6 +1274,28 @@ export interface ExtraSymbolData {
     isFromTypeStatement?: boolean;
 }
 
+/**
+ * Create an `ExtraSymbolData` with every field present (and `undefined`). Lookups fill these in one field at a time, and starting from `{}`
+ * leaves most of them in a separate out-of-object property store and gives the objects many different hidden classes.
+ * Starting with every field keeps them all in the object, with one shared hidden class
+ */
+export function createExtraSymbolData(): ExtraSymbolData {
+    return {
+        definingNode: undefined,
+        description: undefined,
+        completionPriority: undefined,
+        flags: undefined,
+        memberOfAncestor: undefined,
+        doNotMerge: undefined,
+        isAlias: undefined,
+        isInstance: undefined,
+        isFromDocComment: undefined,
+        isBuiltIn: undefined,
+        isFromCallFunc: undefined,
+        isFromTypeStatement: undefined
+    };
+}
+
 export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
@@ -1286,28 +1329,38 @@ export class TypeChainEntry {
         name: string;
         type: BscType;
         data: ExtraSymbolData;
-        location?: Location;
+        /**
+         * The item to get the location from. Falls back to `astNode` if this has no location
+         */
+        locatable?: Locatable;
         separatorToken?: Token;
         astNode: AstNode;
     }) {
         this.name = options.name;
         // make a copy of this data
-        this.data = { ...options.data };
+        this.data = Object.assign(createExtraSymbolData(), options.data);
         this.type = options.type;
-        this._location = options.location;
+        this.locatableOverride = options.locatable;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);
         this.astNode = options.astNode;
         this.isResolved = this.type?.isResolvable();
     }
 
+    /**
+     * The item to get the location from: the `locatable` passed in, or `astNode` if that has no location
+     */
+    get locatable(): Locatable {
+        return util.firstLocatable(this.locatableOverride, this.astNode);
+    }
+
     get location(): Location {
-        return this._location ?? this.astNode?.location;
+        return util.getLocation(this.locatable);
     }
 
     public readonly name: string;
     public readonly type: BscType;
     public readonly data: ExtraSymbolData;
-    private readonly _location: Location;
+    private readonly locatableOverride: Locatable;
     public readonly separatorToken: Token;
     public isResolved: boolean;
     public astNode: AstNode;
@@ -1342,6 +1395,10 @@ export interface TypeChainProcessResult {
      * the range of the first unresolved item
      */
     location: Location;
+    /**
+     * The first unresolved item (the locatable equivalent of `location`)
+     */
+    locatable: Locatable;
     /**
      * Does the chain contain a dynamic type?
      */

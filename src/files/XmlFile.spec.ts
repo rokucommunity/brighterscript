@@ -648,7 +648,7 @@ describe('XmlFile', () => {
             expect(file.parentComponentName).to.not.exist;
         });
 
-        it('adds warning when no "extends" attribute is found', () => {
+        it('does not warn when no "extends" attribute is found', () => {
             program.setFile<XmlFile>(
                 {
                     src: `${rootDir}/components/comp1.xml`,
@@ -661,9 +661,7 @@ describe('XmlFile', () => {
                 `
             );
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
-            ]);
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -1391,6 +1389,21 @@ end sub`);
             expect(code.endsWith(`<!--//# sourceMappingURL=./SimpleScene.xml.map -->`)).to.be.true;
         });
 
+        it('does not crash when a non-transpiled file ends with a sourceMappingURL comment plus a trailing newline', () => {
+            //reproduces https://github.com/rokucommunity/brighterscript/issues/1818
+            program.options.sourceMap = true;
+            let file = program.setFile<XmlFile>('components/SimpleScene.xml',
+                '<?xml version="1.0" encoding="utf-8" ?>\n<component name="SimpleScene" extends="Scene">\n</component>\n<!--//# sourceMappingURL=./comp.xml.map -->\n'
+            );
+            //prevent the default auto-imports to ensure no transpilation from AST
+            (file as any).getMissingImportsForTranspile = () => [];
+            const code = file.transpile().code;
+            expect(code.match(/sourceMappingURL=/g)?.length).to.eql(1);
+            expect(code).to.eql(
+                '<?xml version="1.0" encoding="utf-8" ?>\n<component name="SimpleScene" extends="Scene">\n</component>\n<!--//# sourceMappingURL=./SimpleScene.xml.map -->'
+            );
+        });
+
         it('replaces existing trailing sourceMappingURL comment when AST-transpiling', () => {
             program.options.sourceMap = true;
             //a script tag pointing at a .bs file forces the AST transpile path, which rebuilds output
@@ -1770,12 +1783,12 @@ end sub`);
             program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!--bs:disable-next-line 1006-->
-                <component>
+                <component> <script type="text/brightscript" uri="pkg:/missing.brs" />
                 </component>
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                DiagnosticMessages.referencedFileDoesNotExist()
             ]);
         });
 
@@ -1794,12 +1807,12 @@ end sub`);
             //component without a name attribute
             program.setFile<XmlFile>('components/file.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ButtonCustom"> <!--bs:disable-line 1006-->
+                <component> <script type="text/brightscript" uri="pkg:/missing.brs" /> <!--bs:disable-line 1006-->
                 </component>
             `);
             program.validate();
             expectDiagnostics(program, [
-                DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                DiagnosticMessages.referencedFileDoesNotExist()
             ]);
         });
 
@@ -1818,8 +1831,9 @@ end sub`);
             it('suppresses only the listed codes', () => {
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
-                    <!--bs:disable 1007-->
+                    <!--bs:disable 1004-->
                     <component>
+                        <script type="text/brightscript" uri="pkg:/missing.brs" />
                     </component>
                 `);
                 program.validate();
@@ -1832,12 +1846,13 @@ end sub`);
                 program.setFile<XmlFile>('components/file.xml', trim`
                     <?xml version="1.0" encoding="utf-8" ?>
                     <!--bs:disable 1006-->
-                    <component name="Foo">
+                    <component>
+                        <script type="text/brightscript" uri="pkg:/missing.brs" />
                     </component>
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                    DiagnosticMessages.referencedFileDoesNotExist()
                 ]);
             });
 
@@ -1851,8 +1866,7 @@ end sub`);
                 `);
                 program.validate();
                 expectDiagnostics(program, [
-                    DiagnosticMessages.xmlComponentMissingNameAttribute(),
-                    DiagnosticMessages.xmlComponentMissingExtendsAttribute()
+                    DiagnosticMessages.xmlComponentMissingNameAttribute()
                 ]);
             });
         });

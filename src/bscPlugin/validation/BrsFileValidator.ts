@@ -1,40 +1,24 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCaseStatement, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isIfStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isInvalidType, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isMethodStatement, isNamespaceStatement, isSelectCaseStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isVoidType, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isNamespaceStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, ValidateFileEvent } from '../../interfaces';
+import type { ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
 import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
-import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, IfStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
+import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import { AssociativeArrayType } from '../../types/AssociativeArrayType';
-import { DynamicType } from '../../types/DynamicType';
 import util from '../../util';
-import type { Location, Position, Range } from 'vscode-languageserver';
-import type { Token } from '../../lexer/Token';
-import type { BrightScriptDoc } from '../../parser/BrightScriptDocParser';
-import brsDocParser from '../../parser/BrightScriptDocParser';
-import { TypeStatementType } from '../../types/TypeStatementType';
+import type { Location } from 'vscode-languageserver';
+import type { Locatable, SourceInfo, Token } from '../../lexer/Token';
 import { findUnreachableRegions } from './ControlFlowReachability';
 import { findRegexLiteralProblems } from './RegexLiteralValidation';
 import * as semver from 'semver';
 import { CONTINUE_MIN_FIRMWARE_VERSION, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION } from '../../RokuConstants';
 import type { AvailabilityAxis } from '../../DiagnosticMessages';
 import { globalCallableMap } from '../../globalCallables';
-
-/**
- * The type implied by each type designator character that can end a variable or parameter name
- */
-const typeDesignatorTypes: Record<string, string> = {
-    '$': 'string',
-    '%': 'integer',
-    '!': 'float',
-    '#': 'double',
-    '&': 'longinteger'
-};
 
 export class BrsFileValidator {
     constructor(
@@ -69,21 +53,12 @@ export class BrsFileValidator {
     /**
      * Parser diagnostics sorted by start position. Each entry also holds the furthest end among the entries up to and including it.
      */
-    private parseDiagnosticIndex: Array<{ start: Position; furthestEnd: Position }> | undefined;
+    private parseDiagnosticIndex: Array<{ startPosition: number; furthestEndPosition: number }> | undefined;
 
     public process() {
         const unlinkGlobalSymbolTable = this.event.file.parser.symbolTable.pushParentProvider(() => this.event.program.globalScope.symbolTable);
 
         util.validateTooDeepFile(this.event.file);
-
-        // Invalidate cache on this file
-        // It could have potentially changed before this from plugins, after this, it will not change
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        this.event.file['_cachedLookups'].invalidate();
-        //rebuild the lookups now, because that full walk resolves every `#if` and `#const` (and sets `isActive`) before the walk below,
-        //whose visitors can ask about nodes it has not reached yet (such as the members of a class)
-        // eslint-disable-next-line @typescript-eslint/dot-notation
-        this.event.file['_cachedLookups'].rehydrate();
 
         this.literalPools = {};
         this.walk();
@@ -125,7 +100,7 @@ export class BrsFileValidator {
                 if (firstLabelByName.has(lowerName)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.duplicateLabel(labelName),
-                        location: label.tokens.name.location
+                        location: label.tokens.name
                     });
                 } else {
                     firstLabelByName.set(lowerName, label);
@@ -133,7 +108,7 @@ export class BrsFileValidator {
                 if (this.isInsideTryBranch(label, func)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.labelInTryBlock(labelName),
-                        location: label.tokens.name.location
+                        location: label.tokens.name
                     });
                 }
             }
@@ -147,12 +122,12 @@ export class BrsFileValidator {
                 if (!targetLabel) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.labelNotFound(labelToken.text),
-                        location: labelToken.location
+                        location: labelToken
                     });
                 } else if (this.jumpsIntoForLoop(gotoStatement, targetLabel, func)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.gotoIntoForLoop(labelToken.text),
-                        location: labelToken.location
+                        location: labelToken
                     });
                 }
             }
@@ -199,36 +174,36 @@ export class BrsFileValidator {
 
         const visitor = createVisitor({
             MethodStatement: (node) => {
-                //add the `super` symbol to class methods
-                if (isClassStatement(node.parent) && node.parent.hasParentClass()) {
-                    const data: ExtraSymbolData = {};
-                    const parentClassType = node.parent.parentClassName.getType({ flags: SymbolTypeFlag.typetime, data: data });
-                    node.func.body.getSymbolTable().addSymbol('super', { ...data, isInstance: true }, parentClassType, SymbolTypeFlag.runtime);
-                }
                 this.validateFunctionNameLength(node, this.getMethodRuntimeName(node));
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.callfuncHasToManyArgs(node.args.length),
-                        location: node.tokens.methodName.location
+                        location: node.tokens.methodName
                     });
+                }
+                //optional chaining (`?@.` and `@.name?(`) is emitted as-is, so the device must support it
+                if (node.tokens.operator?.kind === TokenKind.QuestionCallfunc) {
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.operator);
+                }
+                if (node.tokens.openingParen?.kind === TokenKind.QuestionLeftParen) {
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.openingParen);
                 }
             },
             DottedGetExpression: (node) => {
                 if (node.tokens.dot?.kind === TokenKind.QuestionDot) {
-                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.dot?.location?.range);
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.dot);
                 }
             },
             IndexedGetExpression: (node) => {
                 if (node.tokens.questionDot || node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare) {
-                    const range = node.tokens.questionDot?.location?.range ?? node.tokens.openingSquare?.location?.range;
-                    this.validateMinFirmwareVersionForOptionalChaining(range);
+                    this.validateMinFirmwareVersionForOptionalChaining(util.firstLocatable(node.tokens.questionDot, node.tokens.openingSquare));
                 }
             },
             CallExpression: (node) => {
                 if (node.tokens.openingParen?.kind === TokenKind.QuestionLeftParen) {
-                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.openingParen?.location?.range);
+                    this.validateMinFirmwareVersionForOptionalChaining(node.tokens.openingParen);
                 }
                 this.validateGlobalCallableAvailability(node);
             },
@@ -236,65 +211,22 @@ export class BrsFileValidator {
                 this.validateRegexLiteral(node);
             },
             EnumStatement: (node) => {
-                this.validateDeclarationLocations(node, 'enum', () => util.createBoundingRange(node.tokens.enum, node.tokens.name));
+                this.validateDeclarationLocations(node, 'enum', () => util.setBounds({} as Locatable, node.tokens.enum, node.tokens.name));
 
                 this.validateEnumDeclaration(node);
-
-                if (!node.tokens.name) {
-                    return;
-                }
-                //register this enum declaration
-                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
-                // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
             },
             ClassStatement: (node) => {
                 if (!node?.tokens?.name) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'class', () => util.createBoundingRange(node.tokens.class, node.tokens.name));
+                this.validateDeclarationLocations(node, 'class', () => util.setBounds({} as Locatable, node.tokens.class, node.tokens.name));
 
                 for (const constructor of node.getConditionalCompileConstructors()) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.classConstructorNotAllowedInConditionalCompile(),
-                        location: constructor.tokens.name.location
+                        location: constructor.tokens.name
                     });
                 }
-
-                //register this class
-                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
-                node.getSymbolTable().addSymbol('m', { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
-                // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name?.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime | SymbolTypeFlag.runtime);
-
-                if (node.findAncestor(isNamespaceStatement)) {
-                    //add the transpiled name for namespaced constructors to the root symbol table
-                    const transpiledClassConstructor = node.getName(ParseMode.BrightScript);
-
-                    this.event.file.parser.ast.symbolTable.addSymbol(
-                        transpiledClassConstructor,
-                        { definingNode: node },
-                        node.getConstructorType(),
-                        // eslint-disable-next-line no-bitwise
-                        SymbolTypeFlag.runtime | SymbolTypeFlag.postTranspile
-                    );
-                }
-            },
-            AssignmentStatement: (node) => {
-                if (!node?.tokens?.name) {
-                    return;
-                }
-                if (isForStatement(node.parent) && node.parent.counterDeclaration === node) {
-                    // for loop variable variable is added to the block symbol table elsewhere
-                    return;
-                }
-                const data: ExtraSymbolData = {};
-                //register this variable
-                let nodeType = node.getType({ flags: SymbolTypeFlag.runtime, data: data });
-                if (isInvalidType(nodeType) || isVoidType(nodeType)) {
-                    nodeType = DynamicType.instance;
-                }
-                node.parent.getSymbolTable()?.addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true, isFromDocComment: data.isFromDocComment, isFromCallFunc: data.isFromCallFunc }, nodeType, SymbolTypeFlag.runtime);
             },
             DottedSetStatement: (node) => {
                 this.validateNoOptionalChainingInVarSet(node, [node.obj]);
@@ -308,70 +240,24 @@ export class BrsFileValidator {
             AALiteralExpression: (node) => {
                 this.validateSpreadPosition(node);
             },
-            ForEachStatement: (node) => {
-                //registering the for loop variable happens in the visitor for Block, since the loop variable is scoped to the loop body
-            },
             NamespaceStatement: (node) => {
                 if (!node?.nameExpression) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'namespace', () => util.createBoundingRange(node.tokens.namespace, node.nameExpression));
-                //Namespace Types are added at the Scope level - This is handled when the SymbolTables get linked
+                this.validateDeclarationLocations(node, 'namespace', () => util.setBounds({} as Locatable, node.tokens.namespace, node.nameExpression));
             },
             FunctionStatement: (node) => {
-                this.validateDeclarationLocations(node, 'function', () => util.createBoundingRange(node.func.tokens.functionType, node.tokens.name));
-                const funcType = node.getType({ flags: SymbolTypeFlag.typetime });
+                this.validateDeclarationLocations(node, 'function', () => util.setBounds({} as Locatable, node.func.tokens.functionType, node.tokens.name));
 
-                if (node.tokens.name?.text) {
-                    node.parent.getSymbolTable().addSymbol(
-                        node.tokens.name.text,
-                        { definingNode: node },
-                        funcType,
-                        SymbolTypeFlag.runtime
-                    );
-                }
-
-                const namespace = node.findAncestor(isNamespaceStatement);
                 //the function's actual runtime name (namespaced functions get flattened into a single global name, e.g. `namespace_functionName`)
                 let runtimeName = node.tokens.name?.text;
-                //this function is declared inside a namespace
-                if (namespace) {
-                    namespace.getSymbolTable().addSymbol(
-                        node.tokens.name?.text,
-                        { definingNode: node },
-                        funcType,
-                        SymbolTypeFlag.runtime
-                    );
-                    if (node.tokens?.name) {
-                        //add the transpiled name for namespaced functions to the root symbol table
-                        const transpiledNamespaceFunctionName = node.getName(ParseMode.BrightScript);
-                        runtimeName = transpiledNamespaceFunctionName;
-
-                        this.event.file.parser.ast.symbolTable.addSymbol(
-                            transpiledNamespaceFunctionName,
-                            { definingNode: node },
-                            funcType,
-                            // eslint-disable-next-line no-bitwise
-                            SymbolTypeFlag.runtime | SymbolTypeFlag.postTranspile
-                        );
-                    }
+                if (node.tokens?.name && node.findAncestor(isNamespaceStatement)) {
+                    runtimeName = node.getName(ParseMode.BrightScript);
                 }
 
                 this.validateFunctionNameLength(node, runtimeName);
             },
             FunctionExpression: (node) => {
-                const funcSymbolTable = node.getSymbolTable();
-                const isInlineFunc = !(isFunctionStatement(node.parent) || isMethodStatement(node.parent));
-                if (isInlineFunc) {
-                    // symbol table should not include any symbols from parent func
-                    funcSymbolTable.pushParentProvider(() => node.findAncestor<Body>(isBody).getSymbolTable());
-                }
-                if (!funcSymbolTable?.hasSymbol('m', SymbolTypeFlag.runtime) || isInlineFunc) {
-                    if (!isTypecastStatement(node.body?.statements?.[0])) {
-                        // if this is an inline function, or if the function body does not start with a typecast statement, add the `m` symbol to the function scope. If the function body starts with a typecast statement, the `m` symbol will be added in the visitor for TypecastStatement, and it will be typed as the type from the typecast statement
-                        funcSymbolTable?.addSymbol('m', { isInstance: true }, new AssociativeArrayType(), SymbolTypeFlag.runtime);
-                    }
-                }
                 this.validateFunctionParameterCount(node);
                 this.validateFunctionVariableCount(node);
                 this.collectFunctionLiterals(node);
@@ -387,74 +273,34 @@ export class BrsFileValidator {
                     return;
                 }
                 this.validateTypeDesignatorMatchesDeclaredType(node);
-                const data: ExtraSymbolData = {};
-                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime, data: data });
-                // add param symbol at expression level, so it can be used as default value in other params
-                const funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
-                const funcSymbolTable = funcExpr?.getSymbolTable();
-                const extraSymbolData: ExtraSymbolData = {
-                    definingNode: node,
-                    isInstance: true,
-                    isFromDocComment: data.isFromDocComment,
-                    description: data.description
-                };
-                funcSymbolTable?.addSymbol(paramName, extraSymbolData, nodeType, SymbolTypeFlag.runtime);
-
-                //also add param symbol at block level, as it may be redefined, and if so, should show a union
-                funcExpr.body.getSymbolTable()?.addSymbol(paramName, extraSymbolData, nodeType, SymbolTypeFlag.runtime);
             },
             InterfaceStatement: (node) => {
                 if (!node.tokens.name) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'interface', () => util.createBoundingRange(node.tokens.interface, node.tokens.name));
-
-                const nodeType = node.getType({ flags: SymbolTypeFlag.typetime });
-                // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node }, nodeType, SymbolTypeFlag.typetime);
+                this.validateDeclarationLocations(node, 'interface', () => util.setBounds({} as Locatable, node.tokens.interface, node.tokens.name));
             },
             ConstStatement: (node) => {
                 if (!node.tokens.name) {
                     return;
                 }
-                this.validateDeclarationLocations(node, 'const', () => util.createBoundingRange(node.tokens.const, node.tokens.name));
-                const nodeType = node.getType({ flags: SymbolTypeFlag.runtime });
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, nodeType, SymbolTypeFlag.runtime);
+                this.validateDeclarationLocations(node, 'const', () => util.setBounds({} as Locatable, node.tokens.const, node.tokens.name));
             },
             CatchStatement: (node) => {
-                //brs and bs both support variableExpression for the exception variable
-                if (isVariableExpression(node.exceptionVariableExpression)) {
-                    node.parent.getSymbolTable().addSymbol(
-                        node.exceptionVariableExpression.getName(),
-                        { definingNode: node, isInstance: true },
-                        //TODO I think we can produce a slightly more specific type here (like an AA but with the known exception properties)
-                        DynamicType.instance,
-                        SymbolTypeFlag.runtime
-                    );
+                const isValidExceptionVariable =
+                    //brs and bs both support variableExpression for the exception variable
+                    isVariableExpression(node.exceptionVariableExpression) ||
                     //brighterscript allows catch without an exception variable
-                } else if (isBrighterscript && !node.exceptionVariableExpression) {
-                    //this is fine
-
+                    (isBrighterscript && !node.exceptionVariableExpression) ||
                     //brighterscript allows a typecast expression here
-                } else if (isBrighterscript && isTypecastExpression(node.exceptionVariableExpression) && isVariableExpression(node.exceptionVariableExpression.obj)) {
-                    node.parent.getSymbolTable().addSymbol(
-                        node.exceptionVariableExpression.obj.getName(),
-                        { definingNode: node, isInstance: true },
-                        node.exceptionVariableExpression.getType({ flags: SymbolTypeFlag.runtime }),
-                        SymbolTypeFlag.runtime
-                    );
+                    (isBrighterscript && isTypecastExpression(node.exceptionVariableExpression) && isVariableExpression(node.exceptionVariableExpression.obj));
 
-                    //no other expressions are allowed here
-                } else {
+                //no other expressions are allowed here
+                if (!isValidExceptionVariable) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.expectedExceptionVarToFollowCatch(),
-                        location: node.exceptionVariableExpression?.location ?? node.tokens.catch?.location
+                        location: util.firstLocatable<Locatable>(node.exceptionVariableExpression, node.tokens.catch)
                     });
-                }
-            },
-            DimStatement: (node) => {
-                if (node.tokens.name) {
-                    node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isInstance: true }, node.getType({ flags: SymbolTypeFlag.runtime }), SymbolTypeFlag.runtime);
                 }
             },
             ReturnStatement: (node) => {
@@ -470,7 +316,7 @@ export class BrsFileValidator {
                     if (node.value) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.voidFunctionMayNotReturnValue(func.tokens.functionType?.text),
-                            location: node.location
+                            location: node
                         });
                     }
 
@@ -479,19 +325,13 @@ export class BrsFileValidator {
                     if (!node.value) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.nonVoidFunctionMustReturnValue(func?.tokens.functionType?.text),
-                            location: node.location
+                            location: node
                         });
                     }
                 }
             },
             ContinueStatement: (node) => {
                 this.validateContinueStatement(node);
-            },
-            TypecastStatement: (node) => {
-                const obj = node.typecastExpression.obj;
-                if (isVariableExpression(obj)) {
-                    node.parent.getSymbolTable().addSymbol(obj.tokens.name.text, { definingNode: node, doNotMerge: true, isInstance: true }, node.getType({ flags: SymbolTypeFlag.typetime }), SymbolTypeFlag.runtime);
-                }
             },
             PrintStatement: (node) => {
                 this.validatePrintStatementItemCount(node);
@@ -512,26 +352,11 @@ export class BrsFileValidator {
             ConditionalCompileErrorStatement: (node) => {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.hashError(node.tokens.message.text),
-                    location: node.location
+                    location: node
                 });
             },
-            AliasStatement: (node) => {
-                // eslint-disable-next-line no-bitwise
-                const targetType = node.value.getType({ flags: SymbolTypeFlag.typetime | SymbolTypeFlag.runtime });
-
-                // eslint-disable-next-line no-bitwise
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, doNotMerge: true, isAlias: true }, targetType, SymbolTypeFlag.runtime | SymbolTypeFlag.typetime);
-
-            },
             TypeStatement: (node) => {
-                this.validateDeclarationLocations(node, 'type', () => util.createBoundingRange(node.tokens.type, node.tokens.name));
-                const wrappedNodeType = node.getType({ flags: SymbolTypeFlag.runtime });
-                const typeStmtType = new TypeStatementType(node.tokens.name.text, wrappedNodeType);
-                node.parent.getSymbolTable().addSymbol(node.tokens.name.text, { definingNode: node, isFromTypeStatement: true }, typeStmtType, SymbolTypeFlag.typetime);
-
-            },
-            IfStatement: (node) => {
-                this.setUpComplementSymbolTables(node, isIfStatement);
+                this.validateDeclarationLocations(node, 'type', () => util.setBounds({} as Locatable, node.tokens.type, node.tokens.name));
             },
             ExitStatement: (node) => {
                 if (isExitSelectStatement(node)) {
@@ -539,51 +364,13 @@ export class BrsFileValidator {
                     if (!target || target.isInLoop) {
                         this.event.program.diagnostics.register({
                             ...(target ? DiagnosticMessages.exitSelectInLoop() : DiagnosticMessages.exitSelectOutsideSelectCase()),
-                            location: node.location
+                            location: node
                         });
                     }
                 }
             },
             SelectCaseStatement: (node) => {
-                //a variable assigned in every case (including `case else`) is known to exist after the `select case`.
-                //But if any case might `exit select` part way through, the rest of that case might not run
-                const elseCase = node.elseCase;
-                if (elseCase?.body && !node.cases.some(x => x.canExitEarly)) {
-                    for (const caseStatement of node.cases) {
-                        if (caseStatement !== elseCase && caseStatement.body) {
-                            elseCase.body.symbolTable.complementOtherTable(caseStatement.body.symbolTable);
-                        }
-                    }
-                }
                 this.validateSelectCaseStatement(node);
-            },
-            Block: (node) => {
-                const blockSymbolTable = node.symbolTable;
-                if (node.findAncestor<Block>(isFunctionExpression)) {
-                    // this block is in a function. order matters!
-                    blockSymbolTable.isOrdered = true;
-                }
-                if (!isFunctionExpression(node.parent) && node.parent) {
-                    node.symbolTable.name = `Block-${node.parent.kind}@${node.location?.range?.start?.line}`;
-                    // we're a block inside another block (or body). This block is a pocket in the bigger block
-                    node.parent.getSymbolTable().addPocketTable({
-                        index: node.parent.statementIndex,
-                        table: blockSymbolTable,
-                        // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
-                        willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || this.isAlwaysExecutedCase(node.parent)
-                    });
-
-                    if (isForStatement(node.parent)) {
-                        const counterDecl = node.parent.counterDeclaration;
-                        const loopVar = counterDecl.tokens.name;
-                        const loopVarType = counterDecl.getType({ flags: SymbolTypeFlag.runtime });
-                        blockSymbolTable.addSymbol(loopVar.text, { isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
-
-                    } else if (isForEachStatement(node.parent)) {
-                        const loopVarType = node.parent.getLoopVariableType({ flags: SymbolTypeFlag.runtime });
-                        blockSymbolTable.addSymbol(node.parent.tokens.item.text, { isInstance: true }, loopVarType, SymbolTypeFlag.runtime);
-                    }
-                }
             },
             VariableExpression: (node) => {
                 //flag reserved unreferencable builtins (e.g. `ObjFun`, `type`) used in non-call position.
@@ -598,27 +385,8 @@ export class BrsFileValidator {
                 ) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.reservedBuiltinUsedAsValue(name),
-                        location: node.tokens.name.location
+                        location: node.tokens.name
                     });
-                }
-            },
-            AstNode: (node) => {
-                //check for doc comments
-                if (!node.leadingTrivia || node.leadingTrivia.length === 0) {
-                    return;
-                }
-                const doc = brsDocParser.parseNode(node);
-                if (doc.tags.length === 0) {
-                    return;
-                }
-
-                let funcExpr = node.findAncestor<FunctionExpression>(isFunctionExpression);
-                if (funcExpr) {
-                    // handle comment tags inside a function expression
-                    this.processDocTagsInFunction(doc, node, funcExpr);
-                } else {
-                    //handle comment tags outside of a function expression
-                    this.processDocTagsAtTopLevel(doc, node);
                 }
             }
         });
@@ -630,40 +398,13 @@ export class BrsFileValidator {
         });
     }
 
-    private processDocTagsInFunction(doc: BrightScriptDoc, node: AstNode, funcExpr: FunctionExpression) {
-        //TODO: Handle doc tags that influence the function they're in
-
-        // For example, declaring variable types:
-        // const symbolTable = funcExpr.body.getSymbolTable();
-
-        // for (const varTag of doc.getAllTags(BrsDocTagKind.Var)) {
-        //     const varName = (varTag as BrsDocParamTag).name;
-        //     const varTypeStr = (varTag as BrsDocParamTag).type;
-        //     const data: ExtraSymbolData = {};
-        //     const type = doc.getTypeFromContext(varTypeStr, node, { flags: SymbolTypeFlag.typetime, fullName: varTypeStr, data: data, tableProvider: () => symbolTable });
-        //     if (type) {
-        //         symbolTable.addSymbol(varName, { ...data, isFromDocComment: true }, type, SymbolTypeFlag.runtime);
-        //     }
-        // }
-    }
-
-    private processDocTagsAtTopLevel(doc: BrightScriptDoc, node: AstNode) {
-        //TODO:
-        // - handle import statements?
-        // - handle library statements?
-        // - handle typecast statements?
-        // - handle alias statements?
-        // - handle const statements?
-        // - allow interface definitions?
-    }
-
     /**
      * Validate that a statement is defined in one of these specific locations
      *  - the root of the AST
      *  - inside a namespace
      * This is applicable to things like FunctionStatement, ClassStatement, NamespaceStatement, EnumStatement, InterfaceStatement
      */
-    private validateDeclarationLocations(statement: Statement, keyword: string, rangeFactory?: () => (Range | undefined)) {
+    private validateDeclarationLocations(statement: Statement, keyword: string, locatableFactory?: () => Locatable) {
         //if nested inside a namespace, or defined at the root of the AST (i.e. in a body that has no parent)
         const isOkDeclarationLocation = (parentNode: AstNode | undefined) => {
             return isNamespaceStatement(parentNode?.parent) || (isBody(parentNode) && !parentNode?.parent);
@@ -693,7 +434,7 @@ export class BrsFileValidator {
         //the statement was defined in the wrong place. Flag it.
         this.event.program.diagnostics.register({
             ...DiagnosticMessages.keywordMustBeDeclaredAtNamespaceLevel(keyword),
-            location: rangeFactory ? util.createLocationFromFileRange(this.event.file, rangeFactory()) : statement.location
+            location: locatableFactory ? locatableFactory() : statement
         });
     }
 
@@ -726,7 +467,7 @@ export class BrsFileValidator {
         if (name && name.length > BrsFileValidator.MaxFunctionNameLength) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.functionNameTooLong(name, name.length, BrsFileValidator.MaxFunctionNameLength),
-                location: node.tokens.name?.location ?? node.location
+                location: util.firstLocatable<Locatable>(node.tokens.name, node)
             });
         }
     }
@@ -736,21 +477,16 @@ export class BrsFileValidator {
      * Anything else, including `as dynamic` and `as object`, is a "Type Mismatch" compile error on device.
      */
     private validateTypeDesignatorMatchesDeclaredType(param: FunctionParameterExpression) {
-        if (!param.typeExpression) {
-            return;
-        }
-        const paramName = param.tokens.name.text;
-        const designatorType = typeDesignatorTypes[paramName[paramName.length - 1]];
+        const designatorType = param.getMismatchedTypeDesignatorType();
         if (!designatorType) {
             return;
         }
+        const paramName = param.tokens.name.text;
         const declaredType = param.typeExpression.getName(ParseMode.BrighterScript);
-        if (declaredType?.toLowerCase() !== designatorType) {
-            this.event.program.diagnostics.register({
-                ...DiagnosticMessages.typeDesignatorMismatch(paramName, designatorType, declaredType),
-                location: param.location
-            });
-        }
+        this.event.program.diagnostics.register({
+            ...DiagnosticMessages.typeDesignatorMismatch(paramName, designatorType.toString(), declaredType),
+            location: param.location
+        });
     }
 
     private validateFunctionParameterCount(func: FunctionExpression) {
@@ -759,7 +495,7 @@ export class BrsFileValidator {
             for (let i = CallExpression.MaximumArguments; i < func.parameters.length; i++) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.tooManyCallableParameters(func.parameters.length, CallExpression.MaximumArguments),
-                    location: func.parameters[i]?.tokens.name?.location ?? func.parameters[i]?.location ?? func.location
+                    location: util.firstLocatable<Locatable>(func.parameters[i]?.tokens.name, func.parameters[i], func)
                 });
             }
         }
@@ -771,7 +507,7 @@ export class BrsFileValidator {
         if (count > PrintStatement.MaximumPrintCount) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyPrintItems(count, PrintStatement.MaximumPrintCount),
-                location: statement.location
+                location: statement
             });
         }
     }
@@ -781,52 +517,53 @@ export class BrsFileValidator {
      * Nested functions have their own limit and are not included. Names that are only read are not counted, so the count is a lower bound.
      */
     private validateFunctionVariableCount(func: FunctionExpression) {
-        const variableLocations = new Map<string, Location>();
-        const addVariable = (nameToken: Token | undefined, fallbackLocation: Location) => {
+        //keep the locatable for each variable, and only build a `Location` for the one we report
+        const variableLocatables = new Map<string, Locatable>();
+        const addVariable = (nameToken: Token | undefined, fallback: Locatable) => {
             const name = nameToken?.text?.toLowerCase();
-            if (name && !variableLocations.has(name)) {
-                variableLocations.set(name, nameToken.location ?? fallbackLocation);
+            if (name && !variableLocatables.has(name)) {
+                variableLocatables.set(name, nameToken.sourceInfo ? nameToken : fallback);
             }
         };
         // count all the parameters as they count as variables
         for (const parameter of func.parameters) {
-            addVariable(parameter.tokens.name, parameter.location);
+            addVariable(parameter.tokens.name, parameter);
         }
 
         // count all the variables in the function body
         func.body?.walk(createVisitor({
             AssignmentStatement: (statement) => {
-                addVariable(statement.tokens.name, statement.location);
+                addVariable(statement.tokens.name, statement);
             },
             AugmentedAssignmentStatement: (statement) => {
                 if (isVariableExpression(statement.item)) {
-                    addVariable(statement.item.tokens.name, statement.location);
+                    addVariable(statement.item.tokens.name, statement);
                 }
             },
             DimStatement: (statement) => {
-                addVariable(statement.tokens.name, statement.location);
+                addVariable(statement.tokens.name, statement);
             },
             IncrementStatement: (statement) => {
                 if (isVariableExpression(statement.value)) {
-                    addVariable(statement.value.tokens.name, statement.location);
+                    addVariable(statement.value.tokens.name, statement);
                 }
             },
             ForEachStatement: (statement) => {
-                addVariable(statement.tokens.item, statement.location);
+                addVariable(statement.tokens.item, statement);
             },
             CatchStatement: (statement) => {
                 const exceptionVariable = isTypecastExpression(statement.exceptionVariableExpression) ? statement.exceptionVariableExpression.obj : statement.exceptionVariableExpression;
                 if (isVariableExpression(exceptionVariable)) {
-                    addVariable(exceptionVariable.tokens.name, statement.location);
+                    addVariable(exceptionVariable.tokens.name, statement);
                 }
             }
         }), { walkMode: WalkMode.visitAll });
 
-        if (variableLocations.size > FunctionExpression.MaximumVariables) {
-            const firstOverLimitLocation = [...variableLocations.values()][FunctionExpression.MaximumVariables];
+        if (variableLocatables.size > FunctionExpression.MaximumVariables) {
+            const firstOverLimit = [...variableLocatables.values()][FunctionExpression.MaximumVariables];
             this.event.program.diagnostics.register({
-                ...DiagnosticMessages.tooManyFunctionVariables(variableLocations.size, FunctionExpression.MaximumVariables),
-                location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
+                ...DiagnosticMessages.tooManyFunctionVariables(variableLocatables.size, FunctionExpression.MaximumVariables),
+                location: util.firstLocatable<Locatable>(firstOverLimit, func.tokens.functionType, func)
             });
         }
     }
@@ -844,7 +581,7 @@ export class BrsFileValidator {
      */
     private collectFunctionLiterals(func: FunctionExpression) {
         const pools = this.literalPools;
-        const addToPool = (poolName: LiteralPoolName, key: string | number, location: Location) => {
+        const addToPool = (poolName: LiteralPoolName, key: string | number, location: Locatable) => {
             let pool = pools[poolName];
             if (!pool) {
                 pool = { values: new Set<string | number>(), firstOverLimitLocation: undefined };
@@ -865,24 +602,24 @@ export class BrsFileValidator {
                 const text = token.text;
                 switch (token.kind) {
                     case TokenKind.IntegerLiteral:
-                        addToPool('integer', /^&h/i.test(text) ? parseInt(text.slice(2), 16) : Number(text.replace('%', '')), literal.location);
+                        addToPool('integer', /^&h/i.test(text) ? parseInt(text.slice(2), 16) : Number(text.replace('%', '')), literal);
                         break;
                     case TokenKind.LongIntegerLiteral:
-                        addToPool('longinteger', getLongIntegerKey(text), literal.location);
+                        addToPool('longinteger', getLongIntegerKey(text), literal);
                         break;
                     case TokenKind.FloatLiteral:
-                        addToPool('float', Math.fround(getFloatingPointValue(text)), literal.location);
+                        addToPool('float', Math.fround(getFloatingPointValue(text)), literal);
                         break;
                     case TokenKind.DoubleLiteral:
-                        addToPool('double', getFloatingPointValue(text), literal.location);
+                        addToPool('double', getFloatingPointValue(text), literal);
                         break;
                     case TokenKind.StringLiteral:
-                        addToPool('string', getStringLiteralKey(text), literal.location);
+                        addToPool('string', getStringLiteralKey(text), literal);
                         break;
                     case TokenKind.TemplateStringQuasi:
                         //empty quasi strings are dropped from template strings, but tagged templates keep them
                         if (text !== '' || isTaggedTemplateStringExpression(literal.parent?.parent)) {
-                            addToPool('string', text, literal.location);
+                            addToPool('string', text, literal);
                         }
                         break;
                     default:
@@ -894,12 +631,12 @@ export class BrsFileValidator {
                     return;
                 }
                 for (const part of this.getSourceLiteralReplacements(sourceLiteral, this.event.file)) {
-                    addToPool(part.type, part.value, sourceLiteral.location);
+                    addToPool(part.type, part.value, sourceLiteral);
                 }
                 const literalKind = sourceLiteral.tokens.value.kind;
                 const lineRange = sourceLiteral.location?.range;
                 if (lineRange && (literalKind === TokenKind.LineNumLiteral || literalKind === TokenKind.PkgLocationLiteral)) {
-                    addToPool('integer', (lineRange.start.line + 1) % 65536, sourceLiteral.location);
+                    addToPool('integer', (lineRange.start.line + 1) % 65536, sourceLiteral);
                 }
             },
             AAMemberExpression: (member) => {
@@ -907,14 +644,14 @@ export class BrsFileValidator {
                 if (keyToken?.kind !== TokenKind.StringLiteral || member.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                addToPool('string', getStringLiteralKey(keyToken.text), keyToken.location ?? member.location);
+                addToPool('string', getStringLiteralKey(keyToken.text), util.firstLocatable<Locatable>(keyToken, member));
             },
             //template string escapes (like `\n` or `"`) transpile to `chr(charCode)`
             EscapedCharCodeLiteralExpression: (escape) => {
                 if (escape.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                addToPool('integer', escape.tokens.value.charCode, escape.location);
+                addToPool('integer', escape.tokens.value.charCode, escape);
             },
             //`/pattern/flags` transpiles to `CreateObject("roRegex", "pattern", "flags")`, with each `"` in the pattern split out as `chr(34)`
             RegexLiteralExpression: (regex) => {
@@ -929,14 +666,14 @@ export class BrsFileValidator {
                     flags = flagMatch[1];
                 }
                 const patternParts = text.substring(1, text.length - 1).split('"');
-                addToPool('string', 'roRegex', regex.location);
+                addToPool('string', 'roRegex', regex);
                 for (const part of patternParts) {
-                    addToPool('string', part, regex.location);
+                    addToPool('string', part, regex);
                 }
                 if (patternParts.length > 1) {
-                    addToPool('integer', 34, regex.location);
+                    addToPool('integer', 34, regex);
                 }
-                addToPool('string', flags, regex.location);
+                addToPool('string', flags, regex);
             },
             //`node@.method()` transpiles to `node.callfunc("method")`
             CallfuncExpression: (callfunc) => {
@@ -944,7 +681,7 @@ export class BrsFileValidator {
                 if (!callfunc.tokens.methodName || callfunc.findAncestor<FunctionExpression>(isFunctionExpression) !== func) {
                     return;
                 }
-                addToPool('string', callfunc.tokens.methodName.text, callfunc.tokens.methodName.location ?? callfunc.location);
+                addToPool('string', callfunc.tokens.methodName.text, util.firstLocatable<Locatable>(callfunc.tokens.methodName, callfunc));
             }
         });
 
@@ -1067,14 +804,14 @@ export class BrsFileValidator {
      * Nested functions have their own limit and are not included.
      */
     private validateFunctionGotoLabelCount(func: FunctionExpression) {
-        const labelLocations = new Map<string, Location>();
+        const labelLocations = new Map<string, Locatable>();
         const continueLoops = new Set<AstNode>();
         const continueIsTranspiled = this.event.file.needsTranspiled && !this.event.program.firmwareCapabilities.continueStatement;
         func.body?.walk(createVisitor({
             GotoStatement: (statement) => {
                 const labelName = statement.tokens.label?.text?.toLowerCase();
                 if (labelName && !labelLocations.has(labelName)) {
-                    labelLocations.set(labelName, statement.tokens.label.location ?? statement.location);
+                    labelLocations.set(labelName, util.firstLocatable<Locatable>(statement.tokens.label, statement));
                 }
             },
             ContinueStatement: (statement) => {
@@ -1087,7 +824,7 @@ export class BrsFileValidator {
                 }
                 if (enclosingLoop && enclosingLoop !== func && !continueLoops.has(enclosingLoop)) {
                     continueLoops.add(enclosingLoop);
-                    labelLocations.set(`continue-loop:${continueLoops.size}`, statement.location);
+                    labelLocations.set(`continue-loop:${continueLoops.size}`, statement);
                 }
             }
         }), { walkMode: WalkMode.visitAll });
@@ -1096,7 +833,7 @@ export class BrsFileValidator {
             const firstOverLimitLocation = [...labelLocations.values()][FunctionExpression.MaximumGotoLabels];
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.tooManyGotoLabels(labelLocations.size, FunctionExpression.MaximumGotoLabels),
-                location: firstOverLimitLocation ?? func.tokens.functionType?.location ?? func.location
+                location: firstOverLimitLocation ?? util.firstLocatable<Locatable>(func.tokens.functionType, func)
             });
         }
     }
@@ -1115,7 +852,7 @@ export class BrsFileValidator {
             if (memberNames.has(memberNameLower)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.duplicateIdentifier(member.name),
-                    location: member.location
+                    location: member
                 });
             } else {
                 memberNames.add(memberNameLower);
@@ -1136,7 +873,7 @@ export class BrsFileValidator {
             memberValueKind = (member.value as LiteralExpression)?.tokens?.value?.kind;
             memberValue = member.value;
         }
-        const range = (memberValue ?? member)?.location?.range;
+        const valueLocatable: Locatable = memberValue ?? member;
         if (
             //is integer enum, has value, that value type is not integer
             (enumValueKind === TokenKind.IntegerLiteral && memberValueKind && memberValueKind !== enumValueKind) ||
@@ -1147,7 +884,7 @@ export class BrsFileValidator {
                 ...DiagnosticMessages.enumValueMustBeType(
                     enumValueKind.replace(/literal$/i, '').toLowerCase()
                 ),
-                location: util.createLocationFromFileRange(this.event.file, range)
+                location: valueLocatable
             });
         }
 
@@ -1161,7 +898,7 @@ export class BrsFileValidator {
                         ...DiagnosticMessages.enumValueMustBeType(
                             enumValueKind.replace(/literal$/i, '').toLowerCase()
                         ),
-                        location: util.createLocationFromFileRange(this.event.file, range)
+                        location: valueLocatable
                     });
                 }
 
@@ -1171,7 +908,7 @@ export class BrsFileValidator {
                     ...DiagnosticMessages.enumValueIsRequired(
                         enumValueKind.replace(/literal$/i, '').toLowerCase()
                     ),
-                    location: util.createLocationFromFileRange(this.event.file, range)
+                    location: valueLocatable
                 });
             }
         }
@@ -1186,12 +923,12 @@ export class BrsFileValidator {
         if (!isLiteralBoolean(assignment.value)) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.invalidHashConstValue(),
-                location: assignment.value.location
+                location: assignment.value
             });
         } else if (statement.isDuplicate) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.duplicateConstDeclaration(assignment.tokens.name.text),
-                location: assignment.tokens.name.location
+                location: assignment.tokens.name
             });
         }
     }
@@ -1240,36 +977,45 @@ export class BrsFileValidator {
      * The diagnostics are indexed once per validator, so each call is a binary search instead of a scan.
      */
     private hasParseDiagnosticWithin(func: FunctionExpression) {
-        const functionRange = func.location?.range;
-        if (!functionRange) {
+        if (func.startPosition === undefined || !func.sourceInfo) {
             return false;
         }
-        const index = this.getParseDiagnosticIndex();
+        const index = this.getParseDiagnosticIndex(func.sourceInfo);
         let low = 0;
         let high = index.length;
         while (low < high) {
             const middle = Math.floor((low + high) / 2);
-            if (util.comparePosition(index[middle].start, functionRange.end) < 0) {
+            if (index[middle].startPosition < func.endPosition) {
                 low = middle + 1;
             } else {
                 high = middle;
             }
         }
-        return low > 0 && util.comparePosition(index[low - 1].furthestEnd, functionRange.start) > 0;
+        return low > 0 && index[low - 1].furthestEndPosition > func.startPosition;
     }
 
-    private getParseDiagnosticIndex() {
+    private getParseDiagnosticIndex(sourceInfo: SourceInfo) {
         if (!this.parseDiagnosticIndex) {
-            const ranges = this.event.file.parser.diagnostics
-                .map(diagnostic => diagnostic.location?.range)
-                .filter(range => !!range)
-                .sort((rangeA, rangeB) => util.comparePosition(rangeA.start, rangeB.start));
-            let furthestEnd: Position;
-            this.parseDiagnosticIndex = ranges.map(range => {
-                if (!furthestEnd || util.comparePosition(range.end, furthestEnd) > 0) {
-                    furthestEnd = range.end;
-                }
-                return { start: range.start, furthestEnd: furthestEnd };
+            const spans = this.event.file.parser.diagnostics
+                //parser diagnostics are usually Locatables (tokens/nodes). Convert any resolved `Location` into positions too
+                .map(diagnostic => {
+                    const location = diagnostic.location;
+                    if (location && ('startPosition' in location || !('uri' in location))) {
+                        return location as Locatable;
+                    }
+                    const range = (location as Location)?.range;
+                    return {
+                        startPosition: util.getOffset(sourceInfo, range?.start),
+                        endPosition: util.getOffset(sourceInfo, range?.end)
+                    };
+                })
+                //synthetic locatables have no positions
+                .filter(span => span?.startPosition !== undefined && span.endPosition !== undefined)
+                .sort((spanA, spanB) => spanA.startPosition - spanB.startPosition);
+            let furthestEndPosition = -1;
+            this.parseDiagnosticIndex = spans.map(span => {
+                furthestEndPosition = Math.max(furthestEndPosition, span.endPosition);
+                return { startPosition: span.startPosition, furthestEndPosition: furthestEndPosition };
             });
         }
         return this.parseDiagnosticIndex;
@@ -1304,9 +1050,9 @@ export class BrsFileValidator {
                 if (branch.isActive === false) {
                     this.flagInactiveBranchBodies(branch, overlappingRunLocation);
                 }
-            } else if (branch?.isActive === false && branch.location) {
+            } else if (branch?.isActive === false && branch.sourceInfo) {
                 //the branch runs from the end of its opening directive to the start of its closing directive
-                const { start, end } = branch.location.range;
+                const { start, end } = util.getLocation(branch).range;
                 if (end.line - start.line > 1) {
                     const location = util.createLocation(start.line + 1, 0, end.line, 0, this.event.file.srcPath);
                     if (overlappingRunLocation && util.rangesIntersect(location.range, overlappingRunLocation.range)) {
@@ -1328,7 +1074,7 @@ export class BrsFileValidator {
         if (statement.isConditionDeclared === false && statement.tokens.condition && !this.event.program.firmwareCapabilities.undeclaredHashConstIsFalse) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.hashConstDoesNotExist(),
-                location: statement.tokens.condition.location
+                location: statement.tokens.condition
             });
         }
     }
@@ -1361,7 +1107,7 @@ export class BrsFileValidator {
                 ) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementOutsideFunction(),
-                        location: statement.location
+                        location: statement
                     });
                 }
             }
@@ -1404,17 +1150,17 @@ export class BrsFileValidator {
                 if (isLibraryStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementLocation('library', 'at the top of the file'),
-                        location: result.location
+                        location: result
                     });
                 } else if (isImportStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementLocation('import', 'at the top of the file'),
-                        location: result.location
+                        location: result
                     });
                 } else if (isAliasStatement(result)) {
                     this.event.program.diagnostics.register({
                         ...DiagnosticMessages.unexpectedStatementLocation('alias', 'at the top of the file'),
-                        location: result.location
+                        location: result
                     });
                 }
             }
@@ -1442,7 +1188,7 @@ export class BrsFileValidator {
             if (isBadTypecastObj) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.invalidTypecastStatementApplication(resultVarStr, hasFunctionAncestor),
-                    location: typecastStmt.typecastExpression.obj.location
+                    location: typecastStmt.typecastExpression.obj
                 });
             }
 
@@ -1466,18 +1212,17 @@ export class BrsFileValidator {
             if (!isFirst) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.unexpectedStatementLocation('typecast', 'at the top of the file or beginning of block or namespace'),
-                    location: typecastStmt.location
+                    location: typecastStmt
                 });
             }
         }
     }
 
     private validateSelectCaseStatement(statement: SelectCaseStatement) {
-        const headerLocation = util.createBoundingLocation(statement.tokens.select, statement.tokens.case);
         if (statement.cases.length === 0) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.selectCaseHasNoCases(),
-                location: headerLocation
+                location: util.setBounds({} as Locatable, statement.tokens.select, statement.tokens.case)
             });
             return;
         }
@@ -1489,14 +1234,14 @@ export class BrsFileValidator {
             for (const elseCase of elseCases.slice(1)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.duplicateCaseElse(),
-                    location: util.createBoundingLocation(elseCase.tokens.case, elseCase.tokens.else)
+                    location: util.setBounds({} as Locatable, elseCase.tokens.case, elseCase.tokens.else)
                 });
             }
             //only flag the first one. Any others were already flagged as duplicates
             if (statement.cases.indexOf(elseCases[0]) < statement.cases.length - elseCases.length) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.caseElseMustBeLast(),
-                    location: util.createBoundingLocation(elseCases[0].tokens.case, elseCases[0].tokens.else)
+                    location: util.setBounds({} as Locatable, elseCases[0].tokens.case, elseCases[0].tokens.else)
                 });
             }
         }
@@ -1512,7 +1257,7 @@ export class BrsFileValidator {
             ) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.emptyCaseDoesNotFallThrough(),
-                    location: caseStatement.tokens.case.location
+                    location: caseStatement.tokens.case
                 });
             }
         }
@@ -1536,10 +1281,10 @@ export class BrsFileValidator {
                     if (firstValue) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.duplicateCaseValue(
-                                util.getTextForRange(this.event.file.fileContents, value.location?.range) ?? key,
-                                firstValue.location?.range.start.line + 1
+                                util.getTextForRange(this.event.file.fileContents, util.getLocation(value)?.range) ?? key,
+                                util.getStartPosition(firstValue)?.line + 1
                             ),
-                            location: value.location
+                            location: value
                         });
                     } else {
                         seenValues.set(key, value);
@@ -1553,7 +1298,7 @@ export class BrsFileValidator {
                     } else if (valueType !== expectedType) {
                         this.event.program.diagnostics.register({
                             ...DiagnosticMessages.caseValueTypeMismatch(valueType, expectedType),
-                            location: value.location
+                            location: value
                         });
                     }
                 }
@@ -1612,7 +1357,7 @@ export class BrsFileValidator {
             const actualLoopType = statement.tokens.loopType;
             if (actualLoopType && expectedLoopType?.toLowerCase() !== actualLoopType.text?.toLowerCase()) {
                 this.event.program.diagnostics.register({
-                    location: statement.tokens.loopType.location,
+                    location: statement.tokens.loopType,
                     ...DiagnosticMessages.expectedToken(expectedLoopType)
                 });
             }
@@ -1634,7 +1379,7 @@ export class BrsFileValidator {
         //flag continue statements found outside of a loop
         if (!parent) {
             this.event.program.diagnostics.register({
-                location: statement.location,
+                location: statement,
                 ...DiagnosticMessages.illegalContinueStatement()
             });
         }
@@ -1658,7 +1403,7 @@ export class BrsFileValidator {
                     CONTINUE_MIN_FIRMWARE_VERSION,
                     this.event.program.getMinFirmwareVersion()
                 ),
-                location: statement.location
+                location: statement
             });
         }
     }
@@ -1674,7 +1419,7 @@ export class BrsFileValidator {
             if (isSpreadExpression(element)) {
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.spreadOperatorNotAllowedHere(),
-                    location: element.tokens.dotDotDot.location
+                    location: element.tokens.dotDotDot
                 });
             }
         }
@@ -1691,21 +1436,23 @@ export class BrsFileValidator {
                 // a.b?[2] = true
                 (isIndexedGetExpression(node) && (node?.tokens.questionDot?.kind === TokenKind.QuestionDot || node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)) ||
                 // a?[1] = true
-                (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare)
+                (isIndexedSetStatement(node) && node.tokens.openingSquare?.kind === TokenKind.QuestionLeftSquare) ||
+                // a?@.getChild().b = true or a@.getChild?().b = true
+                (isCallfuncExpression(node) && (node.tokens.operator?.kind === TokenKind.QuestionCallfunc || node.tokens.openingParen?.kind === TokenKind.QuestionLeftParen))
             ) {
                 //try to highlight the entire left-hand-side expression if possible
-                let range: Range;
+                let locatable: Locatable;
                 if (isDottedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj?.location, parent.tokens.dot, parent.tokens.name);
+                    locatable = util.setBounds({} as Locatable, parent.obj, parent.tokens.dot, parent.tokens.name);
                 } else if (isIndexedSetStatement(parent)) {
-                    range = util.createBoundingRange(parent.obj?.location, parent.tokens.openingSquare, ...parent.indexes, parent.tokens.closingSquare);
+                    locatable = util.setBounds({} as Locatable, parent.obj, parent.tokens.openingSquare, ...parent.indexes, parent.tokens.closingSquare);
                 } else {
-                    range = node.location?.range;
+                    locatable = node;
                 }
 
                 this.event.program.diagnostics.register({
                     ...DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment(),
-                    location: util.createLocationFromFileRange(this.event.file, range)
+                    location: locatable
                 });
             }
 
@@ -1718,44 +1465,21 @@ export class BrsFileValidator {
     }
 
     /**
-     * A `case else` that is the only case in its `select case` always runs all the way through (unless it can `exit select` early)
-     */
-    private isAlwaysExecutedCase(node: AstNode) {
-        return isCaseStatement(node) &&
-            node.isElse &&
-            isSelectCaseStatement(node.parent) &&
-            node.parent.cases.length === 1 &&
-            !node.canExitEarly;
-    }
-
-    private setUpComplementSymbolTables(node: IfStatement | ConditionalCompileStatement, predicate: (node: AstNode) => boolean) {
-        if (isBlock(node.elseBranch)) {
-            const elseTable = node.elseBranch.symbolTable;
-            let currentNode = node;
-            while (predicate(currentNode)) {
-                const thenBranch = (currentNode as IfStatement | ConditionalCompileStatement).thenBranch;
-                elseTable.complementOtherTable(thenBranch.symbolTable);
-                currentNode = currentNode.parent as IfStatement | ConditionalCompileStatement;
-            }
-        }
-    }
-
-    /**
      * Flag regex literals that `roRegex` would fail to compile (i.e. `/(abc/`), and unsupported flags
      */
     private validateRegexLiteral(node: RegexLiteralExpression) {
         const token = node.tokens.regexLiteral;
-        const start = token?.location?.range?.start;
-        if (!start) {
+        if (!token?.sourceInfo) {
             return;
         }
-        //regex literals are always on a single line, so problem offsets map directly onto the token's starting line
+        //problem offsets are relative to the start of the token
         for (const problem of findRegexLiteralProblems(token.text)) {
             this.event.program.diagnostics.register({
                 ...problem.diagnostic,
                 location: {
-                    uri: token.location.uri,
-                    range: util.createRange(start.line, start.character + problem.start, start.line, start.character + problem.end)
+                    startPosition: token.startPosition + problem.start,
+                    endPosition: token.startPosition + problem.end,
+                    sourceInfo: token.sourceInfo
                 }
             });
         }
@@ -1767,7 +1491,7 @@ export class BrsFileValidator {
      * This applies to both .brs and .bs files because optional chaining is not transpiled —
      * it is emitted as-is, so the target device must natively support it.
      */
-    private validateMinFirmwareVersionForOptionalChaining(range: Range | undefined) {
+    private validateMinFirmwareVersionForOptionalChaining(locatable: Locatable | undefined) {
         if (!this.event.program.firmwareCapabilities.optionalChaining) {
             this.event.program.diagnostics.register({
                 ...DiagnosticMessages.featureRequiresMinFirmwareVersion(
@@ -1775,7 +1499,7 @@ export class BrsFileValidator {
                     OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION,
                     this.event.program.getMinFirmwareVersion()
                 ),
-                location: util.createLocationFromFileRange(this.event.file, range)
+                location: locatable
             });
         }
     }
@@ -1808,7 +1532,7 @@ export class BrsFileValidator {
         if (diagnostic) {
             this.event.program.diagnostics.register({
                 ...diagnostic,
-                location: node.callee.location
+                location: node.callee
             });
         }
     }
@@ -1865,7 +1589,7 @@ type LiteralPoolName = 'integer' | 'string' | 'float' | 'double' | 'longinteger'
 
 interface LiteralPool {
     values: Set<string | number>;
-    firstOverLimitLocation: Location | undefined;
+    firstOverLimitLocation: Locatable | undefined;
 }
 
 interface LabelsAndGotos {

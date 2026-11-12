@@ -1375,12 +1375,12 @@ export class Program {
             })
             //run before/validate/after as a single per-file action so the Sequencer can't cancel
             //between them. Splitting into three forEach steps would let cancellation land after
-            //`validateFile` (where BrsFileValidator pushes per-node symbols via addSymbol) but
-            //before `afterValidateFile` (where processSymbolInformation registers validation
-            //segments) — leaving the file in a half-processed state. The next pass would either
-            //re-run BrsFileValidator (pushing duplicate symbols → CrossScopeValidator name-
-            //collision) or skip the file in scope validation (no segments to walk → no
-            //diagnostics emitted). Atomic-per-file means either the file is fully processed or
+            //`validateFile` (where BrsFileLinker pushes per-node symbols via addSymbol) but
+            //before `afterValidateFile` (where BrsFileValidator adds the file's diagnostics)
+            //— leaving the file in a half-processed state. The next pass would either re-run
+            //BrsFileLinker (pushing duplicate symbols → CrossScopeValidator name-collision)
+            //or skip the file entirely (no file diagnostics emitted). Atomic-per-file means
+            //either the file is fully processed or
             //it's untouched. Plugins that need an all-files-done signal should use
             //`afterValidateProgram` instead of `afterValidateFile`.
             .forEach('validateFile', () => filesToProcess, (file) => {

@@ -1,5 +1,6 @@
 import type { LabelDeclaration, VariableDeclaration } from './interfaces';
 import type { FunctionExpression } from './parser/Expression';
+import { util } from './util';
 
 //TODO I think this class can be eliminated in favor of moving some of these onto the FunctionExpression AST node
 export class FunctionScope {
@@ -13,7 +14,7 @@ export class FunctionScope {
      * and ends after the final `n` in `end function` or `b` in end sub.
      */
     public get range() {
-        return this.func?.location?.range;
+        return util.getLocation(this.func)?.range;
     }
     /**
      * The scopes that are children of this scope

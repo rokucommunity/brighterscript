@@ -8,7 +8,8 @@ import { isToken } from './Token';
 import { rangeToArray } from '../parser/Parser.spec';
 import { Range } from 'vscode-languageserver';
 import { DiagnosticMessages } from '../DiagnosticMessages';
-import { util } from '../util';
+import { util, standardizePath as s } from '../util';
+import { expectDiagnostics, rootDir } from '../testHelpers.spec';
 
 describe('lexer', () => {
     it('recognizes the `const` keyword', () => {
@@ -29,6 +30,42 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the `...` token', () => {
+        expectKinds('... a...b ...[1] ...{} .5...', [
+            TokenKind.DotDotDot,
+            TokenKind.Identifier,
+            TokenKind.DotDotDot,
+            TokenKind.Identifier,
+            TokenKind.DotDotDot,
+            TokenKind.LeftSquareBracket,
+            TokenKind.IntegerLiteral,
+            TokenKind.RightSquareBracket,
+            TokenKind.DotDotDot,
+            TokenKind.LeftCurlyBrace,
+            TokenKind.RightCurlyBrace,
+            TokenKind.FloatLiteral,
+            TokenKind.DotDotDot
+        ]);
+    });
+
+    it('splits more than three dots into `...` followed by `.`', () => {
+        expectKinds('.... .....', [
+            TokenKind.DotDotDot,
+            TokenKind.Dot,
+            TokenKind.DotDotDot,
+            TokenKind.Dot,
+            TokenKind.Dot
+        ]);
+    });
+
+    it('does not produce `...` when dots belong to number literals', () => {
+        expectKinds('1...2', [
+            TokenKind.FloatLiteral,
+            TokenKind.Dot,
+            TokenKind.FloatLiteral
+        ]);
+    });
+
     it('recognizes the question mark operator in various contexts', () => {
         expectKinds('? ?? ?. ?[ ?.[ ?( ?@', [
             TokenKind.Question,
@@ -39,6 +76,24 @@ describe('lexer', () => {
             TokenKind.LeftSquareBracket,
             TokenKind.QuestionLeftParen,
             TokenKind.QuestionAt
+        ]);
+    });
+
+    it('recognizes the optional callfunc operator', () => {
+        expectKinds('node?@.doSomething() node?@id node@.doSomething()', [
+            TokenKind.Identifier,
+            TokenKind.QuestionCallfunc,
+            TokenKind.Identifier,
+            TokenKind.LeftParen,
+            TokenKind.RightParen,
+            TokenKind.Identifier,
+            TokenKind.QuestionAt,
+            TokenKind.Identifier,
+            TokenKind.Identifier,
+            TokenKind.Callfunc,
+            TokenKind.Identifier,
+            TokenKind.LeftParen,
+            TokenKind.RightParen
         ]);
     });
 
@@ -170,12 +225,12 @@ describe('lexer', () => {
 
     it('computes range properly both with and without whitespace', () => {
         let withoutWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
-            .map(x => rangeToArray(x.location?.range));
+            .map(x => rangeToArray(util.getLocation(x)?.range));
 
         let withWhitespace = Lexer.scan(`sub Main()\n    bob = true\nend sub`).tokens
             //filter out the whitespace...we only care that it was computed during the scan
             .filter(x => x.kind !== TokenKind.Whitespace)
-            .map(x => rangeToArray(x.location?.range));
+            .map(x => rangeToArray(util.getLocation(x)?.range));
 
         /*eslint-disable */
         let expectedLocations = [
@@ -279,7 +334,7 @@ describe('lexer', () => {
                 end sub
             `, {
                 includeWhitespace: true
-            }).tokens.map(x => [...rangeToArray(x.location?.range), x.text]);
+            }).tokens.map(x => [...rangeToArray(util.getLocation(x)?.range), x.text]);
 
             expect(tokens).to.eql([
                 [0, 0, 0, 1, '\n'],
@@ -317,7 +372,7 @@ describe('lexer', () => {
                 //ignore the Eof token
                 .filter(x => x.kind !== TokenKind.Eof);
 
-            expect(tokens.map(x => x.location?.range)).to.eql([
+            expect(tokens.map(x => util.getLocation(x)?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 3, 0, 4), // \n
                 Range.create(1, 0, 1, 3), // sub
@@ -460,6 +515,21 @@ describe('lexer', () => {
                 13,
                 10
             ]);
+        });
+
+        it('treats a lone carriage return as a newline', () => {
+            let { tokens } = Lexer.scan('`a\rb`');
+            expect(tokens.map(t => t.kind)).to.deep.equal([
+                TokenKind.BackTick,
+                TokenKind.TemplateStringQuasi,
+                TokenKind.EscapedCharCodeLiteral, // carriage return
+                TokenKind.TemplateStringQuasi,
+                TokenKind.BackTick,
+                TokenKind.Eof
+            ]);
+            expect((tokens[2] as any).charCode).to.equal(13);
+            //`b` starts the next line
+            expect(util.getLocation(tokens[3]).range).to.eql(util.createRange(1, 0, 1, 1));
         });
 
         it('prevents expressions when escaping the dollar sign', () => {
@@ -968,7 +1038,7 @@ describe('lexer', () => {
             );
             expect(tokens.map(x => {
                 return {
-                    range: x.location?.range,
+                    range: util.getLocation(x)?.range,
                     kind: x.kind
                 };
             })).to.eql([
@@ -1265,11 +1335,11 @@ describe('lexer', () => {
         });
     });
 
-    describe('isReserved', () => {
+    describe('reserved words', () => {
         it('is true only for reserved words, not for other keywords or identifiers', () => {
             //`if`/`sub` are reserved; `tab`/`as` are keywords but not reserved (see Keywords doc comment)
             let { tokens } = Lexer.scan('if sub tab as somevar');
-            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+            expect(tokens.map(t => ReservedTokenKinds.has(t.kind))).to.deep.equal([
                 true, //if
                 true, //sub
                 false, //tab
@@ -1281,7 +1351,7 @@ describe('lexer', () => {
 
         it('is true for multi-word reserved keywords regardless of casing', () => {
             let { tokens } = Lexer.scan('END WHILE end sub');
-            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+            expect(tokens.map(t => ReservedTokenKinds.has(t.kind))).to.deep.equal([
                 true, //end while
                 true, //end sub
                 false //eof
@@ -1298,7 +1368,6 @@ describe('lexer', () => {
                 let { tokens } = Lexer.scan(text);
                 //some entries are multi-word (e.g. 'end if'), which lex to a single token plus Eof
                 expect(tokens[0].kind, `token kind for keyword text '${text}'`).to.equal(kind);
-                expect(tokens[0].isReserved, `isReserved for keyword text '${text}'`).to.equal(ReservedTokenKinds.has(kind));
             }
         });
     });
@@ -1465,7 +1534,7 @@ describe('lexer', () => {
     describe('location tracking', () => {
         it('tracks starting and ending locations including whitespace', () => {
             let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: true });
-            expect(tokens.map(t => t.location?.range)).to.eql([
+            expect(tokens.map(t => util.getLocation(t)?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 3, 0, 4), // <space>
                 Range.create(0, 4, 0, 7), // foo
@@ -1484,7 +1553,7 @@ describe('lexer', () => {
 
         it('tracks starting and ending locations excluding whitespace', () => {
             let { tokens } = Lexer.scan(`sub foo()\n    print "bar"\r\nend sub`, { includeWhitespace: false });
-            expect(tokens.map(t => t.location?.range)).to.eql([
+            expect(tokens.map(t => util.getLocation(t)?.range)).to.eql([
                 Range.create(0, 0, 0, 3), // sub
                 Range.create(0, 4, 0, 7), // foo
                 Range.create(0, 7, 0, 8), // (
@@ -1529,7 +1598,7 @@ describe('lexer', () => {
         ]);
 
         //verify the location of `rem`
-        expect(tokens.map(t => [t.location?.range.start.character, t.location?.range.end.character])).to.eql([
+        expect(tokens.map(t => [util.getLocation(t)?.range.start.character, util.getLocation(t)?.range.end.character])).to.eql([
             [0, 6], // person
             [6, 7], // .
             [7, 10], // rem
@@ -1859,7 +1928,7 @@ describe('lexer', () => {
         function stringify(tokens: Token[]) {
             return tokens
                 //exclude the explicit triva tokens since they'll be included in the leading/trailing arrays
-                .filter(x => !AllowedTriviaTokens.includes(x.kind))
+                .filter(x => !AllowedTriviaTokens.has(x.kind))
                 .flatMap(x => [...x.leadingTrivia ?? [], x])
                 .map(x => x.text)
                 .join('');
@@ -1905,7 +1974,7 @@ describe('lexer', () => {
 
 
         function expectTrivia(text: string, expected: Array<{ text: string; leadingTrivia?: string[]; trailingTrivia?: string[] }>) {
-            const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.includes(x.kind));
+            const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.has(x.kind));
             expect(
                 tokens.map(x => {
                     return {
@@ -1933,6 +2002,71 @@ describe('lexer', () => {
                     //EOF
                     { leadingTrivia: [` `, `'trueComment`, `\n`, `'eof`], text: `` }
                 ]);
+        });
+    });
+
+    describe('location boundaries', () => {
+        const srcPath = s`${rootDir}/source/main.brs`;
+        const uri = util.pathToUri(srcPath);
+
+        function scan(text: string) {
+            return Lexer.scan(text, { srcPath: srcPath }).diagnostics;
+        }
+
+        it('flags an unterminated string at the end of the file', () => {
+            expectDiagnostics(scan('x = "abc'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(0, 4, 0, 8) }
+            }]);
+        });
+
+        it('flags an unterminated string followed by a LF newline', () => {
+            expectDiagnostics(scan('x = "abc\ny = 1'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(0, 4, 0, 7) }
+            }]);
+        });
+
+        it('flags an unterminated string on a CRLF line', () => {
+            expectDiagnostics(scan('x = 1\r\ny = "abc\r\nz = 3'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(1, 4, 1, 7) }
+            }]);
+        });
+
+        it('flags an unterminated string at the end of a CRLF file', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2\r\nz = "abc'), [{
+                ...DiagnosticMessages.unterminatedString(),
+                location: { uri: uri, range: Range.create(2, 4, 2, 8) }
+            }]);
+        });
+
+        it('flags an unexpected character on a CRLF line', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2 ~ 3'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(1, 6, 1, 7) }
+            }]);
+        });
+
+        it('flags an unexpected character in a file mixing LF and CRLF', () => {
+            expectDiagnostics(scan('x = 1\r\ny = 2\n\r\nz = 3 ~ 4'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(3, 6, 3, 7) }
+            }]);
+        });
+
+        it('flags an unexpected character after a surrogate-pair emoji on the same line', () => {
+            expectDiagnostics(scan('x = 1\ny = "😀" ~ 1'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(1, 9, 1, 10) }
+            }]);
+        });
+
+        it('flags an unexpected character after a multi-line template string', () => {
+            expectDiagnostics(scan('x = `a\r\n${b}\nc` ~ 1'), [{
+                ...DiagnosticMessages.unexpectedCharacter('~'),
+                location: { uri: uri, range: Range.create(2, 3, 2, 4) }
+            }]);
         });
     });
 });
