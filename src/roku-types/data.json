@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2026-11-12T15:02:19.771Z",
+    "generatedDate": "2026-11-12T15:04:51.979Z",
     "nodes": {
         "animatedimage": {
             "description": "Extends [**Group**](https://developer.roku.com/dev/docs/group)\n\nThe AnimatedImage node enables developers to render animated GIFs, stickers, and small videos. It is designed for low-frame-rate, simple animations that reside in a small area.\n\nOnly use a single, small animated image at a time to minimize CPU load and memory usage (large animations may consume CPU and memory resources; using too many animated images may cause choppy animations).\n\nThe AnimatedImage downloads the entire resource before decoding. Playback begins only after the download hasbeen completed.\n\n> \\[!NOTE\\] This node is not supported on older Roku device models (Liberty, Littlefield, Austin, Briscoe, Ft. Worth, Gilbert, Amarillo).",
@@ -6124,22 +6124,7 @@
                 "name": "StandardDialog",
                 "url": "https://developer.roku.com/dev/docs/standard-dialog"
             },
-            "fields": [
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"\"",
-                    "description": "A string to be displayed next to the spinning progress indicator. It typically tells the user why they are waiting. > Minimize the message length.",
-                    "name": "message",
-                    "type": "string"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"\"",
-                    "description": "The title to be displayed at the top of the dialog.If no title is specified, the progress dialog will be displayed without a title area and will use the minimum width needed to show the spinning progress indicator and message",
-                    "name": "title",
-                    "type": "string"
-                }
-            ],
+            "fields": [],
             "interfaces": [],
             "name": "StandardProgressDialog",
             "url": "https://developer.roku.com/dev/docs/standard-progress-dialog"
@@ -6322,43 +6307,7 @@
                 "name": "StdDlgItemBase",
                 "url": "https://developer.roku.com/dev/docs/std-dlg-item-base"
             },
-            "fields": [
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"left\"",
-                    "description": "Specifies where to position and align the graphic and its text label, relative to the content area. This may be one of the following values:\n\n| Value | Text Position |\n| --- | --- |\n| left | The graphic is left-aligned in the content area.   The text label is positioned horizontally to the right of the graphic, and centered vertically. |\n| right | The graphic is right-aligned in the content area.   The text label is positioned horizontally to the left of the graphic, and centered vertically. |\n| center\\_below | The graphic and text label are centered horizontally in the content area.   The graphic is positioned below the text label. |\n| center\\_above | The graphic and text label are centered horizontally in the content area.   The graphic is positioned above the text label. |",
-                    "name": "graphicAlign",
-                    "type": "string"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "0",
-                    "description": "The image height to be used instead of the image's actual height.",
-                    "name": "graphicHeight",
-                    "type": "float"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"\"",
-                    "description": "The URI of the image to be displayed.",
-                    "name": "graphicUri",
-                    "type": "uri"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "0",
-                    "description": "The image width to be used instead of the image's actual width.",
-                    "name": "graphicWidth",
-                    "type": "float"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"\"",
-                    "description": "Specifies the text to be displayed next to the graphic. If the text width does not fit within the width of the content area, the text will wrap onto multiple lines.",
-                    "name": "text",
-                    "type": "string"
-                }
-            ],
+            "fields": [],
             "interfaces": [],
             "name": "StdDlgGraphicItem",
             "url": "https://developer.roku.com/dev/docs/std-dlg-graphic-item"
@@ -6573,43 +6522,7 @@
                 "name": "StdDlgAreaBase",
                 "url": "https://developer.roku.com/dev/docs/std-dlg-area-base"
             },
-            "fields": [
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"\"",
-                    "description": "Specifies a bitmap to be displayed at the left edge of the dialog's title area (to the left of dialog's primary title).",
-                    "name": "primaryIcon",
-                    "type": "URL"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "0.0f",
-                    "description": "Adjusts the vertical position of the primary icon relative to the baseline of the dialog's primary title. By default, the bottom of the primary icon is aligned with the primary title's baseline.",
-                    "name": "primaryIconVertOffset",
-                    "type": "float"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"\"",
-                    "description": "Specifies the title to be displayed in the dialog's title area.",
-                    "name": "primaryTitle",
-                    "type": "string"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "\"\"",
-                    "description": "Specifies a bitmap to be displayed at the right edge of the dialog's title area.",
-                    "name": "secondaryIcon",
-                    "type": "URL"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "0.0f",
-                    "description": "Adjusts the vertical position of the secondary icon relative to the baseline of the dialog's primary title. By default, the bottom of the secondary icon is aligned with the primary title's baseline.",
-                    "name": "secondaryIconVertOffset",
-                    "type": "float"
-                }
-            ],
+            "fields": [],
             "interfaces": [],
             "name": "StdDlgTitleArea",
             "url": "https://developer.roku.com/dev/docs/std-dlg-title-area"
@@ -8819,19 +8732,6 @@
             ],
             "name": "roProfile",
             "url": "https://developer.roku.com/dev/docs/roprofile"
-        },
-        "roprogramguide": {
-            "constructors": [],
-            "description": "Represents Electronic Program Guide (EPG) information from the tuner.\n\nSome Roku devices incorporate a tuner giving access to broadcast TV and radio received over an antenna or cable. In addition to the video and audio data from the tuner, the Roku Player receives electronic program guide (EPG) data about the currently-broadcasting program, and the next few programs to be broadcast. The roProgramGuide object provides access to that guide data.\n\nThis object can be created with no parameters:\n\n`createObject(\"roProgramGuide\")`",
-            "events": [],
-            "interfaces": [
-                {
-                    "name": "ifProgramGuide",
-                    "url": "https://developer.roku.com/dev/docs/ifprogramguide"
-                }
-            ],
-            "name": "roProgramGuide",
-            "url": "https://developer.roku.com/dev/docs/roprogramguide"
         },
         "roregex": {
             "constructors": [
@@ -14835,85 +14735,6 @@
             "name": "ifProfile",
             "properties": [],
             "url": "https://developer.roku.com/dev/docs/ifprofile"
-        },
-        "ifprogramguide": {
-            "implementers": [
-                {
-                    "description": "Represents Electronic Program Guide (EPG) information from the tuner.",
-                    "name": "roProgramGuide",
-                    "url": "https://developer.roku.com/dev/docs/roprogramguide"
-                }
-            ],
-            "methods": [
-                {
-                    "description": "Returns the list of logical channel numbers on which the given program ID can be found.",
-                    "name": "GetChannels",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The program ID containing to be returned.",
-                            "isRequired": true,
-                            "name": "id",
-                            "type": "Integer"
-                        }
-                    ],
-                    "returnType": "object"
-                },
-                {
-                    "description": "Returns details about the current and next program on an app.",
-                    "name": "GetNowNextPrograms",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The app number for which programs are to be retrieved.",
-                            "isRequired": true,
-                            "name": "channel",
-                            "type": "String"
-                        }
-                    ],
-                    "returnDescription": "An roAssociativeArray containing two roArray components: one for the current program and another for the next program on the app. Each roArray contains the following key/value pairs detailing the program:",
-                    "returnType": "dynamic"
-                },
-                {
-                    "description": "Returns the programs falling within the given time range.",
-                    "name": "GetPrograms",
-                    "params": [
-                        {
-                            "default": null,
-                            "description": "The start time programs must fall within to be retrieved.",
-                            "isRequired": true,
-                            "name": "startTime",
-                            "type": "roDateTime"
-                        },
-                        {
-                            "default": null,
-                            "description": "The app number for which programs are to be retrieved.",
-                            "isRequired": true,
-                            "name": "channel",
-                            "type": "String"
-                        },
-                        {
-                            "default": null,
-                            "description": "The end time programs must fall within to be retrieved.",
-                            "isRequired": true,
-                            "name": "endTime",
-                            "type": "roDateTime"
-                        }
-                    ],
-                    "returnDescription": "An roArray of programs falling within the given time range (returns invalid if the given channel is unknown). Each entry in the array contains an roAssociativeArray containing the following details of a program:",
-                    "returnType": "Object"
-                },
-                {
-                    "description": "Returns an integer which is incremented each time the underlying data in the guide changes.",
-                    "name": "GetVersion",
-                    "params": [],
-                    "returnDescription": "The version number of the program guide.",
-                    "returnType": "integer"
-                }
-            ],
-            "name": "ifProgramGuide",
-            "properties": [],
-            "url": "https://developer.roku.com/dev/docs/ifprogramguide"
         },
         "ifregex": {
             "description": "> See the PCRE documentation ([http://www.pcre.org/](http://www.pcre.org/)) for documentation on the PCRE library used for regular expression matching. See the [Perlre main page](http://perldoc.perl.org/perlre.html \"Perlre main page\") for complete documentation of the possible regular expressions this library can parse and match. In general, most Perl compatible regular expressions are supported.",

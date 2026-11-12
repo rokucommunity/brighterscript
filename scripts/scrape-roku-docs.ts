@@ -86,9 +86,6 @@ class Runner {
         //include hand-written overrides that were missing from roku docs, or were wrong from roku docs.
         this.mergeOverrides();
 
-        //keep anything that disappeared from the docs, since the api probably still exists on device
-        this.mergePreviousData(previousData);
-
         //certain references are missing hyperlinks. this attempts to repair them
         this.repairReferences();
         this.linkMissingImplementers();
@@ -99,7 +96,10 @@ class Runner {
         //this.writeTypeDefinitions();
 
         //store the output (converting any old-style doc urls, such as the ones from the hand-written overrides, to the new format)
-        fsExtra.outputFileSync(outPath, normalizeDocUrl(JSON.stringify(this.result, objectKeySorter, 4)));
+        const output = normalizeDocUrl(JSON.stringify(this.result, objectKeySorter, 4));
+        fsExtra.outputFileSync(outPath, output);
+
+        printChangeSummary(previousData, JSON.parse(output));
     }
 
     /**
@@ -1023,34 +1023,6 @@ class Runner {
     }
 
     /**
-     * Roku sometimes removes docs (or the contents of a doc) for apis that still exist on device. Rather than
-     * start flagging those as errors in user code, carry the previously-scraped data forward:
-     * - entire components/interfaces/events/nodes that are no longer in the docs
-     * - node fields, when a node's doc no longer lists any fields at all
-     */
-    private mergePreviousData(previousData: Runner['result']) {
-        if (!previousData) {
-            return;
-        }
-        for (const key of ['components', 'interfaces', 'events', 'nodes'] as const) {
-            for (const name in previousData[key] ?? {}) {
-                if (!this.result[key][name]) {
-                    console.log(`Keeping previously-scraped ${key} '${name}' because it is no longer in the docs`);
-                    this.result[key][name] = previousData[key][name];
-                }
-            }
-        }
-        for (const name in this.result.nodes) {
-            const node = this.result.nodes[name];
-            const previousFields = previousData.nodes?.[name]?.fields ?? [];
-            if (node.fields?.length === 0 && previousFields.length > 0) {
-                console.log(`Keeping previously-scraped fields for node '${name}' because the docs no longer list any`);
-                node.fields = previousFields;
-            }
-        }
-    }
-
-    /**
      * Merge hand-written overrides to the Roku docs. This is for missing items or fixing incorrect info
      */
     private mergeOverrides() {
@@ -1788,6 +1760,74 @@ function fixMethod(iface: RokuInterface, funcName: string, mergeData: Func) {
     } else {
         console.error('Could not fix method', funcName);
     }
+}
+
+/**
+ * Log what was added, removed, or changed in data.json compared to the previous scrape
+ */
+function printChangeSummary(previousData: Record<string, any>, nextData: Record<string, any>) {
+    if (!previousData) {
+        return;
+    }
+    const lines = [] as string[];
+    for (const category of ['components', 'interfaces', 'events', 'nodes']) {
+        const previous = previousData[category] ?? {};
+        const next = nextData[category] ?? {};
+        const names = [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort();
+        const categoryLines = [] as string[];
+        for (const name of names) {
+            if (!previous[name]) {
+                categoryLines.push(`  + ${next[name].name ?? name}`);
+            } else if (!next[name]) {
+                categoryLines.push(`  - ${previous[name].name ?? name}`);
+            } else if (JSON.stringify(previous[name]) !== JSON.stringify(next[name])) {
+                categoryLines.push(`  ~ ${next[name].name ?? name}: ${getMemberChanges(previous[name], next[name]).join(', ')}`);
+            }
+        }
+        if (categoryLines.length > 0) {
+            lines.push(`${category}:`, ...categoryLines);
+        }
+    }
+    if (lines.length === 0) {
+        console.log('\nNo changes to data.json. If you expected changes, run `npm run rescrape-roku-docs` to fetch the latest docs.');
+    } else {
+        console.log('\nChanges to data.json:\n' + lines.join('\n'));
+    }
+}
+
+/**
+ * Describe how a component/interface/event/node changed. Lists of named items (methods, fields, etc) report which items were added, removed or changed
+ */
+function getMemberChanges(previous: Record<string, any>, next: Record<string, any>) {
+    const result = [] as string[];
+    const keys = [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort();
+    for (const key of keys) {
+        const previousValue = previous[key];
+        const nextValue = next[key];
+        if (JSON.stringify(previousValue) === JSON.stringify(nextValue)) {
+            continue;
+        }
+        const isNamedList = (value: any) => Array.isArray(value) && value.every(x => typeof x?.name === 'string');
+        if (isNamedList(previousValue ?? []) && isNamedList(nextValue ?? [])) {
+            const previousItems = new Map<string, any>((previousValue ?? []).map(x => [x.name, x]));
+            const nextItems = new Map<string, any>((nextValue ?? []).map(x => [x.name, x]));
+            for (const [name, item] of nextItems) {
+                if (!previousItems.has(name)) {
+                    result.push(`+${key}.${name}`);
+                } else if (JSON.stringify(previousItems.get(name)) !== JSON.stringify(item)) {
+                    result.push(`~${key}.${name}`);
+                }
+            }
+            for (const name of previousItems.keys()) {
+                if (!nextItems.has(name)) {
+                    result.push(`-${key}.${name}`);
+                }
+            }
+        } else {
+            result.push(`~${key}`);
+        }
+    }
+    return result;
 }
 
 const devDocRepoUrl = 'https://gitlab.com/rokudev/dev-doc.git';
