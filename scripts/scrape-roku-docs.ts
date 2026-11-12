@@ -304,8 +304,7 @@ class Runner {
         for (const name in componentDocs) {
             console.log(`Processing component ${i++} of ${count}`);
             const docPath = componentDocs[name];
-            const docApiUrl = docPath;
-            const manager = await new TokenManager().process(docApiUrl, name);
+            const manager = await new TokenManager().process(docPath, name);
 
             const component = {
                 name: manager.getHeading(1)?.text,
@@ -479,8 +478,7 @@ class Runner {
         for (const name in interfaceDocs) {
             console.log(`Processing interface ${i++} of ${count}`);
             const docPath = interfaceDocs[name];
-            const docApiUrl = docPath;
-            const manager = await new TokenManager().process(docApiUrl, name);
+            const manager = await new TokenManager().process(docPath, name);
 
             try {
 
@@ -504,7 +502,7 @@ class Runner {
 
                 this.result.interfaces[name?.toLowerCase()] = iface as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing interface ${docPath}`, e);
             }
         }
     }
@@ -516,8 +514,7 @@ class Runner {
         for (const name in eventDocs) {
             console.log(`Processing event ${i++} of ${count}`);
             const docPath = eventDocs[name];
-            const docApiUrl = docPath;
-            const manager = await new TokenManager().process(docApiUrl, name);
+            const manager = await new TokenManager().process(docPath, name);
 
             try {
                 const evt = {
@@ -540,7 +537,7 @@ class Runner {
 
                 this.result.events[name?.toLowerCase()] = evt as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing event ${docPath}`, e);
             }
         }
     }
@@ -575,8 +572,7 @@ class Runner {
             }
             console.log(`Processing node ${i} of ${docs.length}`);
 
-            const docApiUrl = doc.path;
-            const manager = await new TokenManager().process(docApiUrl, doc.name);
+            const manager = await new TokenManager().process(doc.path, doc.name);
 
             try {
 
@@ -606,7 +602,7 @@ class Runner {
 
                 this.result.nodes[node.name?.toLowerCase()] = node as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing node ${doc.path}`, e);
             }
         }
     }
