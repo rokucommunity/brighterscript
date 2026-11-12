@@ -36,6 +36,7 @@ import { InvalidType } from '../../types/InvalidType';
 import { VoidType } from '../../types/VoidType';
 import { LogLevel } from '../../Logger';
 import { Stopwatch } from '../../Stopwatch';
+import { performance } from 'perf_hooks';
 import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
 import type { EnumType } from '../../types/EnumType';
