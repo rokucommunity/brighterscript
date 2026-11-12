@@ -1837,7 +1837,8 @@ const docUrlBase = 'https://developer.roku.com/dev/docs/';
 /**
  * Make sure there's a local copy of the roku dev-doc repo (https://gitlab.com/rokudev/dev-doc), and return its path.
  * - `--docs-dir <path>` uses an existing checkout instead of cloning
- * - `--refresh` throws away the cached clone and fetches the latest docs
+ * - otherwise the cached clone in `scripts/.dev-doc` is updated to the latest docs
+ * - `--refresh` throws away the cached clone and re-clones it
  */
 function ensureDocsRepo() {
     const args = process.argv.slice(2);
@@ -1867,7 +1868,15 @@ function ensureDocsRepo() {
             throw new Error(`Unable to clone ${devDocRepoUrl}. Check your network connection, or pass --docs-dir <path> to use an existing checkout of the roku dev-doc repo.\n${e?.message}`);
         }
     } else {
-        console.log(`Using cached docs from ${docsDir} (run with --refresh to fetch the latest)`);
+        //pull the latest docs into the cached clone
+        console.log(`Updating cached docs in ${docsDir}`);
+        try {
+            const run = (command: string) => execSync(command, { cwd: docsDir, stdio: 'inherit' });
+            run(`git fetch --depth 1 origin ${devDocBranch}`);
+            run('git reset --hard FETCH_HEAD');
+        } catch (e) {
+            console.warn(`Unable to update the cached docs, so using them as-is (run with --refresh to re-clone).\n${e?.message}`);
+        }
     }
     const commit = execSync('git rev-parse HEAD', { cwd: docsDir }).toString().trim();
     console.log(`Using dev-doc commit ${commit}`);
@@ -1951,7 +1960,8 @@ function getDocTitle(filePath: string, frontmatter: Record<string, string>, prop
     const slug = getDocSlug(filePath);
     let title = frontmatter.title?.trim();
     //brightscript components, interfaces and events always start with a lower case `ro` or `if`
-    if (/^(Ro|If)[A-Z]/.test(title) || /^(Ro|If)[a-z]+$/.test(title)) {
+    const isBrightScriptDoc = /\/brightscript\//i.test(filePath.replace(/\\/g, '/'));
+    if (isBrightScriptDoc && (/^(Ro|If)[A-Z]/.test(title) || /^(Ro|If)[a-z]+$/.test(title))) {
         title = title.charAt(0).toLowerCase() + title.substring(1);
     }
     const titleMatchesSlug = title?.toLowerCase().replace(/\s+/g, '') === slug.replace(/-/g, '');
@@ -2277,9 +2287,21 @@ class TokenManager {
                 }
                 //some docs just have a paragraph with one or more links instead of a list
             } else if (list?.type === 'paragraph') {
-                for (const link of (list.tokens ?? []).filter(x => x.type === 'link') as marked.Tokens.Link[]) {
+                //links can be nested inside bold/italic tokens
+                const links = [] as marked.Tokens.Link[];
+                const collectLinks = (tokens: Token[]) => {
+                    for (const token of tokens ?? []) {
+                        if (token.type === 'link') {
+                            links.push(token as marked.Tokens.Link);
+                        } else {
+                            collectLinks((token as any).tokens);
+                        }
+                    }
+                };
+                collectLinks(list.tokens);
+                for (const link of links) {
                     result.push({
-                        name: link.text?.replace(/^\*\*/, '').replace(/\*\*$/, ''),
+                        name: link.text?.replace(/^[*_]+|[*_]+$/g, ''),
                         url: getDocUrl(link.href)
                     });
                 }
