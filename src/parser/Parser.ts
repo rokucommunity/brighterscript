@@ -969,7 +969,6 @@ export class Parser {
                 functionType = new TokenObject(
                     TokenKind.Function,
                     'function',
-                    true,
                     this.peek().startPosition,
                     this.peek().endPosition,
                     this.peek().sourceInfo,

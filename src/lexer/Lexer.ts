@@ -1,5 +1,5 @@
 /* eslint-disable func-names */
-import { TokenKind, ReservedTokenKinds, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
+import { TokenKind, Keywords, PreceedingRegexTypes, AllowedTriviaTokens, FixedTokenText, LexerTextCache, LEXER_TEXT_CACHE_MAX_ENTRIES } from './TokenKind';
 import type { Locatable, SourceInfo, Token } from './Token';
 import { isAlpha, isDecimalDigit, isAlphaNumeric, isHexDigit } from './Characters';
 import { DiagnosticMessages } from '../DiagnosticMessages';
@@ -97,7 +97,6 @@ export class Lexer {
         this.tokens.push(new TokenObject(
             TokenKind.Eof,
             '',
-            false,
             this.current,
             this.current + 1,
             this.sourceInfo,
@@ -1188,7 +1187,6 @@ export class Lexer {
         let token: Token = new TokenObject(
             kind,
             text,
-            ReservedTokenKinds.has(kind),
             this.start,
             this.current,
             this.sourceInfo,

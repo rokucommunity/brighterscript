@@ -1,5 +1,5 @@
 import type { Token } from '../../lexer/Token';
-import { TokenKind, ReservedWords } from '../../lexer/TokenKind';
+import { TokenKind } from '../../lexer/TokenKind';
 
 /* A set of utilities to be used while writing tests for the BRS parser. */
 
@@ -10,7 +10,6 @@ export function token(kind: TokenKind, text?: string): Token {
     return {
         kind: kind,
         text: text!,
-        isReserved: ReservedWords.has((text ?? '').toLowerCase()),
         startPosition: undefined,
         endPosition: undefined,
         sourceInfo: undefined,

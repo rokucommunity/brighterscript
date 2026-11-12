@@ -67,98 +67,84 @@ describe('parser primary expressions', () => {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '5',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 5, 0, 6)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(1, 2, 1, 3)
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(1, 4, 1, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(1, 9, 1, 10)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'c',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 6, 2, 7)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 8, 2, 9)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(1, 9, 1, 10) //TODO are these numbers right?
             }
         ]);

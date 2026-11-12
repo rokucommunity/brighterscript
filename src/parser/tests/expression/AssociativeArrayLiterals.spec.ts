@@ -340,91 +340,78 @@ describe('parser associative array literals', () => {
                 kind: TokenKind.Identifier,
                 text: 'a',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 4, 0, 5)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 8, 0, 9)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 9, 0, 10)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(1, 0, 1, 1)
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'b',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 0, 2, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 2, 2, 3)
             },
             {
                 kind: TokenKind.LeftCurlyBrace,
                 text: '{',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 4, 2, 5)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(3, 0, 3, 1)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(4, 0, 4, 1)
             },
             {
                 kind: TokenKind.RightCurlyBrace,
                 text: '}',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(5, 0, 5, 1)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(5, 1, 5, 2)
             }
         ]);

@@ -82,35 +82,30 @@ describe('parser prefix unary expressions', () => {
                 kind: TokenKind.Identifier,
                 text: '_false',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 6)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 7, 0, 8)
             },
             {
                 kind: TokenKind.Not,
                 text: 'not',
                 leadingTrivia: [],
-                isReserved: true,
                 ...testLocatable(0, 9, 0, 12)
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
                 leadingTrivia: [],
-                isReserved: true,
                 ...testLocatable(0, 13, 0, 17)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 17, 0, 18)
             }
         ]);

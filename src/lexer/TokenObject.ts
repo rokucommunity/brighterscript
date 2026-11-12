@@ -11,7 +11,6 @@ export class TokenObject implements Token {
     constructor(
         public kind: TokenKind,
         public text: string,
-        public isReserved: boolean,
         public startPosition: number,
         public endPosition: number,
         public sourceInfo: SourceInfo | undefined,
