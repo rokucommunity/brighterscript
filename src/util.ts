@@ -1334,7 +1334,6 @@ export class Util {
             const result = new TokenObject(
                 token.kind,
                 token.text,
-                token.isReserved,
                 token.startPosition,
                 token.endPosition,
                 token.sourceInfo,
@@ -3370,7 +3369,7 @@ export class Util {
                 type: funcType,
                 data: options.data,
                 locatable: methodNameToken,
-                separatorToken: createToken(TokenKind.Callfunc),
+                separatorToken: createToken(isCallfuncExpression(callExpr) && callExpr.tokens.operator?.kind === TokenKind.QuestionCallfunc ? TokenKind.QuestionCallfunc : TokenKind.Callfunc),
                 astNode: callExpr
             }));
             if (options.ignoreCall) {

@@ -108,49 +108,42 @@ describe('parser for loops', () => {
             {
                 kind: TokenKind.For,
                 text: 'for',
-                isReserved: true,
                 ...testLocatable(0, 0, 0, 3),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Identifier,
                 text: 'i',
-                isReserved: false,
                 ...testLocatable(0, 4, 0, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
-                isReserved: false,
                 ...testLocatable(0, 6, 0, 7),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '0',
-                isReserved: false,
                 ...testLocatable(0, 8, 0, 9),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.To,
                 text: 'to',
-                isReserved: false,
                 ...testLocatable(0, 10, 0, 12),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.IntegerLiteral,
                 text: '10',
-                isReserved: false,
                 ...testLocatable(0, 13, 0, 15),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
-                isReserved: false,
                 ...testLocatable(0, 15, 0, 16),
                 leadingTrivia: []
             },
@@ -163,7 +156,6 @@ describe('parser for loops', () => {
             {
                 kind: TokenKind.EndFor,
                 text: 'end for',
-                isReserved: false,
                 ...testLocatable(2, 0, 2, 8),
                 leadingTrivia: []
             },

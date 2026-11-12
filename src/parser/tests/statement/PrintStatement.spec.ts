@@ -399,21 +399,18 @@ describe('parser print statements', () => {
             {
                 kind: TokenKind.Print,
                 text: 'print',
-                isReserved: true,
                 ...testLocatable(0, 0, 0, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.StringLiteral,
                 text: `"foo"`,
-                isReserved: false,
                 ...testLocatable(0, 6, 0, 11),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
-                isReserved: false,
                 ...testLocatable(0, 11, 0, 12),
                 leadingTrivia: []
             }
