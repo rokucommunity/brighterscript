@@ -24,6 +24,34 @@ const builtInSymbolData: ExtraSymbolData = {
     isBuiltIn: true
 };
 
+/**
+ * Get the lookup table of the most recently created program
+ */
+function currentLookupTable() {
+    return BuiltInInterfaceAdder.getLookupTable?.();
+}
+
+/**
+ * The global symbol table providers of the programs that are still alive, oldest first (see `BuiltInInterfaceAdder.addLookupTableProvider`).
+ * Held weakly, so a program that is never disposed can still be garbage collected
+ */
+let lookupTableProviders: Array<WeakRef<() => SymbolTable>> = [];
+
+/**
+ * Get the lookup table of the most recently registered program that is still alive
+ */
+function latestLookupTable(): SymbolTable | undefined {
+    for (let i = lookupTableProviders.length - 1; i >= 0; i--) {
+        const provider = lookupTableProviders[i].deref();
+        if (provider) {
+            return provider();
+        }
+        //that program was garbage collected without being disposed
+        lookupTableProviders.splice(i, 1);
+    }
+    return undefined;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class BuiltInInterfaceAdder {
 
@@ -34,6 +62,28 @@ export class BuiltInInterfaceAdder {
     static unionTypeFactory: (types: BscType[]) => UnionType;
 
     static getLookupTable: () => SymbolTable;
+
+    /**
+     * Use this table for built-in type lookups until it's removed with `removeLookupTableProvider` (or its program is garbage collected).
+     * When several are registered, the most recent one is used.
+     * The provider is only held weakly, so the caller must keep its own reference to it for as long as it should be used
+     */
+    static addLookupTableProvider(provider: () => SymbolTable) {
+        //drop the entries for programs that were garbage collected without being disposed
+        lookupTableProviders = lookupTableProviders.filter(ref => ref.deref());
+        lookupTableProviders.push(new WeakRef(provider));
+        this.getLookupTable = latestLookupTable;
+    }
+
+    /**
+     * Stop using this table for built-in type lookups (i.e. its program was disposed). Lookups go back to the most recent remaining one
+     */
+    static removeLookupTableProvider(provider: () => SymbolTable) {
+        lookupTableProviders = lookupTableProviders.filter(ref => {
+            const existing = ref.deref();
+            return existing && existing !== provider;
+        });
+    }
 
     static addBuiltInInterfacesToType(thisType: BscType, overrides?: Map<string, BuiltInInterfaceOverride>) {
         const builtInMemberTable = thisType.getBuiltInMemberTable();
@@ -144,7 +194,9 @@ export class BuiltInInterfaceAdder {
             if (!this.getLookupTable) {
                 throw new Error(`Unable to find type instance '${typeName}'`);
             }
-            return this.getLookupTable()?.getSymbolType(typeName, { flags: SymbolTypeFlag.typetime, fullName: typeName, tableProvider: this.getLookupTable });
+            //the types built here are cached across every program (see `builtInMethodCache`), so the provider must look up the current
+            //program's table each time instead of holding onto this one's (which would also keep this whole program in memory)
+            return this.getLookupTable()?.getSymbolType(typeName, { flags: SymbolTypeFlag.typetime, fullName: typeName, tableProvider: currentLookupTable });
         }
 
         return returnType;

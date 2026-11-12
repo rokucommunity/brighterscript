@@ -232,7 +232,7 @@ export class Program {
         this.globalScope.symbolTable.addSymbol('string', builtInSymbolData, StringType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('void', builtInSymbolData, VoidType.instance, SymbolTypeFlag.typetime);
 
-        BuiltInInterfaceAdder.getLookupTable = () => this.globalScope.symbolTable;
+        BuiltInInterfaceAdder.addLookupTableProvider(this.builtInLookupTableProvider);
 
         for (const callable of globalCallables) {
             this.globalScope.symbolTable.addSymbol(callable.name, { ...builtInSymbolData, description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
@@ -291,6 +291,12 @@ export class Program {
      * All scopes should directly or indirectly inherit from this scope
      */
     public globalScope: Scope = undefined as any;
+
+    /**
+     * Gives built-in types access to this program's global symbol table. `BuiltInInterfaceAdder` only holds it weakly,
+     * so it's kept here to stay usable for as long as this program is alive
+     */
+    private builtInLookupTableProvider = () => this.globalScope.symbolTable;
 
     /**
      * Plugins which can provide extra diagnostics or transform AST
@@ -1518,16 +1524,33 @@ export class Program {
                 const didComponentChange = changedComponentTypes.length > 0;
                 const didProvidedSymbolChange = changedSymbols.get(SymbolTypeFlag.runtime).size > 0 || changedSymbols.get(SymbolTypeFlag.typetime).size > 0;
                 const scopesToCheck = this.getScopesForCrossScopeValidation(didComponentChange, didProvidedSymbolChange);
+                const filesToRevalidate = this.isFirstValidation ? new Set<BscFile>() : this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
 
                 this.crossScopeValidation.buildComponentsMap();
                 this.logger.time(LogLevel.info, ['addDiagnosticsForScopes'], () => {
-                    this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
-                });
-                if (!this.isFirstValidation) {
-                    const filesToRevalidate = this.crossScopeValidation.getFilesRequiringChangedSymbol(scopesToCheck, changedSymbols);
-                    for (const file of filesToRevalidate) {
-                        filesToBeValidatedInScopeContext.add(file);
+                    if (this.isFirstValidation || didComponentChange) {
+                        if (scopesToCheck.length > 0) {
+                            this.crossScopeValidation.addDiagnosticsForScopes(scopesToCheck);
+                        }
+                        return;
                     }
+                    //only the changed files, and the files that use a changed symbol, can have different cross-scope results.
+                    //Changing a file clears all of its diagnostics (including cross-scope ones), so it's rechecked in every scope it's in
+                    const filesToCheck = new Set([...filesToBeValidatedInScopeContext, ...filesToRevalidate]);
+                    const scopes = new Set(scopesToCheck);
+                    for (const file of filesToBeValidatedInScopeContext) {
+                        for (const scope of this.getScopesForFile(file)) {
+                            if (scope !== this.globalScope) {
+                                scopes.add(scope);
+                            }
+                        }
+                    }
+                    if (scopes.size > 0) {
+                        this.crossScopeValidation.addDiagnosticsForScopes([...scopes], filesToCheck, didProvidedSymbolChange);
+                    }
+                });
+                for (const file of filesToRevalidate) {
+                    filesToBeValidatedInScopeContext.add(file);
                 }
 
                 this.currentScopeValidationOptions = {
@@ -1645,10 +1668,10 @@ export class Program {
             if (this.globalScope === scope) {
                 continue;
             }
-            if (someComponentTypeChanged) {
-                scopesForCrossScopeValidation.push(scope);
-            }
-            if (didProvidedSymbolChange && !scope.isValidated) {
+            if (
+                someComponentTypeChanged ||
+                (didProvidedSymbolChange && !scope.isValidated)
+            ) {
                 scopesForCrossScopeValidation.push(scope);
             }
         }
@@ -2781,6 +2804,7 @@ export class Program {
 
     public dispose() {
         this.plugins.emit('beforeRemoveProgram', { program: this });
+        BuiltInInterfaceAdder.removeLookupTableProvider(this.builtInLookupTableProvider);
 
         for (let filePath in this.files) {
             this.files[filePath]?.dispose?.();
