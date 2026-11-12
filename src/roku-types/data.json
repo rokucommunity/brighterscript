@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2026-11-12T14:43:01.322Z",
+    "generatedDate": "2026-11-12T15:02:19.771Z",
     "nodes": {
         "animatedimage": {
             "description": "Extends [**Group**](https://developer.roku.com/dev/docs/group)\n\nThe AnimatedImage node enables developers to render animated GIFs, stickers, and small videos. It is designed for low-frame-rate, simple animations that reside in a small area.\n\nOnly use a single, small animated image at a time to minimize CPU load and memory usage (large animations may consume CPU and memory resources; using too many animated images may cause choppy animations).\n\nThe AnimatedImage downloads the entire resource before decoding. Playback begins only after the download hasbeen completed.\n\n> \\[!NOTE\\] This node is not supported on older Roku device models (Liberty, Littlefield, Austin, Briscoe, Ft. Worth, Gilbert, Amarillo).",
@@ -62,11 +62,11 @@
             "url": "https://developer.roku.com/dev/docs/animation"
         },
         "animationbase": {
-            "description": "Extends [**Node**](docs:node)\n\nAnimationBase is an abstract node class that contains the fields common to the [Animation](https://developer.roku.com/dev/docs/animation), [SequentialAnimation](https://developer.roku.com/dev/docs/sequentialanimation), and [ParallelAnimation](https://developer.roku.com/dev/docs/parallelanimation) nodes. The purpose of the AnimationBase node class is to provide the basic functionality needed to animate screen elements, such as moving them across the display screen, fading them in and out of view, or changing their color. All node classes extended from AnimationBase require the use of the interpolator node classes [FloatFieldInterpolator](https://developer.roku.com/dev/docs/floatfieldinterpolator), [Vector2DFieldInterpolator](https://developer.roku.com/dev/docs/vector2dfieldinterpolator), and [ColorFieldInterpolator](https://developer.roku.com/dev/docs/colorfieldinterpolator) as child nodes to achieve a specific animation effect.\n\n> AnimationBase is not meant to be instantiated directly by app code",
+            "description": "Extends [**Node**](https://developer.roku.com/dev/docs/node)\n\nAnimationBase is an abstract node class that contains the fields common to the [Animation](https://developer.roku.com/dev/docs/animation), [SequentialAnimation](https://developer.roku.com/dev/docs/sequentialanimation), and [ParallelAnimation](https://developer.roku.com/dev/docs/parallelanimation) nodes. The purpose of the AnimationBase node class is to provide the basic functionality needed to animate screen elements, such as moving them across the display screen, fading them in and out of view, or changing their color. All node classes extended from AnimationBase require the use of the interpolator node classes [FloatFieldInterpolator](https://developer.roku.com/dev/docs/floatfieldinterpolator), [Vector2DFieldInterpolator](https://developer.roku.com/dev/docs/vector2dfieldinterpolator), and [ColorFieldInterpolator](https://developer.roku.com/dev/docs/colorfieldinterpolator) as child nodes to achieve a specific animation effect.\n\n> AnimationBase is not meant to be instantiated directly by app code",
             "events": [],
             "extends": {
                 "name": "Node",
-                "url": "docs:node"
+                "url": "https://developer.roku.com/dev/docs/node"
             },
             "fields": [
                 {
@@ -951,11 +951,11 @@
             "url": "https://developer.roku.com/dev/docs/buttongroup"
         },
         "channelstore": {
-            "description": "Extends [**Node**](/dev/docs/node)\n\nThe **ChannelStore** node class provides an interface to the Streaming Store. It provides functionality equivalent to the [roChannelStore](https://developer.roku.com/dev/docs/ifchannelstore) component. In general, the **ChannelStore** node class allows developers to issue one of several commands, which involves the following steps:\n\n1.  Set the fields containing the data needed by the command (optional).\n2.  Set up an observer of the result field associated with the command.\n3.  Set the command field to the appropriate string to start the command execution.\n4.  The field associated with the command is set to a **ContentNode** object containing the results of the command.\n\nEach of the commands starts a sequence of actions associated with the financial transaction that are handled by the Roku OS outside of control or monitoring by the app SceneGraph markup. The SceneGraph markup merely initiates the purchase and receives a final result.",
+            "description": "Extends [**Node**](https://developer.roku.com/dev/docs/node)\n\nThe **ChannelStore** node class provides an interface to the Streaming Store. It provides functionality equivalent to the [roChannelStore](https://developer.roku.com/dev/docs/ifchannelstore) component. In general, the **ChannelStore** node class allows developers to issue one of several commands, which involves the following steps:\n\n1.  Set the fields containing the data needed by the command (optional).\n2.  Set up an observer of the result field associated with the command.\n3.  Set the command field to the appropriate string to start the command execution.\n4.  The field associated with the command is set to a **ContentNode** object containing the results of the command.\n\nEach of the commands starts a sequence of actions associated with the financial transaction that are handled by the Roku OS outside of control or monitoring by the app SceneGraph markup. The SceneGraph markup merely initiates the purchase and receives a final result.",
             "events": [],
             "extends": {
                 "name": "Node",
-                "url": "/dev/docs/node"
+                "url": "https://developer.roku.com/dev/docs/node"
             },
             "fields": [
                 {
@@ -9613,7 +9613,7 @@
                     "description": "Returns the message port currently set on the animated image.",
                     "name": "GetMessagePort",
                     "params": [],
-                    "returnDescription": "The current message port (\\[roMessagePort\\](doc: romessageport)) ).",
+                    "returnDescription": "The current message port ([roMessagePort](https://developer.roku.com/dev/docs/romessageport)) ).",
                     "returnType": "object"
                 },
                 {
@@ -9671,7 +9671,7 @@
                     "params": [
                         {
                             "default": null,
-                            "description": "The message port (\\[roMessagePort\\](doc: romessageport)) for asynchronous events.",
+                            "description": "The message port ([roMessagePort](https://developer.roku.com/dev/docs/romessageport)) for asynchronous events.",
                             "isRequired": true,
                             "name": "port",
                             "type": "Object"
@@ -9970,22 +9970,22 @@
                 {
                     "description": "An array stores an indexed collection of BrightScript objects. Each entry of an array can be a different type, or they may all of the same type",
                     "name": "roArray",
-                    "url": "/dev/docs/roarray"
+                    "url": "https://developer.roku.com/dev/docs/roarray"
                 },
                 {
                     "description": "The byte array component is used to contain and manipulate an arbitrary array of bytes",
                     "name": "roByteArray",
-                    "url": "/dev/docs/robytearray"
+                    "url": "https://developer.roku.com/dev/docs/robytearray"
                 },
                 {
                     "description": "The list object implements the interfaces: ifList, ifArray, ifEnum and therefore can behave like an array that can dynamically add members",
                     "name": "roList",
-                    "url": "/dev/docs/rolist"
+                    "url": "https://developer.roku.com/dev/docs/rolist"
                 },
                 {
                     "description": "Contains a list of roXML objects",
                     "name": "roXMLList",
-                    "url": "/dev/docs/roxmllist"
+                    "url": "https://developer.roku.com/dev/docs/roxmllist"
                 }
             ],
             "methods": [

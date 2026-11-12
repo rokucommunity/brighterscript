@@ -1954,9 +1954,9 @@ function normalizeDevDocMarkdown(markdown: string) {
         .replace(/<(\/?)Table>/g, '<$1table>')
         //jsx style attributes
         .replace(/\s*style=\{\{[^}]*\}\}/g, '')
-        //doc links
-        .replace(/\(doc:([\w-]+)/g, `(${docUrlBase}$1`)
-        .replace(/href="doc:([\w-]+)/g, `href="${docUrlBase}$1`);
+        //doc links (`doc:slug`, plus the occasional `docs:slug` typo and site-relative `/dev/docs/slug`)
+        .replace(/\((?:docs?:\s*|\/dev\/docs\/)([\w-]+)/g, `(${docUrlBase}$1`)
+        .replace(/href="(?:docs?:\s*|\/dev\/docs\/)([\w-]+)/g, `href="${docUrlBase}$1`);
 }
 
 /**
@@ -1966,8 +1966,9 @@ function getDocUrl(docPath: string) {
     if (!docPath) {
         return undefined;
     }
-    if (docPath.startsWith('doc:')) {
-        return docUrlBase + docPath.substring(4);
+    const relativeMatch = /^(?:docs?:\s*|\/dev\/docs\/)(.*)$/.exec(docPath);
+    if (relativeMatch) {
+        return docUrlBase + relativeMatch[1];
     }
     if (/^https?:/.test(docPath)) {
         return normalizeDocUrl(docPath);
