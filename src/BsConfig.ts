@@ -1,4 +1,7 @@
+import type { DiagnosticSeverity } from 'vscode-languageserver-protocol';
 import type { LogLevel } from './logging';
+
+export type BsDiagnosticSeverity = 'error' | 'warn' | 'info' | 'hint' | DiagnosticSeverity;
 
 export interface BsConfig {
     /**
@@ -118,7 +121,15 @@ export interface BsConfig {
     /**
      * A list of filters used to exclude diagnostics from the output
      */
-    diagnosticFilters?: Array<string | number | { files?: string | Array<string | { src: string } | { dest: string }>; codes?: Array<number | string> }>;
+    diagnosticFilters?: Array<
+    | string
+    | number
+    | {
+        files?: string | Array<string | { src: string } | { dest: string }>;
+        codes?: Array<number | string>;
+        minSeverity?: BsDiagnosticSeverity;
+    }
+    >;
 
     /**
      * Use the deprecated diagnosticFilters format from v0. This is useful for backwards compatibility.

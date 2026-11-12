@@ -23,6 +23,7 @@ import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
 import type { FunctionExpression } from '../../parser/Expression';
 import { LogLevel } from '../../Logger';
+import { createExtraSymbolData } from '../../interfaces';
 
 const SCOPES_FOR_COMPLETION = 3;
 
@@ -178,7 +179,7 @@ export class CompletionsProcessor {
     public getBrsFileCompletions(position: Position, file: BrsFile, scopesToProcess: Scope[]): { global: CompletionItem[]; scoped: CompletionItem[] } {
         let result = [] as CompletionItem[];
         const currentTokenByFilePosition = file.getTokenAt(position);
-        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(file.getClosestExpression(position)?.location?.range.start);
+        const currentToken = currentTokenByFilePosition ?? file.getTokenAt(util.getLocation(file.getClosestExpression(position))?.range.start);
 
         const emptyResult = { global: [], scoped: [] };
 
@@ -206,14 +207,14 @@ export class CompletionsProcessor {
         if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Dot)) {
             const dotToken = this.getAdjacentToken(file, currentToken, TokenKind.Dot);
             beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+            expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForMembers = true;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc) || this.isTokenAdjacentTo(file, currentToken, TokenKind.QuestionCallfunc)) {
             //`@.` or its optional chaining form `?@.`
             const callfuncKind = this.isTokenAdjacentTo(file, currentToken, TokenKind.Callfunc) ? TokenKind.Callfunc : TokenKind.QuestionCallfunc;
             const dotToken = this.getAdjacentToken(file, currentToken, callfuncKind);
             beforeDotToken = file.getTokenBefore(dotToken);
-            expression = file.getClosestExpression(beforeDotToken?.location?.range.end);
+            expression = file.getClosestExpression(util.getLocation(beforeDotToken)?.range.end);
             shouldLookForCallFuncMembers = true;
         } else if (this.isTokenAdjacentTo(file, currentToken, TokenKind.As)) {
             if (file.parseMode === ParseMode.BrightScript) {
@@ -241,7 +242,7 @@ export class CompletionsProcessor {
             return emptyResult;
         }
 
-        const tokenBefore = file.getTokenBefore(file.getClosestToken(expression.location?.range?.start));
+        const tokenBefore = file.getTokenBefore(file.getClosestToken(util.getLocation(expression)?.range?.start));
 
         // helper to check get correct symbol tables for look ups
         function getSymbolTableForLookups() {
@@ -545,12 +546,12 @@ export class CompletionsProcessor {
                     label: pkgPath,
                     textEdit: TextEdit.replace(
                         util.createRange(
-                            currentToken.location?.range.start.line,
+                            util.getLocation(currentToken)?.range.start.line,
                             //+1 to step past the opening quote
-                            currentToken.location?.range.start.character + (openingQuote ? 1 : 0),
-                            currentToken.location?.range.end.line,
+                            util.getLocation(currentToken)?.range.start.character + (openingQuote ? 1 : 0),
+                            util.getLocation(currentToken)?.range.end.line,
                             //-1 to exclude the closing quotemark (or the end character if there is no closing quotemark)
-                            currentToken.location?.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
+                            util.getLocation(currentToken)?.range.end.character + (currentToken.text.endsWith('"') ? -1 : 0)
                         ),
                         pkgPath
                     ),
@@ -631,19 +632,19 @@ export class CompletionsProcessor {
                 name: 'true',
                 type: BooleanType.instance,
                 flags: SymbolTypeFlag.runtime,
-                data: {}
+                data: createExtraSymbolData()
             },
             {
                 name: 'false',
                 type: BooleanType.instance,
                 flags: SymbolTypeFlag.runtime,
-                data: {}
+                data: createExtraSymbolData()
             },
             {
                 name: 'invalid',
                 type: InvalidType.instance,
                 flags: SymbolTypeFlag.runtime,
-                data: {}
+                data: createExtraSymbolData()
             }
         ];
     }
@@ -658,9 +659,9 @@ export class CompletionsProcessor {
             return true;
         }
 
-        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
+        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.has(t.kind), 1);
         const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
-        if (firstComment && util.comparePosition(position, firstComment?.location?.range.start) >= 0) {
+        if (firstComment && util.comparePosition(position, util.getLocation(firstComment)?.range.start) >= 0) {
             return true;
         }
         return false;
@@ -695,7 +696,7 @@ export const KeywordCompletions = Object.keys(Keywords)
  * List of completions for all valid intrinsic types.
  * Build this list once because it won't change for the lifetime of this process
  */
-export const NativeTypeCompletions = DeclarableTypes
+export const NativeTypeCompletions = [...DeclarableTypes]
     //create completions
     .map(x => {
         return {

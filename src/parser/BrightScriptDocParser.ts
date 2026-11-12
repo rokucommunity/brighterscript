@@ -64,7 +64,7 @@ export class BrightScriptDocParser {
                     lastTag.detail = lastTag.detail.trim();
                 }
                 if (haveMatchingTokens) {
-                    lastTag.location = util.createBoundingLocation(lastTag.location, blockLines[blockLines.length - 1].token.location);
+                    lastTag.location = util.createBoundingLocation(lastTag.location, util.getLocation(blockLines[blockLines.length - 1].token));
                 }
             }
             blockLines.length = 0;
@@ -99,7 +99,8 @@ export class BrightScriptDocParser {
     }
 
     public getTypeLocationFromToken(token: Token): Location {
-        if (!token?.location) {
+        const location = util.getLocation(token);
+        if (!location) {
             return undefined;
         }
         const startCurly = token.text.indexOf('{');
@@ -107,16 +108,17 @@ export class BrightScriptDocParser {
         if (startCurly === -1 || endCurly === -1 || endCurly <= startCurly) {
             return undefined;
         }
+        const start = location.range.start;
         return {
-            uri: token.location.uri,
+            uri: location.uri,
             range: {
                 start: {
-                    line: token.location.range.start.line,
-                    character: token.location.range.start.character + startCurly + 1
+                    line: start.line,
+                    character: start.character + startCurly + 1
                 },
                 end: {
-                    line: token.location.range.start.line,
-                    character: token.location.range.start.character + endCurly
+                    line: start.line,
+                    character: start.character + endCurly
                 }
             }
         };
@@ -151,7 +153,7 @@ export class BrightScriptDocParser {
         return {
             ...result,
             token: token,
-            location: token?.location
+            location: util.getLocation(token)
         };
     }
 

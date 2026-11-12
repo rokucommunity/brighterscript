@@ -68,7 +68,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'missing-name-attribute'
     }),
-    xmlComponentMissingExtendsAttribute: () => ({
+    __unused45: () => ({
         message: `Component is mising "extends" attribute and will automatically extend "Group" by default`,
         legacyCode: 1007,
         severity: DiagnosticSeverity.Warning,
@@ -81,7 +81,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'syntax-error'
     }),
-    unnecessaryScriptImportInChildFromParent: (parentComponentName: string) => ({
+    __unused46: (parentComponentName: string) => ({
         message: `Unnecessary script import: Script is already imported in ancestor component '${parentComponentName}'.`,
         legacyCode: 1009,
         severity: DiagnosticSeverity.Warning,
@@ -742,7 +742,7 @@ export let DiagnosticMessages = {
         severity: DiagnosticSeverity.Error,
         code: 'local-var-same-name-as-class'
     }),
-    unnecessaryCodebehindScriptImport: () => ({
+    __unused47: () => ({
         message: `This import is unnecessary because compiler option 'autoImportComponentScript' is enabled`,
         legacyCode: 1107,
         severity: DiagnosticSeverity.Warning,
@@ -1394,6 +1394,10 @@ export let DiagnosticMessages = {
      */
     typeDesignatorMismatch: (paramName: string, designatorType: string, declaredType: string) => ({
         message: `Parameter '${paramName}' is declared 'as ${declaredType}', but its type designator makes it '${designatorType}'. Use 'as ${designatorType}' or remove the type designator`,
+        data: {
+            designatorType: designatorType,
+            declaredType: declaredType
+        },
         severity: DiagnosticSeverity.Error,
         code: 'type-designator-mismatch'
     }),
@@ -1401,6 +1405,15 @@ export let DiagnosticMessages = {
         message: `Function has ${count} labels used by goto, max is ${max}.`,
         severity: DiagnosticSeverity.Error,
         code: 'exceeds-max-goto-label-count'
+    }),
+    /**
+     * Assigning to a member of an associative array read from a node field. Reading the field returns a copy, so the assignment is discarded
+     * @param fieldName the name of the node field (i.e. `metadata`)
+     */
+    nodeFieldAssociativeArrayMemberAssignmentHasNoEffect: (fieldName: string) => ({
+        message: `Assignment has no effect: '${fieldName}' is an associative array field on a node, and reading it returns a copy. Read it into a local variable, modify it, then assign it back to the node`,
+        severity: DiagnosticSeverity.Warning,
+        code: 'node-field-aa-member-assignment-no-effect'
     })
 };
 export const defaultMaximumTruncationLength = 160;

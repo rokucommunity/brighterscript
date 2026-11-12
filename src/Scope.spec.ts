@@ -3069,7 +3069,7 @@ describe('Scope', () => {
                         end function
                     end namespace
                 `);
-                //BrsFileValidator populates each body's symbolTable during validate; the
+                //BrsFileLinker populates each body's symbolTable during validate; the
                 //namespace contribution's symbolTable is built from those bodies.
                 program.validate();
                 const lib = program['scopes']['source'].buildNamespaceLookup().get('lib');
@@ -6282,24 +6282,24 @@ describe('Scope', () => {
             // Namespace types exist at file level, and will not change
             let symbolTables = getSymbolTableList();
 
-            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
-            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.statements.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(1, `${x.name} has wrong number of siblings`));
 
             scope.unlinkSymbolTable();
-            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
-            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.statements.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(0, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(1, `${x.name} has wrong number of siblings`));
 
             //do it again, make sure we don't end up with additional siblings
             scope.linkSymbolTable();
 
             // get the member tables again, as the types were re-created
             symbolTables = getSymbolTableList();
-            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
-            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.statements.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(1, `${x.name} has wrong number of siblings`));
 
             scope.unlinkSymbolTable();
-            symbolTables.statements.forEach(x => expect(x['siblings'].size).to.eql(0, `${x.name} has wrong number of siblings`));
-            symbolTables.types.forEach(x => expect(x['siblings'].size).to.eql(1, `${x.name} has wrong number of siblings`));
+            symbolTables.statements.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(0, `${x.name} has wrong number of siblings`));
+            symbolTables.types.forEach(x => expect((x['siblings']?.size ?? 0)).to.eql(1, `${x.name} has wrong number of siblings`));
         });
     });
 
