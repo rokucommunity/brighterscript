@@ -3369,7 +3369,7 @@ export class Util {
                 type: funcType,
                 data: options.data,
                 locatable: methodNameToken,
-                separatorToken: createToken(TokenKind.Callfunc),
+                separatorToken: createToken(isCallfuncExpression(callExpr) && callExpr.tokens.operator?.kind === TokenKind.QuestionCallfunc ? TokenKind.QuestionCallfunc : TokenKind.Callfunc),
                 astNode: callExpr
             }));
             if (options.ignoreCall) {

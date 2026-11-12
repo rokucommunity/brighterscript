@@ -271,7 +271,7 @@ export class DefinitionProvider {
 
         const previousToken = file.getTokenAt({ line: util.getLocation(token)?.range.start.line, character: util.getLocation(token)?.range.start.character });
 
-        if (previousToken?.kind === TokenKind.Callfunc) {
+        if (previousToken?.kind === TokenKind.Callfunc || previousToken?.kind === TokenKind.QuestionCallfunc) {
             for (const scope of this.event.program.getScopes()) {
                 //does this xml file declare this function in its interface?
                 if (isXmlScope(scope)) {
