@@ -3350,6 +3350,32 @@ describe('BrsFile', () => {
             `);
         });
 
+        describe('type designators', () => {
+            it('drops an `as` type that conflicts with the parameter type designator', async () => {
+                await testTranspile(`
+                    sub one(a$ as integer, c! as dynamic, d# as object, e& as float, b% = 1 as string)
+                    end sub
+                `, `
+                    sub one(a$, c!, d#, e&, b% = 1)
+                    end sub
+                `, 'trim', 'source/main.bs', false);
+            });
+
+            it('keeps an `as` type that matches the parameter type designator', async () => {
+                await testTranspile(`
+                    sub one(a$ as string, c! as float, d# as double, e& as LongInteger, b% = 1 as integer)
+                    end sub
+                `);
+            });
+
+            it('keeps `as` types on parameters without a type designator', async () => {
+                await testTranspile(`
+                    sub one(a as integer, c as dynamic, d as object, b = "" as string)
+                    end sub
+                `);
+            });
+        });
+
         it('discard return type when removeParameterTypes is true', async () => {
             program.options.removeParameterTypes = true;
             await testTranspile(`
@@ -5148,6 +5174,34 @@ describe('BrsFile', () => {
                     sub foo()
                         event = {}
                         event.event.append({})
+                    end sub
+                `);
+            });
+
+            it('does not inline an enum member when the first part of the expression is shadowed', async () => {
+                await testTranspile(`
+                    sub shadowed()
+                        direction = { up: "north" }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print direction.up
+                    end sub
+
+                    enum Direction
+                        up = "up"
+                    end enum
+                    `, `
+                    sub shadowed()
+                        direction = {
+                            up: "north"
+                        }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print "up"
                     end sub
                 `);
             });

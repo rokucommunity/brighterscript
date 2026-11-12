@@ -23,6 +23,7 @@ import type { Token } from '../../lexer/Token';
 import { createIdentifier } from '../../astUtils/creators';
 import type { FunctionExpression } from '../../parser/Expression';
 import { LogLevel } from '../../Logger';
+import { createExtraSymbolData } from '../../interfaces';
 
 const SCOPES_FOR_COMPLETION = 3;
 
@@ -629,19 +630,19 @@ export class CompletionsProcessor {
                 name: 'true',
                 type: BooleanType.instance,
                 flags: SymbolTypeFlag.runtime,
-                data: {}
+                data: createExtraSymbolData()
             },
             {
                 name: 'false',
                 type: BooleanType.instance,
                 flags: SymbolTypeFlag.runtime,
-                data: {}
+                data: createExtraSymbolData()
             },
             {
                 name: 'invalid',
                 type: InvalidType.instance,
                 flags: SymbolTypeFlag.runtime,
-                data: {}
+                data: createExtraSymbolData()
             }
         ];
     }
@@ -656,7 +657,7 @@ export class CompletionsProcessor {
             return true;
         }
 
-        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.includes(t.kind), 1);
+        const nextNonComment = file.getNextTokenByPredicate(currentToken, (t: Token) => !AllowedTriviaTokens.has(t.kind), 1);
         const firstComment = nextNonComment?.leadingTrivia?.find(t => t.kind === TokenKind.Comment);
         if (firstComment && util.comparePosition(position, util.getLocation(firstComment)?.range.start) >= 0) {
             return true;
@@ -693,7 +694,7 @@ export const KeywordCompletions = Object.keys(Keywords)
  * List of completions for all valid intrinsic types.
  * Build this list once because it won't change for the lifetime of this process
  */
-export const NativeTypeCompletions = DeclarableTypes
+export const NativeTypeCompletions = [...DeclarableTypes]
     //create completions
     .map(x => {
         return {

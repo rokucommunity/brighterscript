@@ -1,12 +1,12 @@
 import * as path from 'path';
 import { DiagnosticTag } from 'vscode-languageserver';
-import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
+import { isAALiteralExpression, isAliasStatement, isArrayLiteralExpression, isArrayType, isArrayTypeLike, isAssignmentStatement, isAssociativeArrayType, isAssociativeArrayTypeLike, isBinaryExpression, isBooleanTypeLike, isBrsFile, isBuiltInType, isCallableType, isCallExpression, isCallFuncableTypeLike, isCallfuncExpression, isClassStatement, isClassType, isComponentType, isCompoundType, isDottedGetExpression, isDynamicType, isEnumMemberStatement, isEnumMemberType, isEnumType, isFunctionExpression, isFunctionParameterExpression, isIndexedGetExpression, isInterfaceType, isIterableType, isLiteralExpression, isLiteralString, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isPrimitiveType, isReferenceType, isReturnStatement, isStringTypeLike, isTypedFunctionType, isTypeStatementType, isUnaryExpression, isUnionType, isVariableExpression, isVoidType, isXmlScope } from '../../astUtils/reflection';
 import type { DiagnosticInfo } from '../../DiagnosticMessages';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BsDiagnosticInput, CallableContainer, ExtraSymbolData, FileReference, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
+import type { BsDiagnosticInput, CallableContainer, ExtraSymbolData, GetTypeOptions, ValidateScopeEvent, TypeChainEntry, TypeChainProcessResult, TypeCompatibilityData } from '../../interfaces';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
-import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
+import type { AssignmentStatement, AugmentedAssignmentStatement, ClassStatement, ConstStatement, DottedSetStatement, IndexedSetStatement, ForEachStatement, ForStatement, IncrementStatement, NamespaceStatement, ReturnStatement, SelectCaseStatement, EnumMemberStatement, EnumStatement } from '../../parser/Statement';
 import { util } from '../../util';
 import { nodes, components } from '../../roku-types';
 import type { BRSComponentData } from '../../roku-types';
@@ -26,7 +26,6 @@ import { ParseMode } from '../../parser/Parser';
 import { BsClassValidator } from '../../validators/ClassValidator';
 import { globalCallableMap } from '../../globalCallables';
 import type { XmlScope } from '../../XmlScope';
-import type { XmlFile } from '../../files/XmlFile';
 import { SGFieldTypes } from '../../parser/SGTypes';
 import { DynamicType } from '../../types/DynamicType';
 import { getAllTypesFromCompoundType } from '../../types/helpers';
@@ -41,6 +40,7 @@ import chalk from 'chalk';
 import { IntegerType } from '../../types/IntegerType';
 import type { EnumType } from '../../types/EnumType';
 import type { Scope } from '../../Scope';
+import { createExtraSymbolData } from '../../interfaces';
 
 /**
  * The lower-case names of all platform-included scenegraph nodes
@@ -56,7 +56,6 @@ const enum ScopeValidatorDiagnosticTag {
     FunctionCollisions = 'ScopeValidatorFunctionCollisions',
     Classes = 'ScopeValidatorClasses',
     XMLInterface = 'ScopeValidatorXML',
-    XMLImports = 'ScopeValidatorXMLImports',
     ObserverCallbacks = 'ScopeValidatorObserverCallbacks',
     Default = 'ScopeValidator',
     Segment = 'ScopeValidatorSegment'
@@ -111,8 +110,6 @@ export class ScopeValidator {
             }).durationText;
             metrics.xmlValidationTime = validationStopwatch.getDurationTextFor(() => {
                 if (isXmlScope(this.event.scope)) {
-                    //detect when the child imports a script that its ancestor also imports
-                    this.diagnosticDetectDuplicateAncestorScriptImports(this.event.scope);
                     //validate component interface
                     this.validateXmlInterface(this.event.scope);
                     //validate the function names passed to `observeField`/`observeFieldScoped`
@@ -225,6 +222,12 @@ export class ScopeValidator {
                     DottedSetStatement: (dottedSetStmt) => {
                         this.addValidationKindMetric('DottedSetStatement', () => {
                             this.validateDottedSetStatement(file, dottedSetStmt);
+                            this.validateNodeFieldAssociativeArrayMemberAssignment(file, dottedSetStmt);
+                        });
+                    },
+                    IndexedSetStatement: (indexedSetStmt) => {
+                        this.addValidationKindMetric('IndexedSetStatement', () => {
+                            this.validateNodeFieldAssociativeArrayMemberAssignment(file, indexedSetStmt);
                         });
                     },
                     BinaryExpression: (binaryExpr) => {
@@ -720,7 +723,7 @@ export class ScopeValidator {
 
 
     private validateCallExpression(file: BrsFile, expression: CallExpression) {
-        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: {} };
+        const getTypeOptions = { flags: SymbolTypeFlag.runtime, data: createExtraSymbolData() };
         let funcType = this.getNodeTypeWrapper(file, expression?.callee, getTypeOptions);
         if (funcType?.isResolvable() && isClassType(funcType)) {
             // We're calling a class - get the constructor
@@ -863,7 +866,7 @@ export class ScopeValidator {
                 // unable to find a paramType -- maybe there are more args than params
                 break;
             }
-            const data = {} as ExtraSymbolData;
+            const data = createExtraSymbolData();
             let argType = this.getNodeTypeWrapper(file, arg, { flags: SymbolTypeFlag.runtime, data: data });
             if (isCallableType(paramType) && isClassType(argType) && isClassStatement(data.definingNode)) {
                 argType = data.definingNode.getConstructorType();
@@ -932,7 +935,7 @@ export class ScopeValidator {
         const typeChainExpectedLHS = [] as TypeChainEntry[];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
 
-        const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const expectedLHSType = this.getNodeTypeWrapper(file, dottedSetStmt, { ...getTypeOpts, data: createExtraSymbolData(), typeChain: typeChainExpectedLHS });
         const actualRHSType = this.getNodeTypeWrapper(file, dottedSetStmt?.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         // check if anything in typeChain is an AA - if so, just allow it
@@ -970,6 +973,29 @@ export class ScopeValidator {
     }
 
     /**
+     * Detect assignments to a member of an associative array that was read from a node field (i.e. `m.top.metadata.a = 1`).
+     * Reading an AA field from a node returns a copy, so the assignment is discarded at runtime.
+     * This applies anywhere in the chain (i.e. `m.config.someNode.metadata.title.text = "x"`)
+     */
+    private validateNodeFieldAssociativeArrayMemberAssignment(file: BrsFile, setStmt: DottedSetStatement | IndexedSetStatement) {
+        const getTypeOpts = { flags: SymbolTypeFlag.runtime };
+        let expr = setStmt.obj;
+        while (isDottedGetExpression(expr) || isIndexedGetExpression(expr)) {
+            if (isDottedGetExpression(expr) &&
+                isAssociativeArrayType(this.getNodeTypeWrapper(file, expr, getTypeOpts)) &&
+                isComponentType(this.getNodeTypeWrapper(file, expr.obj, getTypeOpts))
+            ) {
+                this.addMultiScopeDiagnostic({
+                    ...DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect(expr.tokens.name.text),
+                    location: setStmt.location
+                });
+                return;
+            }
+            expr = expr.obj;
+        }
+    }
+
+    /**
      * Detect when declared type does not match rhs type
      */
     private validateAssignmentStatement(file: BrsFile, assignStmt: AssignmentStatement) {
@@ -980,7 +1006,7 @@ export class ScopeValidator {
 
         const typeChainExpectedLHS = [];
         const getTypeOpts = { flags: SymbolTypeFlag.runtime };
-        const expectedLHSType = this.getNodeTypeWrapper(file, assignStmt.typeExpression, { ...getTypeOpts, data: {}, typeChain: typeChainExpectedLHS });
+        const expectedLHSType = this.getNodeTypeWrapper(file, assignStmt.typeExpression, { ...getTypeOpts, data: createExtraSymbolData(), typeChain: typeChainExpectedLHS });
         const actualRHSType = this.getNodeTypeWrapper(file, assignStmt.value, getTypeOpts);
         const compatibilityData: TypeCompatibilityData = {};
         if (!expectedLHSType || !expectedLHSType.isResolvable()) {
@@ -1219,7 +1245,7 @@ export class ScopeValidator {
         // Do a complete type check on all DottedGet and Variable expressions
         // this will create a diagnostic if an invalid member is accessed
         const typeChain: TypeChainEntry[] = [];
-        const typeData = {} as ExtraSymbolData;
+        const typeData = createExtraSymbolData();
         let exprType = this.getNodeTypeWrapper(file, expression, {
             flags: symbolType,
             typeChain: typeChain,
@@ -2022,37 +2048,6 @@ export class ScopeValidator {
                     ...DiagnosticMessages.cannotFindName(docTypeTag.typeString),
                     location: brsDocParser.getTypeLocationFromToken(docTypeTag.token) ?? docTypeTag.location
                 });
-            }
-        }
-    }
-
-    /**
-     * Detect when a child has imported a script that an ancestor also imported
-     */
-    private diagnosticDetectDuplicateAncestorScriptImports(scope: XmlScope) {
-        this.event.program.diagnostics.clearByFilter({ scope: this.event.scope, fileUri: util.pathToUri(scope.xmlFile?.srcPath), tag: ScopeValidatorDiagnosticTag.XMLImports });
-        if (scope.xmlFile.parentComponent) {
-            //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
-            let parentScriptImports = scope.xmlFile.getAncestorScriptTagImports();
-            let lookup = {} as Record<string, FileReference>;
-            for (let parentScriptImport of parentScriptImports) {
-                //keep the first occurance of a pkgPath. Parent imports are first in the array
-                if (!lookup[parentScriptImport.destPath]) {
-                    lookup[parentScriptImport.destPath] = parentScriptImport;
-                }
-            }
-
-            //add warning for every script tag that this file shares with an ancestor
-            for (let scriptImport of scope.xmlFile.scriptTagImports) {
-                let ancestorScriptImport = lookup[scriptImport.destPath];
-                if (ancestorScriptImport) {
-                    let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
-                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.destPath;
-                    this.addDiagnostic({
-                        location: util.createLocationFromFileRange(scope.xmlFile, scriptImport.filePathRange),
-                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
-                    }, ScopeValidatorDiagnosticTag.XMLImports);
-                }
             }
         }
     }

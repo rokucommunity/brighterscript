@@ -2500,6 +2500,37 @@ describe('util', () => {
             const strippedNode = util.stripTrailingSourceMappingURLComment(rootNode);
             expect(strippedNode.toString()).to.eql('sub p()\nend sub');
         });
+
+        it('only needs the end of the output, however the text is split into nodes', () => {
+            const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+            const texts = [
+                `sub p()\nend sub\n'//# sourceMappingURL=./p.brs.map`,
+                `sub p()\r\nend sub\r\n'//# sourceMappingURL=./p.brs.map\r\n\r\n`,
+                `sub p()\nend sub\n  '//# sourceMappingURL=./p.brs.map  \n`,
+                `<component>\n</component>\n<!-- //# sourceMappingURL=./p.xml.map -->\n`,
+                `'//# sourceMappingURL=./p.brs.map`,
+                `\n'//# sourceMappingURL=./p.brs.map`,
+                `sub p()\nend sub\n`,
+                `sub p()\nend sub\n'//# sourceMappingURL=./p.brs.map\nprint 1`,
+                `print "a"`,
+                `\n\n`,
+                ``
+            ];
+            for (const text of texts) {
+                const match = pattern.exec(text);
+                const expected = match ? text.slice(0, text.length - match[0].length) : text;
+                //split into 3 strings at every pair of positions, with the middle and last ones nested in child nodes
+                for (let i = 0; i <= text.length; i++) {
+                    for (let j = i; j <= text.length; j++) {
+                        const node = new SourceNode(null, null, 'source/p.brs', [
+                            text.slice(0, i),
+                            new SourceNode(1, 0, 'source/p.brs', [text.slice(i, j), new SourceNode(1, 0, 'source/p.brs', [text.slice(j)])])
+                        ]);
+                        expect(util.stripTrailingSourceMappingURLComment(node).toString(), JSON.stringify({ text: text, i: i, j: j })).to.eql(expected);
+                    }
+                }
+            }
+        });
     });
 });
 

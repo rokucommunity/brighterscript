@@ -307,6 +307,33 @@ describe('Program', () => {
             expect(afterProvideFile.callCount).to.equal(2);
             expect(afterValidateFile.callCount).to.equal(2);
         });
+
+        it('links file symbols before plugins run validateFile, and adds file diagnostics before plugins run afterValidateFile', () => {
+            let symbolsDuringValidateFile: boolean;
+            let diagnosticsDuringValidateFile: string[];
+            let diagnosticsDuringAfterValidateFile: string[];
+            const getFileDiagnostics = (file: BscFile) => program.diagnostics.getDiagnostics().filter(x => x.location?.uri === util.pathToUri(file.srcPath)).map(x => x.message);
+            program.plugins.add({
+                name: 'reads brighterscript results',
+                validateFile: (event) => {
+                    symbolsDuringValidateFile = (event.file as BrsFile).ast.symbolTable.hasSymbol('main', SymbolTypeFlag.runtime);
+                    diagnosticsDuringValidateFile = getFileDiagnostics(event.file);
+                },
+                afterValidateFile: (event) => {
+                    diagnosticsDuringAfterValidateFile = getFileDiagnostics(event.file);
+                }
+            });
+            program.setFile('source/main.brs', `
+                sub main()
+                    return 1
+                end sub
+            `);
+            program.validate();
+
+            expect(symbolsDuringValidateFile).to.be.true;
+            expect(diagnosticsDuringValidateFile).to.eql([]);
+            expect(diagnosticsDuringAfterValidateFile).to.include(DiagnosticMessages.voidFunctionMayNotReturnValue('sub').message);
+        });
     });
 
     describe('getFile', () => {
@@ -573,7 +600,7 @@ describe('Program', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('shows warning when a child component imports the same script as its parent', () => {
+        it('does not warn when a child component imports the same script as its parent', () => {
             program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
@@ -590,9 +617,7 @@ describe('Program', () => {
 
             program.setFile('lib.brs', `'comment`);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.unnecessaryScriptImportInChildFromParent('ParentScene')
-            ]);
+            expectZeroDiagnostics(program);
         });
 
         it('adds info diag when child component method shadows parent component method', () => {
@@ -1080,7 +1105,7 @@ describe('Program', () => {
             });
 
             it('does not duplicate symbol-table entries when validateFile is cancelled and re-runs', async () => {
-                //BrsFileValidator runs in the `validateFile` plugin event and pushes into per-file
+                //BrsFileLinker runs in the `validateFile` plugin event and pushes into per-file
                 //symbol tables for every class/interface/function/etc. If a cancelled validation
                 //re-fired `validateFile` for the same file, those addSymbol calls would run again
                 //and accumulate parallel entries — and CrossScopeValidator would flag a
@@ -1653,11 +1678,6 @@ describe('Program', () => {
             expectZeroDiagnostics(
                 program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code)
             );
-
-            //the children all include a redundant import of lib.brs file which is imported by the parent.
-            expect(
-                program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code)
-            ).to.be.lengthOf(childCount);
         });
 
         it('detects script import changes', () => {

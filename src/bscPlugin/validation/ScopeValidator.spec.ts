@@ -5988,6 +5988,88 @@ describe('ScopeValidator', () => {
         });
     });
 
+    describe('nodeFieldAssociativeArrayMemberAssignmentHasNoEffect', () => {
+        beforeEach(() => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs" />
+                    <interface>
+                        <field id="metadata" type="assocarray" />
+                        <field id="childNode" type="node" />
+                        <field id="title" type="string" />
+                    </interface>
+                </component>
+            `);
+        });
+
+        it('flags dotted and indexed assignments to members of an AA field on a node', () => {
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    top = m.top as roSGNodeWidget
+                    top.metadata.a = 1
+                    top.metadata["b"] = 2
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata'),
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata')
+            ]);
+        });
+
+        it('flags assignments deeper in the chain and on any typed node', () => {
+            program.setFile('components/Widget.bs', `
+                sub update(widget as roSGNodeWidget)
+                    widget.metadata.title.text = "x"
+                    widget.metadata.list[0] = 1
+                end sub
+
+                sub updateNested(holder as Holder)
+                    holder.widget.metadata.a = 1
+                end sub
+
+                interface Holder
+                    widget as roSGNodeWidget
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata'),
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata'),
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata')
+            ]);
+        });
+
+        it('does not flag assignments that actually update the node or a real AA', () => {
+            program.setFile('components/Widget.bs', `
+                sub update(widget as roSGNodeWidget)
+                    metadata = widget.metadata
+                    metadata.a = 1
+                    widget.metadata = metadata
+                    widget.metadata = { a: 1 }
+                    widget.title = "x"
+                    widget.childNode.id = "x"
+                    m.someAA = {}
+                    m.someAA.a = 1
+                    m.someAA["b"] = 2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not flag when the node type is unknown', () => {
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.metadata.a = 1
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+    });
+
     describe('notCallable', () => {
         it('finds when trying to call on a non-function', () => {
             program.setFile('source/test.bs', `

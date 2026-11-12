@@ -371,7 +371,7 @@ export type BlockTerminator =
     | TokenKind.EndSelect;
 
 /** Set of keywords that end non-conditional compilation blocks. */
-export const BlockTerminators = [
+export const BlockTerminators: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.Else,
     TokenKind.EndFor,
     TokenKind.Next,
@@ -384,10 +384,10 @@ export const BlockTerminators = [
     TokenKind.Catch,
     TokenKind.EndTry,
     TokenKind.EndSelect
-];
+]);
 
 /** The set of operators valid for use in assignment statements. */
-export const AssignmentOperators = [
+export const AssignmentOperators: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.Equal,
     TokenKind.MinusEqual,
     TokenKind.PlusEqual,
@@ -396,9 +396,9 @@ export const AssignmentOperators = [
     TokenKind.BackslashEqual,
     TokenKind.LeftShiftEqual,
     TokenKind.RightShiftEqual
-];
+]);
 
-export const CompoundAssignmentOperators = [
+export const CompoundAssignmentOperators: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.MinusEqual,
     TokenKind.PlusEqual,
     TokenKind.StarEqual,
@@ -406,10 +406,10 @@ export const CompoundAssignmentOperators = [
     TokenKind.BackslashEqual,
     TokenKind.LeftShiftEqual,
     TokenKind.RightShiftEqual
-];
+]);
 
 /** List of TokenKinds that are permitted as property names. */
-export const AllowedProperties = [
+export const AllowedProperties: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.As,
     TokenKind.And,
     TokenKind.Box,
@@ -501,10 +501,10 @@ export const AllowedProperties = [
     TokenKind.Select,
     TokenKind.Case,
     TokenKind.EndSelect
-];
+]);
 
 /** List of TokenKind that are allowed as local var identifiers. */
-export const AllowedLocalIdentifiers = [
+export const AllowedLocalIdentifiers: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.EndFor,
     TokenKind.ForEach,
     TokenKind.Void,
@@ -542,9 +542,9 @@ export const AllowedLocalIdentifiers = [
     TokenKind.Select,
     TokenKind.Case,
     TokenKind.EndSelect
-];
+]);
 
-export const BrighterScriptSourceLiterals = [
+export const BrighterScriptSourceLiterals: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.SourceFilePathLiteral,
     TokenKind.SourceLineNumLiteral,
     TokenKind.FunctionNameLiteral,
@@ -554,13 +554,13 @@ export const BrighterScriptSourceLiterals = [
     TokenKind.SourceLocationLiteral,
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral
-];
+]);
 
 /**
  * List of string versions of TokenKind and various globals that are NOT allowed as local var identifiers.
  * Used to throw more helpful "you can't use a reserved word as an identifier" errors.
  */
-export const DisallowedLocalIdentifiers = [
+export const DisallowedLocalIdentifiers: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.And,
     TokenKind.Box,
     TokenKind.CreateObject,
@@ -613,11 +613,11 @@ export const DisallowedLocalIdentifiers = [
     TokenKind.PkgPathLiteral,
     TokenKind.PkgLocationLiteral,
     TokenKind.Throw
-];
+]);
 
 export const DisallowedLocalIdentifiersText = new Set([
     'run',
-    ...DisallowedLocalIdentifiers.map(x => x.toLowerCase())
+    ...[...DisallowedLocalIdentifiers].map(x => x.toLowerCase())
 ]);
 
 /**
@@ -645,7 +645,7 @@ export const UnreferencableBuiltins = new Set([
  * List of string versions of TokenKind and various globals that are NOT allowed as scope function names.
  * Used to throw more helpful "you can't use a reserved word as a function name" errors.
  */
-export const DisallowedFunctionIdentifiers = [
+export const DisallowedFunctionIdentifiers: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.And,
     TokenKind.CreateObject,
     TokenKind.Dim,
@@ -681,16 +681,16 @@ export const DisallowedFunctionIdentifiers = [
     TokenKind.Type,
     TokenKind.While,
     TokenKind.Throw
-];
+]);
 
 export const DisallowedFunctionIdentifiersText = new Set([
     'run',
-    ...DisallowedFunctionIdentifiers.map(x => x.toLowerCase())
+    ...[...DisallowedFunctionIdentifiers].map(x => x.toLowerCase())
 ]);
 
 
 /** List of TokenKind that are used as declared types on parameters/functions in Brightscript*/
-export const DeclarableTypes = [
+export const DeclarableTypes: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.Boolean,
     TokenKind.Integer,
     TokenKind.LongInteger,
@@ -701,12 +701,12 @@ export const DeclarableTypes = [
     TokenKind.Dynamic,
     TokenKind.Void,
     TokenKind.Function
-];
+]);
 
 /** List of TokenKind that will not break parsing a TypeExpression in Brighterscript*/
-export const AllowedTypeIdentifiers = [
-    ...(AllowedProperties.filter(tokenKind => tokenKind !== TokenKind.Invalid))
-];
+export const AllowedTypeIdentifiers: ReadonlySet<TokenKind> = new Set<TokenKind>([
+    ...[...AllowedProperties].filter(tokenKind => tokenKind !== TokenKind.Invalid)
+]);
 
 
 /**
@@ -760,12 +760,12 @@ export const PreceedingRegexTypes = new Set([
 /**
  * The tokens that may be in leading trivia
  */
-export const AllowedTriviaTokens: ReadonlyArray<TokenKind> = [
+export const AllowedTriviaTokens: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.Newline,
     TokenKind.Whitespace,
     TokenKind.Comment,
     TokenKind.Colon
-];
+]);
 
 
 /**
@@ -778,7 +778,7 @@ export type PrintSeparatorToken = Token & {
 /**
  * The tokens that may be in a binary expression
  */
-export const BinaryExpressionOperatorTokens: ReadonlyArray<TokenKind> = [
+export const BinaryExpressionOperatorTokens: ReadonlySet<TokenKind> = new Set<TokenKind>([
     TokenKind.Equal,
     TokenKind.LessGreater,
     TokenKind.Greater,
@@ -796,7 +796,7 @@ export const BinaryExpressionOperatorTokens: ReadonlyArray<TokenKind> = [
     TokenKind.Mod,
     TokenKind.Backslash,
     TokenKind.Caret
-];
+]);
 
 /**
  * Token kinds whose source text is invariant (always the same character sequence).
