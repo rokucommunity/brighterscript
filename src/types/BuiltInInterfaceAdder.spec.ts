@@ -13,6 +13,10 @@ import { ArrayType } from './ArrayType';
 import { expect } from 'chai';
 import { EnumMemberType, EnumType } from './EnumType';
 import { AssociativeArrayType } from './AssociativeArrayType';
+import { SymbolTable } from '../SymbolTable';
+import { Program } from '../Program';
+//registers SymbolTable.referenceTypeFactory, used to build the not-yet-known return type
+import './ReferenceType';
 
 describe('BuiltInInterfaceAdder', () => {
 
@@ -134,6 +138,93 @@ describe('BuiltInInterfaceAdder', () => {
         expect(enumTrim).to.be.undefined;
         const memberTrim = myEnumMember.getMemberType('trim', { flags: SymbolTypeFlag.runtime });
         expectTypeToBe(memberTrim, TypedFunctionType);
+    });
+
+    it('resolves cached method return types against the current lookup table', () => {
+        const originalGetLookupTable = BuiltInInterfaceAdder.getLookupTable;
+        try {
+            //the method is cached while the lookup table does not know about its return type yet
+            const firstTable = new SymbolTable('first');
+            BuiltInInterfaceAdder.getLookupTable = () => firstTable;
+            const method = { name: 'getThing', description: '', params: [], returnType: 'SomeCustomType', isVariadic: false };
+            const methodType = (BuiltInInterfaceAdder as any).buildMethodFromDocData(method) as TypedFunctionType;
+            expect(methodType.returnType.isResolvable()).to.be.false;
+
+            //a newer lookup table (i.e. from a newer program) declares the type
+            const secondTable = new SymbolTable('second');
+            secondTable.addSymbol('SomeCustomType', {}, new ClassType('SomeCustomType'), SymbolTypeFlag.typetime);
+            BuiltInInterfaceAdder.getLookupTable = () => secondTable;
+
+            expect(methodType.returnType.isResolvable()).to.be.true;
+            expect(methodType.returnType.toString()).to.equal('SomeCustomType');
+        } finally {
+            BuiltInInterfaceAdder.getLookupTable = originalGetLookupTable;
+        }
+    });
+
+    describe('lookup table providers', () => {
+        let originalGetLookupTable: typeof BuiltInInterfaceAdder.getLookupTable;
+        const providers: Array<() => SymbolTable> = [];
+
+        beforeEach(() => {
+            originalGetLookupTable = BuiltInInterfaceAdder.getLookupTable;
+        });
+
+        afterEach(() => {
+            for (const provider of providers.splice(0)) {
+                BuiltInInterfaceAdder.removeLookupTableProvider(provider);
+            }
+            BuiltInInterfaceAdder.getLookupTable = originalGetLookupTable;
+        });
+
+        function addProvider(table: SymbolTable) {
+            const provider = () => table;
+            providers.push(provider);
+            BuiltInInterfaceAdder.addLookupTableProvider(provider);
+            return provider;
+        }
+
+        it('uses the most recently added table', () => {
+            const first = new SymbolTable('first');
+            const second = new SymbolTable('second');
+            addProvider(first);
+            addProvider(second);
+            expect(BuiltInInterfaceAdder.getLookupTable()).to.equal(second);
+        });
+
+        it('falls back to the previous table once the newest one is removed', () => {
+            const first = new SymbolTable('first');
+            const second = new SymbolTable('second');
+            addProvider(first);
+            const secondProvider = addProvider(second);
+
+            BuiltInInterfaceAdder.removeLookupTableProvider(secondProvider);
+            expect(BuiltInInterfaceAdder.getLookupTable()).to.equal(first);
+        });
+
+        it('keeps using the newest table when an older one is removed', () => {
+            const first = new SymbolTable('first');
+            const second = new SymbolTable('second');
+            const firstProvider = addProvider(first);
+            addProvider(second);
+
+            BuiltInInterfaceAdder.removeLookupTableProvider(firstProvider);
+            expect(BuiltInInterfaceAdder.getLookupTable()).to.equal(second);
+        });
+
+        it('stops using a program\'s table once that program is disposed', () => {
+            const olderProgram = new Program({ rootDir: process.cwd() });
+            const newerProgram = new Program({ rootDir: process.cwd() });
+            try {
+                expect(BuiltInInterfaceAdder.getLookupTable()).to.equal(newerProgram.globalScope.symbolTable);
+
+                newerProgram.dispose();
+                expect(BuiltInInterfaceAdder.getLookupTable()).to.equal(olderProgram.globalScope.symbolTable);
+            } finally {
+                olderProgram.dispose();
+                newerProgram.dispose();
+            }
+        });
     });
 
     it('does not throw when getLookupTable is not set', () => {

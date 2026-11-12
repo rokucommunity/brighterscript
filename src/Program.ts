@@ -232,7 +232,7 @@ export class Program {
         this.globalScope.symbolTable.addSymbol('string', builtInSymbolData, StringType.instance, SymbolTypeFlag.typetime);
         this.globalScope.symbolTable.addSymbol('void', builtInSymbolData, VoidType.instance, SymbolTypeFlag.typetime);
 
-        BuiltInInterfaceAdder.getLookupTable = () => this.globalScope.symbolTable;
+        BuiltInInterfaceAdder.addLookupTableProvider(this.builtInLookupTableProvider);
 
         for (const callable of globalCallables) {
             this.globalScope.symbolTable.addSymbol(callable.name, { ...builtInSymbolData, description: callable.shortDescription }, callable.type, SymbolTypeFlag.runtime);
@@ -291,6 +291,12 @@ export class Program {
      * All scopes should directly or indirectly inherit from this scope
      */
     public globalScope: Scope = undefined as any;
+
+    /**
+     * Gives built-in types access to this program's global symbol table. `BuiltInInterfaceAdder` only holds it weakly,
+     * so it's kept here to stay usable for as long as this program is alive
+     */
+    private builtInLookupTableProvider = () => this.globalScope.symbolTable;
 
     /**
      * Plugins which can provide extra diagnostics or transform AST
@@ -2798,6 +2804,7 @@ export class Program {
 
     public dispose() {
         this.plugins.emit('beforeRemoveProgram', { program: this });
+        BuiltInInterfaceAdder.removeLookupTableProvider(this.builtInLookupTableProvider);
 
         for (let filePath in this.files) {
             this.files[filePath]?.dispose?.();
