@@ -82,21 +82,18 @@ describe('parser while statements', () => {
             {
                 kind: TokenKind.While,
                 text: 'while',
-                isReserved: true,
                 ...testLocatable(0, 0, 0, 5),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.True,
                 text: 'true',
-                isReserved: true,
                 ...testLocatable(0, 6, 0, 10),
                 leadingTrivia: []
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
-                isReserved: false,
                 ...testLocatable(0, 10, 0, 11),
                 leadingTrivia: []
             },
@@ -109,7 +106,6 @@ describe('parser while statements', () => {
             {
                 kind: TokenKind.EndWhile,
                 text: 'end while',
-                isReserved: false,
                 ...testLocatable(2, 0, 2, 9),
                 leadingTrivia: []
             },

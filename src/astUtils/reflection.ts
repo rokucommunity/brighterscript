@@ -91,13 +91,13 @@ export function isStatement(element: AstNode | undefined): element is Statement 
 }
 
 export function isBody(element: AstNode | undefined): element is Body {
-    return element?.constructor?.name === 'Body';
+    return element?.kind === AstNodeKind.Body;
 }
 export function isAssignmentStatement(element: AstNode | undefined): element is AssignmentStatement {
     return element?.kind === AstNodeKind.AssignmentStatement;
 }
 export function isBlock(element: AstNode | undefined): element is Block {
-    return element?.constructor?.name === 'Block';
+    return element?.kind === AstNodeKind.Block;
 }
 export function isExpressionStatement(element: AstNode | undefined): element is ExpressionStatement {
     return element?.kind === AstNodeKind.ExpressionStatement;
@@ -584,14 +584,14 @@ export function isBuiltInType(value: any, name: string): value is InterfaceType 
         (isTypeStatementType(value) && isBuiltInType(value.wrappedType, name));
 }
 
-const nativeTypeKinds = [
+const nativeTypeKinds: ReadonlySet<BscTypeKind> = new Set([
     BscTypeKind.DynamicType,
     BscTypeKind.ObjectType,
     BscTypeKind.VoidType,
     BscTypeKind.FunctionType
-];
+]);
 export function isNativeType(value: any): value is IntegerType | LongIntegerType | FloatType | DoubleType | StringType | BooleanType | VoidType | DynamicType | ObjectType | FunctionType | InterfaceType {
-    return isPrimitiveType(value) || nativeTypeKinds.includes(value?.kind);
+    return isPrimitiveType(value) || nativeTypeKinds.has(value?.kind);
 }
 
 export function isTypeStatementTypeOf(value: any, typeGuard: (val: any) => boolean) {

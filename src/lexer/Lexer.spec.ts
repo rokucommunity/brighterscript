@@ -79,6 +79,24 @@ describe('lexer', () => {
         ]);
     });
 
+    it('recognizes the optional callfunc operator', () => {
+        expectKinds('node?@.doSomething() node?@id node@.doSomething()', [
+            TokenKind.Identifier,
+            TokenKind.QuestionCallfunc,
+            TokenKind.Identifier,
+            TokenKind.LeftParen,
+            TokenKind.RightParen,
+            TokenKind.Identifier,
+            TokenKind.QuestionAt,
+            TokenKind.Identifier,
+            TokenKind.Identifier,
+            TokenKind.Callfunc,
+            TokenKind.Identifier,
+            TokenKind.LeftParen,
+            TokenKind.RightParen
+        ]);
+    });
+
     it('separates optional chain characters and LeftSquare when found at beginning of statement locations', () => {
         //a statement starting with a question mark is actually a print statement, so we need to keep the ? separate from [
         expectKinds(`?[ ?[ : ?[ ?[`, [
@@ -1317,11 +1335,11 @@ describe('lexer', () => {
         });
     });
 
-    describe('isReserved', () => {
+    describe('reserved words', () => {
         it('is true only for reserved words, not for other keywords or identifiers', () => {
             //`if`/`sub` are reserved; `tab`/`as` are keywords but not reserved (see Keywords doc comment)
             let { tokens } = Lexer.scan('if sub tab as somevar');
-            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+            expect(tokens.map(t => ReservedTokenKinds.has(t.kind))).to.deep.equal([
                 true, //if
                 true, //sub
                 false, //tab
@@ -1333,7 +1351,7 @@ describe('lexer', () => {
 
         it('is true for multi-word reserved keywords regardless of casing', () => {
             let { tokens } = Lexer.scan('END WHILE end sub');
-            expect(tokens.map(t => t.isReserved)).to.deep.equal([
+            expect(tokens.map(t => ReservedTokenKinds.has(t.kind))).to.deep.equal([
                 true, //end while
                 true, //end sub
                 false //eof
@@ -1350,7 +1368,6 @@ describe('lexer', () => {
                 let { tokens } = Lexer.scan(text);
                 //some entries are multi-word (e.g. 'end if'), which lex to a single token plus Eof
                 expect(tokens[0].kind, `token kind for keyword text '${text}'`).to.equal(kind);
-                expect(tokens[0].isReserved, `isReserved for keyword text '${text}'`).to.equal(ReservedTokenKinds.has(kind));
             }
         });
     });
@@ -1922,7 +1939,7 @@ describe('lexer', () => {
         function stringify(tokens: Token[]) {
             return tokens
                 //exclude the explicit triva tokens since they'll be included in the leading/trailing arrays
-                .filter(x => !AllowedTriviaTokens.includes(x.kind))
+                .filter(x => !AllowedTriviaTokens.has(x.kind))
                 .flatMap(x => [...x.leadingTrivia ?? [], x])
                 .map(x => x.text)
                 .join('');
@@ -1968,7 +1985,7 @@ describe('lexer', () => {
 
 
         function expectTrivia(text: string, expected: Array<{ text: string; leadingTrivia?: string[]; trailingTrivia?: string[] }>) {
-            const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.includes(x.kind));
+            const tokens = Lexer.scan(text).tokens.filter(x => !AllowedTriviaTokens.has(x.kind));
             expect(
                 tokens.map(x => {
                     return {
