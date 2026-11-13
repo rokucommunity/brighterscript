@@ -1,11 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/dot-notation */
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-require-imports */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable no-cond-assign */
-import * as phin from 'phin';
+
 import * as fsExtra from 'fs-extra';
+import * as path from 'path';
+import { execSync } from 'child_process';
 import { standardizePath as s } from '../src/util';
 import { ParseMode, Parser } from '../src/parser/Parser';
 import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
@@ -28,7 +31,9 @@ const foundTypesTranslation = {
     'object (string array)': 'object',
     'robytearray object': 'roByteArray',
     'rolist of roassociativearray items': 'roList',
-    'roassociative array': 'roAssociativeArray'
+    'roassociative array': 'roAssociativeArray',
+    'int': 'Integer',
+    'bool': 'Boolean'
 };
 
 const turndownService = new TurndownService({
@@ -40,6 +45,11 @@ turndownService.use(gfm);
 class Runner {
     private references: any;
 
+    /**
+     * Root dir of the local clone of the roku dev-doc repo
+     */
+    private docsDir: string;
+
     private result = {
         generatedDate: new Date().toISOString(),
         nodes: {} as Record<string, SceneGraphNode>,
@@ -50,10 +60,12 @@ class Runner {
 
     public async run() {
         const outPath = s`${__dirname}/../src/roku-types/data.json`;
+        const previousData = fsExtra.pathExistsSync(outPath) ? fsExtra.readJsonSync(outPath) : undefined;
 
-        loadCache();
+        //make sure we have a local copy of the roku docs repo
+        this.docsDir = ensureDocsRepo();
         //load the base level roku docs data
-        await this.loadReferences();
+        this.loadReferences();
 
         //build the various types of docs
         await this.buildComponents();
@@ -76,8 +88,11 @@ class Runner {
 
         //this.writeTypeDefinitions();
 
-        //store the output
-        fsExtra.outputFileSync(outPath, JSON.stringify(this.result, objectKeySorter, 4));
+        //store the output (converting any old-style doc urls, such as the ones from the hand-written overrides, to the new format)
+        const output = normalizeDocUrl(JSON.stringify(this.result, objectKeySorter, 4));
+        fsExtra.outputFileSync(outPath, output);
+
+        printChangeSummary(previousData, JSON.parse(output));
     }
 
     /**
@@ -282,8 +297,7 @@ class Runner {
         for (const name in componentDocs) {
             console.log(`Processing component ${i++} of ${count}`);
             const docPath = componentDocs[name];
-            const docApiUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(docPath, name);
 
             const component = {
                 name: manager.getHeading(1)?.text,
@@ -366,15 +380,15 @@ class Runner {
                 interfaces: [
                     {
                         name: 'ifDouble',
-                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdouble.md'
+                        url: 'https://developer.roku.com/dev/docs/references/brightscript/interfaces/ifdouble.md'
                     },
                     {
                         name: 'ifToStr',
-                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/iftostr.md'
+                        url: 'https://developer.roku.com/dev/docs/references/brightscript/interfaces/iftostr.md'
                     }
                 ],
                 name: 'roIntrinsicDouble',
-                url: 'https://developer.roku.com/docs/references/brightscript/components/rodouble.md'
+                url: 'https://developer.roku.com/dev/docs/references/brightscript/components/rodouble.md'
             };
         }
     }
@@ -457,8 +471,7 @@ class Runner {
         for (const name in interfaceDocs) {
             console.log(`Processing interface ${i++} of ${count}`);
             const docPath = interfaceDocs[name];
-            const docApiUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(docPath, name);
 
             try {
 
@@ -482,7 +495,7 @@ class Runner {
 
                 this.result.interfaces[name?.toLowerCase()] = iface as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing interface ${docPath}`, e);
             }
         }
     }
@@ -494,8 +507,7 @@ class Runner {
         for (const name in eventDocs) {
             console.log(`Processing event ${i++} of ${count}`);
             const docPath = eventDocs[name];
-            const docApiUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(docPath, name);
 
             try {
                 const evt = {
@@ -518,7 +530,7 @@ class Runner {
 
                 this.result.events[name?.toLowerCase()] = evt as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing event ${docPath}`, e);
             }
         }
     }
@@ -553,8 +565,7 @@ class Runner {
             }
             console.log(`Processing node ${i} of ${docs.length}`);
 
-            const docApiUrl = this.getDocApiUrl(doc.path);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(doc.path, doc.name);
 
             try {
 
@@ -584,7 +595,7 @@ class Runner {
 
                 this.result.nodes[node.name?.toLowerCase()] = node as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing node ${doc.path}`, e);
             }
         }
     }
@@ -660,10 +671,10 @@ class Runner {
 
     /**
      * ContentNode fields are a special case because the fields are listed in a different markdown file:
-     * https://developer.roku.com/docs/developer-program/getting-started/architecture/content-metadata.md
+     * https://developer.roku.com/dev/docs/developer-program/getting-started/architecture/content-metadata.md
      */
     private async buildContentNodeFields() {
-        const manager = await new TokenManager().process(this.getContentNodeDocApiUrl());
+        const manager = await new TokenManager().process(s`${this.docsDir}/${contentMetadataDocPath}`);
 
         const fields: SceneGraphNodeField[] = [
             ...this.getContentNodeFields(manager, ['attributes', 'type', 'values', 'example'], 2),
@@ -888,6 +899,8 @@ class Runner {
 
     private fixFunctionParams(text: string): string {
         return text.replace(/to as /ig, 'toValue as ')
+            //some docs put the default value after the type (`text as String = ""`), but brightscript wants it before (`text = "" as String`)
+            .replace(/(\w+)\s+as\s+(\w+)\s*=\s*("[^"]*"|[\w.-]+)/ig, '$1 = $3 as $2')
             .replace(/as\s+int\s*$/ig, 'as integer')
             .replace(/as\s+int\s*,/ig, 'as integer,')
             .replace(/as\s+int\s*\)\s*/ig, 'as integer)')
@@ -945,18 +958,54 @@ class Runner {
 
     }
 
-    private getDocApiUrl(docRelativePath: string) {
-        return `https://developer.roku.com/api/v1/get-dev-cms-doc?locale=en-us&filePath=${docRelativePath.replace(/^\/docs\//, '')}`;
-    }
+    /**
+     * Build the doc index by walking the `docs/REFERENCES` folder of the dev-doc repo.
+     * The result has the same shape as the old `left-nav/references.json` from the roku docs CMS:
+     * `{ BrightScript: { Components, Interfaces, Events }, SceneGraph: { [category]: { [name]: path } } }`
+     */
+    private loadReferences() {
+        const referencesDir = s`${this.docsDir}/${referencesDocPath}`;
+        const titles = getProperNamesFromLinks(getMarkdownFiles(referencesDir));
 
+        const getDocs = (dir: string) => {
+            const result = {} as Record<string, string>;
+            for (const fileName of fsExtra.readdirSync(dir).sort()) {
+                const filePath = s`${dir}/${fileName}`;
+                if (!fileName.endsWith('.md') || fileName === 'index.md') {
+                    continue;
+                }
+                const frontmatter = parseFrontmatter(fsExtra.readFileSync(filePath).toString()).attributes;
+                if (frontmatter.hidden === 'true') {
+                    continue;
+                }
+                result[getDocTitle(filePath, frontmatter, titles)] = filePath;
+            }
+            return result;
+        };
 
-    private getContentNodeDocApiUrl() {
-        return this.getDocApiUrl('developer-program/getting-started/architecture/content-metadata.md');
-    }
+        const sceneGraph = {} as Record<string, any>;
+        const sceneGraphDir = s`${referencesDir}/scenegraph`;
+        //top-level nodes (Node, Scene)
+        Object.assign(sceneGraph, getDocs(sceneGraphDir));
+        for (const category of fsExtra.readdirSync(sceneGraphDir).sort()) {
+            //these are not nodes
+            if (['component-functions', 'xml-elements'].includes(category)) {
+                continue;
+            }
+            const categoryDir = s`${sceneGraphDir}/${category}`;
+            if (fsExtra.statSync(categoryDir).isDirectory()) {
+                sceneGraph[category] = getDocs(categoryDir);
+            }
+        }
 
-    private async loadReferences() {
-        const response = await getJson('https://developer.roku.com/api/v1/get-dev-cms-doc?filePath=left-nav%2Freferences.json&locale=en-us');
-        this.references = JSON.parse(response.content);
+        this.references = {
+            BrightScript: {
+                Components: getDocs(s`${referencesDir}/brightscript/components`),
+                Interfaces: getDocs(s`${referencesDir}/brightscript/interfaces`),
+                Events: getDocs(s`${referencesDir}/brightscript/events`)
+            },
+            SceneGraph: sceneGraph
+        };
     }
 
     /**
@@ -967,11 +1016,11 @@ class Runner {
             nodes: {
                 rsgpalette: {
                     availableSince: '9.4',
-                    description: 'Extends [Node](https://developer.roku.com/docs/references/scenegraph/node.md\n\nThe **RSGPalette** node allows developers to specify a named set of color values that can be shared among nodes that support RSGPalette colors.\n\nNodes that support RSGPalette colors include a **palette** field, which can be set to an **RSGPalette** node to override the default colors used by the node. The specific palette values used by those nodes are defined in each node\'s documentation.\n\nIf a node that supports a palette does not set its **palette** filed, the RSGPalette is inherited from ancestor nodes in the scene graph. Specifically, the node looks up the scene graph until it finds a **PaletteGroup** node with its **palette** field set. This may be found in the **Scene** itself.\n\nIf no node in the scene graph has its **palette** field set, the keyboard uses the default palette (gray background/white text).\n\nCurrently, the **RSGPalette** node is typically used in channels that customize the colors of the dynamic keyboard nodes. In this case, the channel assigns the RSGPalette node to the **palette** field of the [DynamicKeyboardBase](https://developer.roku.com/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md\"DynamicKeyboardBase\") node and lets the keyboard\'s **DynamicKeyGrid** and **VoiceTextEditBox** inherit that RSGPalette.\n\n> The colors in the RSGPalette do not cascade. If a child node overrides its parent\'s RSGPalette node, that RSGPalette should specify values for all the colors used by the node. Unspecified values will use the system default colors.',
+                    description: 'Extends [Node](https://developer.roku.com/dev/docs/references/scenegraph/node.md\n\nThe **RSGPalette** node allows developers to specify a named set of color values that can be shared among nodes that support RSGPalette colors.\n\nNodes that support RSGPalette colors include a **palette** field, which can be set to an **RSGPalette** node to override the default colors used by the node. The specific palette values used by those nodes are defined in each node\'s documentation.\n\nIf a node that supports a palette does not set its **palette** filed, the RSGPalette is inherited from ancestor nodes in the scene graph. Specifically, the node looks up the scene graph until it finds a **PaletteGroup** node with its **palette** field set. This may be found in the **Scene** itself.\n\nIf no node in the scene graph has its **palette** field set, the keyboard uses the default palette (gray background/white text).\n\nCurrently, the **RSGPalette** node is typically used in channels that customize the colors of the dynamic keyboard nodes. In this case, the channel assigns the RSGPalette node to the **palette** field of the [DynamicKeyboardBase](https://developer.roku.com/dev/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md\"DynamicKeyboardBase\") node and lets the keyboard\'s **DynamicKeyGrid** and **VoiceTextEditBox** inherit that RSGPalette.\n\n> The colors in the RSGPalette do not cascade. If a child node overrides its parent\'s RSGPalette node, that RSGPalette should specify values for all the colors used by the node. Unspecified values will use the system default colors.',
                     events: [],
                     extends: {
                         name: 'Node',
-                        url: 'https://developer.roku.com/docs/references/scenegraph/node.md'
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
                     },
                     fields: [
                         {
@@ -1114,7 +1163,7 @@ class Runner {
                     events: [],
                     extends: {
                         name: 'Node',
-                        url: 'https://developer.roku.com/docs/references/scenegraph/node.md'
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
                     },
                     fields: [
                         {
@@ -1155,7 +1204,7 @@ class Runner {
                     events: [],
                     extends: {
                         name: 'Node',
-                        url: 'https://developer.roku.com/docs/references/scenegraph/node.md'
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
                     },
                     fields: [
                         {
@@ -1224,7 +1273,7 @@ class Runner {
                     events: [],
                     extends: {
                         name: 'Node',
-                        url: 'https://developer.roku.com/docs/references/scenegraph/node.md'
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
                     },
                     fields: [
                         {
@@ -1318,7 +1367,7 @@ class Runner {
                     description: 'The base dialog component.',
                     extends: {
                         name: 'Group',
-                        url: 'https://developer.roku.com/docs/references/scenegraph/layout-group-nodes/group.md'
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/layout-group-nodes/group.md'
                     },
                     fields: [
                         {
@@ -1367,7 +1416,7 @@ class Runner {
                             name: 'palette',
                             accessPermission: 'READ_WRITE',
                             default: 'not set',
-                            description: 'Sets the color palette for the dialog\'s background, text, buttons, and other elements. By default, no palette is specified; therefore, the dialog inherits the color palette from the nodes higher in the scene graph (typically, from the dialog\'s \\[Scene\\](https://developer.roku.com/docs/references/scenegraph/scene.md node, which has a \\*\\*palette\\*\\* field that can be used to consistently color the standard dialogs and keyboards in the app). The RSGPalette color values used by the StandardDialog node are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| DialogBackgroundColor | Blend color for dialog\'s background bitmap. |\n| DialogItemColor | Blend color for the following items:    *   [StdDlgProgressItem\'s](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md spinner bitmap *   [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic   |\n| DialogTextColor | Color for the text in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "normal" or "bold". *   All [content area items](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md, except for [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md. *   [Title area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.mdfields). Unfocused button.   |\n| DialogFocusColor | Blend color for the following:    *   The [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) focus bitmap. *   The focused scrollbar thumb.   |\n| DialogFocusItemColor | Color for the text of the focused button. |\n| DialogSecondaryTextColor | Color for the text of in the following items:    *   [StdDlgTextItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "secondary". *   Disabled button.   |\n| DialogSecondaryItemColor | Color for the following items:    *   The divider displayed below the title area. *   The unfilled portion of the [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic.   |\n| DialogInputFieldColor | The blend color for the text edit box background bitmap for keyboards used inside dialogs. |\n| DialogKeyboardColor | The blend color for the keyboard background bitmap for keyboards used inside dialogs |\n| DialogFootprintColor | The blend color for the following items:    *   The button focus footprint bitmap that is displayed when the [button area](https://developer.roku.com/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) does not have focus. *   Unfocused scrollbar thumb and scrollbar track.   |',
+                            description: 'Sets the color palette for the dialog\'s background, text, buttons, and other elements. By default, no palette is specified; therefore, the dialog inherits the color palette from the nodes higher in the scene graph (typically, from the dialog\'s \\[Scene\\](https://developer.roku.com/dev/docs/references/scenegraph/scene.md node, which has a \\*\\*palette\\*\\* field that can be used to consistently color the standard dialogs and keyboards in the app). The RSGPalette color values used by the StandardDialog node are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| DialogBackgroundColor | Blend color for dialog\'s background bitmap. |\n| DialogItemColor | Blend color for the following items:    *   [StdDlgProgressItem\'s](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md spinner bitmap *   [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic   |\n| DialogTextColor | Color for the text in the following items:    *   [StdDlgTextItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "normal" or "bold". *   All [content area items](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md, except for [StdDlgTextItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md. *   [Title area](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.mdfields). Unfocused button.   |\n| DialogFocusColor | Blend color for the following:    *   The [button area](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) focus bitmap. *   The focused scrollbar thumb.   |\n| DialogFocusItemColor | Color for the text of the focused button. |\n| DialogSecondaryTextColor | Color for the text of in the following items:    *   [StdDlgTextItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "secondary". *   Disabled button.   |\n| DialogSecondaryItemColor | Color for the following items:    *   The divider displayed below the title area. *   The unfilled portion of the [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic.   |\n| DialogInputFieldColor | The blend color for the text edit box background bitmap for keyboards used inside dialogs. |\n| DialogKeyboardColor | The blend color for the keyboard background bitmap for keyboards used inside dialogs |\n| DialogFootprintColor | The blend color for the following items:    *   The button focus footprint bitmap that is displayed when the [button area](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) does not have focus. *   Unfocused scrollbar thumb and scrollbar track.   |',
                             type: 'RSGPalette node'
                         },
                         {
@@ -1440,122 +1489,8 @@ class Runner {
                     name: 'roRegion',
                     interfaces: [{
                         name: 'ifDraw2D',
-                        url: 'https://developer.roku.com/docs/references/brightscript/interfaces/ifdraw2d.md'
+                        url: 'https://developer.roku.com/dev/docs/references/brightscript/interfaces/ifdraw2d.md'
                     }]
-                },
-                routils: {
-                    name: 'roUtils',
-                    methods: [{
-                        name: 'DeepCopy',
-                        description: 'Performs a deep copy of the source node object (it copies the obejct and all of its nested objects). If the source object contains items that are not copyable, they are skipped.',
-                        params: [
-                            {
-                                name: 'data',
-                                default: null,
-                                description: 'The object to be copied',
-                                isRequired: true,
-                                type: 'Object'
-                            }
-                        ],
-                        returnType: 'Object',
-                        returnDescription: 'This function returns a copy of the specified object.'
-                    }, {
-                        name: 'IsSameObject',
-                        description: 'Checks whether two BrightScript objects refer to the same instance and returns a flag indicating the result.',
-                        params: [
-                            {
-                                name: 'data1',
-                                default: null,
-                                description: 'First object',
-                                isRequired: true,
-                                type: 'Object'
-                            },
-                            {
-                                name: 'data2',
-                                default: null,
-                                description: 'Second object',
-                                isRequired: true,
-                                type: 'Object'
-                            }
-                        ],
-                        returnType: 'Boolean',
-                        returnDescription: 'Returns true if data1 and data2 reference the same object; otherwise, this returns false.'
-                    }],
-                    interfaces: []
-                },
-                rorenderthreadqueue: {
-                    name: 'roRenderThreadQueue',
-                    methods: [{
-                        name: 'AddMessageHandler',
-                        description: 'Registers a handler for messages received on the async message channel with the given message ID. The handler is called on the render thread for each message received. You can register multiple handlers for a single ID. In this case, the handlers are called in the order they were registered. This function can only be called on the render thread.',
-                        params: [
-                            {
-                                name: 'message_id',
-                                default: null,
-                                description: 'The ID of the message channel to which this handler should be registered.',
-                                isRequired: true,
-                                type: 'string'
-                            },
-                            {
-                                name: 'handler',
-                                default: null,
-                                description: 'The name of the handler function to be called for each message received.',
-                                isRequired: true,
-                                type: 'string'
-                            }
-                        ],
-                        returnType: 'Object',
-                        returnDescription: 'Returns an object that can be used to unregister the handler, if required, by calling `handle.unregister()`'
-                    }, {
-                        name: 'PostMessage',
-                        description: 'Post a message to the queue. The data is moved and becomes unavailable to the calling thread. The call returns immediately and does not block the calling thread. This function may be called from any thread.',
-                        params: [
-                            {
-                                name: 'message_id',
-                                default: null,
-                                description: 'The ID of the channel to which this message should be posted.',
-                                isRequired: true,
-                                type: 'String'
-                            },
-                            {
-                                name: 'data',
-                                default: null,
-                                description: 'The contents of the message to be passed to any registered handlers. This must be recursively copyable. Non-copyable objects are silently ignored. Copyable objects include:\n - roAssociativeArray\n - roArray\n - integer, long integer\n - string\n - bool\n - float, double\n - invalid\n - roSGNode',
-                                isRequired: true,
-                                type: 'Object'
-                            }
-                        ],
-                        returnType: 'Void',
-                        returnDescription: undefined
-                    }, {
-                        name: 'CopyMessage',
-                        description: 'Copy a message to the queue. The call returns immediately and does not block the calling thread. This function is similar to the `PostMessage()` function, but it copies data instead of moving it.',
-                        params: [
-                            {
-                                name: 'message_id',
-                                default: null,
-                                description: 'The ID of the channel to which this message should be posted.',
-                                isRequired: true,
-                                type: 'String'
-                            },
-                            {
-                                name: 'data',
-                                default: null,
-                                description: 'The contents of the message to be passed to any registered handlers. This must be recursively copyable. Non-copyable objects are silently ignored. Copyable objects include:\n - roAssociativeArray\n - roArray\n - integer, long integer\n - string\n - bool\n - float, double\n - invalid\n - roSGNode',
-                                isRequired: true,
-                                type: 'Object'
-                            }
-                        ],
-                        returnType: 'Void',
-                        returnDescription: undefined
-                    }, {
-                        name: 'NumCopies',
-                        description: 'Returns the total number of objects for the channel that were copied by the PostMessage() function instead of being moved.',
-                        params: [],
-                        returnType: 'Integer',
-                        returnDescription: undefined
-                    }],
-                    interfaces: []
                 }
             } as Record<string, Partial<BrightScriptComponent> & { name: string }>,
             events: {},
@@ -1812,40 +1747,299 @@ function fixMethod(iface: RokuInterface, funcName: string, mergeData: Func) {
     }
 }
 
-let cache: Record<string, string>;
-function loadCache() {
-    const cachePath = s`${__dirname}/.cache.json`;
-    if (fsExtra.pathExistsSync(cachePath)) {
-        cache = fsExtra.readJsonSync(cachePath);
-    } else {
-        cache = {};
+/**
+ * Log what was added, removed, or changed in data.json compared to the previous scrape
+ */
+function printChangeSummary(previousData: Record<string, any>, nextData: Record<string, any>) {
+    if (!previousData) {
+        return;
     }
-}
-
-function saveCache() {
-    fsExtra.writeJsonSync(s`${__dirname}/.cache.json`, cache);
-}
-
-async function getJson(url: string) {
-    if (!cache[url]) {
-        console.log('Fetching from web', url);
-        cache[url] = (await phin({
-            url: url,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+    const lines = [] as string[];
+    for (const category of ['components', 'interfaces', 'events', 'nodes']) {
+        const previous = previousData[category] ?? {};
+        const next = nextData[category] ?? {};
+        const names = [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort();
+        const categoryLines = [] as string[];
+        for (const name of names) {
+            if (!previous[name]) {
+                categoryLines.push(`  + ${next[name].name ?? name}`);
+            } else if (!next[name]) {
+                categoryLines.push(`  - ${previous[name].name ?? name}`);
+            } else if (JSON.stringify(previous[name]) !== JSON.stringify(next[name])) {
+                categoryLines.push(`  ~ ${next[name].name ?? name}: ${getMemberChanges(previous[name], next[name]).join(', ')}`);
             }
-        })).body.toString();
-        saveCache();
-    } else {
-        console.log('Fetching from cache', url);
+        }
+        if (categoryLines.length > 0) {
+            lines.push(`${category}:`, ...categoryLines);
+        }
     }
-    return JSON.parse(cache[url]);
+    if (lines.length === 0) {
+        console.log('\nNo changes to data.json. If you expected changes, run `npm run rescrape-roku-docs` to fetch the latest docs.');
+    } else {
+        console.log('\nChanges to data.json:\n' + lines.join('\n'));
+    }
 }
 
-function getDocUrl(docRelativePath: string) {
-    if (docRelativePath) {
-        return `https://developer.roku.com${docRelativePath}`;
+/**
+ * Describe how a component/interface/event/node changed. Lists of named items (methods, fields, etc) report which items were added, removed or changed
+ */
+function getMemberChanges(previous: Record<string, any>, next: Record<string, any>) {
+    const result = [] as string[];
+    const keys = [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort();
+    for (const key of keys) {
+        const previousValue = previous[key];
+        const nextValue = next[key];
+        if (JSON.stringify(previousValue) === JSON.stringify(nextValue)) {
+            continue;
+        }
+        const isNamedList = (value: any) => Array.isArray(value) && value.every(x => typeof x?.name === 'string');
+        if (isNamedList(previousValue ?? []) && isNamedList(nextValue ?? [])) {
+            const previousItems = new Map<string, any>((previousValue ?? []).map(x => [x.name, x]));
+            const nextItems = new Map<string, any>((nextValue ?? []).map(x => [x.name, x]));
+            for (const [name, item] of nextItems) {
+                if (!previousItems.has(name)) {
+                    result.push(`+${key}.${name}`);
+                } else if (JSON.stringify(previousItems.get(name)) !== JSON.stringify(item)) {
+                    result.push(`~${key}.${name}`);
+                }
+            }
+            for (const name of previousItems.keys()) {
+                if (!nextItems.has(name)) {
+                    result.push(`-${key}.${name}`);
+                }
+            }
+        } else {
+            result.push(`~${key}`);
+        }
     }
+    return result;
+}
+
+const devDocRepoUrl = 'https://gitlab.com/rokudev/dev-doc.git';
+const devDocBranch = 'v2.0';
+const docUrlBase = 'https://developer.roku.com/dev/docs/';
+const referencesDocPath = 'docs/REFERENCES';
+//ContentNode fields live in a separate doc outside of REFERENCES
+const contentMetadataDocPath = 'docs/DEVELOPER/getting-started/architecture/content-metadata.md';
+
+/**
+ * Get the paths the scraper needs that are missing from a dev-doc checkout
+ */
+function getMissingDocPaths(docsDir: string) {
+    return [referencesDocPath, contentMetadataDocPath].filter(x => !fsExtra.pathExistsSync(s`${docsDir}/${x}`));
+}
+
+/**
+ * Make sure there's a local copy of the roku dev-doc repo (https://gitlab.com/rokudev/dev-doc), and return its path.
+ * - `--docs-dir <path>` uses an existing checkout instead of cloning
+ * - otherwise the cached clone in `scripts/.dev-doc` is updated to the latest docs
+ * - `--refresh` throws away the cached clone and re-clones it
+ */
+function ensureDocsRepo() {
+    const args = process.argv.slice(2);
+    const docsDirIndex = args.indexOf('--docs-dir');
+    if (docsDirIndex > -1) {
+        const docsDir = path.resolve(args[docsDirIndex + 1] ?? '');
+        const missing = getMissingDocPaths(docsDir);
+        if (missing.length > 0) {
+            throw new Error(`--docs-dir "${docsDir}" is missing ${missing.join(', ')}`);
+        }
+        return docsDir;
+    }
+
+    const docsDir = s`${__dirname}/.dev-doc`;
+    if (args.includes('--refresh')) {
+        fsExtra.removeSync(docsDir);
+    }
+    if (getMissingDocPaths(docsDir).length > 0) {
+        fsExtra.removeSync(docsDir);
+        console.log(`Cloning ${devDocRepoUrl}#${devDocBranch} into ${docsDir}`);
+        try {
+            const run = (command: string) => execSync(command, { cwd: docsDir, stdio: 'inherit' });
+            fsExtra.ensureDirSync(docsDir);
+            run(`git clone --depth 1 --branch ${devDocBranch} --filter=blob:none --sparse ${devDocRepoUrl} .`);
+            run(`git sparse-checkout set ${referencesDocPath} ${path.posix.dirname(contentMetadataDocPath)}`);
+        } catch (e) {
+            fsExtra.removeSync(docsDir);
+            throw new Error(`Unable to clone ${devDocRepoUrl}. Check your network connection, or pass --docs-dir <path> to use an existing checkout of the roku dev-doc repo.\n${e?.message}`);
+        }
+    } else {
+        //pull the latest docs into the cached clone
+        console.log(`Updating cached docs in ${docsDir}`);
+        try {
+            const run = (command: string) => execSync(command, { cwd: docsDir, stdio: 'inherit' });
+            run(`git fetch --depth 1 origin ${devDocBranch}`);
+            run('git reset --hard FETCH_HEAD');
+        } catch (e) {
+            console.warn(`Unable to update the cached docs, so using them as-is (run with --refresh to re-clone).\n${e?.message}`);
+        }
+    }
+    //if these are missing now, roku probably moved them and this script needs updating
+    const missing = getMissingDocPaths(docsDir);
+    if (missing.length > 0) {
+        throw new Error(`The dev-doc repo is missing ${missing.join(', ')}. Roku may have moved these docs, so scripts/scrape-roku-docs.ts needs to be updated with their new location.`);
+    }
+    const commit = execSync('git rev-parse HEAD', { cwd: docsDir }).toString().trim();
+    console.log(`Using dev-doc commit ${commit}`);
+    return docsDir;
+}
+
+/**
+ * Parse the (very simple) yaml frontmatter at the top of a dev-doc markdown file. Only top-level scalar values are kept
+ */
+function parseFrontmatter(text: string) {
+    const attributes = {} as Record<string, string>;
+    const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+    if (!match) {
+        return { attributes: attributes, body: text };
+    }
+    for (const line of match[1].split(/\r?\n/)) {
+        const lineMatch = /^([a-z][\w-]*):\s*(.*?)\s*$/i.exec(line);
+        if (lineMatch) {
+            attributes[lineMatch[1]] = lineMatch[2].replace(/^(['"])(.*)\1$/, '$2').trim();
+        }
+    }
+    return { attributes: attributes, body: text.substring(match[0].length) };
+}
+
+/**
+ * Recursively find all markdown files in a directory
+ */
+function getMarkdownFiles(dir: string): string[] {
+    const result = [] as string[];
+    for (const entry of fsExtra.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = s`${dir}/${entry.name}`;
+        if (entry.isDirectory()) {
+            result.push(...getMarkdownFiles(entryPath));
+        } else if (entry.name.endsWith('.md')) {
+            result.push(entryPath);
+        }
+    }
+    return result;
+}
+
+/**
+ * Get the slug (i.e. `rowebsocket`) for a dev-doc file path or doc url
+ */
+function getDocSlug(docPath: string) {
+    return path.basename(docPath).replace(/\.md$/i, '').toLowerCase();
+}
+
+/**
+ * Some docs have the wrong (or a less specific) title in their frontmatter (i.e. `ifwebsocket.md` has the title `roWebSocket`).
+ * Scan every link across the docs (`[ifWebSocket](doc:ifwebsocket)`) to find the properly-cased name for each slug.
+ */
+function getProperNamesFromLinks(filePaths: string[]) {
+    //slug -> (name -> count)
+    const counts = new Map<string, Map<string, number>>();
+    for (const filePath of filePaths) {
+        const text = fsExtra.readFileSync(filePath).toString();
+        const regexp = /\[\**([\w.]+?)\**\]\(doc:([\w-]+)[^)]*\)/g;
+        let match: RegExpExecArray;
+        while (match = regexp.exec(text)) {
+            const slug = match[2].toLowerCase();
+            if (match[1].toLowerCase() === slug) {
+                const names = counts.get(slug) ?? new Map<string, number>();
+                names.set(match[1], (names.get(match[1]) ?? 0) + 1);
+                counts.set(slug, names);
+            }
+        }
+    }
+    //keep the most commonly-used spelling for each slug
+    const result = new Map<string, string>();
+    for (const [slug, names] of counts) {
+        result.set(slug, [...names].sort((a, b) => b[1] - a[1])[0][0]);
+    }
+    return result;
+}
+
+/**
+ * Get the name for a doc. Usually this is the frontmatter title, but some titles are wrong (`ifwebsocket.md` is titled `roWebSocket`)
+ * or have lost their casing (`Ifrenderthreadqueue`, `IfUtils`). In those cases, use the most common spelling from links to this doc.
+ */
+function getDocTitle(filePath: string, frontmatter: Record<string, string>, properNames: Map<string, string>) {
+    const slug = getDocSlug(filePath);
+    let title = frontmatter.title?.trim();
+    //brightscript components, interfaces and events always start with a lower case `ro` or `if`
+    const isBrightScriptDoc = /\/brightscript\//i.test(filePath.replace(/\\/g, '/'));
+    if (isBrightScriptDoc && (/^(Ro|If)[A-Z]/.test(title) || /^(Ro|If)[a-z]+$/.test(title))) {
+        title = title.charAt(0).toLowerCase() + title.substring(1);
+    }
+    const titleMatchesSlug = title?.toLowerCase().replace(/\s+/g, '') === slug.replace(/-/g, '');
+    //an all-lowercase title has lost its casing
+    if (titleMatchesSlug && title !== title.toLowerCase()) {
+        return title;
+    }
+    return properNames.get(slug) ?? title ?? slug;
+}
+
+/**
+ * Markdown html blocks end at the first blank line, so blank lines inside an html `<table>` cause the rest of the table to be parsed as markdown.
+ * Remove those blank lines so the whole table stays a single html block.
+ */
+function removeBlankLinesInsideHtmlTables(markdown: string) {
+    const result = [] as string[];
+    let depth = 0;
+    for (const line of markdown.split(/\r?\n/)) {
+        if (depth > 0 && line.trim() === '') {
+            continue;
+        }
+        result.push(line);
+        depth += (line.match(/<table\b/gi) ?? []).length - (line.match(/<\/table>/gi) ?? []).length;
+        depth = Math.max(depth, 0);
+    }
+    return result.join('\n');
+}
+
+/**
+ * Convert the readme.io/MDX flavored markdown from the dev-doc repo into plain markdown + html
+ */
+function normalizeDevDocMarkdown(markdown: string) {
+    return removeBlankLinesInsideHtmlTables(markdown)
+        //<HTMLBlock>{`...`}</HTMLBlock>
+        .replace(/<HTMLBlock>\{`([\s\S]*?)`\}<\/HTMLBlock>/g, '$1')
+        //<Anchor href="url">text</Anchor>
+        .replace(/<Anchor\b[^>]*?\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/Anchor>/g, '[$2]($1)')
+        //<Image alt="..." src="..." />
+        .replace(/<Image\b[^>]*?\balt="([^"]*)"[^>]*?\bsrc="([^"]*)"[^>]*\/>/g, '![$1]($2)')
+        .replace(/<(\/?)Table>/g, '<$1table>')
+        //jsx style attributes
+        .replace(/\s*style=\{\{[^}]*\}\}/g, '')
+        //doc links (`doc:slug`, plus the occasional `docs:slug` typo and site-relative `/dev/docs/slug`)
+        .replace(/\((?:docs?:\s*|\/dev\/docs\/)([\w-]+)/g, `(${docUrlBase}$1`)
+        .replace(/href="(?:docs?:\s*|\/dev\/docs\/)([\w-]+)/g, `href="${docUrlBase}$1`);
+}
+
+/**
+ * Get the public url for a doc. Handles dev-doc file paths, `doc:slug` links, and old `/docs/references/.../slug.md` paths
+ */
+function getDocUrl(docPath: string) {
+    if (!docPath) {
+        return undefined;
+    }
+    const relativeMatch = /^(?:docs?:\s*|\/dev\/docs\/)(.*)$/.exec(docPath);
+    if (relativeMatch) {
+        return docUrlBase + relativeMatch[1];
+    }
+    if (/^https?:/.test(docPath)) {
+        return normalizeDocUrl(docPath);
+    }
+    if (/\.md(#.*)?$/i.test(docPath)) {
+        const [filePath, hash] = docPath.split('#');
+        return docUrlBase + getDocSlug(filePath) + (hash ? `#${hash}` : '');
+    }
+    return docPath;
+}
+
+/**
+ * Convert old-style roku doc urls (`https://developer.roku.com/en-ca/docs/references/scenegraph/node.md#fields`)
+ * to the new style (`https://developer.roku.com/dev/docs/node#fields`)
+ */
+function normalizeDocUrl(url: string) {
+    return url.replace(
+        /https:\/\/developer\.roku\.com(?:\/[a-z]{2}-[a-z]{2})?(?:\/dev)?\/docs\/references\/[\w\/-]*?([\w-]+)\.md/gi,
+        (_, slug: string) => docUrlBase + slug.toLowerCase()
+    );
 }
 
 function deepSearch<T = any>(object, key, predicate): T {
@@ -1870,19 +2064,9 @@ function repairMarkdownLinks(text: string) {
     if (typeof text !== 'string') {
         return text;
     }
-    const regexp = /\((\/docs\/references\/.*?.md)/g;
-    let match: RegExpExecArray;
-    const matches = [] as RegExpExecArray[];
-    while (match = regexp.exec(text)) {
-        matches.push(match);
-    }
-
-    //process the matches in reverse to preserve string indexes
-    for (const match of matches.reverse()) {
-        //+1 to step past the opening paren
-        text = text.substring(0, match.index + 1) + getDocUrl(match[1]) + text.substring(match.index + 1 + match[0].length);
-    }
-    return text;
+    return normalizeDocUrl(
+        text.replace(/\((\/docs\/references\/.*?\.md)/g, (_, docPath: string) => `(${getDocUrl(docPath)}`)
+    );
 }
 
 /**
@@ -1967,13 +2151,28 @@ class TokenManager {
     public markdown: string;
     public tokens: marked.TokensList;
 
-    public async process(url: string) {
+    /**
+     * @param filePath path to the dev-doc markdown file
+     * @param title the name of the doc. Defaults to the frontmatter title
+     */
+    public async process(filePath: string, title?: string) {
         try {
-            this.html = (await getJson(url)).content;
+            const { attributes, body } = parseFrontmatter(
+                (await fsExtra.readFile(filePath)).toString()
+            );
+            //the old CMS docs had the title as an h1, and the rest of this script depends on that
+            title = title ?? attributes.title?.trim() ?? getDocSlug(filePath);
+            //some docs repeat the title as an h2 at the top, which would hide the description (which is the content between the h1 and the next heading)
+            const content = normalizeDevDocMarkdown(body).replace(/^\s*##\s+(.*)\r?\n/, (match, heading: string) => {
+                return heading.trim().toLowerCase() === title.toLowerCase() ? '' : match;
+            });
+            const markdown = `# ${title}\n\n${content}`;
+            //round-trip through html so inline html tables get converted into markdown tables, just like the old CMS html docs
+            this.html = marked.parse(markdown);
             this.markdown = turndownService.turndown(this.html);
             this.tokens = marked.lexer(this.markdown);
         } catch (e) {
-            console.error('Unable to process url: ', url);
+            console.error('Unable to process doc: ', filePath, e);
         }
         return this;
     }
@@ -2087,6 +2286,26 @@ class TokenManager {
                         url: getDocUrl(link.href)
                     });
                 }
+                //some docs just have a paragraph with one or more links instead of a list
+            } else if (list?.type === 'paragraph') {
+                //links can be nested inside bold/italic tokens
+                const links = [] as marked.Tokens.Link[];
+                const collectLinks = (tokens: Token[]) => {
+                    for (const token of tokens ?? []) {
+                        if (token.type === 'link') {
+                            links.push(token as marked.Tokens.Link);
+                        } else {
+                            collectLinks((token as any).tokens);
+                        }
+                    }
+                };
+                collectLinks(list.tokens);
+                for (const link of links) {
+                    result.push({
+                        name: link.text?.replace(/^[*_]+|[*_]+$/g, ''),
+                        url: getDocUrl(link.href)
+                    });
+                }
             }
         }
         return result;
@@ -2166,7 +2385,7 @@ class TokenManager {
      */
     public getAvailableSince(startToken: Token, endTokenMatcher: TokenMatcher) {
         const markdown = this.getMarkdown(startToken, endTokenMatcher);
-        const match = /available\s+since\s?(?:roku\s*os\s*)?([\d\.]+)/i.exec(markdown);
+        const match = /available\s+since\s?\[?(?:roku\s*os\s*)?([\d\.]+)/i.exec(markdown);
         if (match) {
             return match[1];
         }
