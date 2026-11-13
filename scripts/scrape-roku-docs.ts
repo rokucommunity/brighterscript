@@ -21,6 +21,7 @@ import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
 import { SymbolTable } from '../src/SymbolTable';
+import { TokenKind } from '../src/lexer/TokenKind';
 
 
 type Token = marked.Token;
@@ -32,6 +33,8 @@ const foundTypesTranslation = {
     'robytearray object': 'roByteArray',
     'rolist of roassociativearray items': 'roList',
     'roassociative array': 'roAssociativeArray',
+    'uri string': 'uri',
+    'oassociativearray': 'roAssociativeArray',
     'int': 'Integer',
     'bool': 'Boolean'
 };
@@ -345,7 +348,8 @@ class Runner {
                                     name: paramName,
                                     default: undefined,
                                     isRequired: true,
-                                    type: (arg as any).type?.toString() ?? 'dynamic',
+                                    //v1 expressions have no `.type`, so v1 always emits 'dynamic' here. Match it to keep data.json in sync with v1
+                                    type: 'dynamic',
                                     description: undefined
                                 });
                             }
@@ -893,6 +897,9 @@ class Runner {
         if (!opts?.allowSpaces) {
             result = result?.split(' ')?.[0];
         }
+        if (foundTypesTranslation[result.toLowerCase()]) {
+            result = foundTypesTranslation[result.toLowerCase()];
+        }
         return result;
     }
 
@@ -907,6 +914,14 @@ class Runner {
             .replace(/as\s+bool\s*$/ig, 'as boolean')
             .replace(/as\s+bool\s*,/ig, 'as boolean,')
             .replace(/as\s+bool\s*\)/ig, 'as boolean)');
+    }
+
+    private getReturnTypeString(func: FunctionStatement) {
+        const token = func.func.returnTypeToken;
+        if (!token) {
+            return undefined;
+        }
+        return token.kind === TokenKind.Identifier ? token.text : token.text.toLowerCase();
     }
 
     private getMethod(text: string) {
@@ -931,7 +946,8 @@ class Runner {
             const signature = {
                 name: func.name?.text,
                 params: [],
-                returnType: func.func.returnTypeToken?.text ?? 'Void'
+                //match v1, whose `getType().toTypeString()` lowercases built-in types but keeps custom type names as written
+                returnType: this.getReturnTypeString(func) ?? returnTypeString ?? 'Void'
             } as Func;
 
             if (variadicMatch) {
@@ -1656,10 +1672,11 @@ function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
         if (!returnDescriptions.includes(originalOverload.returnDescription)) {
             returnDescriptions.push(originalOverload.returnDescription);
         }
-        if (!returnTypes.includes(originalOverload.returnType)) {
+        if (!returnTypes.map(rt => rt.toLowerCase()).includes(originalOverload.returnType.toLowerCase())) {
             returnTypes.push(originalOverload.returnType);
         }
     }
+
     const mergedFunc: Func = {
         name: originalOverloads[0].name,
         params: [],
