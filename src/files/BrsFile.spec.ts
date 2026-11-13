@@ -596,6 +596,50 @@ describe('BrsFile', () => {
         expectZeroDiagnostics(program);
     });
 
+    it('supports roUtils methods from ifUtils', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                utils = CreateObject("roUtils")
+                copy = utils.DeepCopy({ name: "bob" })
+                print utils.IsSameObject(copy, copy)
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports roWebSocket and its ifWebSocket methods', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                port = CreateObject("roMessagePort")
+                ws = CreateObject("roWebSocket")
+                ws.SetMessagePort(port)
+                ws.AddHeader("Authorization", "Bearer abc")
+                ws.SetUrl("wss://example.com/socket")
+                ws.Open()
+                ws.PingTest(1000, "ping")
+                ws.SetTimer("heartbeat", 5000)
+                ws.Close(1000, "done")
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports the Effect node', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                effect = CreateObject("roSGNode", "Effect")
+                effect.borderRadius = [12]
+                effect.gradientStyle = "linear"
+                poster = CreateObject("roSGNode", "Poster")
+                poster.effect = effect
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
         expect(new BrsFile({

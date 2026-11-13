@@ -4,12 +4,9 @@
         "target": "ES2017",
         "resolveJsonModule": true,
         "lib": [
-            "es2017",
-            "es2019.array",
-            "es2021.promise",
-            "es2021.weakref",
-            "es2022.error",
-            "dom"
+            "es2022",
+            "DOM",
+            "DOM.Iterable"
         ]
     }
 }
