@@ -9,7 +9,7 @@
     "watch": "npm run clean && tsc --watch",
     "prepublishOnly": "npm run build",
     "lint": "eslint \"src/**\" && npm run check-eol",
-    "check-eol": "check-eol --eol platform './*' 'src/**/*' 'scripts/**/*' 'TestRokuApp/**/*' 'docs/**/*' 'benchmarks/**/*' '.vscode/*' '.github/**/*' '!**/node_modules/**/*'",
+    "check-eol": "check-eol --eol platform './*' 'src/**/*' 'scripts/**/*' 'TestRokuApp/**/*' 'docs/**/*' 'benchmarks/**/*' '.vscode/*' '.github/**/*' '!**/node_modules/**/*' '!src/roku-types/data.json'",
     "format": "tsfmt -r",
     "test": "nyc mocha",
     "test:nocover": "mocha",
