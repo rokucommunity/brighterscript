@@ -17,7 +17,7 @@ Sometimes BrighterScript will need to protect against unintended performance iss
 There are 2 possible ways that your null-coalescing expressions can be transpiled:
 
 ### Simple
-In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous. This means BrighterScript can use a simpler and more performant transpile target.
+In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous. This means BrighterScript can use a simpler and more performant transpile target. This only happens when the consequent and alternate are made up entirely of literals (strings, numbers, arrays, associative arrays, etc.) and plain variable references. Anything else (such as `a.b`, `a["b"]`, `a@b`, function calls, or math operations) uses scope capturing instead.
 ```brighterscript
 userId = createdUserId ?? -1
 ```
