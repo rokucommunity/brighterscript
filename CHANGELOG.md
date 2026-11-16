@@ -6,6 +6,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.0.0-alpha.58](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.57...v1.0.0-alpha.58) - 2026-11-16
+### Added
+ - Add diagnostic for files over the device literal limit ([#1862](https://github.com/rokucommunity/brighterscript/pull/1862))
+ - Add diagnostic for functions over the device goto label limit ([#1861](https://github.com/rokucommunity/brighterscript/pull/1861))
+### Changed
+ - Keep comments above a statement-level ?? ahead of its temp statements ([#1989](https://github.com/rokucommunity/brighterscript/pull/1989))
+ - Merge master into v1 ([#1939](https://github.com/rokucommunity/brighterscript/pull/1939), [#1958](https://github.com/rokucommunity/brighterscript/pull/1958), [#1983](https://github.com/rokucommunity/brighterscript/pull/1983), [#1988](https://github.com/rokucommunity/brighterscript/pull/1988))
+ - Keep trailing comments on their line when lowering statement-level ?? ([#1987](https://github.com/rokucommunity/brighterscript/pull/1987))
+ - Allow same-line annotations inside function bodies ([#1916](https://github.com/rokucommunity/brighterscript/pull/1916))
+ - Scrape roku docs from the dev-doc gitlab repo ([#1979](https://github.com/rokucommunity/brighterscript/pull/1979))
+ - Support optional chaining on callfunc ([#1920](https://github.com/rokucommunity/brighterscript/pull/1920))
+ - perf: remove Token.isReserved in favor of ReservedTokenKinds ([#1961](https://github.com/rokucommunity/brighterscript/pull/1961))
+ - perf: use ReadonlySets for token kind lists instead of spreading arrays ([#1962](https://github.com/rokucommunity/brighterscript/pull/1962))
+ - Warn when assigning to a member of an AA read from a node field ([#1975](https://github.com/rokucommunity/brighterscript/pull/1975))
+ - perf: keep objects on one hidden class by initializing late-assigned fields ([#1967](https://github.com/rokucommunity/brighterscript/pull/1967))
+ - Let type designators win over conflicting parameter `as` types ([#1965](https://github.com/rokucommunity/brighterscript/pull/1965))
+ - perf: skip transpile work for expressions with nothing to inline, and only read the tail when stripping sourceMappingURL ([#1973](https://github.com/rokucommunity/brighterscript/pull/1973))
+ - Link BrsFile symbols in validateFile, validate in afterValidateFile ([#1947](https://github.com/rokucommunity/brighterscript/pull/1947))
+ - perf: reuse the lexer's trivia scratch array between tokens ([#1963](https://github.com/rokucommunity/brighterscript/pull/1963))
+ - perf: don't allocate collections that usually stay empty ([#1968](https://github.com/rokucommunity/brighterscript/pull/1968))
+ - Don't request workspace folders from clients that don't support them ([#1948](https://github.com/rokucommunity/brighterscript/pull/1948))
+ - Run BscPlugin's work in after* hooks so plugins always run first ([#1946](https://github.com/rokucommunity/brighterscript/pull/1946))
+ - Security enhancements ([#1944](https://github.com/rokucommunity/brighterscript/pull/1944), [#1956](https://github.com/rokucommunity/brighterscript/pull/1956))
+ - Lazily allocate ReferenceType state and BscType member tables ([#1952](https://github.com/rokucommunity/brighterscript/pull/1952))
+ - Refactor Location tracking to be an offset-based Locatable model ([#1845](https://github.com/rokucommunity/brighterscript/pull/1845))
+ - feat: support severity-based diagnostic filtering (#776) ([#1930](https://github.com/rokucommunity/brighterscript/pull/1930))
+ - Allow a colon before a single-line `if` ([#1925](https://github.com/rokucommunity/brighterscript/pull/1925))
+ - Flag parameters whose type designator conflicts with their `as` type … ([#1921](https://github.com/rokucommunity/brighterscript/pull/1921))
+ - Allow regex literals in return statements (#994) ([#1922](https://github.com/rokucommunity/brighterscript/pull/1922))
+ - Don't capture namespace names in ternary and `??` inline functions ([#1917](https://github.com/rokucommunity/brighterscript/pull/1917))
+ - Flag missing observer callbacks (#777) ([#1919](https://github.com/rokucommunity/brighterscript/pull/1919))
+ - Transpile statement-level `??` to if statements (#306) ([#1914](https://github.com/rokucommunity/brighterscript/pull/1914))
+ - Validate regex literals ([#1915](https://github.com/rokucommunity/brighterscript/pull/1915))
+### Fixed
+ - Fix memory leak: built-in method cache kept the first program alive ([#1980](https://github.com/rokucommunity/brighterscript/pull/1980))
+ - Fix lost cross-scope diagnostics after editing a file shared by multiple scopes ([#1932](https://github.com/rokucommunity/brighterscript/pull/1932))
+ - Fix false "cannot find name" caused by a field's type chain ([#1971](https://github.com/rokucommunity/brighterscript/pull/1971))
+ - Fix memory leak: forget diagnostic segments once they're cleared ([#1969](https://github.com/rokucommunity/brighterscript/pull/1969))
+### Removed
+ - Remove lint-style redundant-import, missing-extends, and unnecessary-codebehind diagnostics ([#1964](https://github.com/rokucommunity/brighterscript/pull/1964))
+
+
+
 ## [1.0.0-alpha.57](https://github.com/rokucommunity/brighterscript/compare/1.0.0-alpha.56...v1.0.0-alpha.57) - 2026-10-13
 ### Added
  - Add goto and label diagnostics ([#1893](https://github.com/rokucommunity/brighterscript/pull/1893))
