@@ -517,6 +517,50 @@ describe('NullCoalescingExpression', () => {
                 `);
             });
 
+            it('keeps trailing comments on their own statement when temps are used', async () => {
+                await testTranspile(`
+                    sub main(a)
+                        m.x = a.x ?? "" ' first
+                        m.y = a.y ?? "" ' second
+                    end sub
+                `, `
+                    sub main(a)
+                        __bsc_tmp_coalesce = a.x
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.x = __bsc_tmp_coalesce ' first
+                        __bsc_tmp_coalesce = a.y
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.y = __bsc_tmp_coalesce ' second
+                    end sub
+                `);
+            });
+
+            it('keeps trailing comments on their own statement for local targets', async () => {
+                await testTranspile(`
+                    sub main(a)
+                        x = a.x ?? "" ' first
+                        y = a.y ?? "" ' second
+                        print x + y
+                    end sub
+                `, `
+                    sub main(a)
+                        x = a.x ' first
+                        if x = invalid then
+                            x = ""
+                        end if
+                        y = a.y ' second
+                        if y = invalid then
+                            y = ""
+                        end if
+                        print x + y
+                    end sub
+                `);
+            });
+
             it('uses a temp for indexed set targets', async () => {
                 await testTranspile(`
                     sub main(task, arr)
