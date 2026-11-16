@@ -6,7 +6,7 @@ The source for the BrighterScript docs site, built with [Docusaurus](https://doc
 From the repo root:
 
 ```bash
-npm run docs         # live-reloading dev server for this checkout's docs (i.e. http://localhost:3000/brighterscript/v0/)
+npm run docs         # dev server: this checkout's docs live-reload (i.e. http://localhost:3000/brighterscript/v0/), and every other version is built at startup
 npm run build-docs   # the full site with every version, into website/build
 ```
 

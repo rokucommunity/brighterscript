@@ -2,7 +2,7 @@
  * Builds and runs the docs site.
  *
  *   node scripts/site.mjs start   dev server: this checkout's docs live (at /brighterscript/<this version>/), plus every other
- *                                 version prebuilt from its newest tag (rebuilt only when there's a newer tag)
+ *                                 version built from its newest tag (rebuilt on every start)
  *   node scripts/site.mjs build   the full site: every version in doc-versions.json, side by side, into website/build
  *   node scripts/site.mjs serve   serve that full build locally, like production
  *
@@ -245,22 +245,14 @@ function writeSharedFiles(siteRootDir, options = { include404: true }) {
 
 /**
  * For the dev server: build every OTHER version (from its newest tag, same as the full build) into `devSitesDir`, so the
- * dev server can serve them next to this checkout's live docs. A version is only rebuilt when it has a newer tag
- * (delete website/.versions to force a rebuild). A version that can't be built only warns, so it never blocks local editing.
+ * dev server can serve them next to this checkout's live docs. Rebuilt on every start, so they're never stale.
+ * A version that can't be built only warns, so it never blocks local editing.
  */
 function buildOtherVersionsForDev() {
+    fs.rmSync(devSitesDir, { recursive: true, force: true });
     for (const version of versions.filter(x => x.name !== localVersionName)) {
-        const outDir = path.join(devSitesDir, version.name);
-        const stampPath = path.join(devSitesDir, `${version.name}.tag`);
         try {
-            const tag = findLatestTag(version.name);
-            if (tag && fs.existsSync(stampPath) && fs.readFileSync(stampPath, 'utf8') === tag && fs.existsSync(path.join(outDir, 'index.html'))) {
-                console.log(`[site] ${version.name}: using the previous build of tag ${tag}`);
-                continue;
-            }
-            fs.rmSync(outDir, { recursive: true, force: true });
-            buildOtherVersion(version, outDir);
-            fs.writeFileSync(stampPath, tag);
+            buildOtherVersion(version, path.join(devSitesDir, version.name));
         } catch (e) {
             console.warn(`[site] WARNING: couldn't build docs version "${version.name}", so it won't be available in the dev server: ${e.message}`);
         }
