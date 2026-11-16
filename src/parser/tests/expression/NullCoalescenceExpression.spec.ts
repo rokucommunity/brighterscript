@@ -315,6 +315,94 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
+        it('short-circuits complex expressions nested inside a grouping', () => {
+            testTranspile(`
+                sub main(cached, alpha)
+                    a = cached ?? (alpha.beta + 2)
+                end sub
+            `, `
+                sub main(cached, alpha)
+                    a = (function(alpha, cached)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return (alpha.beta + 2)
+                            end if
+                        end function)(alpha, cached)
+                end sub
+            `);
+        });
+
+        it('short-circuits binary expressions containing dotted gets', () => {
+            testTranspile(`
+                sub main(cached, alpha, beta)
+                    a = cached ?? alpha + beta.charlie
+                end sub
+            `, `
+                sub main(cached, alpha, beta)
+                    a = (function(alpha, beta, cached)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return alpha + beta.charlie
+                            end if
+                        end function)(alpha, beta, cached)
+                end sub
+            `);
+        });
+
+        it('short-circuits template strings with a variable interpolation', () => {
+            testTranspile(`
+                sub main(cached, beta)
+                    a = cached ?? \`alpha\${beta}\`
+                end sub
+            `, `
+                sub main(cached, beta)
+                    a = (function(beta, cached)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return ("alpha" + bslib_toString(beta))
+                            end if
+                        end function)(beta, cached)
+                end sub
+            `);
+        });
+
+        it('short-circuits template strings with a dotted get interpolation', () => {
+            testTranspile(`
+                sub main(cached, beta)
+                    a = cached ?? \`alpha\${beta.charlie}\`
+                end sub
+            `, `
+                sub main(cached, beta)
+                    a = (function(beta, cached)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return ("alpha" + bslib_toString(beta.charlie))
+                            end if
+                        end function)(beta, cached)
+                end sub
+            `);
+        });
+
+        it('uses bslib_coalesce for template strings without interpolations', () => {
+            testTranspile(`
+                sub main(cached)
+                    a = cached ?? \`alpha\`
+                end sub
+            `, `
+                sub main(cached)
+                    a = bslib_coalesce(cached, "alpha")
+                end sub
+            `);
+        });
+
         it('uses bslib_coalesce for plain variables and literals', () => {
             testTranspile(`
                 sub main(cached, fallback)
