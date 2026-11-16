@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIndexedGetExpression, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -2589,7 +2589,7 @@ export class TernaryExpression extends Expression {
         let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
-        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
 
         if (mutatingExpressions.length > 0) {
             result.push(
@@ -2697,14 +2697,14 @@ export class NullCoalescingExpression extends Expression {
     public readonly alternate: Expression;
 
     /**
-     * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
-     * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
+     * Does either side contain a call, callfunc, dotted get, indexed get, or xml attribute get? Those may have side effects or crash,
+     * so they can't be passed to `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
      */
     public hasMutatingExpression(file: BrsFile) {
         return [
             ...util.getExpressionInfo(this.consequent, file).expressions,
             ...util.getExpressionInfo(this.alternate, file).expressions
-        ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+        ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e) || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
     }
 
     transpile(state: BrsTranspileState) {
