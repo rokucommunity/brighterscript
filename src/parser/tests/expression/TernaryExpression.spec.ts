@@ -966,19 +966,6 @@ describe('ternary expressions', () => {
                 , 'none', undefined, false);
         });
 
-        it('short-circuits unary expression branches when not a simple assignment', () => {
-            testTranspile(
-                `print q ? 1 : -count`,
-                'print (function(__bsCondition, count)\n' +
-                '        if __bsCondition then\n' +
-                '            return 1\n' +
-                '        else\n' +
-                '            return -count\n' +
-                '        end if\n' +
-                '    end function)(q, count)'
-                , 'none', undefined, false);
-        });
-
         it('uses bslib_ternary for plain variables and literals', () => {
             testTranspile(
                 `print q ? name : "nobody"`,

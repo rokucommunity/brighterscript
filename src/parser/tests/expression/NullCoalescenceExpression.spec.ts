@@ -296,25 +296,6 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
-        it('short-circuits binary expression alternate', () => {
-            testTranspile(`
-                sub main(cached, count)
-                    a = cached ?? count + 1
-                end sub
-            `, `
-                sub main(cached, count)
-                    a = (function(cached, count)
-                            __bsConsequent = cached
-                            if __bsConsequent <> invalid then
-                                return __bsConsequent
-                            else
-                                return count + 1
-                            end if
-                        end function)(cached, count)
-                end sub
-            `);
-        });
-
         it('short-circuits complex expressions nested inside a grouping', () => {
             testTranspile(`
                 sub main(cached, alpha)
@@ -349,25 +330,6 @@ describe('NullCoalescingExpression', () => {
                                 return alpha + beta.charlie
                             end if
                         end function)(alpha, beta, cached)
-                end sub
-            `);
-        });
-
-        it('short-circuits template strings with a variable interpolation', () => {
-            testTranspile(`
-                sub main(cached, beta)
-                    a = cached ?? \`alpha\${beta}\`
-                end sub
-            `, `
-                sub main(cached, beta)
-                    a = (function(beta, cached)
-                            __bsConsequent = cached
-                            if __bsConsequent <> invalid then
-                                return __bsConsequent
-                            else
-                                return ("alpha" + bslib_toString(beta))
-                            end if
-                        end function)(beta, cached)
                 end sub
             `);
         });

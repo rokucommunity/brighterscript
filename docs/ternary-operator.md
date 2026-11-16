@@ -107,7 +107,7 @@ end if
 ```
 
 ### BrighterScript `bslib_ternary` library function
-In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous or cloning, but the code was too complex to safely transpile to an `if else` block so we will leverage the `bslib_ternary` function instead. This only happens when the consequent and alternate are made up entirely of literals (strings, numbers, arrays, associative arrays, etc.) and plain variable references. Anything else (such as `a.b`, `a["b"]`, `a@b`, function calls, or math operations) uses scope capturing instead.
+In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous or cloning, but the code was too complex to safely transpile to an `if else` block so we will leverage the `bslib_ternary` function instead.
 
 ```BrighterScript
 printAuthStatus(user = invalid ? "not logged in" : "logged in")

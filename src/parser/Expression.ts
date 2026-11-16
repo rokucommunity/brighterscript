@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isCallExpression, isCommentStatement, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isGroupingExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isRegexLiteralExpression, isSourceLiteralExpression, isStringType, isTemplateStringExpression, isTemplateStringQuasiExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIndexedGetExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -1833,12 +1833,12 @@ export class TernaryExpression extends Expression {
             return !nonReferenceableFunctions.includes(name.toLowerCase());
         });
 
-        const needsShortCircuit = !canEvaluateEagerly([
+        let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
-        ]);
+        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
 
-        if (needsShortCircuit) {
+        if (mutatingExpressions.length > 0) {
             result.push(
                 state.sourceNode(
                     this.questionMarkToken,
@@ -1934,12 +1934,12 @@ export class NullCoalescingExpression extends Expression {
             return !nonReferenceableFunctions.includes(name.toLowerCase());
         });
 
-        const needsShortCircuit = !canEvaluateEagerly([
+        let hasMutatingExpression = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
-        ]);
+        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e) || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
 
-        if (needsShortCircuit) {
+        if (hasMutatingExpression) {
             result.push(
                 `(function(`,
                 //write all the scope variables as parameters.
@@ -2163,28 +2163,3 @@ const nonReferenceableFunctions = [
     'tab',
     'pos'
 ];
-
-/**
- * Determines whether every expression in the list can be evaluated eagerly without risk of a runtime error or side effect.
- * Only literals and plain variable references are safe. Anything else (dotted/indexed gets, calls, math, etc.) could crash
- * or have side effects when evaluated for a branch that should have been skipped, so it needs short-circuiting.
- */
-function canEvaluateEagerly(expressions: Expression[]) {
-    return expressions.every(e => {
-        //a missing expression (i.e. `a ? : b`) is transpiled as `invalid`, which is safe
-        return !e ||
-            isVariableExpression(e) ||
-            isLiteralExpression(e) ||
-            isSourceLiteralExpression(e) ||
-            isEscapedCharCodeLiteralExpression(e) ||
-            isRegexLiteralExpression(e) ||
-            //template strings with interpolations do real work at runtime (concatenation + `bslib_toString`), so they should be short-circuited
-            (isTemplateStringExpression(e) && e.expressions.length === 0) ||
-            isTemplateStringQuasiExpression(e) ||
-            isArrayLiteralExpression(e) ||
-            isAALiteralExpression(e) ||
-            isAAMemberExpression(e) ||
-            isGroupingExpression(e) ||
-            isTypeCastExpression(e);
-    });
-}
