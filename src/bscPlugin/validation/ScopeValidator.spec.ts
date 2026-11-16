@@ -1,7 +1,6 @@
 import * as sinonImport from 'sinon';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { Program } from '../../Program';
-import { util } from '../../util';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectTypeToBe, expectZeroDiagnostics, trim } from '../../testHelpers.spec';
 import { expect } from 'chai';
 import type { TypeCompatibilityData } from '../../interfaces';
@@ -13,12 +12,15 @@ import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { AssociativeArrayType } from '../../types/AssociativeArrayType';
 import undent from 'undent';
 import * as fsExtra from 'fs-extra';
+import * as path from 'path';
 import { tempDir, rootDir } from '../../testHelpers.spec';
 import { isFunctionStatement, isReturnStatement } from '../../astUtils/reflection';
 import { ScopeValidator } from './ScopeValidator';
 import type { FunctionStatement, ReturnStatement } from '../../parser/Statement';
 import { Logger } from '@rokucommunity/logger';
 import { ParseMode } from '../..';
+import { Range } from 'vscode-languageserver';
+import { util, standardizePath as s } from '../../util';
 
 describe('ScopeValidator', () => {
 
@@ -5891,6 +5893,450 @@ describe('ScopeValidator', () => {
             //currently no error
             expectZeroDiagnostics(program);
         });
+
+        it('keeps scope-specific diagnostics for a file shared by multiple scopes after it changes', () => {
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    onlyInA()
+                end sub
+            `);
+            program.setFile('components/a.brs', `
+                sub onlyInA()
+                end sub
+            `);
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="shared.brs" />
+                    <script uri="a.brs" />
+                </component>
+            `);
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="shared.brs" />
+                </component>
+            `);
+            program.validate();
+            //`onlyInA` is not available in component B's scope
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('onlyInA')
+            ]);
+
+            //make an edit to the shared file that does not change its behavior
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    onlyInA()
+                    print "changed"
+                end sub
+            `);
+            program.validate();
+            //the diagnostic from component B's scope should still be present
+            expectDiagnostics(program, [
+                DiagnosticMessages.cannotFindFunction('onlyInA')
+            ]);
+        });
+
+        it('keeps incompatible definition diagnostics for a file shared by multiple scopes after it changes', () => {
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    doThing("hello")
+                end sub
+            `);
+            program.setFile('components/a.brs', `
+                sub doThing(x as string)
+                end sub
+            `);
+            program.setFile('components/b.brs', `
+                sub doThing(x as integer)
+                end sub
+            `);
+            program.setFile('components/A.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="A" extends="Group">
+                    <script uri="shared.brs" />
+                    <script uri="a.brs" />
+                </component>
+            `);
+            program.setFile('components/B.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="B" extends="Group">
+                    <script uri="shared.brs" />
+                    <script uri="b.brs" />
+                </component>
+            `);
+            program.validate();
+            const expected = [
+                DiagnosticMessages.incompatibleSymbolDefinition('doThing', { scopes: [`components${path.sep}A.xml`, `components${path.sep}B.xml`] })
+            ];
+            expectDiagnostics(program, expected);
+
+            //make an edit to the shared file that does not change its behavior
+            program.setFile('components/shared.brs', `
+                sub shared()
+                    doThing("hello")
+                    print "changed"
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, expected);
+        });
+
+        describe('files shared by multiple scopes', () => {
+            function setComponent(name: string, scripts: string[]) {
+                program.setFile(`components/${name}.xml`, [
+                    '<?xml version="1.0" encoding="utf-8" ?>',
+                    `<component name="${name}" extends="Group">`,
+                    ...scripts.map(x => `    <script uri="${x}" />`),
+                    '</component>'
+                ].join('\n'));
+            }
+
+            function setupMissingInB(sharedContents: string) {
+                program.setFile('components/shared.brs', sharedContents);
+                program.setFile('components/a.brs', `
+                    sub onlyInA()
+                    end sub
+                `);
+                program.setFile('components/b.brs', `
+                    sub onlyInB()
+                    end sub
+                `);
+                setComponent('A', ['shared.brs', 'a.brs']);
+                setComponent('B', ['shared.brs', 'b.brs']);
+                program.validate();
+            }
+
+            it('moves a cross-scope diagnostic when lines are added above it', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.cannotFindFunction('onlyInA'),
+                    location: { range: util.createRange(2, 24, 2, 31) }
+                }]);
+
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        print "one"
+                        print "two"
+                        onlyInA()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [{
+                    ...DiagnosticMessages.cannotFindFunction('onlyInA'),
+                    location: { range: util.createRange(4, 24, 4, 31) }
+                }]);
+            });
+
+            it('removes a cross-scope diagnostic when the usage is removed', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        print "no more call"
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('adds a cross-scope diagnostic for a new usage in an existing file', () => {
+                setupMissingInB(`
+                    sub shared()
+                    end sub
+                `);
+                expectZeroDiagnostics(program);
+
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            it('removes and restores a cross-scope diagnostic when another file in the scope provides the symbol', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+
+                program.setFile('components/b.brs', `
+                    sub onlyInB()
+                    end sub
+                    sub onlyInA()
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                program.setFile('components/b.brs', `
+                    sub onlyInB()
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            it('rechecks a scope when its script tags change but no symbols do', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+
+                //B now gets `onlyInA` from a.brs, which was already in the program
+                setComponent('B', ['shared.brs', 'b.brs', 'a.brs']);
+                program.validate();
+                expectZeroDiagnostics(program);
+
+                setComponent('B', ['shared.brs', 'b.brs']);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            it('does not duplicate cross-scope diagnostics when a file is revalidated without changing', () => {
+                setupMissingInB(`
+                    sub shared()
+                        onlyInA()
+                    end sub
+                `);
+                program.getFile('components/shared.brs').isValidated = false;
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.cannotFindFunction('onlyInA')
+                ]);
+            });
+
+            function setupDoThing(aParamType: string, bParamType: string) {
+                program.setFile('components/shared.brs', `
+                    sub shared()
+                        doThing("hello")
+                    end sub
+                `);
+                program.setFile('components/a.brs', `
+                    sub doThing(x as ${aParamType})
+                    end sub
+                `);
+                program.setFile('components/b.brs', `
+                    sub doThing(x as ${bParamType})
+                    end sub
+                `);
+                setComponent('A', ['shared.brs', 'a.brs']);
+                setComponent('B', ['shared.brs', 'b.brs']);
+                program.validate();
+            }
+
+            const incompatibleDoThing = DiagnosticMessages.incompatibleSymbolDefinition('doThing', { scopes: [`components${path.sep}A.xml`, `components${path.sep}B.xml`] });
+
+            it('removes an incompatible definition diagnostic when the other definition is fixed', () => {
+                setupDoThing('string', 'integer');
+                expectDiagnostics(program, [incompatibleDoThing]);
+
+                program.setFile('components/b.brs', `
+                    sub doThing(x as string)
+                    end sub
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('adds an incompatible definition diagnostic when one definition changes', () => {
+                setupDoThing('string', 'string');
+                expectZeroDiagnostics(program);
+
+                program.setFile('components/b.brs', `
+                    sub doThing(x as integer)
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [incompatibleDoThing]);
+            });
+
+            it('keeps an incompatible definition diagnostic when a file defining the symbol has a body edit', () => {
+                setupDoThing('string', 'integer');
+                expectDiagnostics(program, [incompatibleDoThing]);
+
+                program.setFile('components/b.brs', `
+                    sub doThing(x as integer)
+                        print "changed"
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [incompatibleDoThing]);
+            });
+
+            function setupNameCollision(utilsContents: string) {
+                program.options.autoImportComponentScript = true;
+                program.setFile('source/utils.bs', utilsContents);
+                program.setFile('components/Button1.bs', `
+                    import "pkg:/source/utils.bs"
+                    const Test = "test"
+                `);
+                program.setFile('components/Button1.xml', `
+                    <component name="Button1" extends="Group">
+                    </component>
+                `);
+                program.setFile('components/Button2.bs', `
+                    import "pkg:/source/utils.bs"
+                    const Other = "other"
+                `);
+                program.setFile('components/Button2.xml', `
+                    <component name="Button2" extends="Group">
+                    </component>
+                `);
+                program.validate();
+            }
+
+            it('keeps and moves name collision diagnostics located in a file that has a body edit', () => {
+                setupNameCollision(`
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    {
+                        ...DiagnosticMessages.nameCollision('Interface', 'Const', 'Test'),
+                        location: { range: util.createRange(1, 30, 1, 34) }
+                    }
+                ]);
+
+                program.setFile('source/utils.bs', `
+                    'a comment that moves everything down a line
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    {
+                        ...DiagnosticMessages.nameCollision('Interface', 'Const', 'Test'),
+                        location: { range: util.createRange(2, 30, 2, 34) }
+                    }
+                ]);
+            });
+
+            it('keeps name collision diagnostics located on a namespace when its file has a body edit', () => {
+                program.setFile('source/utils.bs', `
+                    namespace Test
+                        function foo()
+                        end function
+                    end namespace
+                `);
+                program.setFile('source/main.bs', `
+                    enum Test
+                        a
+                    end enum
+                `);
+                program.validate();
+                const messagesBefore = program.getDiagnostics().map(x => x.message).sort();
+                expect(messagesBefore).to.include(DiagnosticMessages.nameCollision('Namespace', 'Enum', 'Test').message);
+
+                program.setFile('source/utils.bs', `
+                    namespace Test
+                        function foo()
+                            'a comment
+                        end function
+                    end namespace
+                `);
+                program.validate();
+                expect(program.getDiagnostics().map(x => x.message).sort()).to.eql(messagesBefore);
+            });
+
+            it('updates the related information of name collision diagnostics in other files when a file has a body edit', () => {
+                setupNameCollision(`
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                const getRelatedLineInUtils = () => {
+                    const diagnostic = program.getDiagnostics().find(x => x.location.uri.endsWith('Button1.bs'));
+                    return diagnostic.relatedInformation.find(x => x.location.uri.endsWith('utils.bs')).location.range.start.line;
+                };
+                expect(getRelatedLineInUtils()).to.eql(1);
+
+                program.setFile('source/utils.bs', `
+                    'a comment that moves everything down a line
+                    'and another one
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    DiagnosticMessages.nameCollision('Interface', 'Const', 'Test')
+                ]);
+                expect(getRelatedLineInUtils()).to.eql(3);
+            });
+
+            it('removes name collision diagnostics in other files when the colliding symbol is removed', () => {
+                setupNameCollision(`
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    DiagnosticMessages.nameCollision('Interface', 'Const', 'Test')
+                ]);
+
+                program.setFile('source/utils.bs', `
+                    interface Renamed
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectZeroDiagnostics(program);
+            });
+
+            it('adds name collision diagnostics in other files when a colliding symbol is added', () => {
+                setupNameCollision(`
+                    interface Renamed
+                        name as string
+                    end interface
+                `);
+                expectZeroDiagnostics(program);
+
+                program.setFile('source/utils.bs', `
+                    interface Test
+                        name as string
+                    end interface
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.nameCollision('Const', 'Interface', 'Test'),
+                    DiagnosticMessages.nameCollision('Interface', 'Const', 'Test')
+                ]);
+            });
+        });
     });
 
 
@@ -5984,6 +6430,88 @@ describe('ScopeValidator', () => {
                 //the `#else` in main.bs
                 { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(6, 0, 7, 0) } }
             ]);
+        });
+    });
+
+    describe('nodeFieldAssociativeArrayMemberAssignmentHasNoEffect', () => {
+        beforeEach(() => {
+            program.setFile('components/Widget.xml', trim`
+                <?xml version="1.0" encoding="utf-8" ?>
+                <component name="Widget" extends="Group">
+                    <script uri="Widget.bs" />
+                    <interface>
+                        <field id="metadata" type="assocarray" />
+                        <field id="childNode" type="node" />
+                        <field id="title" type="string" />
+                    </interface>
+                </component>
+            `);
+        });
+
+        it('flags dotted and indexed assignments to members of an AA field on a node', () => {
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    top = m.top as roSGNodeWidget
+                    top.metadata.a = 1
+                    top.metadata["b"] = 2
+                end sub
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata'),
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata')
+            ]);
+        });
+
+        it('flags assignments deeper in the chain and on any typed node', () => {
+            program.setFile('components/Widget.bs', `
+                sub update(widget as roSGNodeWidget)
+                    widget.metadata.title.text = "x"
+                    widget.metadata.list[0] = 1
+                end sub
+
+                sub updateNested(holder as Holder)
+                    holder.widget.metadata.a = 1
+                end sub
+
+                interface Holder
+                    widget as roSGNodeWidget
+                end interface
+            `);
+            program.validate();
+            expectDiagnostics(program, [
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata'),
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata'),
+                DiagnosticMessages.nodeFieldAssociativeArrayMemberAssignmentHasNoEffect('metadata')
+            ]);
+        });
+
+        it('does not flag assignments that actually update the node or a real AA', () => {
+            program.setFile('components/Widget.bs', `
+                sub update(widget as roSGNodeWidget)
+                    metadata = widget.metadata
+                    metadata.a = 1
+                    widget.metadata = metadata
+                    widget.metadata = { a: 1 }
+                    widget.title = "x"
+                    widget.childNode.id = "x"
+                    m.someAA = {}
+                    m.someAA.a = 1
+                    m.someAA["b"] = 2
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
+        it('does not flag when the node type is unknown', () => {
+            program.setFile('components/Widget.bs', `
+                sub init()
+                    m.top.metadata.a = 1
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
         });
     });
 
@@ -7568,4 +8096,325 @@ describe('ScopeValidator', () => {
             expect((unvalidatedSegments[0] as FunctionStatement).getName(ParseMode.BrighterScript)).to.equal('doStuff');
         });
     });
+
+    /* eslint-disable no-template-curly-in-string */
+    describe('location boundaries', () => {
+        function uriOf(pkgPath: string) {
+            return util.pathToUri(s`${rootDir}/${pkgPath}`);
+        }
+
+        function range(startLine: number, startChar: number, endLine: number, endChar: number) {
+            return Range.create(startLine, startChar, endLine, endChar);
+        }
+
+        it('flags an identifier in a .brs file', () => {
+            program.setFile('source/main.brs', 'sub main()\n    print notDefined\nend sub\n');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 10, 1, 20)
+                }
+            }]);
+        });
+
+        it('flags an identifier in a .bs file', () => {
+            program.setFile('source/main.bs', 'sub main()\n    print notDefined\nend sub\n');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 10, 1, 20)
+                }
+            }]);
+        });
+
+        it('flags a token at column 0 right after a newline', () => {
+            program.setFile('source/main.brs', 'sub main()\nnotDefined()\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindFunction('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 0, 1, 10)
+                }
+            }]);
+        });
+
+        it('flags a token at the end of a line and at the end of a file with no trailing newline', () => {
+            program.setFile('source/main.brs', 'sub main()\nend sub\nprint notDefined');
+            program.validate();
+            expectDiagnostics(program, [{
+                //the whole statement (starting at column 0)
+                code: DiagnosticMessages.unexpectedStatementOutsideFunction().code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 0, 2, 16)
+                }
+            }, {
+                //the very last token in the file
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 6, 2, 16)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a .brs file', () => {
+            program.setFile('source/main.brs', 'sub main()\n    return {\n        a: 1\n    }\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                //the whole return statement
+                code: DiagnosticMessages.voidFunctionMayNotReturnValue('sub').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }, {
+                //just the returned expression
+                code: DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'void').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 11, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a .bs file', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x as integer = {\n        a: 1\n    }\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.assignmentTypeMismatch('roAssociativeArray', 'integer').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags a multi-line statement in a file with CRLF line endings', () => {
+            program.setFile('source/main.brs', 'sub main()\r\n    return {\r\n        a: 1\r\n    }\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.voidFunctionMayNotReturnValue('sub').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 4, 3, 5)
+                }
+            }, {
+                code: DiagnosticMessages.returnTypeMismatch('roAssociativeArray', 'void').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 11, 3, 5)
+                }
+            }]);
+        });
+
+        it('flags identifiers in a file with CRLF line endings', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    a = 1\r\n    print notDefined\r\nnotDefined2()\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 10, 2, 20)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindFunction('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 0, 3, 11)
+                }
+            }]);
+        });
+
+        it('flags identifiers in a file mixing LF and CRLF line endings', () => {
+            program.setFile('source/main.brs', 'sub main()\r\n    a = 1\n    print notDefined\r\n\n\r\n    print a + notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 10, 2, 20)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(5, 14, 5, 25)
+                }
+            }]);
+        });
+
+        it('counts a surrogate-pair emoji before the flagged token as two characters', () => {
+            program.setFile('source/main.brs', 'sub main()\n    print "😀" + notDefined\n    print "😀😀" + notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(1, 17, 1, 27)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.brs'),
+                    range: range(2, 19, 2, 30)
+                }
+            }]);
+        });
+
+        it('counts a surrogate-pair emoji before the flagged token on a CRLF line', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    print "😀" + notDefined\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(1, 17, 1, 27)
+                }
+            }]);
+        });
+
+        it('flags a token after a multi-line template string', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x = `a\n${1}\n`: print notDefined\n    print notDefined2\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 9, 3, 19)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(4, 10, 4, 21)
+                }
+            }]);
+        });
+
+        it('flags a token after a multi-line template string with CRLF line endings', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    x = `a\r\n${1}\r\n`: print notDefined\r\n    print notDefined2\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(3, 9, 3, 19)
+                }
+            }, {
+                code: DiagnosticMessages.cannotFindName('notDefined2').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(4, 10, 4, 21)
+                }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later line of the template', () => {
+            program.setFile('source/main.bs', 'sub main()\n    x = `😀 ${1}\n  and ${notDefined}\n`\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 8, 2, 18)
+                }
+            }]);
+        });
+
+        it('flags a token inside a template string expression on a later CRLF line of the template', () => {
+            program.setFile('source/main.bs', 'sub main()\r\n    x = `😀 ${1}\r\n  and ${notDefined}\r\n`\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('source/main.bs'),
+                    range: range(2, 8, 2, 18)
+                }
+            }]);
+        });
+
+        it('includes correct related information uris and ranges across files', () => {
+            program.setFile('source/a.brs', 'sub main()\nend sub\n\nsub doIt()\nend sub');
+            program.setFile('source/b.brs', 'sub doIt()\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.duplicateFunctionImplementation('doIt').code,
+                location: {
+                    uri: uriOf('source/a.brs'),
+                    range: range(3, 4, 3, 8)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('source/b.brs'),
+                        range: range(0, 4, 0, 8)
+                    },
+                    message: 'Function declared here'
+                }, {
+                    location: {
+                        uri: uriOf('source/a.brs'),
+                        range: range(3, 4, 3, 8)
+                    },
+                    message: `In scope 'source'`
+                }]
+            }, {
+                code: DiagnosticMessages.duplicateFunctionImplementation('doIt').code,
+                location: {
+                    uri: uriOf('source/b.brs'),
+                    range: range(0, 4, 0, 8)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('source/a.brs'),
+                        range: range(3, 4, 3, 8)
+                    },
+                    message: 'Function declared here'
+                }, {
+                    location: {
+                        uri: uriOf('source/b.brs'),
+                        range: range(0, 4, 0, 8)
+                    },
+                    message: `In scope 'source'`
+                }]
+            }]);
+        });
+
+        it('includes correct locations for xml diagnostics in a CRLF file', () => {
+            program.setFile('components/Comp.xml', '<?xml version="1.0" encoding="utf-8" ?>\r\n<component name="Comp" extends="Group">\r\n    <script uri="missing.brs" />\r\n</component>');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.referencedFileDoesNotExist().code,
+                location: {
+                    uri: uriOf('components/Comp.xml'),
+                    range: range(2, 17, 2, 28)
+                },
+                relatedInformation: [{
+                    location: {
+                        uri: uriOf('components/Comp.xml'),
+                        range: range(1, 17, 1, 21)
+                    },
+                    message: `In component scope 'Comp'`
+                }]
+            }]);
+        });
+
+        it('flags a token in a component script and relates it to the xml file', () => {
+            program.setFile('components/Comp.xml', '<?xml version="1.0" encoding="utf-8" ?>\n<component name="Comp" extends="Group">\n    <script uri="Comp.brs" />\n</component>');
+            program.setFile('components/Comp.brs', 'sub init()\r\n    print "😀" : print notDefined\r\nend sub');
+            program.validate();
+            expectDiagnostics(program, [{
+                code: DiagnosticMessages.cannotFindName('notDefined').code,
+                location: {
+                    uri: uriOf('components/Comp.brs'),
+                    range: range(1, 23, 1, 33)
+                }
+            }]);
+        });
+    });
+    /* eslint-enable no-template-curly-in-string */
 });

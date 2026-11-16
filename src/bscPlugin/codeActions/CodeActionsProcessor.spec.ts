@@ -47,72 +47,6 @@ describe('CodeActionsProcessor', () => {
     }
 
     describe('getCodeActions', () => {
-        it('suggests `extends=Group`', () => {
-            const file = program.setFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1">
-                </component>
-            `);
-            program.validate();
-            expectCodeActions(() => {
-                program.getCodeActions(
-                    file.srcPath,
-                    //<comp|onent name="comp1">
-                    util.createRange(1, 5, 1, 5)
-                );
-            }, [{
-                title: `Extend "Group"`,
-                isPreferred: true,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="Group"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }, {
-                title: `Extend "Task"`,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="Task"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }, {
-                title: `Extend "ContentNode"`,
-                kind: 'quickfix',
-                changes: [{
-                    filePath: s`${rootDir}/components/comp1.xml`,
-                    newText: ' extends="ContentNode"',
-                    type: 'insert',
-                    //<component name="comp1"|>
-                    position: util.createPosition(1, 23)
-                }]
-            }]);
-        });
-
-        it('adds attribute at end of component with multiple attributes`', () => {
-            const file = program.setFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1" attr2="attr3" attr3="attr3">
-                </component>
-            `);
-            program.validate();
-            const codeActions = program.getCodeActions(
-                file.srcPath,
-                //<comp|onent name="comp1">
-                util.createRange(1, 5, 1, 5)
-            );
-            expect(
-                codeActions[0].edit!.changes![util.pathToUri(s`${rootDir}/components/comp1.xml`)][0].range
-            ).to.eql(
-                util.createRange(1, 51, 1, 51)
-            );
-        });
-
         it('does not produce duplicate code actions for bs imports', () => {
             //define the function in two files
             program.setFile('components/lib1.brs', `
@@ -767,63 +701,6 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
-    describe('unnecessaryScriptImportInChildFromParent', () => {
-        it('offers to remove the redundant script import', () => {
-            program.setFile('components/parent.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ParentScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
-                </component>
-            `);
-            program.setFile('source/lib.brs', '');
-            const file = program.setFile('components/child.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib.brs" />
-                </component>
-            `);
-            // uri on line 2 of child.xml
-            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Remove redundant script import']);
-        });
-
-        it('offers fix-all when multiple redundant imports exist', () => {
-            program.setFile('components/parent.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ParentScene" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/source/lib1.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/lib2.brs" />
-                </component>
-            `);
-            program.setFile('source/lib1.brs', '');
-            program.setFile('source/lib2.brs', '');
-            const file = program.setFile('components/child.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="ChildScene" extends="ParentScene">
-                    <script type="text/brightscript" uri="pkg:/source/lib1.brs" />
-                    <script type="text/brightscript" uri="pkg:/source/lib2.brs" />
-                </component>
-            `);
-            testGetCodeActions(file, util.createRange(2, 50, 2, 50), [
-                'Fix all: Remove redundant script imports',
-                'Remove redundant script import'
-            ]);
-        });
-    });
-
-    describe('unnecessaryCodebehindScriptImport', () => {
-        it('offers to remove the unnecessary codebehind import', () => {
-            const file = program.setFile('components/comp1.xml', trim`
-                <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1" extends="Scene">
-                    <script type="text/brightscript" uri="pkg:/components/comp1.brs" />
-                </component>
-            `);
-            program.setFile('components/comp1.brs', '');
-            // uri on line 2
-            testGetCodeActions(file, util.createRange(2, 50, 2, 50), ['Remove unnecessary codebehind import']);
-        });
-    });
-
     describe('scriptImportCaseMismatch', () => {
         it('offers to fix the casing of the script import path', () => {
             const file = program.setFile('components/comp1.xml', trim`
@@ -1136,6 +1013,102 @@ describe('CodeActionsProcessor', () => {
         });
     });
 
+    describe('typeDesignatorMismatch', () => {
+        /**
+         * Apply the (single-line) edits of the code action with the given title, and return the resulting line
+         */
+        function applyAction(fileText: string, actions: CodeAction[], title: string) {
+            const action = actions.find(a => a.title === title);
+            expect(action, `expected an action titled "${title}"`).to.exist;
+            const lines = fileText.split(/\r?\n/);
+            const edits = Object.values(action.edit.changes)[0];
+            //apply from the end of the line backwards so earlier edits don't shift later ones
+            for (const edit of [...edits].sort((a, b) => b.range.start.character - a.range.start.character)) {
+                expect(edit.range.start.line).to.equal(edit.range.end.line);
+                const line = lines[edit.range.start.line];
+                lines[edit.range.start.line] = line.substring(0, edit.range.start.character) + edit.newText + line.substring(edit.range.end.character);
+            }
+            return lines;
+        }
+
+        it('offers to change the type or remove the `as` clause', () => {
+            const file = program.setFile('source/main.brs', `
+                sub foo(name$ as integer)
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(1, 25, 1, 25), [
+                `Change type to 'string'`,
+                `Remove 'as integer'`
+            ]);
+        });
+
+        it('replaces the `as` type with the type designator type', () => {
+            const text = `
+                sub foo(name$ as integer, count% as dynamic)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            program.validate();
+            let lines = applyAction(text, program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25)), `Change type to 'string'`);
+            expect(lines[1]).to.equal(`                sub foo(name$ as string, count% as dynamic)`);
+
+            lines = applyAction(text, program.getCodeActions(file.srcPath, util.createRange(1, 45, 1, 45)), `Change type to 'integer'`);
+            expect(lines[1]).to.equal(`                sub foo(name$ as integer, count% as integer)`);
+        });
+
+        it('removes the ` as <type>` clause including its leading whitespace', () => {
+            const text = `
+                sub foo(name$   as   object, other as string)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            program.validate();
+            const lines = applyAction(text, program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25)), `Remove 'as object'`);
+            expect(lines[1]).to.equal(`                sub foo(name$, other as string)`);
+        });
+
+        it('removes the `as` clause after a default value', () => {
+            const text = `
+                sub foo(name$ = "bob" as integer)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            program.validate();
+            let actions = program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25));
+            expect(applyAction(text, actions, `Remove 'as integer'`)[1]).to.equal(`                sub foo(name$ = "bob")`);
+            expect(applyAction(text, actions, `Change type to 'string'`)[1]).to.equal(`                sub foo(name$ = "bob" as string)`);
+        });
+
+        it('offers fix-all variants when there are multiple mismatches in the file', () => {
+            const text = `
+                sub foo(name$ as integer, count% as string)
+                end sub
+            `;
+            const file = program.setFile('source/main.brs', text);
+            testGetCodeActions(file, util.createRange(1, 25, 1, 25), [
+                `Change type to 'string'`,
+                `Fix all: Change types to match their type designators`,
+                `Fix all: Remove 'as' types that conflict with their type designators`,
+                `Remove 'as integer'`
+            ]);
+            const actions = program.getCodeActions(file.srcPath, util.createRange(1, 25, 1, 25));
+            expect(
+                applyAction(text, actions, `Fix all: Change types to match their type designators`)[1]
+            ).to.equal(`                sub foo(name$ as string, count% as integer)`);
+            expect(
+                applyAction(text, actions, `Fix all: Remove 'as' types that conflict with their type designators`)[1]
+            ).to.equal(`                sub foo(name$, count%)`);
+        });
+
+        it('does not offer the quick fixes when the `as` type matches the type designator', () => {
+            const file = program.setFile('source/main.brs', `
+                sub foo(name$ as string)
+                end sub
+            `);
+            testGetCodeActions(file, util.createRange(1, 25, 1, 25), []);
+        });
+    });
+
     describe('disable diagnostic actions', () => {
         const findLineAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this line`));
         const findFileAction = (actions: CodeAction[], code: string | number) => actions.find(a => a.title.startsWith(`Disable ${code} for this file`));
@@ -1240,7 +1213,7 @@ describe('CodeActionsProcessor', () => {
         it('inserts an XML-style bs:disable directive after the XML declaration', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
-                <component name="comp1">
+                <component extends="Group">
                 </component>
             `);
             program.validate();
@@ -1257,7 +1230,7 @@ describe('CodeActionsProcessor', () => {
         it('inserts an XML-style bs:disable directive at line 0 when the <?xml ?> declaration is missing', () => {
             //Roku permits XML component files without the optional `<?xml ?>` declaration
             const file = program.setFile('components/comp1.xml', trim`
-                <component name="comp1">
+                <component extends="Group">
                 </component>
             `);
             program.validate();
@@ -1338,7 +1311,7 @@ describe('CodeActionsProcessor', () => {
             const file = program.setFile('components/comp1.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <!-- bs:disable: 9999 -->
-                <component name="comp1">
+                <component extends="Group">
                 </component>
             `);
             program.validate();
@@ -1347,7 +1320,7 @@ describe('CodeActionsProcessor', () => {
             expect(action).to.exist;
             const edits = Object.values(action!.edit!.changes!)[0];
             //the new code is appended to the existing space-separated list
-            //In this case "missing-extends-attribute"
+            //In this case "missing-name-attribute"
             expect(/^<!-- bs:disable: 9999 [\w-]+ -->$/.test(edits[0].newText)).to.be.true;
         });
 

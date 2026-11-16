@@ -178,7 +178,15 @@ export class Scope {
 
     private useFileCachesForFileLinkLookups = false;
 
-    private getFileLinkFromFileMap<T extends Statement>(cachedMapName: string, itemName: string, containingNamespace?: string): FileLink<T> {
+    /**
+     * Look up a file link by name using each file's cached lookup maps
+     * @param cachedMapName - The name of the per-file cached lookup map to search
+     * @param itemName - The item name, including the namespace of the item if possible
+     * @param containingNamespace - The namespace used to resolve relative names
+     * @param referencingItem - The statement making this reference. A statement can't refer to itself by its namespace-relative name,
+     * so that match is skipped in favor of the global name.
+     */
+    private getFileLinkFromFileMap<T extends Statement>(cachedMapName: string, itemName: string, containingNamespace?: string, referencingItem?: Statement): FileLink<T> {
         let result: FileLink<T>;
         const fullNameLower = util.getFullyQualifiedClassName(itemName, containingNamespace)?.toLowerCase();
         const itemNameLower = itemName?.toLowerCase();
@@ -186,6 +194,9 @@ export class Scope {
             result = this.findTopCandidateFileLink<T>(cachedMapName, fullNameLower);
         }
         if (itemNameLower && fullNameLower !== itemNameLower) {
+            if (referencingItem && result?.item === referencingItem) {
+                result = undefined;
+            }
             result = this.preferActiveGlobalLink(result, () => this.findTopCandidateFileLink<T>(cachedMapName, itemNameLower));
         }
         return result;
@@ -319,10 +330,12 @@ export class Scope {
      * Get a constant and its containing file by the constant name
      * @param constName - The constant name, including the namespace of the constant if possible
      * @param containingNamespace - The namespace used to resolve relative constant names. (i.e. the namespace around the current statement trying to find a constant)
+     * @param referencingConst - The const whose initializer contains this reference. A const can't refer to itself by its namespace-relative
+     * name (i.e. `namespace promises: const chain = chain`), so that match is skipped in favor of the global name.
      */
-    public getConstFileLink(constName: string, containingNamespace?: string): FileLink<ConstStatement> {
+    public getConstFileLink(constName: string, containingNamespace?: string, referencingConst?: ConstStatement): FileLink<ConstStatement> {
         if (this.useFileCachesForFileLinkLookups) {
-            return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace);
+            return this.getFileLinkFromFileMap('constStatementMap', constName, containingNamespace, referencingConst);
         }
         const lowerName = constName?.toLowerCase();
         const fullNameLower = util.getFullyQualifiedClassName(lowerName, containingNamespace)?.toLowerCase();
@@ -332,6 +345,9 @@ export class Scope {
         let result = constMap.get(fullNameLower);
         //if we couldn't find an active constant by its full namespaced name, look for a global constant with that name
         if (lowerName !== fullNameLower) {
+            if (referencingConst && result?.item === referencingConst) {
+                result = undefined;
+            }
             result = this.preferActiveGlobalLink(result, () => constMap.get(lowerName));
         }
         return result;

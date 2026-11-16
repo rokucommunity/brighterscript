@@ -857,7 +857,7 @@ export class XmlFile implements BscFile {
             return new SourceNode(null, null, state.srcPath, [
                 transpileResult,
                 //add the sourcemap reference comment
-                `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
+                state.newline + `<!--//# sourceMappingURL=./${path.basename(state.srcPath)}.map -->`
             ]).toStringWithSourceMap();
         } else {
             return {

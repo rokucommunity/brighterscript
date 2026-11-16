@@ -18,7 +18,7 @@ export class TypedFunctionType extends BaseFunctionType {
     /**
      * The name of the function for this type. Can be null
      */
-    public name: string;
+    public name: string = undefined;
 
     /**
      * Determines if this is a sub or not

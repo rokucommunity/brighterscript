@@ -1,4 +1,4 @@
-import type { Location } from 'vscode-languageserver';
+import type { Locatable } from '../lexer/Token';
 import { Editor } from '../astUtils/Editor';
 import type { BrsFile } from '../files/BrsFile';
 import type { FirmwareCapabilities } from '../RokuConstants';
@@ -24,9 +24,7 @@ export class BrsTranspileState extends TranspileState {
      * the tree of parents, with the first index being direct parent, and the last index being the furthest removed ancestor.
      * Used to assist blocks in knowing when to add a comment statement to the same line as the first line of the parent
      */
-    lineage = [] as Array<{
-        location?: Location;
-    }>;
+    lineage = [] as Array<Locatable>;
 
     /**
      * Used by ClassMethodStatements to determine information about their enclosing class

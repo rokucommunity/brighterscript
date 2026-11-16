@@ -9,17 +9,33 @@ import type { BscTypeKind } from './BscTypeKind';
 
 export abstract class BscType {
 
-    public readonly memberTable: SymbolTable;
+    /**
+     * Lazy -- most types (ReferenceType, UnionType, TypedFunctionType, etc) never have their member table accessed,
+     * so only allocate it on first use
+     */
+    public get memberTable(): SymbolTable {
+        if (!this._memberTable) {
+            this._memberTable = new SymbolTable(this.__identifier);
+        }
+        return this._memberTable;
+    }
+    private _memberTable: SymbolTable;
 
-    protected __identifier: string;
+    /**
+     * Computed on demand (it's only used for debugging and SymbolTable names) rather than storing a new string on every type
+     */
+    protected get __identifier(): string {
+        return `${this.constructor.name}${this.__identifierName ? ': ' + this.__identifierName : ''}`;
+    }
+    private readonly __identifierName: string;
+
     protected hasAddedBuiltInInterfaces = false;
     public isBuiltIn = false;
 
     public readonly kind: BscTypeKind = null;
 
     constructor(name = '') {
-        this.__identifier = `${this.constructor.name}${name ? ': ' + name : ''}`;
-        this.memberTable = new SymbolTable(this.__identifier);
+        this.__identifierName = name;
         if (TypesCreated[this.constructor.name] === undefined) {
             TypesCreated[this.constructor.name] = 0;
         }

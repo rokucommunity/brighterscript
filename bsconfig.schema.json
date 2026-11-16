@@ -304,6 +304,35 @@
                                 "type": "string",
                                 "description": "A file path relative to rootDir, an absolute path, or a file glob pointing to file(s) you wish to filter diagnostics from."
                             },
+                            "files": {
+                                "description": "A file glob or list of file globs/src/dest descriptors pointing to file(s) you wish to filter diagnostics from.",
+                                "anyOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "array",
+                                        "items": {
+                                            "anyOf": [
+                                                {
+                                                    "type": "string"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "src": {
+                                                            "type": "string"
+                                                        },
+                                                        "dest": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
                             "codes": {
                                 "type": "array",
                                 "description": "A list of codes of diagnostics that should be filtered out from the files matched in 'src'`. If omitted, all error codes are used",
@@ -318,6 +347,16 @@
                                         }
                                     ]
                                 }
+                            },
+                            "minSeverity": {
+                                "type": "string",
+                                "description": "The minimum diagnostic severity to keep (error|warn|info|hint). Diagnostics with a lower severity will be filtered out.",
+                                "enum": [
+                                    "error",
+                                    "warn",
+                                    "info",
+                                    "hint"
+                                ]
                             }
                         }
                     }

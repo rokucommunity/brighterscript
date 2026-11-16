@@ -7,11 +7,17 @@ import { getUniqueType } from './types/helpers';
 import { isAnyReferenceType, isNamespaceType, isReferenceType } from './astUtils/reflection';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { UninitializedType } from './types/UninitializedType';
+import { createExtraSymbolData } from './interfaces';
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
  * Can be part of a hierarchy, so lookups can reference parent scopes
  */
+/**
+ * Shared by every table that has no pocket tables (see `SymbolTable.pocketTables`)
+ */
+const NoPocketTables: PocketTable[] = Object.freeze([]) as unknown as PocketTable[];
+
 export class SymbolTable implements SymbolTypeGetter {
     constructor(
         public name: string,
@@ -28,7 +34,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Indexed by lower symbol name
      */
     //lazy -- most member tables (ReferenceType, BscType, etc) never get a symbol added
-    private symbolMap: Map<string, BscSymbol[]> | undefined;
+    private symbolMap: Map<string, BscSymbol[]> | undefined = undefined;
 
     private parentProviders = [] as SymbolTableProvider[];
 
@@ -85,7 +91,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     //lazy -- most SymbolTables never get a sibling
-    private siblings: Set<SymbolTable> | undefined;
+    private siblings: Set<SymbolTable> | undefined = undefined;
 
     /**
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
@@ -95,8 +101,7 @@ export class SymbolTable implements SymbolTypeGetter {
         this.siblings ??= new Set();
         this.siblings.add(sibling);
         return () => {
-            SymbolTable.mutationCount++;
-            this.siblings.delete(sibling);
+            this.removeSibling(sibling);
         };
     }
 
@@ -106,6 +111,10 @@ export class SymbolTable implements SymbolTypeGetter {
     public removeSibling(sibling: SymbolTable) {
         SymbolTable.mutationCount++;
         this.siblings?.delete(sibling);
+        //most tables have no siblings, so don't keep an empty Set around once the last one is removed
+        if (this.siblings?.size === 0) {
+            this.siblings = undefined;
+        }
     }
 
     /**
@@ -121,11 +130,18 @@ export class SymbolTable implements SymbolTypeGetter {
     }
     private _isOrdered = false;
 
-    public pocketTables = new Array<PocketTable>();
+    /**
+     * Most tables never get a pocket table, so they all share one frozen empty array until the first one is added.
+     * Use `addPocketTable` rather than pushing into this directly
+     */
+    public pocketTables: PocketTable[] = NoPocketTables;
 
     public addPocketTable(pocketTable: PocketTable) {
         SymbolTable.mutationCount++;
         pocketTable.table.isPocketTable = true;
+        if (this.pocketTables === NoPocketTables) {
+            this.pocketTables = [];
+        }
         this.pocketTables.push(pocketTable);
         return () => {
             SymbolTable.mutationCount++;
@@ -153,7 +169,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     //lazy -- only branch-complement tables ever use this
-    private complementsTables: Set<SymbolTable> | undefined;
+    private complementsTables: Set<SymbolTable> | undefined = undefined;
 
     /**
      * This table complements this other table
@@ -372,7 +388,7 @@ export class SymbolTable implements SymbolTypeGetter {
                     if (depth === 0) {
                         // we got pocket tables results, and this is the top recursion
                         // add uninitialized
-                        result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: {}, flags: bitFlags }, ...pocketTableResults];
+                        result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: createExtraSymbolData(), flags: bitFlags }, ...pocketTableResults];
                     } else {
                         //just return pocket table results:
                         result = pocketTableResults;
@@ -482,7 +498,7 @@ export class SymbolTable implements SymbolTypeGetter {
         if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data, flags: foundFlags }, options);
         }
-        options.data ??= {};
+        options.data ??= createExtraSymbolData();
         if (options.data) {
             options.data.definingNode = data?.definingNode;
             options.data.description = data?.description;
@@ -669,19 +685,24 @@ export class SymbolTable implements SymbolTypeGetter {
             // no cache verifier
             return;
         }
-        this.typeCache ??= [
-            undefined,
-            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.runtime
-            new Map<string, TypeCacheEntry>(), // SymbolTypeFlags.typetime
-            new Map<string, TypeCacheEntry>() // SymbolTypeFlags.runtime & SymbolTypeFlags.typetime
-        ];
+        //only runtime (1), typetime (2) and both (3) are cached
+        if (!(options.flags >= 1 && options.flags <= 3)) {
+            return;
+        }
+        //one map per flag value, each created on first use: most tables only ever cache for one of them
+        this.typeCache ??= [undefined, undefined, undefined, undefined];
+        let cache = this.typeCache[options.flags];
         const cacheKey = this.getCacheKey(name, options);
-        let existingCachedValue = this.typeCache[options.flags]?.get(cacheKey);
+        let existingCachedValue = cache?.get(cacheKey);
         if (isReferenceType(cacheEntry.type) && !isReferenceType(existingCachedValue)) {
             // No need to overwrite a non-referenceType with a referenceType
             return;
         }
-        return this.typeCache[options.flags]?.set(cacheKey, cacheEntry);
+        if (!cache) {
+            cache = new Map<string, TypeCacheEntry>();
+            this.typeCache[options.flags] = cache;
+        }
+        return cache.set(cacheKey, cacheEntry);
     }
 
     private getCacheKey(name: string, options?: { statementIndex?: number | 'end' }) {

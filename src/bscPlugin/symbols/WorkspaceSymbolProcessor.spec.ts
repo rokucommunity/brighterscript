@@ -279,4 +279,120 @@ describe('WorkspaceSymbolProcessor', () => {
             ['g', SymbolKind.EnumMember]
         ]);
     });
+
+    describe('location boundaries', () => {
+        /**
+         * Get every workspace symbol as a `name|kind|containerName|uri|range` string, sorted for stable comparison
+         */
+        function getSymbolStrings() {
+            return program.getWorkspaceSymbols().map((x: any) => {
+                return `${x.name}|${SymbolKindMap.get(x.kind)}|${x.containerName}|${x.location.uri}|${util.rangeToString(x.location.range)}`;
+            }).sort();
+        }
+
+        function uri(pkgPath: string) {
+            return util.pathToUri(s`${rootDir}/${pkgPath}`);
+        }
+
+        it('computes exact locations across .bs and .brs files, including CRLF, emoji, and nested namespaces', () => {
+            program.setFile('source/main.bs', [
+                'namespace alpha',
+                '    namespace beta.charlie',
+                '        class Person',
+                '            name as string',
+                '            sub speak()',
+                '            end sub',
+                '        end class',
+                '    end namespace',
+                '    enum Direction',
+                '        up = "up"',
+                '        down = "down"',
+                '    end enum',
+                '    interface Shape',
+                '        width as integer',
+                '        function area() as float',
+                '    end interface',
+                '    const PI = 3.14',
+                'end namespace',
+                'function empty()',
+                'end function',
+                'const LAST_ONE = true'
+            ].join('\n'));
+            program.setFile('source/lib.brs', [
+                '\' 😀 header comment',
+                'function alpha(a, b)',
+                '    if a then',
+                '        print "😀"',
+                '    elseif b then',
+                '        print 2',
+                '    end if',
+                'end function',
+                'sub beta() : print "😀😀" : end sub : sub charlie() : end sub',
+                'sub emptyBrs()',
+                'end sub',
+                ''
+            ].join('\r\n'));
+            const main = uri('source/main.bs');
+            const lib = uri('source/lib.brs');
+            expect(getSymbolStrings()).to.eql([
+                `alpha|Function|undefined|${lib}|1:9-1:14`,
+                `alpha|Namespace|undefined|${main}|0:10-0:15`,
+                `area|Method|Shape|${main}|14:17-14:21`,
+                `beta|Function|undefined|${lib}|8:4-8:8`,
+                `charlie|Function|undefined|${lib}|8:42-8:49`,
+                `charlie|Namespace|alpha|${main}|1:14-1:26`,
+                `Direction|Enum|alpha|${main}|8:9-8:18`,
+                `down|EnumMember|Direction|${main}|10:8-10:12`,
+                `empty|Function|undefined|${main}|18:9-18:14`,
+                `emptyBrs|Function|undefined|${lib}|9:4-9:12`,
+                `LAST_ONE|Constant|undefined|${main}|20:6-20:14`,
+                `name|Field|Person|${main}|3:12-3:16`,
+                `Person|Class|charlie|${main}|2:14-2:20`,
+                `PI|Constant|alpha|${main}|16:10-16:12`,
+                `Shape|Interface|alpha|${main}|12:14-12:19`,
+                `speak|Method|Person|${main}|4:16-4:21`,
+                `up|EnumMember|Direction|${main}|9:8-9:10`,
+                `width|Field|Shape|${main}|13:8-13:13`
+            ].sort());
+        });
+
+        it('uses utf-16 code units for symbols that follow an emoji on the same line', () => {
+            program.setFile('source/main.bs', [
+                'const A = "😀" : const B = 2',
+                'enum E',
+                '    x = "😀😀" : y = "b"',
+                'end enum'
+            ].join('\n'));
+            const main = uri('source/main.bs');
+            expect(getSymbolStrings()).to.eql([
+                `A|Constant|undefined|${main}|0:6-0:7`,
+                `B|Constant|undefined|${main}|0:23-0:24`,
+                `E|Enum|undefined|${main}|1:5-1:6`,
+                `x|EnumMember|E|${main}|2:4-2:5`,
+                `y|EnumMember|E|${main}|2:17-2:18`
+            ].sort());
+        });
+
+        it('computes exact locations for symbols after a multi-line template string', () => {
+            program.setFile('source/main.bs', [
+                'sub main(who as string)',
+                '    count = 1',
+                '    text = `line one 😀',
+                // eslint-disable-next-line no-template-curly-in-string
+                'two ${who} and ${count}',
+                // eslint-disable-next-line no-template-curly-in-string
+                'three ${ lcase(who) }`',
+                '    print text',
+                'end sub',
+                'function after()',
+                'end function',
+                ''
+            ].join('\n'));
+            const main = uri('source/main.bs');
+            expect(getSymbolStrings()).to.eql([
+                `after|Function|undefined|${main}|7:9-7:14`,
+                `main|Function|undefined|${main}|0:4-0:8`
+            ].sort());
+        });
+    });
 });

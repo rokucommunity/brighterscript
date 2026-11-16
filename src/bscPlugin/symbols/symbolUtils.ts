@@ -98,57 +98,57 @@ function getSymbolsFromAstNode(node: AstNode): SymbolInfo[] {
     node.walk(createVisitor({
         FunctionStatement: (statement) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Function, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Function, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         ClassStatement: (statement, parent) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Class, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Class, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         FieldStatement: (statement, parent) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Field, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Field, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         MethodStatement: (statement, parent) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Method, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Method, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         InterfaceStatement: (statement, parent) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Interface, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Interface, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         InterfaceFieldStatement: (statement, parent) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Field, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Field, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         InterfaceMethodStatement: (statement, parent) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Method, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Method, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         ConstStatement: (statement) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Constant, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Constant, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         NamespaceStatement: (statement) => {
             if (statement.nameExpression) {
-                addSymbol(statement, statement.getNameParts().pop().text, SymbolKind.Namespace, statement.location?.range, statement.nameExpression.location?.range);
+                addSymbol(statement, statement.getNameParts().pop().text, SymbolKind.Namespace, util.getLocation(statement)?.range, util.getLocation(statement.nameExpression)?.range);
             }
         },
         EnumStatement: (statement) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.Enum, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.Enum, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         },
         EnumMemberStatement: (statement) => {
             if (statement.tokens.name?.text) {
-                addSymbol(statement, statement.tokens.name.text, SymbolKind.EnumMember, statement.location?.range, statement.tokens.name.location?.range);
+                addSymbol(statement, statement.tokens.name.text, SymbolKind.EnumMember, util.getLocation(statement)?.range, util.getLocation(statement.tokens.name)?.range);
             }
         }
     }), {

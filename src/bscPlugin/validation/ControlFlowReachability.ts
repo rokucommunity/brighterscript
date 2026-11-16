@@ -361,7 +361,7 @@ class ReachabilityAnalysis {
     }
 
     private extendRun(statement: Statement, reason: string) {
-        if (!statement.location) {
+        if (!statement.sourceInfo) {
             return;
         }
         this.unreachableNodes.add(statement);
@@ -386,7 +386,7 @@ class ReachabilityAnalysis {
     }
 
     private classifyChainCoverage(chain: ConditionalCompileStatement, runLocation: Location) {
-        const chainRange = chain.location?.range;
+        const chainRange = util.getLocation(chain)?.range;
         if (!chainRange) {
             return;
         }

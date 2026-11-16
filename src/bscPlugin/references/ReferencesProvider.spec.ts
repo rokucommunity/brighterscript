@@ -285,6 +285,214 @@ describe('ReferencesProvider', () => {
         ).to.eql([]);
     });
 
+    describe('location boundaries', () => {
+        //NOTE: these tests intentionally only use public `Program` APIs (Position in, Location out) so they
+        //can be run against any implementation of token/node locations. All expected values are hand-counted.
+
+        /**
+         * Join lines with the given line ending. No trailing newline is added
+         */
+        function lines(eol: string, ...items: string[]) {
+            return items.join(eol);
+        }
+
+        /**
+         * Get the references at the position, sorted by uri, then by position
+         */
+        function referencesAt(srcPath: string, line: number, character: number) {
+            return program.getReferences(srcPath, util.createPosition(line, character)).sort((a, b) => {
+                if (a.uri !== b.uri) {
+                    return a.uri < b.uri ? -1 : 1;
+                }
+                return (a.range.start.line - b.range.start.line) || (a.range.start.character - b.range.start.character);
+            });
+        }
+
+        function loc(srcPath: string, startLine: number, startCharacter: number, endLine: number, endCharacter: number) {
+            return {
+                uri: util.pathToUri(srcPath),
+                range: util.createRange(startLine, startCharacter, endLine, endCharacter)
+            };
+        }
+
+        it('finds the identifier at its first character, middle, and immediately after its last character', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    alpha = 1',
+                '    print alpha',
+                '    alpha = alpha + 1',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [
+                loc(file.srcPath, 1, 4, 1, 9),
+                loc(file.srcPath, 2, 10, 2, 15),
+                loc(file.srcPath, 3, 4, 3, 9),
+                loc(file.srcPath, 3, 12, 3, 17)
+            ];
+            //print |alpha
+            expect(referencesAt(file.srcPath, 2, 10)).to.eql(expected);
+            //print al|pha
+            expect(referencesAt(file.srcPath, 2, 12)).to.eql(expected);
+            //print alpha|  (the end of a range is inclusive)
+            expect(referencesAt(file.srcPath, 2, 15)).to.eql(expected);
+            //alpha| = 1
+            expect(referencesAt(file.srcPath, 1, 9)).to.eql(expected);
+
+            //print| alpha  (immediately after `print`, so we search for `print` instead)
+            expect(referencesAt(file.srcPath, 2, 9)).to.eql([]);
+        });
+
+        it('finds identifiers at column 0 of a line and at the end of a line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                'beta = 1',
+                'print beta',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [
+                loc(file.srcPath, 1, 0, 1, 4),
+                loc(file.srcPath, 2, 6, 2, 10)
+            ];
+            //|beta = 1
+            expect(referencesAt(file.srcPath, 1, 0)).to.eql(expected);
+            //print beta|
+            expect(referencesAt(file.srcPath, 2, 10)).to.eql(expected);
+        });
+
+        it('handles CRLF line endings and returns the uri of each file for cross-file references', () => {
+            const mainFile = program.setFile('source/main.brs', lines('\r\n',
+                'sub main()',
+                '    gamma = 1',
+                '    print gamma',
+                'gamma = 2',
+                'end sub'
+            ));
+            const otherFile = program.setFile('source/other.brs', lines('\r\n',
+                'sub other()',
+                '    print gamma',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [
+                loc(mainFile.srcPath, 1, 4, 1, 9),
+                loc(mainFile.srcPath, 2, 10, 2, 15),
+                loc(mainFile.srcPath, 3, 0, 3, 5),
+                loc(otherFile.srcPath, 1, 10, 1, 15)
+            ];
+            //column 0 after a `\r\n`
+            expect(referencesAt(mainFile.srcPath, 3, 0)).to.eql(expected);
+            //end of the line, right before the `\r\n`
+            expect(referencesAt(mainFile.srcPath, 2, 15)).to.eql(expected);
+            //from the other file
+            expect(referencesAt(otherFile.srcPath, 1, 12)).to.eql(expected);
+        });
+
+        it('uses utf-16 code units for characters after a surrogate pair emoji on the same line', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                '    name = "😀"',
+                '    print "😀😀" + name',
+                '    x = "😀": name = name + "😀"',
+                'end sub'
+            ));
+            program.validate();
+            //each emoji is 2 utf-16 code units
+            const expected = [
+                loc(file.srcPath, 1, 4, 1, 8),
+                loc(file.srcPath, 2, 19, 2, 23),
+                loc(file.srcPath, 3, 14, 3, 18),
+                loc(file.srcPath, 3, 21, 3, 25)
+            ];
+            expect(referencesAt(file.srcPath, 2, 19)).to.eql(expected);
+            expect(referencesAt(file.srcPath, 2, 21)).to.eql(expected);
+            expect(referencesAt(file.srcPath, 2, 23)).to.eql(expected);
+            expect(referencesAt(file.srcPath, 3, 25)).to.eql(expected);
+        });
+
+        it('counts lines through multi-line template strings', () => {
+            const file = program.setFile('source/main.bs', lines('\n',
+                'sub main()',
+                '    name = "bob"',
+                /* eslint-disable no-template-curly-in-string */
+                '    msg = `hello ${name}',
+                'line two ${name}',
+                'and ${name} three`',
+                /* eslint-enable no-template-curly-in-string */
+                '    print msg + name',
+                'end sub'
+            ));
+            program.validate();
+            const expected = [
+                loc(file.srcPath, 1, 4, 1, 8),
+                loc(file.srcPath, 2, 19, 2, 23),
+                loc(file.srcPath, 3, 11, 3, 15),
+                loc(file.srcPath, 4, 6, 4, 10),
+                loc(file.srcPath, 5, 16, 5, 20)
+            ];
+            //inside `${}` on later lines of the template string
+            expect(referencesAt(file.srcPath, 3, 13)).to.eql(expected);
+            expect(referencesAt(file.srcPath, 4, 10)).to.eql(expected);
+            //after the template string
+            expect(referencesAt(file.srcPath, 5, 20)).to.eql(expected);
+
+            //print msg|
+            expect(referencesAt(file.srcPath, 5, 13)).to.eql([
+                loc(file.srcPath, 2, 4, 2, 7),
+                loc(file.srcPath, 5, 10, 5, 13)
+            ]);
+        });
+
+        it('finds items on the last line of a file with no trailing newline', () => {
+            const file = program.setFile('source/main.brs', lines('\n',
+                'sub main()',
+                'end sub',
+                'sub last(): value = 1: print value: end sub'
+            ));
+            program.validate();
+            const expected = [
+                loc(file.srcPath, 2, 12, 2, 17),
+                loc(file.srcPath, 2, 29, 2, 34)
+            ];
+            //print value|:
+            expect(referencesAt(file.srcPath, 2, 34)).to.eql(expected);
+            //|value = 1
+            expect(referencesAt(file.srcPath, 2, 12)).to.eql(expected);
+        });
+
+        it('finds symbols in namespaces, classes, and empty function bodies', () => {
+            const file = program.setFile('source/main.bs', lines('\n',
+                'namespace alpha.beta',
+                '    function noop()',
+                '    end function',
+                '    class Widget',
+                '        sub render()',
+                '            count = 1',
+                '            print count',
+                '        end sub',
+                '    end class',
+                '    sub caller()',
+                '        noop()',
+                '    end sub',
+                'end namespace'
+            ));
+            program.validate();
+            //variables in a class method inside a namespace
+            const expected = [
+                loc(file.srcPath, 5, 12, 5, 17),
+                loc(file.srcPath, 6, 18, 6, 23)
+            ];
+            expect(referencesAt(file.srcPath, 6, 23)).to.eql(expected);
+            expect(referencesAt(file.srcPath, 5, 12)).to.eql(expected);
+
+            //call to an empty function from inside a namespace
+            expect(referencesAt(file.srcPath, 10, 12)).to.eql([
+                loc(file.srcPath, 10, 8, 10, 12)
+            ]);
+        });
+    });
+
     function locationToString(loc: Location) {
         return `${URI.parse(loc.uri).fsPath}:${loc.range.start.line}:${loc.range.start.character}-${loc.range.end.line}:${loc.range.end.character}`;
     }

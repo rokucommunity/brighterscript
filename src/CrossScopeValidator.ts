@@ -6,7 +6,7 @@ import type { Program } from './Program';
 import { util } from './util';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { BscSymbol } from './SymbolTable';
-import { isCallExpression, isConstStatement, isEnumStatement, isEnumType, isFunctionStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType } from './astUtils/reflection';
+import { isCallExpression, isConstStatement, isEnumStatement, isEnumType, isFunctionStatement, isInheritableType, isInterfaceStatement, isNamespaceStatement, isNamespaceType, isReferenceType, isTypedFunctionType, isUnionType, isBrsFile } from './astUtils/reflection';
 import type { ReferenceType } from './types/ReferenceType';
 import { getAllRequiredSymbolNames } from './types/ReferenceType';
 import type { TypeChainEntry, TypeChainProcessResult } from './interfaces';
@@ -19,6 +19,7 @@ import { ParseMode } from './parser/Parser';
 import { globalFile } from './globalCallables';
 import type { DottedGetExpression, VariableExpression } from './parser/Expression';
 import type { InheritableType } from './types';
+import type { Locatable } from './lexer/Token';
 
 
 interface FileSymbolPair {
@@ -34,6 +35,19 @@ interface SymbolLookupKeys {
 }
 
 const CrossScopeValidatorDiagnosticTag = 'CrossScopeValidator';
+/**
+ * Also on name collision diagnostics, so they can be cleared for a whole scope when its provided symbols change.
+ * They also get `getDuplicateNameTag()`, so the ones for one name can be cleared
+ */
+const CrossScopeValidatorDuplicateTag = 'CrossScopeValidatorDuplicate';
+
+function getDuplicateNameTag(lowerSymbolName: string) {
+    return `${CrossScopeValidatorDuplicateTag}:${lowerSymbolName}`;
+}
+/**
+ * Also on incompatible definition diagnostics. These aren't tied to one scope, so they're cleared by this tag (or by file)
+ */
+const CrossScopeValidatorIncompatibleTag = 'CrossScopeValidatorIncompatible';
 
 /**
  * Where a symbol gets added to a scope's provided symbols: the file, and its order within that file
@@ -164,6 +178,10 @@ export class ProvidedSymbolIndex {
 
     public getSymbolNames(file: BscFile) {
         return this.files.get(file)?.symbolNames ?? [];
+    }
+
+    public getNamespaceNames(file: BscFile) {
+        return this.files.get(file)?.namespaceNames ?? [];
     }
 }
 
@@ -490,7 +508,9 @@ export class CrossScopeValidator {
     private getPossibleDuplicateNames(file: BscFile) {
         let names = this.possibleDuplicateNamesCache?.get(file);
         if (!names) {
-            names = this.providedSymbolIndex.getSymbolNames(file).filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
+            //namespace names are included so a collision located on a namespace gets rechecked when only its file is
+            const allNames = [...this.providedSymbolIndex.getSymbolNames(file), ...this.providedSymbolIndex.getNamespaceNames(file)];
+            names = allNames.filter(name => this.providedSymbolIndex.couldBeDuplicate(name, x => !!this.getGlobalSymbol(x)));
             this.possibleDuplicateNamesCache?.set(file, names);
         }
         return names;
@@ -499,12 +519,12 @@ export class CrossScopeValidator {
 
     private componentsMap = new Map<string, FileSymbolPair>();
 
-    getRequiredMap(scope: Scope) {
+    getRequiredMap(scope: Scope, onlyFiles?: Set<BscFile>) {
         const map = new Map<SymbolLookupKeys, UnresolvedSymbol>();
         scope.enumerateBrsFiles((file) => {
             //typedef files (.d.bs) are ambient declarations only - never validated for diagnostics,
             //so don't flag their own unresolved type references as missing symbols
-            if (file.isTypedef) {
+            if (file.isTypedef || (onlyFiles && !onlyFiles.has(file))) {
                 return;
             }
             for (const symbol of file.requiredSymbols) {
@@ -517,7 +537,11 @@ export class CrossScopeValidator {
         return map;
     }
 
-    getProvidedTree(scope: Scope) {
+    /**
+     * @param scope the scope to get the provided symbols of
+     * @param duplicateNameFiles when set, only look for duplicates of the names these files provide
+     */
+    getProvidedTree(scope: Scope, duplicateNameFiles?: Set<BscFile>) {
         if (this.providedTreeMap.has(scope.name)) {
             return this.providedTreeMap.get(scope.name);
         }
@@ -576,8 +600,10 @@ export class CrossScopeValidator {
         let fileIndex = 0;
         scope.enumerateBrsFiles((file) => {
             scopeSymbols.fileIndex.set(file, fileIndex++);
-            for (const symbolName of this.getPossibleDuplicateNames(file)) {
-                possibleDuplicateNames.add(symbolName);
+            if (!duplicateNameFiles || duplicateNameFiles.has(file)) {
+                for (const symbolName of this.getPossibleDuplicateNames(file)) {
+                    possibleDuplicateNames.add(symbolName);
+                }
             }
 
             // find all "provided symbols" that are reference types
@@ -636,9 +662,9 @@ export class CrossScopeValidator {
         return result;
     }
 
-    getIssuesForScope(scope: Scope) {
-        const requiredMap = this.getRequiredMap(scope);
-        const { providedTree, duplicatesMap } = this.getProvidedTree(scope);
+    getIssuesForScope(scope: Scope, onlyFiles?: Set<BscFile>, duplicateNameFiles?: Set<BscFile>) {
+        const requiredMap = this.getRequiredMap(scope, onlyFiles);
+        const { providedTree, duplicatesMap } = this.getProvidedTree(scope, duplicateNameFiles);
 
         const missingSymbols = new Set<UnresolvedSymbol>();
 
@@ -716,6 +742,32 @@ export class CrossScopeValidator {
         }
     }
 
+    /**
+     * Clear the resolutions of these files' required symbols in these scopes
+     */
+    private clearResolutionsForFilesInScopes(files: Set<BscFile>, scopes: Scope[]) {
+        const lowerScopeNames = new Set(scopes.map(scope => scope.name.toLowerCase()));
+        for (const file of files) {
+            if (!isBrsFile(file)) {
+                continue;
+            }
+            for (const symbol of file.requiredSymbols) {
+                const resolutionInfos = this.resolutionsMap.get(symbol);
+                if (!resolutionInfos) {
+                    continue;
+                }
+                for (const info of resolutionInfos) {
+                    if (lowerScopeNames.has(info.scope.name.toLowerCase())) {
+                        resolutionInfos.delete(info);
+                    }
+                }
+                if (resolutionInfos.size === 0) {
+                    this.resolutionsMap.delete(symbol);
+                }
+            }
+        }
+    }
+
     clearResolutionsForScopes(scopes: Scope[]) {
         const lowerScopeNames = new Set(scopes.map(scope => scope.name.toLowerCase()));
         for (const [symbol, resolutionInfos] of this.resolutionsMap.entries()) {
@@ -781,31 +833,127 @@ export class CrossScopeValidator {
         }
     }
 
-    addDiagnosticsForScopes(scopes: Scope[]) { //, changedFiles: BrsFile[]) {
+    /**
+     * The files in each scope (see `getScopeFilesKey`) the last time all of them were checked
+     */
+    private scopeFilesKeys = new WeakMap<Scope, string>();
+
+    private getScopeFilesKey(scope: Scope) {
+        const srcPaths: string[] = [];
+        scope.enumerateBrsFiles((file) => {
+            srcPaths.push(file.srcPath);
+        });
+        return srcPaths.join('\n');
+    }
+
+    /**
+     * Clear the diagnostics that rechecking these files in these scopes will re-add
+     */
+    private clearDiagnosticsForFilesInScopes(files: Set<BscFile>, scopes: Scope[], clearAllDuplicates: boolean) {
+        const scopeSet = new Set(scopes);
+        for (const file of files) {
+            const fileUri = util.pathToUri(file.srcPath);
+            const fileScopes = this.program.getScopesForFile(file);
+            if (fileScopes.every(scope => scopeSet.has(scope) || scope === this.program.globalScope)) {
+                //every scope this file is in gets rechecked, so clear them all at once
+                this.program.diagnostics.clearByFilter({
+                    tag: CrossScopeValidatorDiagnosticTag,
+                    fileUri: fileUri
+                });
+            } else {
+                for (const scope of fileScopes) {
+                    if (scopeSet.has(scope)) {
+                        this.program.diagnostics.clearByFilter({
+                            scope: scope,
+                            tag: CrossScopeValidatorDiagnosticTag,
+                            fileUri: fileUri
+                        });
+                    }
+                }
+            }
+            this.program.diagnostics.clearByFilter({
+                tag: CrossScopeValidatorIncompatibleTag,
+                fileUri: fileUri
+            });
+        }
+        if (clearAllDuplicates) {
+            for (const scope of scopes) {
+                this.program.diagnostics.clearByFilter({
+                    scope: scope,
+                    tag: CrossScopeValidatorDuplicateTag
+                });
+            }
+        }
+    }
+
+    /**
+     * @param scopes the scopes to check
+     * @param onlyFiles when set, only recheck these files against each scope rather than every file in each scope.
+     * Every file whose provided symbols changed must be included
+     * @param recheckDuplicates when only rechecking some files, should the duplicates of every name in each scope be rechecked
+     * (because provided symbols changed), or only the ones located in those files?
+     */
+    addDiagnosticsForScopes(scopes: Scope[], onlyFiles?: Set<BscFile>, recheckDuplicates = !onlyFiles) {
+        if (onlyFiles) {
+            //a scope's files can change without any symbol changing (eg. an `import` or `<script>` was removed), so those scopes get fully rechecked
+            const scopesWithChangedFiles = scopes.filter(scope => this.scopeFilesKeys.get(scope) !== this.getScopeFilesKey(scope));
+            if (scopesWithChangedFiles.length > 0) {
+                const otherScopes = scopes.filter(scope => !scopesWithChangedFiles.includes(scope));
+                if (otherScopes.length > 0) {
+                    this.addDiagnosticsForScopes(otherScopes, onlyFiles, recheckDuplicates);
+                }
+                this.addDiagnosticsForScopes(scopesWithChangedFiles);
+                return;
+            }
+        }
         const addDuplicateSymbolDiagnostics = true;
         const missingSymbolInScope = new Map<UnresolvedSymbol, Set<Scope>>();
         this.providedTreeMap.clear();
-        this.clearResolutionsForScopes(scopes);
+        if (onlyFiles) {
+            this.clearResolutionsForFilesInScopes(onlyFiles, scopes);
+            this.clearDiagnosticsForFilesInScopes(onlyFiles, scopes, recheckDuplicates);
+        } else {
+            this.clearResolutionsForScopes(scopes);
+        }
+        const duplicateNameFiles = recheckDuplicates ? undefined : onlyFiles;
 
         this.globalSymbolCache = new Map();
         this.possibleDuplicateNamesCache = new Map();
         this.providedSymbolIndex.prune(this.program);
-        for (const scope of scopes) {
-            scope.enumerateBrsFiles((file) => {
-                this.providedSymbolIndex.update(file);
-            });
+        if (onlyFiles) {
+            for (const file of onlyFiles) {
+                if (isBrsFile(file)) {
+                    this.providedSymbolIndex.update(file);
+                }
+            }
+        } else {
+            for (const scope of scopes) {
+                scope.enumerateBrsFiles((file) => {
+                    this.providedSymbolIndex.update(file);
+                });
+            }
         }
 
         // Check scope for duplicates and missing symbols
         for (const scope of scopes) {
-            this.program.diagnostics.clearByFilter({
-                scope: scope,
-                tag: CrossScopeValidatorDiagnosticTag
-            });
+            if (!onlyFiles) {
+                this.program.diagnostics.clearByFilter({
+                    scope: scope,
+                    tag: CrossScopeValidatorDiagnosticTag
+                });
+                this.scopeFilesKeys.set(scope, this.getScopeFilesKey(scope));
+            }
 
-            const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope);
+            const { missingSymbols, duplicatesMap } = this.getIssuesForScope(scope, onlyFiles, duplicateNameFiles);
             if (addDuplicateSymbolDiagnostics && duplicatesMap) {
-                for (const [_flag, dupeSet] of duplicatesMap.entries()) {
+                for (const [symbolName, dupeSet] of duplicatesMap.entries()) {
+                    if (duplicateNameFiles) {
+                        //these names are the only ones looked at, so redo all of their diagnostics (some are in other files, but point to these ones)
+                        this.program.diagnostics.clearByFilter({
+                            scope: scope,
+                            tag: getDuplicateNameTag(symbolName)
+                        });
+                    }
                     if (dupeSet.size > 1) {
 
                         const dupesArray = [...dupeSet.values()];
@@ -861,20 +1009,21 @@ export class CrossScopeValidator {
                                 type AstNodeWithName = VariableExpression | DottedGetExpression | EnumStatement | ClassStatement | ConstStatement | EnumMemberStatement | InterfaceStatement;
 
                                 const thatNodeKindName = otherIsGlobal ? 'Global Function' : util.getAstNodeFriendlyName(otherDupeNode) ?? 'Item';
-                                let thisNameRange = (dupeNode as AstNodeWithName)?.tokens?.name?.location?.range ?? dupeNode.location?.range;
-                                let thatNameRange = (otherDupeNode as AstNodeWithName)?.tokens?.name?.location?.range ?? otherDupeNode?.location?.range;
+                                let thisNameLocatable = util.firstLocatable<Locatable>((dupeNode as AstNodeWithName)?.tokens?.name, dupeNode);
+                                let thatNameLocatable = util.firstLocatable<Locatable>((otherDupeNode as AstNodeWithName)?.tokens?.name, otherDupeNode);
 
-                                const relatedInformation = thatNameRange ? [{
+                                const relatedInformation = thatNameLocatable ? [{
                                     message: `${thatNodeKindName} declared here`,
-                                    location: util.createLocationFromFileRange(otherDupe.file, thatNameRange)
+                                    location: thatNameLocatable
                                 }] : undefined;
                                 this.program.diagnostics.register({
                                     ...DiagnosticMessages.nameCollision(thisNodeKindName, thatNodeKindName, thatName),
-                                    location: util.createLocationFromFileRange(dupe.file, thisNameRange),
+                                    //keep the file's uri even if the node has no location
+                                    location: thisNameLocatable ?? util.createLocationFromFileRange(dupe.file, undefined),
                                     relatedInformation: relatedInformation
                                 }, {
                                     scope: scope,
-                                    tags: [CrossScopeValidatorDiagnosticTag]
+                                    tags: [CrossScopeValidatorDiagnosticTag, CrossScopeValidatorDuplicateTag, getDuplicateNameTag(symbolName)]
                                 });
                             }
                         }
@@ -906,7 +1055,7 @@ export class CrossScopeValidator {
             for (const scope of scopeList) {
                 this.program.diagnostics.register({
                     ...this.getCannotFindDiagnostic(scope, symbol, typeChainResult),
-                    location: typeChainResult.location
+                    location: typeChainResult.locatable
                 }, {
                     scope: scope,
                     tags: [CrossScopeValidatorDiagnosticTag]
@@ -916,8 +1065,16 @@ export class CrossScopeValidator {
 
         this.globalSymbolCache = undefined;
         this.possibleDuplicateNamesCache = undefined;
+        if (duplicateNameFiles) {
+            //these trees only have some of their duplicates, so don't keep them around
+            this.providedTreeMap.clear();
+        }
 
-        for (const resolution of this.getIncompatibleSymbolResolutions()) {
+        if (!onlyFiles) {
+            //every incompatible definition gets re-added below
+            this.program.diagnostics.clearForTag(CrossScopeValidatorIncompatibleTag);
+        }
+        for (const resolution of this.getIncompatibleSymbolResolutions(onlyFiles)) {
             const symbol = resolution.symbol;
             const incompatibleScopes = resolution.incompatibleScopes;
             if (incompatibleScopes.size > 1) {
@@ -925,18 +1082,37 @@ export class CrossScopeValidator {
                 const scopeList = [...incompatibleScopes.values()].map(s => s.name);
                 this.program.diagnostics.register({
                     ...DiagnosticMessages.incompatibleSymbolDefinition(typeChainResult.fullChainName, { scopes: scopeList }),
-                    location: typeChainResult.location
+                    location: typeChainResult.locatable
                 }, {
-                    tags: [CrossScopeValidatorDiagnosticTag]
+                    tags: [CrossScopeValidatorDiagnosticTag, CrossScopeValidatorIncompatibleTag]
                 });
             }
         }
     }
 
-    getIncompatibleSymbolResolutions() {
+    private getResolutionEntries(onlyFiles?: Set<BscFile>) {
+        if (!onlyFiles) {
+            return this.resolutionsMap.entries();
+        }
+        const entries: Array<[UnresolvedSymbol, Set<{ scope: Scope; sourceFile: BscFile; providedSymbol: BscSymbol }>]> = [];
+        for (const file of onlyFiles) {
+            if (!isBrsFile(file)) {
+                continue;
+            }
+            for (const symbol of file.requiredSymbols) {
+                const resolutionDetails = this.resolutionsMap.get(symbol);
+                if (resolutionDetails) {
+                    entries.push([symbol, resolutionDetails]);
+                }
+            }
+        }
+        return entries;
+    }
+
+    getIncompatibleSymbolResolutions(onlyFiles?: Set<BscFile>) {
         const incompatibleResolutions = new Array<{ symbol: UnresolvedSymbol; incompatibleScopes: Set<Scope> }>();
         // check all resolutions and check if there are resolutions that are not compatible across scopes
-        for (const [symbol, resolutionDetails] of this.resolutionsMap.entries()) {
+        for (const [symbol, resolutionDetails] of this.getResolutionEntries(onlyFiles)) {
             if (resolutionDetails.size < 2) {
                 // there is only one resolution... no worries
                 continue;

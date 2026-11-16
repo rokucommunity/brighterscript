@@ -4,7 +4,7 @@ import { Lexer } from '../../../lexer/Lexer';
 import { DisallowedLocalIdentifiersText, TokenKind } from '../../../lexer/TokenKind';
 import { Range } from 'vscode-languageserver';
 import type { AAMemberExpression } from '../../Expression';
-import { expectZeroDiagnostics } from '../../../testHelpers.spec';
+import { expectZeroDiagnostics, getDiagnosticRange } from '../../../testHelpers.spec';
 import type { Statement } from '../../AstNode';
 import { isAAMemberExpression, isDottedSetStatement } from '../../../astUtils/reflection';
 
@@ -37,7 +37,7 @@ describe('parser', () => {
             let { diagnostics } = Parser.parse(tokens);
             expect(diagnostics).to.be.lengthOf(1);
             //specifically check for the error location, because the identifier location was wrong in the past
-            expect(diagnostics[0].location.range).to.deep.include(
+            expect(getDiagnosticRange(diagnostics[0])).to.deep.include(
                 Range.create(1, 4, 1, 8)
             );
         });
