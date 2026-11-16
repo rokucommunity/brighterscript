@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { createVisitor, WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isArrayLiteralExpression, isCallExpression, isCallfuncExpression, isCommentStatement, isDottedGetExpression, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIndexedGetExpression, isIntegerType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNewExpression, isStringType, isTemplateStringExpression, isTypeCastExpression, isUnaryExpression, isVariableExpression, isVoidType, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { TranspileResult, TypedefProvider } from '../interfaces';
 import { VoidType } from '../types/VoidType';
 import { DynamicType } from '../types/DynamicType';
@@ -1836,7 +1836,7 @@ export class TernaryExpression extends Expression {
         let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
-        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
 
         if (mutatingExpressions.length > 0) {
             result.push(
@@ -1937,7 +1937,7 @@ export class NullCoalescingExpression extends Expression {
         let hasMutatingExpression = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
-        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+        ].find(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e) || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
 
         if (hasMutatingExpression) {
             result.push(
