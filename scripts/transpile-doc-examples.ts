@@ -59,7 +59,12 @@ class DocCompiler {
         return this.lines[this.index + 1];
     }
 
-    public async run() {
+    /**
+     * Transpile every brighterscript example in the doc, and update the brightscript block that follows it.
+     * @param write if true, save the result to disk. if false, leave the file alone
+     * @returns true if the doc's contents changed (i.e. its brightscript examples were out of date)
+     */
+    public async run(write: boolean) {
         //get the docs file contents
         let contents = fsExtra.readFileSync(this.docPath).toString();
         const [eol] = /\r?\n/.exec(contents);
@@ -78,9 +83,13 @@ class DocCompiler {
 
         let result = this.lines.join(eol);
         result = this.customProcessing(this.docPath, result);
-        fsExtra.writeFileSync(this.docPath, result);
+        const changed = result !== contents;
+        if (write && changed) {
+            fsExtra.writeFileSync(this.docPath, result);
+        }
         delete this.lines;
         this.index = -1;
+        return changed;
     }
 
     private customProcessing(docPath: string, contents: string) {
@@ -209,7 +218,16 @@ class DocCompiler {
     }
 }
 
+/**
+ * Transpiles every ```brighterscript example in docs/ and writes the output into the ```brightscript block that follows it,
+ * so the docs always show what the current compiler actually produces.
+ *
+ * Usage:
+ *   npm run transpile-doc-examples              update the docs in place
+ *   npm run transpile-doc-examples -- --check   don't change anything, just fail if any doc is out of date (used in CI)
+ */
 (async function main() {
+    const check = process.argv.includes('--check');
     const docsFolder = path.resolve(
         path.join(__dirname, '..', 'docs')
     );
@@ -218,9 +236,24 @@ class DocCompiler {
         absolute: true
     });
 
+    const outdated = [] as string[];
     for (let docPath of docs) {
         console.log('\n', docPath);
         const compiler = new DocCompiler(docPath, enableDebugLogging);
-        await compiler.run();
+        if (await compiler.run(!check)) {
+            outdated.push(path.relative(process.cwd(), docPath));
+        }
     }
-}()).catch((e) => console.error(e));
+
+    if (check && outdated.length > 0) {
+        console.error(`\nThe brightscript examples in these docs are out of date:\n${outdated.map(x => `  - ${x}`).join('\n')}\n\nRun \`npm run transpile-doc-examples\` and commit the changes.`);
+        process.exitCode = 1;
+    } else if (check) {
+        console.log('\nAll doc examples are up to date');
+    } else {
+        console.log(`\nUpdated ${outdated.length} doc(s)`);
+    }
+}()).catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+});

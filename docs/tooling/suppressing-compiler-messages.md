@@ -8,11 +8,11 @@ Developers may want to suppress some of these messages. There are two ways to do
 
 There are three `bsconfig.json` settings which modify the reporting of compiler messages: `diagnosticFilters`, `diagnosticLevel`, and `diagnosticSeverityOverride`.
 
-[diagnosticFilters](https://github.com/rokucommunity/BrighterScript/blob/master/docs/bsconfig.md#diagnosticFilters) allows users to ignore specific errors and specific file paths. It is useful for targetted suppression of errors.
+[diagnosticFilters](../getting-started/bsconfig.md#diagnosticfilters) allows users to ignore specific errors and specific file paths. It is useful for targetted suppression of errors.
 
-[diagnosticLevel](https://github.com/rokucommunity/BrighterScript/blob/master/docs/bsconfig.md#diagnosticLevel) allows users to toggle the level of diagnostics which they wish to see. For example, it allows one to hide all warnings and only show errors.
+[diagnosticLevel](../getting-started/bsconfig.md#diagnosticlevel) allows users to toggle the level of diagnostics which they wish to see. For example, it allows one to hide all warnings and only show errors.
 
-[diagnosticSeverityOverride](https://github.com/rokucommunity/BrighterScript/blob/master/docs/bsconfig.md#diagnosticSeverityOverride) allows users to manually change the severity of a diagnostic, such as setting a particular kind of error to instead by reported as a warning or vice versa. This works in conjunction with the other two options.
+[diagnosticSeverityOverrides](../getting-started/bsconfig.md#diagnosticseverityoverrides) allows users to manually change the severity of a diagnostic, such as setting a particular kind of error to instead by reported as a warning or vice versa. This works in conjunction with the other two options.
 
 ## Ignoring errors and warnings on a per-line basis
 

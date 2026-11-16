@@ -2,6 +2,26 @@
 
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 
+Here's a typical starter config. It keeps the staging folder around after a build, which is handy for inspecting the transpiled output:
+
+```jsonc title="bsconfig.json" showLineNumbers
+{
+    "rootDir": "src",
+    "stagingDir": "out/staging",
+    "retainStagingDir": true,
+    "sourceMap": true
+}
+```
+
+To debug your original source code instead of the transpiled output, turn on source maps:
+
+```jsonc title="bsconfig.json"
+{
+    "rootDir": "src",
+    "sourceMap": true
+}
+```
+
 - [bsconfig.json options](#bsconfigjson-options)
   - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
   - [`autoImportComponentScript`](#autoimportcomponentscript)
@@ -284,15 +304,15 @@ This will copy all files from the standard roku folders directly into the packag
 
 If you want to include additional files, you will need to provide the entire array. For example, if you have a folder with other assets, you could do the following:
 
-```jsonc
+```jsonc {7-8}
 {
     "files": [
         "source/**/*",
         "components/**/*",
         "images/**/*",
-        "manifest"
+        "manifest",
         //your folder with other assets
-        "assets/**/*",
+        "assets/**/*"
     ]
 }
 ```
@@ -320,7 +340,7 @@ All patterns will be resolved relative to rootDir, with their relative positions
 
 Patterns may not reference files outside of [`rootDir`](#rootdir) unless the `{ src, dest }` form is used (see below). For example:
 
-```jsonc
+```jsonc {6-7}
 {
     "rootDir": "C:/projects/CatVideoPlayer",
     "files": [
@@ -382,7 +402,7 @@ If `dest` is not specified it will default to the root of the output folder.
 
 An example of combining regular and advanced file patterns:
 
-```jsonc
+```jsonc {5-8}
 {
     "rootDir": "C:/projects/CatVideoPlayer",
     "files": [
@@ -401,7 +421,7 @@ Because file entries are processed in order you can override a file by specifyin
 
 For example, if you have a base project and a child project that wants to override specific files, you could do the following:
 
-```jsonc
+```jsonc {7-9}
 {
     "files": [
         {
@@ -455,7 +475,7 @@ With this setting, using optional chaining (`?.`) without the version requiremen
 *can* be transpiled down. When a file is transpiled and `minFirmwareVersion` is below `11.5.0`, each
 `continue` is rewritten into a `goto` targeting a label at the end of the enclosing loop body:
 
-```brightscript
+```brightscript {3,8-9}
 ' source
 for i = 0 to 10
     continue for

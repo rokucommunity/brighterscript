@@ -3,7 +3,7 @@ BrighterScript is a superset of Roku's BrightScript language. Its goal is to pro
 
 See the following pages for more information:
 
-## [Annotations](annotations.md)
+## [Annotations](language-features/annotations.md)
 ```brighterscript
 'mostly useful for plugins that change code based on annotations
 @logOnException()
@@ -12,13 +12,13 @@ sub doSomething()
 end
 ```
 
-## [Callfunc Operator](callfunc-operator.md)
+## [Callfunc Operator](language-features/callfunc-operator.md)
 ```brighterscript
 'instead of `node.callfunc("someMethod", 1, 2, 3)`, you can do this:
 node@.someMethod(1, 2, 3)
 ```
 
-## [Classes](classes.md)
+## [Classes](language-features/classes.md)
 ```brighterscript
 class Movie
     public title as string
@@ -32,7 +32,7 @@ class Movie
 end class
 ```
 
-## [Constants](constants.md)
+## [Constants](language-features/constants.md)
 ```brighterscript
 const API_URL = "https://api.acme.com/v1/"
 sub main()
@@ -40,7 +40,7 @@ sub main()
 end sub
 ```
 
-## [Enums](enums.md)
+## [Enums](language-features/enums.md)
 ```brighterscript
 enum RemoteButton
     up = "up"
@@ -50,7 +50,7 @@ enum RemoteButton
 end enum
 ```
 
-## [Namespaces](namespaces.md)
+## [Namespaces](language-features/namespaces.md)
 ```brighterscript
 namespace util
     function toUpper(value as string)
@@ -63,7 +63,7 @@ sub main()
 end sub
 ```
 
-## [Imports](imports.md)
+## [Imports](language-features/imports.md)
 ```brighterscript
 import "pkg:/source/util.bs"
 sub main()
@@ -71,20 +71,20 @@ sub main()
 end sub
 ```
 
-## [Null-coalescing operator](null-coalescing-operator.md)
+## [Null-coalescing operator](language-features/null-coalescing-operator.md)
 ```brighterscript
 userSettings = getSettingsFromRegistry() ?? {}
 ```
 
-## [Plugins](plugins.md)
+## [Plugins](tooling/plugins.md)
 Plugins can be used to manipulate code at any point during the program lifecycle.
 
-## [Regular Expression Literals](regex-literals.md)
+## [Regular Expression Literals](language-features/regex-literals.md)
 ```brighterscript
 print /hello world/ig
 ```
 
-## [Source Literals](source-literals.md)
+## [Source Literals](language-features/source-literals.md)
 ```brighterscript
 print SOURCE_FILE_PATH
 print SOURCE_LINE_NUM
@@ -94,7 +94,7 @@ print SOURCE_LOCATION
 print PKG_PATH
 print PKG_LOCATION
 ```
-## [Template Strings (Template Literals)](template-strings.md)
+## [Template Strings (Template Literals)](language-features/template-strings.md)
 ```brighterscript
 name = `John Smith`
 
@@ -104,7 +104,7 @@ text = `first line text
 second line text`
 ```
 
-## [Ternary (Conditional) Operator](ternary-operator.md)
+## [Ternary (Conditional) Operator](language-features/ternary-operator.md)
 ```brighterscript
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```

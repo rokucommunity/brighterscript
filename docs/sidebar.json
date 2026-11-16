@@ -1,0 +1,39 @@
+{
+    "$comment": "The docs site sidebar, which is also the order of the Previous/Next buttons. Each `file` is a markdown file's path within docs/. `npm run docs` and `npm run build-docs` add new pages here automatically with a best guess for where they belong, so move them if the guess is wrong.",
+    "categories": [
+        {
+            "label": "Getting Started",
+            "items": [
+                { "file": "readme.md", "label": "Introduction" },
+                { "file": "getting-started/bsconfig.md", "label": "bsconfig.json" }
+            ]
+        },
+        {
+            "label": "Language Features",
+            "items": [
+                { "file": "language-features/imports.md", "label": "Imports" },
+                { "file": "language-features/namespaces.md", "label": "Namespaces" },
+                { "file": "language-features/classes.md", "label": "Classes" },
+                { "file": "language-features/interfaces.md", "label": "Interfaces" },
+                { "file": "language-features/enums.md", "label": "Enums" },
+                { "file": "language-features/constants.md", "label": "Constants" },
+                { "file": "language-features/template-strings.md", "label": "Template Strings" },
+                { "file": "language-features/ternary-operator.md", "label": "Ternary Operator" },
+                { "file": "language-features/null-coalescing-operator.md", "label": "Null-Coalescing Operator" },
+                { "file": "language-features/callfunc-operator.md", "label": "Callfunc Operator" },
+                { "file": "language-features/regex-literals.md", "label": "Regex Literals" },
+                { "file": "language-features/source-literals.md", "label": "Source Literals" },
+                { "file": "language-features/computed-property-names.md", "label": "Computed Property Names" },
+                { "file": "language-features/annotations.md", "label": "Annotations" }
+            ]
+        },
+        {
+            "label": "Tooling",
+            "items": [
+                { "file": "tooling/suppressing-compiler-messages.md", "label": "Suppressing Compiler Messages" },
+                { "file": "tooling/language-server.md", "label": "Language Server" },
+                { "file": "tooling/plugins.md", "label": "Plugins" }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,291 @@
+/**
+ * BrighterScript theme, layered on top of Docusaurus' default (Infima) theme.
+ *
+ * Brand colors come from the RokuCommunity site (https://rokucommunity.github.io): a deep Roku-ish purple
+ * with a hot pink accent. The "brighter" gradient (purple -> pink) is used sparingly as the signature accent.
+ */
+/* code font, same as the TypeScript docs. The text font (Segoe UI) is proprietary, so we use it via the system font stack */
+@import '@fontsource/cascadia-mono/400.css';
+@import '@fontsource/cascadia-mono/600.css';
+
+:root {
+    --bs-purple: #581b98;
+    --bs-purple-deep: #3a0f6b;
+    --bs-pink: #f3558e;
+    --bs-gradient: linear-gradient(90deg, #7b2fd1 0%, #f3558e 100%);
+
+    --ifm-color-primary: #6a24b5;
+    --ifm-color-primary-dark: #5f20a3;
+    --ifm-color-primary-darker: #5a1f9a;
+    --ifm-color-primary-darkest: #4a197f;
+    --ifm-color-primary-light: #7528c7;
+    --ifm-color-primary-lighter: #7b2fd1;
+    --ifm-color-primary-lightest: #8f4dd8;
+
+    --ifm-background-color: #fdfdfd;
+    --ifm-font-color-base: #292929;
+
+    /* modeled after https://www.typescriptlang.org/docs/ */
+    --ifm-font-family-base: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+    --ifm-heading-font-family: var(--ifm-font-family-base);
+    --ifm-font-family-monospace: 'Cascadia Mono', Menlo, Monaco, Consolas, monospace;
+    --ifm-heading-font-weight: 600;
+    --ifm-code-font-size: 88%;
+    --ifm-code-border-radius: 0.4rem;
+    --ifm-global-radius: 0.5rem;
+
+    --ifm-navbar-height: 3.75rem;
+    --ifm-navbar-link-hover-color: #fff;
+    --ifm-footer-background-color: #1d0838;
+
+    --docusaurus-highlighted-code-line-bg: rgba(106, 36, 181, 0.1);
+}
+
+[data-theme='dark'] {
+    --ifm-color-primary: #c18cff;
+    --ifm-color-primary-dark: #b06dff;
+    --ifm-color-primary-darker: #a85eff;
+    --ifm-color-primary-darkest: #8f30ff;
+    --ifm-color-primary-light: #d2abff;
+    --ifm-color-primary-lighter: #dabaff;
+    --ifm-color-primary-lightest: #f3e8ff;
+
+    --ifm-background-color: #161e27;
+    --ifm-background-surface-color: #111820;
+    --ifm-font-color-base: #e6e8eb;
+
+    --ifm-footer-background-color: #0d1117;
+
+    --docusaurus-highlighted-code-line-bg: rgba(193, 140, 255, 0.15);
+}
+
+/* ---------- Navbar: solid brand bar with the "brighter" gradient underneath ---------- */
+/* `.navbar--dark` sets its own background, so the brand color has to be applied here */
+.navbar--dark {
+    --ifm-navbar-background-color: var(--bs-purple);
+}
+
+[data-theme='dark'] .navbar--dark {
+    --ifm-navbar-background-color: var(--bs-purple-deep);
+}
+
+.navbar {
+    box-shadow: none;
+    border-bottom: 3px solid transparent;
+    border-image: var(--bs-gradient) 1;
+}
+
+.navbar__title {
+    font-family: var(--ifm-heading-font-family);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.navbar__logo {
+    height: 2rem;
+}
+
+.navbar--dark .navbar__link--active {
+    color: #fff;
+    box-shadow: inset 0 -2px 0 var(--bs-pink);
+}
+
+/* ---------- Typography ---------- */
+h1 {
+    font-size: 2.4rem;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+}
+
+h2,
+h3 {
+    letter-spacing: -0.01em;
+}
+
+.markdown h2 {
+    margin-top: 2.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+/* ---------- Code ---------- */
+code {
+    border: none;
+}
+
+.theme-code-block {
+    border: 1px solid var(--ifm-color-emphasis-200);
+    box-shadow: none;
+}
+
+/* code blocks highlighted by shiki (see code-highlighting.mjs and src/components/ShikiCodeBlock.js) */
+.shiki-code-block {
+    margin-bottom: var(--ifm-leading);
+}
+
+.shiki-code-block pre {
+    margin: 0;
+    padding: var(--ifm-pre-padding);
+    border: 1px solid var(--ifm-color-emphasis-200);
+    border-radius: var(--ifm-code-border-radius);
+    font-size: var(--ifm-code-font-size);
+    line-height: var(--ifm-pre-line-height);
+}
+
+.shiki-code-block pre code {
+    padding: 0;
+    background: none;
+    font-size: inherit;
+}
+
+.shiki-code-block__body {
+    position: relative;
+}
+
+/* title="..." */
+.shiki-code-block__title {
+    padding: 0.5rem var(--ifm-pre-padding);
+    border: 1px solid var(--ifm-color-emphasis-200);
+    border-bottom: none;
+    border-radius: var(--ifm-code-border-radius) var(--ifm-code-border-radius) 0 0;
+    background: var(--ifm-color-emphasis-100);
+    font-family: var(--ifm-font-family-monospace);
+    font-size: var(--ifm-code-font-size);
+    font-weight: 600;
+}
+
+.shiki-code-block--titled pre {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* highlighted lines ({2,4-6} or a `[!code highlight]` comment) stretch the full width of the block */
+.shiki .line.highlighted {
+    display: inline-block;
+    width: calc(100% + 2 * var(--ifm-pre-padding));
+    margin: 0 calc(-1 * var(--ifm-pre-padding));
+    padding: 0 var(--ifm-pre-padding);
+    background-color: var(--docusaurus-highlighted-code-line-bg) !important;
+    box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+}
+
+/* showLineNumbers */
+.shiki.line-numbers code {
+    counter-reset: line;
+}
+
+.shiki.line-numbers .line::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 1.5rem;
+    margin-right: 1.25rem;
+    text-align: right;
+    color: var(--ifm-color-emphasis-500) !important;
+    user-select: none;
+}
+
+/* dark mode uses the `--shiki-dark*` colors shiki puts on every token */
+[data-theme='dark'] .shiki,
+[data-theme='dark'] .shiki span {
+    color: var(--shiki-dark) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+}
+
+/* only the block itself gets the background. css variables inherit, so applying it to spans too would paint over line highlights */
+[data-theme='dark'] .shiki {
+    background-color: var(--shiki-dark-bg) !important;
+}
+
+.shiki-code-block__copy {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    padding: 0.4rem;
+    border: 1px solid var(--ifm-color-emphasis-300);
+    border-radius: var(--ifm-global-radius);
+    background: var(--ifm-background-color);
+    color: var(--ifm-color-emphasis-700);
+    opacity: 0;
+    transition: opacity 150ms;
+}
+
+.shiki-code-block:hover .shiki-code-block__copy,
+.shiki-code-block__copy:focus-visible {
+    opacity: 1;
+}
+
+.shiki-code-block__copy svg {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+/* ---------- Sidebar ---------- */
+.theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
+    font-family: var(--ifm-heading-font-family);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ifm-color-emphasis-600);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--bs-pink);
+    border-radius: 0 var(--ifm-global-radius) var(--ifm-global-radius) 0;
+}
+
+/* ---------- Prev / Next: big cards so the docs read like a book ---------- */
+.pagination-nav__link {
+    padding: 1.1rem 1.4rem;
+    border-width: 1px;
+    transition: border-color 150ms, transform 150ms;
+}
+
+.pagination-nav__link:hover {
+    border-color: var(--ifm-color-primary);
+    transform: translateY(-1px);
+}
+
+.pagination-nav__link--next {
+    position: relative;
+    overflow: hidden;
+}
+
+/* gradient stripe on the "Next" card nudges readers forward */
+.pagination-nav__link--next::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--bs-gradient);
+}
+
+.pagination-nav__sublabel {
+    font-family: var(--ifm-heading-font-family);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.7rem;
+}
+
+.pagination-nav__label {
+    font-family: var(--ifm-heading-font-family);
+    font-size: 1.15rem;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+    border-top: 3px solid transparent;
+    border-image: var(--bs-gradient) 1;
+}
+
+.footer__title {
+    font-family: var(--ifm-heading-font-family);
+}
+
+img {
+    height: auto;
+}

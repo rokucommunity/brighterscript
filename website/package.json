@@ -1,0 +1,33 @@
+{
+  "name": "brighterscript-website",
+  "private": true,
+  "description": "Docs website for BrighterScript. Content lives in ../docs; this folder is just the site tooling.",
+  "scripts": {
+    "start": "node scripts/site.mjs start",
+    "build": "node scripts/site.mjs build",
+    "serve": "node scripts/site.mjs serve"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@docusaurus/core": "^3.10.2",
+    "@docusaurus/preset-classic": "^3.10.2",
+    "@fontsource/cascadia-mono": "^5.3.0",
+    "@mdx-js/react": "^3.1.1",
+    "@shikijs/rehype": "^3.23.0",
+    "@shikijs/transformers": "^3.23.0",
+    "clsx": "^2.1.1",
+    "prism-react-renderer": "^2.4.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "semver": "^7.8.6",
+    "shiki": "^3.23.0",
+    "unist-util-visit": "^5.2.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.1.4",
+    "tinypool": "^2.2.0",
+    "uuid": "^11.1.1"
+  }
+}

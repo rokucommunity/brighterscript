@@ -20,6 +20,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run lint
+      # make sure the transpiled brightscript examples in docs/ match what the compiler actually produces
+      - if: matrix.os == 'ubuntu-latest'
+        run: npm run transpile-doc-examples -- --check
       - run: npm run test
       - name: Upload coverage to Coveralls
         if: matrix.os == 'ubuntu-latest'

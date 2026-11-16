@@ -1,0 +1,68 @@
+name: docs
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+  #other doc versions (v1, ...) are built from the newest release tag for each version, and those tags are created on other
+  #branches (which can't trigger this workflow), so rebuild nightly to pick up new releases
+  schedule:
+    - cron: '23 6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      #full history + tags, so website/scripts/site.mjs can find (and clone) the newest release tag for each docs version
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            website/package-lock.json
+
+      #the root deps are needed to transpile the doc examples
+      - run: npm ci
+
+      #builds every version in website/doc-versions.json into website/build
+      - run: npm run build-docs
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: website/build
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

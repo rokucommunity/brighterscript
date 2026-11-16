@@ -332,7 +332,7 @@ This options object is only available starting with brighterscript `v0.69.4` and
 
 Here's a small example:
 
-```typescript
+```typescript {2}
 export default function (pluginOptions: PluginOptions) {
     if(semver.major(pluginOptions?.version) === '1') {
         return {
@@ -399,7 +399,7 @@ Diagnostics must run every time it is relevant:
 
 Note: in a language-server context, Scope validation happens every time a file changes.
 
-```typescript
+```typescript {9,14-19}
 // bsc-plugin-no-underscores.ts
 import { CompilerPlugin, BscFile, isBrsFile } from 'brighterscript';
 
@@ -441,7 +441,7 @@ end sub
 
 Here's the plugin:
 
-```typescript
+```typescript {14}
 import { CompilerPlugin, BeforeFileTranspileEvent, isBrsFile, WalkMode, createVisitor, TokenKind } from 'brighterscript';
 
 // plugin factory
@@ -502,7 +502,7 @@ export default function plugin() {
 ## Modifying `bsconfig.json` via a plugin
 
 In some cases you may want to modify the project's configuration via a plugin, such as to change settings based on environment variables or to dynamically modify the project's `files` array. Plugins may do so in the `beforeProgramCreate` step. For example, here's a plugin which adds an additional file to the build:
-```typescript
+```typescript {6,11-14}
 import { CompilerPlugin, ProgramBuilder } from 'brighterscript';
 
 export default function plugin() {

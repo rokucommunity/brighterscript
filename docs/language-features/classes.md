@@ -201,7 +201,7 @@ end function
 ### Constructor function with inheritance
 When constructing a child that inherits from a base class, the first call in the child's constructor must be a call to the parent's constructor
 
-```vb
+```vb {11}
 class Duck
     sub new(name as string)
         m.name = name
@@ -261,7 +261,7 @@ end function
 ## Overrides
 Child classes can override methods on parent classes. In this example, the `BabyDuck.Eat()` method completely overrides the parent method. Note: the `override` keyword is mandatory, and you will get a compile error if it is not included in the child class and there is a matching method on the base class. Also, you will get a compile error if the override keyword is present in a child class, but that method doesn't exist in the parent class.
 
-```vb
+```vb {8}
 class Duck
     sub Eat()
         print "Ate all the food"
@@ -319,7 +319,7 @@ end function
 ### Calling parent method from child
 You can also call the original methods on the base class from within an overridden method on a child class.
 
-```vb
+```vb {10}
 class Duck
     public sub walk(meters as integer)
         print "Walked " + meters.ToStr() + " meters"

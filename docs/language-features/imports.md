@@ -23,7 +23,7 @@ end function
 ```
 
 **pkg:/components/Widget.xml**
-```xml
+```xml {7}
 <?xml version="1.0" encoding="utf-8" ?>
 <component name="BaseScene" extends="Scene">
   <children>

@@ -1,6 +1,6 @@
 # BrighterScript Annotations
 
-Annotations are metadata you can attach to any statement, though more often to functions or classes. This extra information will be available to [plugins](plugins.md) walking the AST of the code.
+Annotations are metadata you can attach to any statement, though more often to functions or classes. This extra information will be available to [plugins](../tooling/plugins.md) walking the AST of the code.
 
 > Annotations completely disappear when transpiled to BrightScript, and are not available at run time.
 
