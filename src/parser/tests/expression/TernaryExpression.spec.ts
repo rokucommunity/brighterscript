@@ -1093,6 +1093,26 @@ describe('ternary expressions', () => {
             );
         });
 
+        it('short-circuits indexed get branches when not a simple assignment', async () => {
+            await testTranspile(
+                `print str(q ? 1 : cfg["key"])`,
+                'print str((function(__bsCondition, cfg)\n' +
+                '        if __bsCondition then\n' +
+                '            return 1\n' +
+                '        else\n' +
+                '            return cfg["key"]\n' +
+                '        end if\n' +
+                '    end function)(q, cfg))'
+                , 'none', undefined, false);
+        });
+
+        it('uses bslib_ternary for plain variables and literals', async () => {
+            await testTranspile(
+                `print q ? name : "nobody"`,
+                `print bslib_ternary(q, name, "nobody")`
+                , 'none', undefined, false);
+        });
+
         it('uses `invalid` in place of missing consequent ', async () => {
             await testTranspile(
                 `print name = "bob" ? :"zombie"`,
