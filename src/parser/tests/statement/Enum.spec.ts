@@ -211,6 +211,24 @@ describe('EnumStatement', () => {
             expectZeroDiagnostics(program);
         });
 
+        it('allows enums named like a built-in type', () => {
+            program.setFile('source/main.bs', `
+                enum String
+                    EMPTY = ""
+                end enum
+                enum Integer
+                    ZERO = 0
+                end enum
+                sub main()
+                    text = string.EMPTY
+                    count = Integer.ZERO
+                    print text.len() + count
+                end sub
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+        });
+
         it('catches duplicate enums from same file', () => {
             program.setFile('source/main.bs', `
                 enum Direction
@@ -548,6 +566,21 @@ describe('EnumStatement', () => {
     });
 
     describe('transpile', () => {
+        it('transpiles members of enums named like a built-in type', async () => {
+            await testTranspile(`
+                sub main()
+                    print string.EMPTY
+                end sub
+                enum String
+                    EMPTY = ""
+                end enum
+            `, `
+                sub main()
+                    print ""
+                end sub
+            `, undefined, undefined, false);
+        });
+
         it('transpiles negative number', async () => {
             await testTranspile(`
                 sub main()

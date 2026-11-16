@@ -1795,8 +1795,12 @@ export class VariableExpression extends Expression {
 
 
     getType(options: GetTypeOptions) {
-        let resultType: BscType = util.tokenToBscType(this.tokens.name);
         const nameKey = this.getName();
+        //in a type position, a built-in type name (i.e. `string`) always means the built-in type. At runtime it's an ordinary
+        //identifier, so a symbol of that name (i.e. `enum String`) wins, and the built-in type is only the fallback
+        const isTypetime = (options?.flags & SymbolTypeFlag.typetime) > 0;
+        const builtInType = util.tokenToBscType(this.tokens.name);
+        let resultType: BscType = isTypetime ? builtInType : undefined;
         if (!resultType) {
             //a namespaced const can't refer to itself by name (i.e. `namespace promises: const chain = chain`), so look up the outer symbol instead
             const getTable = util.getSelfNamedConstOfInitializer(this) ? () => this.getRoot().getSymbolTable() : () => this.getSymbolTable();
@@ -1812,6 +1816,9 @@ export class VariableExpression extends Expression {
                 resultType = FunctionType.instance;
             }
 
+            if (!resultType) {
+                resultType = builtInType;
+            }
         }
         options?.typeChain?.push(new TypeChainEntry({ name: nameKey, type: resultType, data: options.data, astNode: this }));
         return resultType;

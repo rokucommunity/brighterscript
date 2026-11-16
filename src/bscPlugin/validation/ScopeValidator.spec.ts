@@ -3297,16 +3297,11 @@ describe('ScopeValidator', () => {
         });
 
         it('does not crash when the returned value has an unknowable type', () => {
-            //an enum named `String` can never be referenced, because the name always resolves to
-            //the built-in `string` type, whose members are not dynamic. `String.EMPTY` therefore
-            //has no type at all, and that must not crash the return statement validation
+            //`string` members are not dynamic, so `text.EMPTY` has no type at all, and that must not crash the return statement validation
             program.setFile('source/util.bs', `
-                enum String
-                    EMPTY = ""
-                end enum
-
                 function getEmpty() as string
-                    return String.EMPTY
+                    text = "abc"
+                    return text.EMPTY
                 end function
             `);
             program.validate();
