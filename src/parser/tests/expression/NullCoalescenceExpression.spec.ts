@@ -643,6 +643,34 @@ describe('NullCoalescingExpression', () => {
                 `);
             });
 
+            it('keeps comments above a statement ahead of its temps', async () => {
+                await testTranspile(`
+                    sub main(a)
+                        m.x = a.x ?? "" ' first
+
+                        ' section
+                        ' about y
+                        m.y = a.y ?? ""
+                    end sub
+                `, `
+                    sub main(a)
+                        __bsc_tmp_coalesce = a.x
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.x = __bsc_tmp_coalesce ' first
+
+                        ' section
+                        ' about y
+                        __bsc_tmp_coalesce = a.y
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.y = __bsc_tmp_coalesce
+                    end sub
+                `);
+            });
+
             it('keeps trailing comments on their own statement when temps are used', async () => {
                 await testTranspile(`
                     sub main(a)

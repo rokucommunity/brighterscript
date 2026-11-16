@@ -150,7 +150,7 @@ export class BrsFilePreTranspileProcessor {
             const fallback = createFallback(statement.tokens.name.text);
             newStatements = [fallback];
             //this statement's trailing comment is stored on the next statement, which the fallback now comes before
-            this.moveTrailingComment(block.statements[index + 1], fallback.tokens.if);
+            this.moveLeadingComments(block.statements[index + 1], fallback.tokens.if, true);
             editor.arraySplice(block.statements, index + 1, 0, ...newStatements);
         } else {
             const tmpName = '__bsc_tmp_coalesce';
@@ -159,8 +159,8 @@ export class BrsFilePreTranspileProcessor {
                 createAssignmentStatement({ name: tmpNameToken, value: expression.consequent }),
                 createFallback(tmpName)
             ];
-            //the previous statement's trailing comment is stored on this statement, which the temp statements now come before
-            this.moveTrailingComment(statement, tmpNameToken);
+            //this statement's comments (and the previous statement's trailing comment) belong ahead of the temp statements that now come first
+            this.moveLeadingComments(statement, tmpNameToken, false);
             editor.setProperty(statement, 'value', createVariableExpression(tmpName, locatable));
             editor.arraySplice(block.statements, index, 0, ...newStatements);
         }
@@ -173,23 +173,35 @@ export class BrsFilePreTranspileProcessor {
     }
 
     /**
-     * A comment at the end of a line is stored in the leading trivia of whatever comes next (everything up to its first newline).
-     * When statements get inserted between the two, move that comment onto `token` (the first token after the line), so it stays
-     * on the line it was written on
+     * Comments live in the leading trivia of whatever comes after them, including a comment at the end of the previous line (everything
+     * up to the first newline). When statements get inserted in front of `node`, move its comments onto `token` (the first token of the
+     * inserted statements), so they stay where they were written.
+     * @param node the node whose leading comments should move
+     * @param token the token to move them onto
+     * @param onlySameLine only move the comment at the end of the previous line, leaving the comments above `node` on it
      */
-    private moveTrailingComment(nextNode: { leadingTrivia?: Token[] } | undefined, token: Token) {
-        const trivia = nextNode?.leadingTrivia;
+    private moveLeadingComments(node: { leadingTrivia?: Token[] } | undefined, token: Token, onlySameLine: boolean) {
+        const trivia = node?.leadingTrivia;
         if (!trivia) {
             return;
         }
-        //include the newline itself, since it's what ends the comment
-        const newlineIndex = trivia.findIndex(x => x.kind === TokenKind.Newline);
-        const sameLineCount = newlineIndex < 0 ? trivia.length : newlineIndex + 1;
-        if (!trivia.slice(0, sameLineCount).some(x => x.kind === TokenKind.Comment)) {
+        let lastCommentIndex = -1;
+        for (let i = 0; i < trivia.length; i++) {
+            if (onlySameLine && trivia[i].kind === TokenKind.Newline) {
+                break;
+            }
+            if (trivia[i].kind === TokenKind.Comment) {
+                lastCommentIndex = i;
+            }
+        }
+        if (lastCommentIndex < 0) {
             return;
         }
-        token.leadingTrivia = trivia.slice(0, sameLineCount);
-        this.event.editor.arraySplice(trivia, 0, sameLineCount);
+        //include the newline that ends the last comment, but leave the indentation before `node` where it is
+        const newlineIndex = trivia.findIndex((x, i) => i > lastCommentIndex && x.kind === TokenKind.Newline);
+        const count = newlineIndex < 0 ? trivia.length : newlineIndex + 1;
+        token.leadingTrivia = trivia.slice(0, count);
+        this.event.editor.arraySplice(trivia, 0, count);
     }
 
     /**
