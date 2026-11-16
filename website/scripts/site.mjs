@@ -40,7 +40,7 @@ import { parseArgs } from 'node:util';
 import semver from 'semver';
 import { versions, localVersionName, localDocsDir, rootBaseUrl, siteUrl, repoDir, websiteDir } from '../versions.mjs';
 import { grammarPath } from '../code-highlighting.mjs';
-import { syncSidebarFile } from '../sidebar.mjs';
+import { syncSidebarFile, otherCategoryLabel } from '../sidebar.mjs';
 
 const buildDir = path.join(websiteDir, 'build');
 //the other versions' sites (and the shared files), prebuilt for the dev server
@@ -111,15 +111,20 @@ function syncSidebar() {
     if (process.env.CI) {
         const problems = [
             ...result.added.map(x => `  - "${x.file}" isn't listed`),
-            ...result.removed.map(x => `  - "${x}" is listed, but that page doesn't exist`)
+            ...result.removed.map(x => `  - "${x}" is listed, but that page doesn't exist`),
+            //(pages that were just added to "Other" are already reported as not listed)
+            ...result.other.filter(x => !result.added.some(y => y.file === x)).map(x => `  - "${x}" is in the "${otherCategoryLabel}" category. Move it to a real one`)
         ];
         if (problems.length > 0) {
-            throw new Error(`${sidebarPath} is out of date:\n${problems.join('\n')}\nRun \`npm run docs\` or \`npm run build-docs\` locally (they update ${sidebarPath} for you), double check where the new pages landed, and commit it.`);
+            throw new Error(`${sidebarPath} is out of date:\n${problems.join('\n')}\nRun \`npm run docs\` or \`npm run build-docs\` locally (they update ${sidebarPath} for you), move any new pages to the right category, and commit it.`);
         }
         return;
     }
     for (const placement of result.added) {
         console.log(`[site] added "${placement.file}" to ${sidebarPath} under "${placement.category}" (${placement.reason}). Move it if that's not the right spot.`);
+    }
+    for (const file of result.other) {
+        console.warn(`[site] WARNING: "${file}" is in the "${otherCategoryLabel}" category of ${sidebarPath}. Move it to a real category before you open a PR (CI fails until you do).`);
     }
     for (const file of result.removed) {
         console.log(`[site] removed "${file}" from ${sidebarPath}, since that page no longer exists`);
