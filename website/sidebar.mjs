@@ -8,8 +8,8 @@
  * Keeping it up to date is (mostly) automatic:
  *   - `npm run docs` / `npm run build-docs` add any page that's missing from sidebar.json, using a best guess for where it
  *     belongs, and remove entries for pages that no longer exist. You'll see the edit in your diff; move it if the guess is wrong.
- *     A page with nothing in common with the others goes in an "Other" category at the end, to be moved somewhere real.
- *   - In CI, the build fails instead if sidebar.json is out of date (or has anything in "Other"), so every page gets a real spot.
+ *     A page with nothing in common with the others goes in an "Uncategorized" category at the end, to be moved somewhere real.
+ *   - In CI, the build fails instead if sidebar.json is out of date (or has anything in "Uncategorized"), so every page gets a real spot.
  *   - Releases from before sidebar.json existed get the same best guess, in memory.
  */
 import fs from 'node:fs';
@@ -22,7 +22,7 @@ export const sidebarFileName = 'sidebar.json';
  * Where a page goes when nothing hints at where it belongs. It's a holding spot: CI fails while this checkout's
  * sidebar.json has anything in it, so someone picks a real category
  */
-export const otherCategoryLabel = 'Other';
+export const otherCategoryLabel = 'Uncategorized';
 
 /**
  * @typedef {{ file: string; label?: string }} SidebarEntry
@@ -113,7 +113,7 @@ export function placeMissingDocs(categories, allDocs) {
                 }
             }
         }
-        //no hints at all: the "Other" category at the end of the sidebar
+        //no hints at all: the "Uncategorized" category at the end of the sidebar
         if (!best) {
             let other = categories.find(x => x.label === otherCategoryLabel);
             if (!other) {

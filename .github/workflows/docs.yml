@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - master
+      #TEMPORARY: deploy every push to the docs PR, to test publishing. Remove before merging
+      - docs-website
     paths:
       - 'docs/**'
       - 'website/**'
@@ -51,7 +53,8 @@ jobs:
           path: website/build
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    #TEMPORARY: docs-website is allowed too, to test publishing. Remove before merging
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/docs-website')
     needs: build
     runs-on: ubuntu-latest
     permissions:
