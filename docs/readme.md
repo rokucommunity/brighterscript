@@ -32,6 +32,14 @@ class Movie
 end class
 ```
 
+## [Computed Property Names](language-features/computed-property-names.md)
+```brighterscript
+handlers = {
+    [ApiPath.login]: loginHandler,
+    [ApiPath.logout]: logoutHandler
+}
+```
+
 ## [Constants](language-features/constants.md)
 ```brighterscript
 const API_URL = "https://api.acme.com/v1/"
@@ -71,7 +79,15 @@ sub main()
 end sub
 ```
 
-## [Null-coalescing operator](language-features/null-coalescing-operator.md)
+## [Interfaces](language-features/interfaces.md)
+```brighterscript
+interface Person
+    name as string
+    function getName() as string
+end interface
+```
+
+## [Null-Coalescing Operator](language-features/null-coalescing-operator.md)
 ```brighterscript
 userSettings = getSettingsFromRegistry() ?? {}
 ```
@@ -94,7 +110,8 @@ print SOURCE_LOCATION
 print PKG_PATH
 print PKG_LOCATION
 ```
-## [Template Strings (Template Literals)](language-features/template-strings.md)
+
+## [Template Strings](language-features/template-strings.md)
 ```brighterscript
 name = `John Smith`
 
@@ -104,7 +121,7 @@ text = `first line text
 second line text`
 ```
 
-## [Ternary (Conditional) Operator](language-features/ternary-operator.md)
+## [Ternary Operator](language-features/ternary-operator.md)
 ```brighterscript
 authStatus = user <> invalid ? "logged in" : "not logged in"
 ```

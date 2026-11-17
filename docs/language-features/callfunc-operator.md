@@ -1,4 +1,4 @@
-# BrighterScript 'callfunc' operator
+# Callfunc Operator
 
 In BrightScript, calling a function on a custom comment requires you to use the [callfunc](https://developer.roku.com/docs/developer-program/core-concepts/handling-application-events.md) function. A standard callfunc expression looks something like this: `node.callFunc("functionName", someArg, someOtherArg)`. This deviates from the conventional `object.someMethod()` synax you are used to with standard objects.
 

@@ -1,6 +1,6 @@
-# BrighterScript Template Strings (Template Literals)
+# Template Strings
 
-Template strings are string literals that can have embedded expressions and also capture newlines.
+Template strings, also known as template literals, are string literals that can have embedded expressions and also capture newlines.
 
 ## Syntax
 ```BrighterScript

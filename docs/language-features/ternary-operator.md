@@ -1,4 +1,4 @@
-# Ternary (Conditional) Operator: ?
+# Ternary Operator
 The ternary (conditional) operator takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shorthand version of an if statement. It can be used in assignments or any place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) section for more information.
 
 ## Warning

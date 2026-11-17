@@ -1,4 +1,4 @@
-# Language Server Settings
+# Language Server
 
 The BrighterScript language server provides several configuration options to customize its behavior for your project.
 

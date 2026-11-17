@@ -1,4 +1,4 @@
-# BrighterScript Plugins
+# Plugins
 
 The brighterscript compiler is extensible using **JavaScript** plugins.
 

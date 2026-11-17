@@ -1,4 +1,4 @@
-# bsconfig.json options
+# bsconfig.json
 
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 

@@ -1,4 +1,4 @@
-# Suppressing compiler messages
+# Suppressing Compiler Messages
 
 The BrighterScript compiler emits errors and warnings when it encounters potentially invalid code. Errors and warnings may also be emitted by compiler plugins, such as by [the BrighterScript linter](https://github.com/rokucommunity/bslint).
 

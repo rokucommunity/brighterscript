@@ -1,4 +1,4 @@
-# BrighterScript Namespaces
+# Namespaces
 
 BrighterScript provides a means of grouping functions and classes into Namespaces. BrightScript has no support for namespaces. Generally Roku developers will simulate namespaces by using underscores. However, that causes a large amount of clutter for the intellisense results.
 

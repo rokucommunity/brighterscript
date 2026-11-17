@@ -1,4 +1,4 @@
-# BrighterScript Source Literals
+# Source Literals
 
 BrightScript provides the `LINE_NUM` literal, which represents the runtime 1-based line number of the current line of code. In a similar fashion, BrighterScript provides several more source literals.
 

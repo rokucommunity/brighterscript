@@ -140,11 +140,8 @@ export function placeMissingDocs(items, allDocs) {
             }
             best = { category: other, index: other.items.length - 1, reason: 'no similar pages' };
         }
-        best.category.items.splice(best.index + 1, 0, {
-            file: doc.file,
-            //"BrighterScript Classes" -> "Classes"
-            label: doc.title.replace(/^BrighterScript\s+/i, '') || idOf(doc.file)
-        });
+        //(no label: the sidebar shows the page's own `# heading`, unless someone adds a label to override it)
+        best.category.items.splice(best.index + 1, 0, { file: doc.file });
         placements.push({ file: doc.file, category: best.category.label, reason: best.reason });
     }
     return placements;
