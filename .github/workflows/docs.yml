@@ -83,7 +83,9 @@ jobs:
 
   deploy:
     #TEMPORARY: docs-website is allowed too, to test publishing. Remove before merging
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/docs-website')
+    #(build's own dependency, release-check, is skipped for everything but releases, and a skipped job anywhere upstream
+    #skips this one too unless the condition says otherwise, hence the explicit check on build's result)
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/docs-website') }}
     needs: build
     runs-on: ubuntu-latest
     permissions:
