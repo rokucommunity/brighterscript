@@ -6,7 +6,7 @@
             "label": "Getting Started",
             "items": [
                 { "file": "getting-started/installation.md" },
-                { "file": "getting-started/bsconfig.md" }
+                { "file": "getting-started/configuration.md" }
             ]
         },
         {
@@ -31,6 +31,7 @@
         {
             "label": "Tooling",
             "items": [
+                { "file": "tooling/bsconfig.md" },
                 { "file": "tooling/suppressing-compiler-messages.md" },
                 { "file": "tooling/language-server.md" },
                 { "file": "tooling/plugins.md" },

@@ -21,7 +21,7 @@ The full documentation is at **[rokucommunity.github.io/brighterscript](https://
 
 - [Introduction](https://rokucommunity.github.io/brighterscript/): what BrighterScript is, with a tour of the language.
 - [Installation](https://rokucommunity.github.io/brighterscript/latest/getting-started/installation): install the compiler and run your first build.
-- [bsconfig.json](https://rokucommunity.github.io/brighterscript/latest/getting-started/bsconfig): every option for configuring your project.
+- [Configuration](https://rokucommunity.github.io/brighterscript/latest/getting-started/configuration): set up your project's `bsconfig.json`.
 - [Plugins](https://rokucommunity.github.io/brighterscript/latest/tooling/plugins): extend the compiler with your own validations and code transforms.
 
 ## BrighterScript v1 is coming
@@ -48,7 +48,7 @@ npx bsc
 
 From the root of a standard Roku project, that validates every file and, if there are no errors, creates `./out/project.zip`. Run `npx bsc --init` to create a `bsconfig.json`, or `npx bsc --help` for every option.
 
-See [Installation](https://rokucommunity.github.io/brighterscript/latest/getting-started/installation) for more examples, and [bsconfig.json](https://rokucommunity.github.io/brighterscript/latest/getting-started/bsconfig) for every config option.
+See [Installation](https://rokucommunity.github.io/brighterscript/latest/getting-started/installation) for more examples, and the [bsconfig.json reference](https://rokucommunity.github.io/brighterscript/latest/tooling/bsconfig) for every config option.
 
 ## Used by
 <br/>

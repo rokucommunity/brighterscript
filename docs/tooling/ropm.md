@@ -21,4 +21,4 @@ Installing it without the alias works too, it just produces longer names:
 ropm install @rokucommunity/bslib
 ```
 
-See also the [`bslibDestinationDir`](../getting-started/bsconfig.md#bslibdestinationdir) option, which controls where the compiler puts its copy of bslib.
+See also the [`bslibDestinationDir`](bsconfig.md#bslibdestinationdir) option, which controls where the compiler puts its copy of bslib.

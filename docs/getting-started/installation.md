@@ -24,19 +24,7 @@ npx bsc
 
 That's it. The compiler finds every file in your project, checks it for syntax and validation errors, and if there are none, creates a zip of your app at `./out/project.zip`.
 
-## Configure your project
-
-You can configure `bsc` in two ways:
-
-1. **A `bsconfig.json` file.** By default, `bsc` looks for a `bsconfig.json` in the directory it runs from. To create one with recommended defaults, run:
-
-    ```bash
-    npx bsc --init
-    ```
-
-    An existing `bsconfig.json` is never overwritten. To use a config file somewhere else, pass its path with `--project`. See [bsconfig.json](bsconfig.md) for every option.
-
-2. **Command line arguments.** Every option can also be set on the command line. Run `bsc --help` for the full list.
+To configure your build, see [Configuration](configuration.md).
 
 ## Examples
 
