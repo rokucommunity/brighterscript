@@ -89,6 +89,22 @@ const config = {
                 }
             };
         },
+        //the search plugin's generated files import modules by absolute path, sometimes with a lowercase drive letter on Windows,
+        //which makes webpack load them twice. Fix their casing (see scripts/path-casing-loader.cjs)
+        process.platform === 'win32' && function searchPathCasing() {
+            return {
+                name: 'search-path-casing',
+                configureWebpack: () => ({
+                    module: {
+                        rules: [{
+                            test: /[\\/]\.docusaurus[\\/]@easyops-cn[\\/]docusaurus-search-local[\\/].*\.js$/,
+                            enforce: 'pre',
+                            use: [path.join(websiteDir, 'scripts', 'path-casing-loader.cjs')]
+                        }]
+                    }
+                })
+            };
+        },
         //`npm run docs` only: serve the other versions (prebuilt by scripts/site.mjs) next to this checkout's live docs,
         //so the version dropdown works in the dev server too
         process.env.DOCS_DEV_SITES_DIR && function serveOtherVersions() {
