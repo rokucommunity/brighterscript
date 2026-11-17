@@ -7,6 +7,8 @@
 /* code font, same as the TypeScript docs. The text font (Segoe UI) is proprietary, so we use it via the system font stack */
 @import '@fontsource/cascadia-mono/400.css';
 @import '@fontsource/cascadia-mono/600.css';
+/* navbar wordmark: Open Sans is by Segoe UI's designer and is a near match for the TypeScript wordmark */
+@import '@fontsource/open-sans/600.css';
 
 :root {
     /* the same blue as the BrighterScript file icon in the editor (and TypeScript's brand blue) */
@@ -63,6 +65,8 @@
 /* `.navbar--dark` sets its own background, so the brand color has to be applied here */
 .navbar--dark {
     --ifm-navbar-background-color: var(--bs-blue);
+    /* Infima's dark navbar uses an off-white (gray-100); use pure white against the blue */
+    --ifm-navbar-link-color: #fff;
 }
 
 [data-theme='dark'] .navbar--dark {
@@ -75,14 +79,17 @@
     --ifm-navbar-padding-vertical: 0.25rem;
 }
 
+/* like the TypeScript wordmark: semibold, caps a bit shorter than the logo square */
 .navbar__title {
-    font-family: var(--ifm-heading-font-family);
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-family: 'Open Sans', var(--ifm-heading-font-family);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: normal;
 }
 
 .navbar__logo {
     height: 1.6rem;
+    margin-right: 0.6rem;
 }
 
 .navbar--dark .navbar__link--active {

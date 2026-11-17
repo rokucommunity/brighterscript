@@ -17,7 +17,7 @@ const repoUrl = 'https://github.com/rokucommunity/brighterscript';
 const config = {
     title: 'BrighterScript',
     tagline: 'A superset of Roku\'s BrightScript language',
-    favicon: 'img/favicon.svg',
+    favicon: 'img/logo.svg',
     url: siteUrl,
     baseUrl: baseUrl,
     trailingSlash: false,
@@ -200,7 +200,7 @@ const config = {
             },
             navbar: {
                 title: 'BrighterScript',
-                logo: { alt: 'BrighterScript', src: 'img/logo.svg' },
+                logo: { alt: 'BrighterScript', src: 'img/logo-inverted.svg' },
                 //white text on the purple bar in both color modes (the color itself is set in custom.css)
                 style: 'dark',
                 items: [
