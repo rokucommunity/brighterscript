@@ -2,7 +2,8 @@
  * Builds and runs the docs site.
  *
  *   node scripts/site.mjs start   dev server: this checkout's docs live (at /brighterscript/<this version>/), plus every other
- *                                 version built from its newest tag (rebuilt on every start)
+ *                                 version built from its newest tag in the background (rebuilt on every start), and a
+ *                                 search index that's rebuilt in the background as you edit
  *   node scripts/site.mjs build   the full site: every version in doc-versions.json, side by side, into website/build
  *   node scripts/site.mjs serve   serve that full build locally, like production
  *
@@ -32,7 +33,7 @@
  * (Internally, this script hands those settings to docusaurus.config.js via the DOCS_BASE_URL / DOCS_EDIT_BRANCH env vars.
  * That's a private detail, not part of the contract.)
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -43,8 +44,11 @@ import { grammarPath } from '../code-highlighting.mjs';
 import { syncSidebarFile, otherCategoryLabel } from '../sidebar.mjs';
 
 const buildDir = path.join(websiteDir, 'build');
-//the other versions' sites (and the shared files), prebuilt for the dev server
+//`npm run docs`: the other versions' sites (and the shared files), served at /brighterscript/
 const devSitesDir = path.join(websiteDir, '.versions', 'sites');
+//`npm run docs`: files for THIS version that change while the dev server runs (pages.json, search-index.json), served at
+///brighterscript/<this version>/. The dev server reloads the page when they change
+const devLiveDir = path.join(websiteDir, '.versions', 'live');
 
 function git(args, options = {}) {
     return execFileSync('git', args, { cwd: repoDir, maxBuffer: 100 * 1024 * 1024, ...options });
@@ -71,9 +75,106 @@ function npm(args, options) {
     }
 }
 
+const docusaurusBin = path.join(websiteDir, 'node_modules', '@docusaurus', 'core', 'bin', 'docusaurus.mjs');
+
 function docusaurus(args, env = {}) {
-    const bin = path.join(websiteDir, 'node_modules', '@docusaurus', 'core', 'bin', 'docusaurus.mjs');
-    run(process.execPath, [bin, ...args], { cwd: websiteDir, shell: false, env: { ...process.env, ...env } });
+    run(process.execPath, [docusaurusBin, ...args], { cwd: websiteDir, shell: false, env: { ...process.env, ...env } });
+}
+
+/**
+ * Like `docusaurus()`, but without blocking (so other work, like the background search index build, can finish meanwhile)
+ */
+function docusaurusAsync(args, env = {}) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, [docusaurusBin, ...args], { cwd: websiteDir, stdio: 'inherit', env: { ...process.env, ...env } });
+        child.on('error', reject);
+        child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`docusaurus ${args[0]} exited with code ${code}`))));
+    });
+}
+
+/**
+ * Make a separate docusaurus site folder that uses THIS site's config, src/, static/ and node_modules/ (via links).
+ * Building from it (`docusaurusBuildArgs`) gives that build its own .docusaurus/ folder, so it can run while the dev
+ * server (or another build) is running without tripping over each other's generated files.
+ */
+function createLinkedSiteDir(siteDir) {
+    const linkNames = ['src', 'static', 'node_modules'];
+    //remove the links themselves first, so deleting the folder can never reach through them into the real folders
+    for (const name of linkNames) {
+        const linkPath = path.join(siteDir, name);
+        if (fs.lstatSync(linkPath, { throwIfNoEntry: false })?.isSymbolicLink()) {
+            fs.rmdirSync(linkPath);
+        }
+    }
+    fs.rmSync(siteDir, { recursive: true, force: true });
+    fs.mkdirSync(siteDir, { recursive: true });
+    for (const name of linkNames) {
+        //(junctions, since they don't need admin rights on windows)
+        fs.symlinkSync(path.join(websiteDir, name), path.join(siteDir, name), 'junction');
+    }
+    fs.copyFileSync(path.join(websiteDir, 'package.json'), path.join(siteDir, 'package.json'));
+    return siteDir;
+}
+
+/**
+ * The `docusaurus build` args to build a linked site folder (see createLinkedSiteDir) into outDir
+ */
+function docusaurusBuildArgs(siteDir, outDir) {
+    return ['build', siteDir, '--config', path.join(websiteDir, 'docusaurus.config.js'), '--out-dir', outDir];
+}
+
+/**
+ * The search index is built from the rendered pages, which the dev server never writes. So for `npm run docs`, build this
+ * checkout's site in the background and hand its search index to the dev server (which reloads the page when it lands).
+ * It rebuilds a few seconds after you stop editing docs/, so search keeps up with your edits.
+ */
+function keepSearchIndexUpToDate() {
+    const siteDir = createLinkedSiteDir(path.join(websiteDir, '.versions', 'search-site'));
+    const outDir = path.join(siteDir, 'build');
+    const logPath = path.join(siteDir, 'build.log');
+
+    let running;
+    let rerunWhenDone = false;
+    const build = () => {
+        if (running) {
+            //one at a time: build again once this one finishes, so the index ends up with the newest edits
+            rerunWhenDone = true;
+            return;
+        }
+        const startedAt = Date.now();
+        const log = fs.openSync(logPath, 'w');
+        running = spawn(process.execPath, [docusaurusBin, ...docusaurusBuildArgs(siteDir, outDir)], {
+            cwd: websiteDir,
+            stdio: ['ignore', log, log],
+            //(a broken link you're in the middle of fixing shouldn't block search)
+            env: { ...process.env, DOCS_STRICT_LINKS: 'false' }
+        });
+        running.on('exit', (code) => {
+            fs.closeSync(log);
+            running = undefined;
+            const indexPath = path.join(outDir, 'search-index.json');
+            if (code !== 0 || !fs.existsSync(indexPath)) {
+                console.warn(`[site] WARNING: couldn't build the search index, so search won't be up to date in the dev server. See ${logPath}`);
+            } else {
+                fs.mkdirSync(devLiveDir, { recursive: true });
+                fs.copyFileSync(indexPath, path.join(devLiveDir, 'search-index.json'));
+                console.log(`[site] search index updated (${Math.round((Date.now() - startedAt) / 1000)}s)`);
+            }
+            if (rerunWhenDone) {
+                rerunWhenDone = false;
+                build();
+            }
+        });
+    };
+
+    console.log('[site] building the search index in the background (the page reloads when it\'s ready)...');
+    build();
+
+    let timer;
+    fs.watch(localDocsDir, { recursive: true }, () => {
+        clearTimeout(timer);
+        timer = setTimeout(build, 3000);
+    });
 }
 
 /**
@@ -177,8 +278,10 @@ function buildVersionWithOurTooling(version, tag, cloneDir, outDir) {
     }
     console.warn(`[site] WARNING: tag ${tag} doesn't have the docs site yet (no "build-docs" npm script), so building its docs/ folder with this checkout's tooling instead`);
 
-    //skips transpile-doc-examples on purpose: that release's examples were already transpiled by its own compiler
-    docusaurus(['build', '--out-dir', outDir], {
+    //skips transpile-doc-examples on purpose: that release's examples were already transpiled by its own compiler.
+    //Builds from a linked site folder, so it doesn't share .docusaurus/ with a running dev server (or the host's own build)
+    const siteDir = createLinkedSiteDir(path.join(websiteDir, '.versions', `${version.name}-site`));
+    docusaurus(docusaurusBuildArgs(siteDir, outDir), {
         DOCS_BASE_URL: `${rootBaseUrl}${version.name}/`,
         DOCS_EDIT_BRANCH: version.branch,
         DOCS_VERSION_NAME: version.name,
@@ -244,20 +347,92 @@ function writeSharedFiles(siteRootDir, options = { include404: true }) {
 }
 
 /**
- * For the dev server: build every OTHER version (from its newest tag, same as the full build) into `devSitesDir`, so the
- * dev server can serve them next to this checkout's live docs. Rebuilt on every start, so they're never stale.
- * A version that can't be built only warns, so it never blocks local editing.
+ * The page a version shows in the dev server while it's still building. It checks every couple of seconds, and opens the
+ * page you asked for once the version is ready
  */
-function buildOtherVersionsForDev() {
-    fs.rmSync(devSitesDir, { recursive: true, force: true });
-    for (const version of versions.filter(x => x.name !== localVersionName)) {
-        try {
-            buildOtherVersion(version, path.join(devSitesDir, version.name));
-        } catch (e) {
-            console.warn(`[site] WARNING: couldn't build docs version "${version.name}", so it won't be available in the dev server: ${e.message}`);
-        }
+function writeBuildingPlaceholder(version, dir) {
+    fs.mkdirSync(dir, { recursive: true });
+    const versionUrl = `${rootBaseUrl}${version.name}/`;
+    fs.writeFileSync(path.join(dir, 'index.html'), `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${version.label} docs are still building</title>
+    <style>
+        body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: 'Segoe UI', -apple-system, sans-serif; background: #fdfdfd; color: #292929; }
+        @media (prefers-color-scheme: dark) { body { background: #161e27; color: #e6e8eb; } }
+        main { max-width: 32rem; padding: 1rem; text-align: center; }
+        .spinner { width: 2rem; height: 2rem; margin: 0 auto 1rem; border: 3px solid #3178c655; border-top-color: #3178c6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        a { color: #3178c6; }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="spinner"></div>
+        <h1>The ${version.label} docs are still building</h1>
+        <p>This only happens in the local dev server. This page opens by itself as soon as they're ready.</p>
+        <p><a href="${rootBaseUrl}${localVersionName}/">Back to the ${localVersionName} docs</a></p>
+    </main>
+    <script>
+        //the page that was asked for (missing pages are sent here as ?missing=<path>)
+        var missing = new URLSearchParams(location.search).get('missing');
+        var target = ${JSON.stringify(versionUrl)} + (missing || '') + location.hash;
+        setInterval(function () {
+            fetch(${JSON.stringify(`${versionUrl}pages.json`)}, { cache: 'no-store' }).then(function (response) {
+                if (response.ok) {
+                    location.replace(target);
+                }
+            }).catch(function () { });
+        }, 2000);
+    </script>
+</body>
+</html>
+`);
+}
+
+/**
+ * For the dev server: build every OTHER version (from its newest tag, same as the full build) in the background, one at a
+ * time, so the dev server starts right away. Until a version is ready, it shows a "still building" page that opens the
+ * real page when it's done. Rebuilt on every start, so they're never stale. A version that can't be built only warns.
+ */
+function buildOtherVersionsForDevInBackground() {
+    const others = versions.filter(x => x.name !== localVersionName);
+    for (const version of others) {
+        writeBuildingPlaceholder(version, path.join(devSitesDir, version.name));
     }
-    writeSharedFiles(devSitesDir, { include404: false });
+    const buildNext = (index) => {
+        const version = others[index];
+        if (!version) {
+            return;
+        }
+        const startedAt = Date.now();
+        //built somewhere else first, then swapped in, so the placeholder stays up until the whole site is there
+        const stagingDir = path.join(websiteDir, '.versions', 'staging', version.name);
+        const logPath = path.join(websiteDir, '.versions', `${version.name}-build.log`);
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+        console.log(`[site] building docs version "${version.name}" in the background...`);
+        const log = fs.openSync(logPath, 'w');
+        const child = spawn(process.execPath, [process.argv[1], 'build-version', version.name, stagingDir], {
+            cwd: websiteDir,
+            stdio: ['ignore', log, log]
+        });
+        child.on('exit', (code) => {
+            fs.closeSync(log);
+            if (code === 0 && fs.existsSync(path.join(stagingDir, 'index.html'))) {
+                const dir = path.join(devSitesDir, version.name);
+                fs.rmSync(dir, { recursive: true, force: true });
+                fs.renameSync(stagingDir, dir);
+                console.log(`[site] docs version "${version.name}" is ready (${Math.round((Date.now() - startedAt) / 1000)}s)`);
+            } else {
+                console.warn(`[site] WARNING: couldn't build docs version "${version.name}", so it won't be available in the dev server. See ${logPath}`);
+                fs.writeFileSync(path.join(devSitesDir, version.name, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Couldn't build the ${version.label} docs</title></head><body style="font-family: sans-serif; padding: 2rem"><h1>Couldn't build the ${version.label} docs</h1><p>See <code>${logPath}</code> for details. <a href="${rootBaseUrl}${localVersionName}/">Back to the ${localVersionName} docs</a></p></body></html>`);
+            }
+            buildNext(index + 1);
+        });
+    };
+    buildNext(0);
 }
 
 async function build(args) {
@@ -314,11 +489,20 @@ try {
     if (command === 'start') {
         syncSidebar();
         await downloadGrammar();
-        buildOtherVersionsForDev();
-        //docusaurus.config.js adds this folder to the dev server (served at /brighterscript/), next to this checkout's live docs
-        docusaurus(['start', ...rest], { DOCS_DEV_SITES_DIR: devSitesDir });
+        fs.rmSync(devSitesDir, { recursive: true, force: true });
+        fs.rmSync(devLiveDir, { recursive: true, force: true });
+        fs.mkdirSync(devLiveDir, { recursive: true });
+        writeSharedFiles(devSitesDir, { include404: false });
+        buildOtherVersionsForDevInBackground();
+        keepSearchIndexUpToDate();
+        //docusaurus.config.js adds these folders to the dev server, next to this checkout's live docs
+        await docusaurusAsync(['start', ...rest], { DOCS_DEV_SITES_DIR: devSitesDir, DOCS_DEV_LIVE_DIR: devLiveDir });
     } else if (command === 'build') {
         await build(rest);
+    } else if (command === 'build-version') {
+        //(internal, for the dev server's background builds) build one other version from its newest tag into a folder
+        const [name, outDir] = rest;
+        buildOtherVersion(versions.find(x => x.name === name), outDir);
     } else if (command === 'serve') {
         //serve the full build (every version) from the site root, so the root redirect and version dropdown work like production
         docusaurus(['serve', '--dir', buildDir, ...rest], { DOCS_BASE_URL: rootBaseUrl });

@@ -1,26 +1,26 @@
 /**
  * BrighterScript theme, layered on top of Docusaurus' default (Infima) theme.
  *
- * Brand colors come from the RokuCommunity site (https://rokucommunity.github.io): a deep Roku-ish purple
- * with a hot pink accent. The "brighter" gradient (purple -> pink) is used sparingly as the signature accent.
+ * Brand color: the blue of the BrighterScript file icon in the editor (the same as TypeScript's), modeled after the
+ * TypeScript docs. A subtle blue gradient is used sparingly as an accent stripe.
  */
 /* code font, same as the TypeScript docs. The text font (Segoe UI) is proprietary, so we use it via the system font stack */
 @import '@fontsource/cascadia-mono/400.css';
 @import '@fontsource/cascadia-mono/600.css';
 
 :root {
-    --bs-purple: #581b98;
-    --bs-purple-deep: #3a0f6b;
-    --bs-pink: #f3558e;
-    --bs-gradient: linear-gradient(90deg, #7b2fd1 0%, #f3558e 100%);
+    /* the same blue as the BrighterScript file icon in the editor (and TypeScript's brand blue) */
+    --bs-blue: #3178c6;
+    --bs-blue-deep: #235a97;
+    --bs-gradient: linear-gradient(90deg, #235a97 0%, #3178c6 50%, #5fa8ee 100%);
 
-    --ifm-color-primary: #6a24b5;
-    --ifm-color-primary-dark: #5f20a3;
-    --ifm-color-primary-darker: #5a1f9a;
-    --ifm-color-primary-darkest: #4a197f;
-    --ifm-color-primary-light: #7528c7;
-    --ifm-color-primary-lighter: #7b2fd1;
-    --ifm-color-primary-lightest: #8f4dd8;
+    --ifm-color-primary: #3178c6;
+    --ifm-color-primary-dark: #2c6cb2;
+    --ifm-color-primary-darker: #2a66a8;
+    --ifm-color-primary-darkest: #22548b;
+    --ifm-color-primary-light: #3f85d1;
+    --ifm-color-primary-lighter: #4a8cd4;
+    --ifm-color-primary-lightest: #6aa0dc;
 
     --ifm-background-color: #fdfdfd;
     --ifm-font-color-base: #292929;
@@ -34,21 +34,21 @@
     --ifm-code-border-radius: 0.4rem;
     --ifm-global-radius: 0.5rem;
 
-    --ifm-navbar-height: 3.75rem;
+    --ifm-navbar-height: 3rem;
     --ifm-navbar-link-hover-color: #fff;
-    --ifm-footer-background-color: #1d0838;
+    --ifm-footer-background-color: #102a43;
 
-    --docusaurus-highlighted-code-line-bg: rgba(106, 36, 181, 0.1);
+    --docusaurus-highlighted-code-line-bg: rgba(49, 120, 198, 0.1);
 }
 
 [data-theme='dark'] {
-    --ifm-color-primary: #c18cff;
-    --ifm-color-primary-dark: #b06dff;
-    --ifm-color-primary-darker: #a85eff;
-    --ifm-color-primary-darkest: #8f30ff;
-    --ifm-color-primary-light: #d2abff;
-    --ifm-color-primary-lighter: #dabaff;
-    --ifm-color-primary-lightest: #f3e8ff;
+    --ifm-color-primary: #5fa8ee;
+    --ifm-color-primary-dark: #4799eb;
+    --ifm-color-primary-darker: #3b92e9;
+    --ifm-color-primary-darkest: #187dd9;
+    --ifm-color-primary-light: #77b6f1;
+    --ifm-color-primary-lighter: #83bcf2;
+    --ifm-color-primary-lightest: #a7cff6;
 
     --ifm-background-color: #161e27;
     --ifm-background-surface-color: #111820;
@@ -56,23 +56,23 @@
 
     --ifm-footer-background-color: #0d1117;
 
-    --docusaurus-highlighted-code-line-bg: rgba(193, 140, 255, 0.15);
+    --docusaurus-highlighted-code-line-bg: rgba(95, 168, 238, 0.15);
 }
 
-/* ---------- Navbar: solid brand bar with the "brighter" gradient underneath ---------- */
+/* ---------- Navbar: solid brand bar ---------- */
 /* `.navbar--dark` sets its own background, so the brand color has to be applied here */
 .navbar--dark {
-    --ifm-navbar-background-color: var(--bs-purple);
+    --ifm-navbar-background-color: var(--bs-blue);
 }
 
 [data-theme='dark'] .navbar--dark {
-    --ifm-navbar-background-color: var(--bs-purple-deep);
+    --ifm-navbar-background-color: var(--bs-blue-deep);
 }
 
+/* a slim, solid bar like the TypeScript docs, so it doesn't eat vertical space */
 .navbar {
     box-shadow: none;
-    border-bottom: 3px solid transparent;
-    border-image: var(--bs-gradient) 1;
+    --ifm-navbar-padding-vertical: 0.25rem;
 }
 
 .navbar__title {
@@ -82,12 +82,12 @@
 }
 
 .navbar__logo {
-    height: 2rem;
+    height: 1.6rem;
 }
 
 .navbar--dark .navbar__link--active {
     color: #fff;
-    box-shadow: inset 0 -2px 0 var(--bs-pink);
+    box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.85);
 }
 
 /* ---------- Typography ---------- */

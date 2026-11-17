@@ -6,11 +6,13 @@ The source for the BrighterScript docs site, built with [Docusaurus](https://doc
 From the repo root:
 
 ```bash
-npm run docs         # dev server: this checkout's docs live-reload (i.e. http://localhost:3000/brighterscript/v0/), and every other version is built at startup
+npm run docs         # dev server: this checkout's docs live-reload (i.e. http://localhost:3000/brighterscript/v0/), and every other version builds in the background
 npm run build-docs   # the full site with every version, into website/build
 ```
 
 Both commands run `npm install` in this folder first, so there's no separate install step. To preview the full build like production, run `npm run serve` in this folder after `build-docs`.
+
+Search ([docusaurus-search-local](https://github.com/easyops-cn/docusaurus-search-local)) is indexed from the built pages. `npm run docs` builds that index in the background (about 30 seconds), at startup and again a few seconds after you stop editing `docs/`, and reloads the page each time it's ready. Each version searches its own pages.
 
 Other versions are built from git tags, so run `git fetch --tags` first if you want them to be current.
 

@@ -2,7 +2,7 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import fs from 'node:fs';
 import path from 'node:path';
-import { versions, versionName, docsDir, localDocsDir, strictLinks, rootBaseUrl, siteUrl, baseUrl, editBranch } from './versions.mjs';
+import { versions, versionName, docsDir, localDocsDir, strictLinks, rootBaseUrl, siteUrl, baseUrl, editBranch, websiteDir } from './versions.mjs';
 import { createSidebarItemsGenerator, sidebarFileName } from './sidebar.mjs';
 import { getRehypeCodeHighlighting } from './code-highlighting.mjs';
 import remarkGithubAlerts from './remark-github-alerts.mjs';
@@ -17,7 +17,7 @@ const repoUrl = 'https://github.com/rokucommunity/brighterscript';
 const config = {
     title: 'BrighterScript',
     tagline: 'A superset of Roku\'s BrightScript language',
-    favicon: 'img/logo.svg',
+    favicon: 'img/favicon.svg',
     url: siteUrl,
     baseUrl: baseUrl,
     trailingSlash: false,
@@ -72,11 +72,16 @@ const config = {
                         .filter(x => !x.unlisted)
                         .map(x => ({ path: x.permalink.substring(baseUrl.length).replace(/\/$/, ''), title: labels.get(x.id) ?? x.title }));
                     actions.setGlobalData({ pages: pages });
-                    //`npm run docs`: next to the other versions' prebuilt sites, so they can read it too
-                    if (process.env.DOCS_DEV_SITES_DIR) {
-                        const dir = path.join(process.env.DOCS_DEV_SITES_DIR, versionName);
-                        fs.mkdirSync(dir, { recursive: true });
-                        fs.writeFileSync(path.join(dir, 'pages.json'), JSON.stringify(pages));
+                    //`npm run docs`: served next to this version's live docs, so the other versions can read it too
+                    if (process.env.DOCS_DEV_LIVE_DIR) {
+                        const dir = process.env.DOCS_DEV_LIVE_DIR;
+                        const pagesPath = path.join(dir, 'pages.json');
+                        const text = JSON.stringify(pages);
+                        //(only when it changes: the dev server reloads the page whenever that folder changes)
+                        if (!fs.existsSync(pagesPath) || fs.readFileSync(pagesPath, 'utf8') !== text) {
+                            fs.mkdirSync(dir, { recursive: true });
+                            fs.writeFileSync(pagesPath, text);
+                        }
                     }
                 },
                 async postBuild({ outDir }) {
@@ -90,21 +95,55 @@ const config = {
             return {
                 name: 'serve-other-versions',
                 configureWebpack: () => ({
-                    devServer: {
-                        static: [{
-                            publicPath: rootBaseUrl,
-                            directory: process.env.DOCS_DEV_SITES_DIR,
-                            //pages are built as `classes.html` but linked as `classes` (trailingSlash: false)
-                            staticOptions: { extensions: ['html'] },
-                            //this version's own pages.json is in there too, so don't list that folder in place of the live home page
-                            serveIndex: false,
-                            watch: false
+                    //the search plugin only searches in production builds, but scripts/site.mjs gives the dev server a real index
+                    module: {
+                        rules: [{
+                            test: /[\\/]@easyops-cn[\\/]docusaurus-search-local[\\/]dist[\\/]client[\\/].*\.jsx?$/,
+                            enforce: 'pre',
+                            use: [path.join(websiteDir, 'scripts', 'search-dev-loader.cjs')]
                         }]
+                    },
+                    devServer: {
+                        static: [
+                            //the other versions' prebuilt sites (scripts/site.mjs swaps each one in when its background build finishes)
+                            {
+                                publicPath: rootBaseUrl,
+                                directory: process.env.DOCS_DEV_SITES_DIR,
+                                //pages are built as `classes.html` but linked as `classes` (trailingSlash: false)
+                                staticOptions: { extensions: ['html'] },
+                                serveIndex: false,
+                                watch: false
+                            },
+                            //this version's pages.json and search index. Reload the page when they change (i.e. a fresh search index lands)
+                            {
+                                publicPath: baseUrl,
+                                directory: process.env.DOCS_DEV_LIVE_DIR,
+                                serveIndex: false,
+                                watch: true
+                            }
+                        ]
                     }
                 })
             };
         }
     ].filter(Boolean),
+
+    themes: [
+        //full-text search, indexed at build time (no external service). Each version is its own site, so search covers the
+        //version you're reading. The index comes from the built pages, so `npm run docs` builds it in the background (see scripts/site.mjs)
+        ['@easyops-cn/docusaurus-search-local', /** @type {import('@easyops-cn/docusaurus-search-local').PluginOptions} */ ({
+            hashed: true,
+            docsRouteBasePath: '/',
+            //(absolute, since the dev server's background index build runs from another site folder. See scripts/site.mjs)
+            docsDir: docsDir,
+            indexBlog: false,
+            indexPages: false,
+            highlightSearchTermsOnTargetPage: true,
+            searchResultLimits: 10,
+            searchResultContextMaxLength: 80,
+            explicitSearchResultPath: true
+        })]
+    ],
 
     presets: [
         [
