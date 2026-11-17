@@ -37,6 +37,9 @@ It keeps the staging folder around after each build, which is handy for inspecti
 | [`diagnosticFilters`](../tooling/bsconfig.md#diagnosticfilters) | Hide errors and warnings you don't care about |
 | [`host`](../tooling/bsconfig.md#host) and [`password`](../tooling/bsconfig.md#password) | The Roku device to deploy to with `--deploy` |
 
+> [!TIP]
+> **[View the full list of options →](../tooling/bsconfig.md)**
+
 ## Tips
 
 - **Add `bsc` to your `package.json` scripts,** so everyone runs the same command:
