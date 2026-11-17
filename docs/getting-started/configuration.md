@@ -37,8 +37,9 @@ It keeps the staging folder around after each build, which is handy for inspecti
 | [`diagnosticFilters`](../tooling/bsconfig.md#diagnosticfilters) | Hide errors and warnings you don't care about |
 | [`host`](../tooling/bsconfig.md#host) and [`password`](../tooling/bsconfig.md#password) | The Roku device to deploy to with `--deploy` |
 
-> [!TIP]
-> **[View the full list of options →](../tooling/bsconfig.md)**
+## All options
+
+`bsconfig.json` supports many more options than the ones above, for things like diagnostics, source maps, plugins and deploying. You can view the full list, with a description and example of each, in the [bsconfig.json reference](../tooling/bsconfig.md).
 
 ## Tips
 
