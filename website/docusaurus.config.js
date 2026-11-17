@@ -89,18 +89,27 @@ const config = {
                 }
             };
         },
-        //the search plugin's generated files import modules by absolute path, sometimes with a lowercase drive letter on Windows,
-        //which makes webpack load them twice. Fix their casing (see scripts/path-casing-loader.cjs)
-        process.platform === 'win32' && function searchPathCasing() {
+        //patches for the search plugin
+        function searchFixes() {
             return {
-                name: 'search-path-casing',
+                name: 'search-fixes',
                 configureWebpack: () => ({
                     module: {
-                        rules: [{
-                            test: /[\\/]\.docusaurus[\\/]@easyops-cn[\\/]docusaurus-search-local[\\/].*\.js$/,
-                            enforce: 'pre',
-                            use: [path.join(websiteDir, 'scripts', 'path-casing-loader.cjs')]
-                        }]
+                        rules: [
+                            //highlight the words that actually matched (search is fuzzy), not the ones you typed (see scripts/search-highlight-loader.cjs)
+                            {
+                                test: /[\\/]@easyops-cn[\\/]docusaurus-search-local[\\/]dist[\\/]client[\\/]client[\\/]theme[\\/]worker\.js$/,
+                                enforce: 'pre',
+                                use: [path.join(websiteDir, 'scripts', 'search-highlight-loader.cjs')]
+                            },
+                            //the plugin's generated files import modules by absolute path, sometimes with a lowercase drive letter on Windows,
+                            //which makes webpack load them twice. Fix their casing (see scripts/path-casing-loader.cjs)
+                            process.platform === 'win32' && {
+                                test: /[\\/]\.docusaurus[\\/]@easyops-cn[\\/]docusaurus-search-local[\\/].*\.js$/,
+                                enforce: 'pre',
+                                use: [path.join(websiteDir, 'scripts', 'path-casing-loader.cjs')]
+                            }
+                        ].filter(Boolean)
                     }
                 })
             };

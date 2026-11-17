@@ -1,39 +1,68 @@
 name: docs
 on:
-  push:
-    branches:
-      - master
-      #TEMPORARY: deploy every push to the docs PR, to test publishing. Remove before merging
-      - docs-website
-    paths:
-      - 'docs/**'
-      - 'website/**'
-      - '.github/workflows/docs.yml'
+  #deploy after every release, from any version's branch (master, v1, ...). GitHub always runs `workflow_run` from the default
+  #branch's copy of this file, so a v1 release rebuilds the whole site from master too, and this file can be the same on every branch.
+  #(a tag trigger wouldn't work: the release tags are pushed with GITHUB_TOKEN, which doesn't trigger other workflows)
+  workflow_run:
+    workflows: ['Publish Release']
+    types: [completed]
+  #build only, as a check
   pull_request:
     paths:
       - 'docs/**'
       - 'website/**'
       - '.github/workflows/docs.yml'
+  #deploy by hand (from master)
   workflow_dispatch:
-  #other doc versions (v1, ...) are built from the newest release tag for each version, and those tags are created on other
-  #branches (which can't trigger this workflow), so rebuild nightly to pick up new releases
-  schedule:
-    - cron: '23 6 * * *'
+  #TEMPORARY: deploy every push to the docs PR, to test publishing. Remove before merging
+  push:
+    branches:
+      - docs-website
 
 permissions:
   contents: read
 
 jobs:
+  #"Publish Release" also runs when a release PR is closed without merging (to clean it up), so only deploy for real releases:
+  #a merged release PR, or a release published by hand
+  release-check:
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      released: ${{ steps.check.outputs.released }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          released=false
+          if [ "$CONCLUSION" = "success" ]; then
+            if [ "$RUN_EVENT" = "workflow_dispatch" ]; then
+              released=true
+            elif [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state merged --json number --jq length)" != "0" ]; then
+              released=true
+            fi
+          fi
+          echo "released=$released" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: release-check
+    #(release-check is skipped for everything but releases, hence the !cancelled())
+    if: ${{ !cancelled() && (github.event_name != 'workflow_run' || needs.release-check.outputs.released == 'true') }}
     runs-on: ubuntu-latest
     steps:
       #full history + tags, so website/scripts/site.mjs can find (and clone) the newest release tag for each docs version
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -47,7 +76,7 @@ jobs:
       #builds every version in website/doc-versions.json into website/build
       - run: npm run build-docs
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:
           path: website/build
@@ -68,4 +97,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

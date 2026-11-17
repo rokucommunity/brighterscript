@@ -59,4 +59,4 @@ The host only builds the newest tag of each version. To change the contract, upd
 To add a version (e.g. `v2`), add it to `doc-versions.json` on mainline. It needs at least one release tag with a `docs/` folder.
 
 ## Deploying
-[`.github/workflows/docs.yml`](../.github/workflows/docs.yml) builds the site and deploys it to GitHub Pages on each push to `master` that touches `docs/` or `website/`. It also runs nightly to pick up new release tags. Pull requests only run the build, as a check.
+[`.github/workflows/docs.yml`](../.github/workflows/docs.yml) builds the site from `master` and deploys it to GitHub Pages after every release of any version (when the "Publish Release" workflow finishes, on `master`, `v1`, ...), so the site always matches what's released. Docs changes merged to `master` go live with the next release, or run the workflow by hand to deploy sooner. Pull requests only run the build, as a check.
