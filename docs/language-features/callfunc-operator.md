@@ -4,7 +4,7 @@ In BrightScript, calling a function on a custom comment requires you to use the 
 
 Which leads us to the callfunc operator in BrighterScript. This is denoted by an at symbol followed by a period. ( `@.` ). Whenever BrighterScript encounters the callfunc operator, it will transpile the code into a valid callfunc expression, while allowing you to write _mostly_ the same type of syntax you're used to for object method calls.
 
-Here's a simple example:
+## Basic usage
 
 ```BrighterScript
 node@.someMethod(1,2,3)

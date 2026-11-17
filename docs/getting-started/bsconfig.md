@@ -2,26 +2,7 @@
 
 While a minimal `bsconfig.json` file is sufficient for getting started, `bsc` supports a range of helpful options.
 
-Here's a typical starter config. It keeps the staging folder around after a build, which is handy for inspecting the transpiled output:
-
-```jsonc title="bsconfig.json" showLineNumbers
-{
-    "rootDir": "src",
-    "stagingDir": "out/staging",
-    "retainStagingDir": true,
-    "sourceMap": true
-}
-```
-
-To debug your original source code instead of the transpiled output, turn on source maps:
-
-```jsonc title="bsconfig.json"
-{
-    "rootDir": "src",
-    "sourceMap": true
-}
-```
-
+- [Starter config](#starter-config)
 - Options
   - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
   - [`autoImportComponentScript`](#autoimportcomponentscript)
@@ -63,6 +44,28 @@ To debug your original source code instead of the transpiled output, turn on sou
   - [`stagingDir`](#stagingdir)
   - [`username`](#username)
   - [`watch`](#watch)
+
+## Starter config
+
+Here's a typical starter config. It keeps the staging folder around after a build, which is handy for inspecting the transpiled output:
+
+```jsonc title="bsconfig.json" showLineNumbers
+{
+    "rootDir": "src",
+    "stagingDir": "out/staging",
+    "retainStagingDir": true,
+    "sourceMap": true
+}
+```
+
+To debug your original source code instead of the transpiled output, turn on source maps:
+
+```jsonc title="bsconfig.json"
+{
+    "rootDir": "src",
+    "sourceMap": true
+}
+```
 
 ## `allowBrighterScriptInBrightScript`
 
