@@ -22,7 +22,7 @@ To debug your original source code instead of the transpiled output, turn on sou
 }
 ```
 
-- [bsconfig.json options](#bsconfigjson-options)
+- Options
   - [`allowBrighterScriptInBrightScript`](#allowbrighterscriptinbrightscript)
   - [`autoImportComponentScript`](#autoimportcomponentscript)
   - [`bslibDestinationDir`](#bslibdestinationdir)

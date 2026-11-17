@@ -5,12 +5,14 @@
  *   - the version list is loaded at runtime from /brighterscript/versions.json (written by the host build). That way a version
  *     built from an old release tag still lists versions added after it.
  *   - the links are plain `<a>` tags (full page loads), pointing at the same page in the other version. If that page doesn't
- *     exist there, the site's 404 page handles it.
+ *     exist there, that version's 404 page sends you to its "not in this version" page (see src/theme/NotFound/Content),
+ *     which keeps the sidebar, and goes straight to the page if it only moved.
  */
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import { useLocation } from '@docusaurus/router';
 import DropdownNavbarItem from '@theme/NavbarItem/DropdownNavbarItem';
+import useDocVersions from './useDocVersions';
 
 function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -18,21 +20,9 @@ function escapeHtml(text) {
 
 export default function VersionDropdownNavbarItem(props) {
     const { siteConfig } = useDocusaurusContext();
-    const { versionName, rootBaseUrl, fallbackVersions } = siteConfig.customFields;
+    const { versionName, rootBaseUrl } = siteConfig.customFields;
     const { pathname, hash } = useLocation();
-    const [versions, setVersions] = useState(fallbackVersions);
-
-    useEffect(() => {
-        fetch(`${rootBaseUrl}versions.json`)
-            .then(response => (response.ok ? response.json() : undefined))
-            .then(list => {
-                if (Array.isArray(list) && list.length > 0) {
-                    setVersions(list);
-                }
-            })
-            //not there (i.e. the local dev server). Keep the fallback list
-            .catch(() => { });
-    }, [rootBaseUrl]);
+    const versions = useDocVersions();
 
     //nothing to switch between
     if (versions.length < 2) {

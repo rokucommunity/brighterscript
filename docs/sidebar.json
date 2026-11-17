@@ -1,10 +1,10 @@
 {
-    "$comment": "The docs site sidebar, which is also the order of the Previous/Next buttons. Each `file` is a markdown file's path within docs/. `npm run docs` and `npm run build-docs` add new pages here automatically with a best guess for where they belong, so move them if the guess is wrong.",
-    "categories": [
+    "$comment": "The docs site sidebar, which is also the order of the Previous/Next buttons. Each entry is a page (`file` is a markdown file's path within docs/) or a category of pages. `npm run docs` and `npm run build-docs` add new pages here automatically with a best guess for where they belong, so move them if the guess is wrong.",
+    "items": [
+        { "file": "readme.md", "label": "Introduction" },
         {
             "label": "Getting Started",
             "items": [
-                { "file": "readme.md", "label": "Introduction" },
                 { "file": "getting-started/bsconfig.md", "label": "bsconfig.json" }
             ]
         },

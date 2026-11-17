@@ -27,7 +27,7 @@ end sub
 As you can see, behind the scenes, BrighterScript will convert all periods found within namespace names into underscores so that it will be compatible with regular BrightScript.
 
 ## Classes
-Namespaces can also contain classes. See the [classes](classes.md#Namespaces) for more detailed information.
+Namespaces can also contain classes. See the [classes](classes.md#namespaces) for more detailed information.
 
 ## Namespace inference
 Functions and classes within a namespace do not need to be prefixed with the full namespace name when called from another location in the same namespace. For example,

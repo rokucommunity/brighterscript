@@ -3,7 +3,8 @@
  *
  * The sidebar order is also the order of the "Previous" / "Next" buttons, so it should read like a book.
  * docs/sidebar.json lives next to the markdown (not in the website tooling), so every version branch owns its own order.
- * Each entry's `file` is the markdown file's path within docs/ (i.e. `language-features/classes.md`).
+ * Its top-level `items` are pages (like the introduction) or categories of pages. A page's `file` is the markdown file's
+ * path within docs/ (i.e. `language-features/classes.md`).
  *
  * Keeping it up to date is (mostly) automatic:
  *   - `npm run docs` / `npm run build-docs` add any page that's missing from sidebar.json, using a best guess for where it
@@ -27,8 +28,23 @@ export const otherCategoryLabel = 'Uncategorized';
 /**
  * @typedef {{ file: string; label?: string }} SidebarEntry
  * @typedef {{ label: string; items: SidebarEntry[] }} SidebarCategory
+ * @typedef {SidebarEntry | SidebarCategory} SidebarItem a top-level item: a page, or a category of pages
  * @typedef {{ file: string; title: string }} DocInfo
  */
+
+/** @returns {item is SidebarCategory} */
+function isCategory(item) {
+    return Array.isArray(item.items);
+}
+
+/**
+ * Every page in the sidebar, in order (top-level pages and the pages in each category)
+ * @param {SidebarItem[]} items
+ * @returns {SidebarEntry[]}
+ */
+function entriesOf(items) {
+    return items.flatMap(x => (isCategory(x) ? x.items : [x]));
+}
 
 /**
  * Find every doc in a docs folder: its file (path within the folder, with forward slashes) and its title (first `# heading`)
@@ -73,12 +89,13 @@ function wordsOf(doc) {
 }
 
 /**
- * Put every doc that isn't in the sidebar yet where it most likely belongs. Returns where each one went.
- * @param {SidebarCategory[]} categories (modified in place)
+ * Put every doc that isn't in the sidebar yet where it most likely belongs (always in a category). Returns where each one went.
+ * @param {SidebarItem[]} items the sidebar's top-level items (modified in place)
  * @param {DocInfo[]} allDocs
  */
-export function placeMissingDocs(categories, allDocs) {
-    const listed = new Set(categories.flatMap(c => c.items.map(x => x.file)));
+export function placeMissingDocs(items, allDocs) {
+    const listed = new Set(entriesOf(items).map(x => x.file));
+    const categories = items.filter(isCategory);
     const missing = allDocs.filter(x => !listed.has(x.file)).sort((a, b) => a.file.localeCompare(b.file));
     const placements = [];
     if (missing.length === 0) {
@@ -119,6 +136,7 @@ export function placeMissingDocs(categories, allDocs) {
             if (!other) {
                 other = { label: otherCategoryLabel, items: [] };
                 categories.push(other);
+                items.push(other);
             }
             best = { category: other, index: other.items.length - 1, reason: 'no similar pages' };
         }
@@ -133,7 +151,7 @@ export function placeMissingDocs(categories, allDocs) {
 }
 
 function readSidebarFile(sidebarPath) {
-    return fs.existsSync(sidebarPath) ? JSON.parse(fs.readFileSync(sidebarPath, 'utf8')) : { categories: [] };
+    return fs.existsSync(sidebarPath) ? JSON.parse(fs.readFileSync(sidebarPath, 'utf8')) : { items: [] };
 }
 
 /**
@@ -148,17 +166,18 @@ export function syncSidebarFile(docsDir, options) {
     const existingFiles = new Set(docs.map(x => x.file));
 
     const removed = [];
-    for (const category of sidebar.categories) {
-        category.items = category.items.filter(item => {
-            if (!existingFiles.has(item.file)) {
-                removed.push(item.file);
-                return false;
-            }
-            return true;
-        });
+    const exists = (entry) => {
+        if (!existingFiles.has(entry.file)) {
+            removed.push(entry.file);
+            return false;
+        }
+        return true;
+    };
+    for (const category of sidebar.items.filter(isCategory)) {
+        category.items = category.items.filter(exists);
     }
-    sidebar.categories = sidebar.categories.filter(x => x.items.length > 0);
-    const added = placeMissingDocs(sidebar.categories, docs);
+    sidebar.items = sidebar.items.filter(x => (isCategory(x) ? x.items.length > 0 : exists(x)));
+    const added = placeMissingDocs(sidebar.items, docs);
 
     if (options.write) {
         const text = (JSON.stringify(sidebar, null, 4) + '\n')
@@ -170,7 +189,7 @@ export function syncSidebarFile(docsDir, options) {
             fs.writeFileSync(sidebarPath, text);
         }
     }
-    const other = sidebar.categories.find(x => x.label === otherCategoryLabel)?.items.map(x => x.file) ?? [];
+    const other = sidebar.items.find(x => isCategory(x) && x.label === otherCategoryLabel)?.items.map(x => x.file) ?? [];
     return { sidebarPath: sidebarPath, added: added, removed: removed, other: other };
 }
 
@@ -180,10 +199,12 @@ export function syncSidebarFile(docsDir, options) {
  */
 export function createSidebarItemsGenerator(docsDir, fallbackSidebarPath) {
     const ownSidebarPath = path.join(docsDir, sidebarFileName);
-    const sidebar = readSidebarFile(fs.existsSync(ownSidebarPath) ? ownSidebarPath : fallbackSidebarPath);
 
     /** @type {import('@docusaurus/plugin-content-docs').SidebarItemsGeneratorOption} */
     return async ({ docs }) => {
+        //read it fresh every time, so the dev server picks up edits
+        const hasOwnSidebar = fs.existsSync(ownSidebarPath);
+        const sidebar = readSidebarFile(hasOwnSidebar ? ownSidebarPath : fallbackSidebarPath);
         const knownIds = new Set(docs.map(x => x.id));
         const allDocs = findDocs(docsDir).filter(x => knownIds.has(idOf(x.file)));
         const existingFiles = new Set(allDocs.map(x => x.file));
@@ -201,21 +222,30 @@ export function createSidebarItemsGenerator(docsDir, fallbackSidebarPath) {
             const sameName = filesByBaseName.get(baseNameOf(file));
             return sameName?.length === 1 ? sameName[0].file : undefined;
         };
+        const resolveEntry = (entry) => ({ ...entry, file: resolve(entry.file) });
 
-        const categories = sidebar.categories
-            .map(c => ({
-                label: c.label,
-                items: c.items.map(x => ({ ...x, file: resolve(x.file) })).filter(x => x.file)
-            }))
-            .filter(c => c.items.length > 0);
+        const items = sidebar.items
+            .map(x => (isCategory(x) ? { label: x.label, items: x.items.map(resolveEntry).filter(y => y.file) } : resolveEntry(x)))
+            .filter(x => (isCategory(x) ? x.items.length > 0 : x.file));
+
+        //a borrowed sidebar can't know what this version calls its home page, so the home page (whatever docusaurus serves
+        //at the version's root url) goes first if the borrowed sidebar didn't find it
+        if (!hasOwnSidebar) {
+            const home = docs.find(x => x.frontMatter?.slug === '/') ?? docs.find(x => /^(readme|index)$/i.test(x.id));
+            if (home && !entriesOf(items).some(x => idOf(x.file) === home.id)) {
+                const homeFile = allDocs.find(x => idOf(x.file) === home.id)?.file;
+                if (homeFile) {
+                    items.unshift({ file: homeFile, label: 'Introduction' });
+                }
+            }
+        }
         //normally a no-op (sidebar.json is kept in sync), but releases from before sidebar.json existed need the best guess
-        placeMissingDocs(categories, allDocs);
+        placeMissingDocs(items, allDocs);
 
-        return categories.map(category => ({
-            type: 'category',
-            label: category.label,
-            collapsed: false,
-            items: category.items.map(x => ({ type: 'doc', id: idOf(x.file), label: x.label }))
-        }));
+        const toDoc = (entry) => ({ type: 'doc', id: idOf(entry.file), label: entry.label });
+        return items.map(x => (isCategory(x)
+            ? { type: 'category', label: x.label, collapsed: false, items: x.items.map(toDoc) }
+            : toDoc(x)
+        ));
     };
 }

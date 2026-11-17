@@ -1,5 +1,6 @@
 // @ts-check
 import { themes as prismThemes } from 'prism-react-renderer';
+import fs from 'node:fs';
 import path from 'node:path';
 import { versions, versionName, docsDir, localDocsDir, strictLinks, rootBaseUrl, siteUrl, baseUrl, editBranch } from './versions.mjs';
 import { createSidebarItemsGenerator, sidebarFileName } from './sidebar.mjs';
@@ -45,6 +46,44 @@ const config = {
     },
 
     plugins: [
+        //every page in this version ({ path, title }, path relative to baseUrl), for the "not in this version" page
+        //(src/components/MissingPage.js). It's global data for this version, and `pages.json` for the other versions to read
+        function docsPages() {
+            let pages = [];
+            return {
+                name: 'docs-pages',
+                async allContentLoaded({ allContent, actions }) {
+                    const loadedVersions = allContent['docusaurus-plugin-content-docs']?.default?.loadedVersions ?? [];
+                    //the sidebar labels are the short names ("Classes" rather than "BrighterScript Classes")
+                    const labels = new Map();
+                    const collectLabels = (items) => {
+                        for (const item of items) {
+                            if (item.type === 'doc' && item.label) {
+                                labels.set(item.id, item.label);
+                            }
+                            collectLabels(item.items ?? []);
+                        }
+                    };
+                    for (const version of loadedVersions) {
+                        Object.values(version.sidebars ?? {}).forEach(collectLabels);
+                    }
+                    pages = loadedVersions
+                        .flatMap(x => x.docs)
+                        .filter(x => !x.unlisted)
+                        .map(x => ({ path: x.permalink.substring(baseUrl.length).replace(/\/$/, ''), title: labels.get(x.id) ?? x.title }));
+                    actions.setGlobalData({ pages: pages });
+                    //`npm run docs`: next to the other versions' prebuilt sites, so they can read it too
+                    if (process.env.DOCS_DEV_SITES_DIR) {
+                        const dir = path.join(process.env.DOCS_DEV_SITES_DIR, versionName);
+                        fs.mkdirSync(dir, { recursive: true });
+                        fs.writeFileSync(path.join(dir, 'pages.json'), JSON.stringify(pages));
+                    }
+                },
+                async postBuild({ outDir }) {
+                    fs.writeFileSync(path.join(outDir, 'pages.json'), JSON.stringify(pages));
+                }
+            };
+        },
         //`npm run docs` only: serve the other versions (prebuilt by scripts/site.mjs) next to this checkout's live docs,
         //so the version dropdown works in the dev server too
         process.env.DOCS_DEV_SITES_DIR && function serveOtherVersions() {
@@ -57,6 +96,8 @@ const config = {
                             directory: process.env.DOCS_DEV_SITES_DIR,
                             //pages are built as `classes.html` but linked as `classes` (trailingSlash: false)
                             staticOptions: { extensions: ['html'] },
+                            //this version's own pages.json is in there too, so don't list that folder in place of the live home page
+                            serveIndex: false,
                             watch: false
                         }]
                     }
@@ -128,7 +169,8 @@ const config = {
                         items: [
                             { label: 'GitHub', href: repoUrl },
                             { label: 'npm', href: 'https://www.npmjs.com/package/brighterscript' },
-                            { label: 'Website source', href: `${repoUrl}/tree/master/website` }
+                            //where the pages are written (each version's own branch), not the site tooling in website/
+                            { label: 'Edit these docs', href: `${repoUrl}/tree/${editBranch}/docs` }
                         ]
                     }
                 ],

@@ -234,8 +234,165 @@ code {
 
 .menu__link--active:not(.menu__link--sublist) {
     font-weight: 600;
-    box-shadow: inset 3px 0 0 var(--bs-pink);
+    box-shadow: inset 3px 0 0 var(--ifm-color-primary);
     border-radius: 0 var(--ifm-global-radius) var(--ifm-global-radius) 0;
+}
+
+/* the "not in this version" page is shown on the home page's url, so don't highlight the home page as the current one */
+html.docs-missing-page .theme-doc-sidebar-menu .menu__link--active:not(.menu__link--sublist) {
+    font-weight: inherit;
+    box-shadow: none;
+    background: none;
+    color: var(--ifm-menu-color);
+}
+
+/* ---------- Heading anchors: a link icon in the margin to the left (on hover), instead of a "#" after the text ---------- */
+.markdown :is(h2, h3, h4, h5, h6).anchor {
+    position: relative;
+}
+
+.markdown .hash-link {
+    position: absolute;
+    left: -1.5rem;
+    top: 50%;
+    translate: 0 -50%;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    color: var(--ifm-color-emphasis-600);
+}
+
+.markdown .hash-link:hover {
+    color: var(--ifm-color-primary);
+}
+
+.markdown .hash-link::before {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* phones don't have room in the margin, so the icon goes after the heading text */
+@media (max-width: 996px) {
+    .markdown .hash-link {
+        position: static;
+        display: inline-block;
+        translate: none;
+        margin-left: 0.4rem;
+        vertical-align: middle;
+    }
+}
+
+/* ---------- Headings that are links (i.e. the feature list on the introduction page): look like headings, not links ---------- */
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link) {
+    color: inherit;
+    text-decoration: none;
+    transition: color 150ms;
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link)::after {
+    content: '→';
+    margin-left: 0.4em;
+    font-size: 0.8em;
+    color: var(--ifm-color-emphasis-500);
+    transition: color 150ms, margin-left 150ms;
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link):hover {
+    color: var(--ifm-color-primary);
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link):hover::after {
+    color: var(--ifm-color-primary);
+    margin-left: 0.6em;
+}
+
+/* ---------- "View the transpiled BrightScript code": looks like a code block's title bar, and the code attaches right under it ---------- */
+.markdown details.alert {
+    --docusaurus-details-decoration-color: var(--ifm-color-emphasis-600);
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    color: var(--ifm-font-color-base);
+}
+
+.markdown details.alert > summary {
+    padding: 0.5rem var(--ifm-pre-padding) 0.5rem calc(var(--ifm-pre-padding) + 1rem);
+    border: 1px solid var(--ifm-color-emphasis-200);
+    border-radius: var(--ifm-code-border-radius);
+    background: var(--ifm-color-emphasis-100);
+    font-size: 0.9rem;
+    color: var(--ifm-color-emphasis-800);
+    transition: color 150ms;
+}
+
+/* (docusaurus positions the arrow assuming no padding) */
+.markdown details.alert > summary::before {
+    left: var(--ifm-pre-padding);
+    top: 50%;
+    translate: 0 -50%;
+}
+
+.markdown details.alert > summary:hover {
+    color: var(--ifm-color-primary);
+}
+
+.markdown details.alert[open] > summary {
+    border-bottom: none;
+    border-radius: var(--ifm-code-border-radius) var(--ifm-code-border-radius) 0 0;
+}
+
+/* no divider or gap: the code block is the bottom half of the box */
+.markdown details.alert > div > div {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.markdown details.alert .shiki-code-block {
+    margin-bottom: 0;
+}
+
+.markdown details.alert .shiki-code-block pre {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* ---------- "On this page": a small bar marks the hovered / current heading, instead of recoloring the text ---------- */
+.table-of-contents__link {
+    position: relative;
+    color: var(--ifm-color-emphasis-700);
+}
+
+.table-of-contents__link:hover,
+.table-of-contents__link--active {
+    color: var(--ifm-font-color-base);
+}
+
+.table-of-contents__link::before {
+    content: '';
+    position: absolute;
+    left: -0.6rem;
+    top: 0.15em;
+    bottom: 0.15em;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background-color 150ms;
+}
+
+.table-of-contents__link:hover::before {
+    background: var(--ifm-color-emphasis-400);
+}
+
+.table-of-contents__link--active::before,
+.table-of-contents__link--active:hover::before {
+    background: var(--ifm-color-primary);
 }
 
 /* ---------- Prev / Next: big cards so the docs read like a book ---------- */
