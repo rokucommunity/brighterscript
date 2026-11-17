@@ -11,7 +11,7 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 [![license](https://img.shields.io/npm/l/brighterscript.svg)](LICENSE)
 [![Slack](https://img.shields.io/badge/Slack-RokuCommunity-4A154B?logo=slack)](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA)
 
-BrighterScript adds [classes, namespaces, imports, enums, interfaces, type annotations and modern operators](https://rokucommunity.github.io/brighterscript/latest/#language-features) to Roku's BrightScript language, and compiles them to plain BrightScript that runs on every Roku device. Every BrightScript file is already valid BrighterScript, so projects can adopt it one file at a time.
+BrighterScript adds [classes, namespaces, imports, enums, interfaces, type annotations and modern operators](https://rokucommunity.github.io/brighterscript/latest/language-features/imports) to Roku's BrightScript language, and compiles them to plain BrightScript that runs on every Roku device. Every BrightScript file is already valid BrighterScript, so projects can adopt it one file at a time.
 
 The compiler validates entire projects, BrightScript and BrighterScript alike, and reports errors with their exact location before anything reaches a device. It powers the [BrightScript Language](https://marketplace.visualstudio.com/items?itemName=RokuCommunity.brightscript) extension for VS Code, and its [plugin API](https://rokucommunity.github.io/brighterscript/latest/tooling/plugins) lets teams add their own validations and code transforms.
 

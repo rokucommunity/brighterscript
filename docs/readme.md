@@ -81,22 +81,6 @@ end sub
 
 </details>
 
-## Get started
-
-- [Installation](getting-started/installation.md): install the compiler and run your first build.
-- [bsconfig.json](getting-started/bsconfig.md): every option for configuring your project.
-- [Language Server](tooling/language-server.md): tune the editor experience for large projects.
-
-## Language features
-
-- [Imports](language-features/imports.md): declare a script's dependencies in the script itself, instead of in XML `<script>` tags.
-- [Namespaces](language-features/namespaces.md) and [Classes](language-features/classes.md): organize your code, with inheritance and access modifiers.
-- [Interfaces](language-features/interfaces.md), [Enums](language-features/enums.md) and [Constants](language-features/constants.md): name your shapes and values, checked at compile time.
-- [Template Strings](language-features/template-strings.md): ``print `hello ${name}` ``.
-- [Ternary](language-features/ternary-operator.md) and [Null-Coalescing](language-features/null-coalescing-operator.md) operators: `a ? b : c` and `a ?? b`.
-- [Callfunc Operator](language-features/callfunc-operator.md): `node@.someMethod()` instead of `node.callfunc("someMethod")`.
-- [Regular Expression Literals](language-features/regex-literals.md), [Source Literals](language-features/source-literals.md), [Computed Property Names](language-features/computed-property-names.md) and [Annotations](language-features/annotations.md).
-
 ## Used by
 
 BrighterScript is used to build apps for Roku by teams like these. It also powers the [BrightScript Language](https://marketplace.visualstudio.com/items?itemName=RokuCommunity.brightscript) extension for VS Code and the [maestro framework](https://github.com/georgejecook/maestro-roku).
