@@ -37,12 +37,6 @@ It keeps the staging folder around after each build, which is handy for inspecti
 | [`diagnosticFilters`](../tooling/bsconfig.md#diagnosticfilters) | Hide errors and warnings you don't care about |
 | [`host`](../tooling/bsconfig.md#host) and [`password`](../tooling/bsconfig.md#password) | The Roku device to deploy to with `--deploy` |
 
-## All options
-
-`bsconfig.json` supports many more options than the ones above, for things like diagnostics, source maps, plugins and deploying. Each one has a description and an example in the reference.
-
-**[View all bsconfig.json options →](../tooling/bsconfig.md)**
-
 ## Tips
 
 - **Add `bsc` to your `package.json` scripts,** so everyone runs the same command:
@@ -59,3 +53,9 @@ It keeps the staging folder around after each build, which is handy for inspecti
 - **Keep secrets out of the repo.** Pass your device's password on the command line (`bsc --deploy --host 192.168.1.10 --password secret`) instead of putting it in `bsconfig.json`.
 - **Share settings between configs** with [`extends`](../tooling/bsconfig.md#extends). For example, a `bsconfig.dev.json` can extend `bsconfig.json` and only override what's different, and you build with it using `bsc --project bsconfig.dev.json`.
 - **Every option also works on the command line.** Run `bsc --help` for the full list.
+
+## All options
+
+`bsconfig.json` supports many more options than the ones in the table above, for things like diagnostics, source maps, plugins and deploying. Each one has a description and an example in the reference.
+
+**[View all bsconfig.json options →](../tooling/bsconfig.md)**
