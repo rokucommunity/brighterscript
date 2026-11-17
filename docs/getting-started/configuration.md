@@ -56,4 +56,6 @@ It keeps the staging folder around after each build, which is handy for inspecti
 
 ## All options
 
+The table above only covers the basics. There are many more options for diagnostics, source maps, plugins, deploying and more.
+
 **[View all bsconfig.json options →](../tooling/bsconfig.md)**
