@@ -14,16 +14,20 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
 The BrighterScript language provides new features and syntax enhancements to Roku's BrightScript language. Because the language is a superset of BrightScript, the parser and associated tools (VSCode integration, cli, etc...) work with standard BrightScript (.brs) files. This means you will get benefits (as described in the following section) from using the BrighterScript compiler, whether your project contains BrighterScript (.bs) files or not. The BrighterScript language transpiles to standard BrightScript, so your code is fully compatible with all roku devices.
 
-## Help!
+## BrighterScript v1 is coming
 
 > [!IMPORTANT]
-> We are currently seeking testers for two major rewrites:
+> BrighterScript v1 is a complete overhaul of the compiler's core, and it's getting close to release. We'd love your help testing it before it ships.
 
-- Language Server Protocol (LSP) Rewrite: We’ve been hard at work revamping our LSP to improve stability, performance, and add new features. We would love your feedback as you put it through its paces. ([Join the LSP discussion](https://github.com/rokucommunity/brighterscript/discussions/1322))
+To try it in your project:
 
-- Version 1 (v1) Rewrite: This is a complete overhaul of the core of our project. Your input is crucial in helping us identify bugs and further refine the release. ([Join the v1 discussion](https://github.com/rokucommunity/brighterscript/discussions/1321))
+```bash
+npm install brighterscript@next
+```
 
-If you're interested in helping, please visit the GitHub discussion links above for more information and instructions on how to get involved.
+- Read the [v1 docs](https://rokucommunity.github.io/brighterscript/v1/) to see what's new and what's changed.
+- Follow the work on the [`v1` branch](https://github.com/rokucommunity/brighterscript/tree/v1).
+- Share bugs and feedback in the [v1 discussion](https://github.com/rokucommunity/brighterscript/discussions) or on [Slack](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA).
 
 ## Features
 BrighterScript adds several new features to the BrightScript language such as namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
