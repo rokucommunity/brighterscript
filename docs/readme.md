@@ -83,13 +83,13 @@ end sub
 
 ## Language features
 
-A few highlights (see the sidebar for everything):
-
 - [Imports](language-features/imports.md): declare a script's dependencies in the script itself, instead of in XML `<script>` tags.
 - [Namespaces](language-features/namespaces.md) and [Classes](language-features/classes.md): organize your code, with inheritance and access modifiers.
 - [Interfaces](language-features/interfaces.md), [Enums](language-features/enums.md) and [Constants](language-features/constants.md): name your shapes and values, checked at compile time.
 - [Template Strings](language-features/template-strings.md): ``print `hello ${name}` ``.
 - [Ternary](language-features/ternary-operator.md) and [Null-Coalescing](language-features/null-coalescing-operator.md) operators: `a ? b : c` and `a ?? b`.
+- [Callfunc Operator](language-features/callfunc-operator.md): `node@.someMethod()` instead of `node.callfunc("someMethod")`.
+- [Regular Expression Literals](language-features/regex-literals.md), [Source Literals](language-features/source-literals.md), [Computed Property Names](language-features/computed-property-names.md) and [Annotations](language-features/annotations.md).
 
 ## Used by
 
