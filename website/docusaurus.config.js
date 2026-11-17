@@ -102,6 +102,12 @@ const config = {
                                 enforce: 'pre',
                                 use: [path.join(websiteDir, 'scripts', 'search-highlight-loader.cjs')]
                             },
+                            //load search in the background once the page is idle, not when you first touch the search box (see scripts/search-preload-loader.cjs)
+                            {
+                                test: /[\\/]@easyops-cn[\\/]docusaurus-search-local[\\/]dist[\\/]client[\\/]client[\\/]theme[\\/]SearchBar[\\/]SearchBar\.jsx$/,
+                                enforce: 'pre',
+                                use: [path.join(websiteDir, 'scripts', 'search-preload-loader.cjs')]
+                            },
                             //the plugin's generated files import modules by absolute path, sometimes with a lowercase drive letter on Windows,
                             //which makes webpack load them twice. Fix their casing (see scripts/path-casing-loader.cjs)
                             process.platform === 'win32' && {
@@ -163,6 +169,8 @@ const config = {
             docsDir: docsDir,
             indexBlog: false,
             indexPages: false,
+            //keep common English words like "for", "if", "and", "not" and "while" searchable: they're BrightScript keywords
+            removeDefaultStopWordFilter: ['en'],
             highlightSearchTermsOnTargetPage: true,
             searchResultLimits: 10,
             searchResultContextMaxLength: 80,

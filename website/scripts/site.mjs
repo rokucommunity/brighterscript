@@ -38,6 +38,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
+import zlib from 'node:zlib';
 import semver from 'semver';
 import { versions, localVersionName, localDocsDir, rootBaseUrl, siteUrl, repoDir, websiteDir } from '../versions.mjs';
 import { grammarPath } from '../code-highlighting.mjs';
@@ -158,7 +159,7 @@ function keepSearchIndexUpToDate() {
             } else {
                 fs.mkdirSync(devLiveDir, { recursive: true });
                 fs.copyFileSync(indexPath, path.join(devLiveDir, 'search-index.json'));
-                console.log(`[site] search index updated (${Math.round((Date.now() - startedAt) / 1000)}s)`);
+                console.log(`[site] search index updated (${Math.round((Date.now() - startedAt) / 1000)}s, ${describeFileSize(indexPath)})`);
             }
             if (rerunWhenDone) {
                 rerunWhenDone = false;
@@ -366,6 +367,15 @@ function writeRedirect(filePath, url, title = 'BrighterScript') {
     ].join('\n'));
 }
 
+/**
+ * A file's size, and its gzipped size (what browsers actually download from GitHub Pages), i.e. `660 KB, 140 KB gzipped`
+ */
+function describeFileSize(filePath) {
+    const contents = fs.readFileSync(filePath);
+    const kb = (bytes) => `${Math.round(bytes / 1024)} KB`;
+    return `${kb(contents.length)}, ${kb(zlib.gzipSync(contents).length)} gzipped`;
+}
+
 function escapeHtml(text) {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -448,7 +458,9 @@ function buildOtherVersionsForDevInBackground() {
                 const dir = path.join(devSitesDir, version.name);
                 fs.rmSync(dir, { recursive: true, force: true });
                 fs.renameSync(stagingDir, dir);
-                console.log(`[site] docs version "${version.name}" is ready (${Math.round((Date.now() - startedAt) / 1000)}s)`);
+                const indexPath = path.join(dir, 'search-index.json');
+                const indexSize = fs.existsSync(indexPath) ? `, search index ${describeFileSize(indexPath)}` : '';
+                console.log(`[site] docs version "${version.name}" is ready (${Math.round((Date.now() - startedAt) / 1000)}s${indexSize})`);
             } else {
                 console.warn(`[site] WARNING: couldn't build docs version "${version.name}", so it won't be available in the dev server. See ${logPath}`);
                 fs.writeFileSync(path.join(devSitesDir, version.name, 'index.html'), `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Couldn't build the ${version.label} docs</title></head><body style="font-family: sans-serif; padding: 2rem"><h1>Couldn't build the ${version.label} docs</h1><p>See <code>${logPath}</code> for details. <a href="${rootBaseUrl}${localVersionName}/">Back to the ${localVersionName} docs</a></p></body></html>`);

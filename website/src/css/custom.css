@@ -454,6 +454,11 @@ img {
     height: auto;
 }
 
+/* the sidebar category next to "Next" / "Previous" (src/theme/PaginatorNavLink) */
+.pagination-nav__category {
+    color: var(--ifm-color-emphasis-600);
+}
+
 /* the "Used by" logos on the introduction page (docs/readme.md) */
 .used-by {
     display: flex;
