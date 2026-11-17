@@ -2,6 +2,9 @@
 
 A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 
+**[📖 Documentation](https://rokucommunity.github.io/brighterscript/)** · [bsconfig.json options](https://rokucommunity.github.io/brighterscript/latest/getting-started/bsconfig) · [Plugins](https://rokucommunity.github.io/brighterscript/latest/tooling/plugins)
+
+[![docs](https://img.shields.io/badge/docs-rokucommunity.github.io-3178c6)](https://rokucommunity.github.io/brighterscript/)
 [![build status](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/build.yml?branch=master&logo=github)](https://github.com/rokucommunity/brighterscript/actions?query=branch%3Amaster+workflow%3Abuild)
 [![security](https://img.shields.io/github/actions/workflow/status/rokucommunity/brighterscript/security-audit.yml?branch=master&label=security&logo=data:image/svg%2Bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHJlY3QgeD0iMyIgeT0iOCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjciIHJ4PSIxIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik01IDhWNWEzIDMgMCAwIDEgNiAwdjMiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==)](https://github.com/rokucommunity/brighterscript/actions/workflows/security-audit.yml)
 [![coverage status](https://img.shields.io/coveralls/github/rokucommunity/brighterscript?logo=coveralls)](https://coveralls.io/github/rokucommunity/brighterscript?branch=master)
@@ -30,9 +33,9 @@ npm install brighterscript@next
 - Share bugs and feedback in the [v1 discussion](https://github.com/rokucommunity/brighterscript/discussions) or on [Slack](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA).
 
 ## Features
-BrighterScript adds several new features to the BrightScript language such as namespaces, classes, import statements, and more. Take a look at the language specification docs for more information.
+BrighterScript adds several new features to the BrightScript language such as namespaces, classes, import statements, and more. Take a look at the docs for more information.
 
-[BrighterScript Language Specification](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)
+[BrighterScript documentation](https://rokucommunity.github.io/brighterscript/)
 
 ## Why use the BrighterScript compiler/CLI?
 
@@ -49,34 +52,34 @@ BrighterScript adds several new features to the BrightScript language such as na
     - The project is owned by [RokuCommunity](https://github.com/rokucommunity) and the syntax and features are thoroughly thought out, discussed, and planned.
     - Actively developed.
  - Reduce boilerplate code and time debugging with language features like these:
-    - [Import statements](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-features/imports.md)
+    - [Import statements](https://rokucommunity.github.io/brighterscript/latest/language-features/imports)
       - Declare import statements in scripts instead of xml script tags.
       - Automatically add script tags to XML components for all script import statements and their cascading dependencies
       - Missing imports are flagged at compile time.
-    - [Classes](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-features/classes.md)
+    - [Classes](https://rokucommunity.github.io/brighterscript/latest/language-features/classes)
       - Support for class inheritance and method overrides
       - Class fields and can be marked as `public`, `protected`, and `private` and incorrect access will be enforced by compile-time checks.
       - Class methods are automatically scoped to the class
-    - [Namespaces](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-features/namespaces.md):
+    - [Namespaces](https://rokucommunity.github.io/brighterscript/latest/language-features/namespaces):
       - Automatically add a name prefix to all methods inside a namespace block.
       - Prevents method naming collisions and improves code readability and maintainability.
       - Missing method invocations, and other namespace related syntax errors are reported at compile time.
-    - [Ternary operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-features/ternary-operator.md)
+    - [Ternary operator](https://rokucommunity.github.io/brighterscript/latest/language-features/ternary-operator)
       - `username = m.user <> invalid ? m.user.name : "not logged in"`
-    - [Template strings](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-features/template-strings.md)
+    - [Template strings](https://rokucommunity.github.io/brighterscript/latest/language-features/template-strings)
       - ```print `Hello ${firstNameVar}` ```.
-    - [null-coalescing operator](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-features/null-coalescing-operator.md)
+    - [null-coalescing operator](https://rokucommunity.github.io/brighterscript/latest/language-features/null-coalescing-operator)
       - `user = m.user ?? getDefaultUser()`
     - Additional Language features coming soon
       - null-conditional operator: `userSettings = m.user?.account?.profile?.settings`
-    - and [more](https://github.com/rokucommunity/BrighterScript/blob/master/docs/readme.md)...
+    - and [more](https://rokucommunity.github.io/brighterscript/)...
 
 
   - Full BrighterScript support for syntax checking, validation, and intellisense is available within the [Brightscript Language](https://marketplace.visualstudio.com/items?itemName=celsoaf.brightscript) VSCode extension.
 
-  - Configure the language server behavior using [language server settings](https://github.com/rokucommunity/brighterscript/blob/master/docs/tooling/language-server.md).
+  - Configure the language server behavior using [language server settings](https://rokucommunity.github.io/brighterscript/latest/tooling/language-server).
 
-  - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/tooling/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
+  - And if it's not enough, the [plugin API](https://rokucommunity.github.io/brighterscript/latest/tooling/plugins) allows extending the compiler to provide extra diagnostics or transformations.
 
 ## Who uses Brighterscript?
 <br/>
@@ -204,11 +207,11 @@ The presence of a `bsconfig.json` file in a directory indicates that the directo
 }
 ```
 
-More information on the config file format may be found in the [bsconfig.json documentation](https://github.com/rokucommunity/BrighterScript/blob/master/docs/getting-started/bsconfig.md).
+More information on the config file format may be found in the [bsconfig.json documentation](https://rokucommunity.github.io/brighterscript/latest/getting-started/bsconfig).
 
 ## Suppressing compiler messages
 
-The BrighterScript compiler emits errors and warnings when it encounters potentially invalid code. Errors and warnings may also be emitted by compiler plugins, such as by [the BrighterScript linter](https://github.com/rokucommunity/bslint). These messages can be suppressed if needed; see [the documentation](https://github.com/rokucommunity/BrighterScript/blob/master/docs/tooling/suppressing-compiler-messages.md).
+The BrighterScript compiler emits errors and warnings when it encounters potentially invalid code. Errors and warnings may also be emitted by compiler plugins, such as by [the BrighterScript linter](https://github.com/rokucommunity/bslint). These messages can be suppressed if needed; see [the documentation](https://rokucommunity.github.io/brighterscript/latest/tooling/suppressing-compiler-messages).
 
 ## ropm support
 In order for BrighterScript-transpiled projects to work as ropm modules, they need a reference to [bslib](https://github.com/rokucommunity/bslib/blob/master/source/bslib.brs) (the BrightScript runtime library for BrighterScript features) in their package. As `ropm` and `brighterscript` become more popular, this could result in many duplicate copies of `bslib.brs`.

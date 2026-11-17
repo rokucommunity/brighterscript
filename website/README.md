@@ -30,6 +30,7 @@ Every docs version (v0, v1, ...) is its own independent site, built by that vers
 [`doc-versions.json`](doc-versions.json) (on mainline) lists every version on the site:
 - Each version lives at its own permanent URL, like `/brighterscript/v0/classes` or `/brighterscript/v1/classes`.
 - The site root redirects to the version marked `"current": true`. To promote v1, move the flag. No URLs change.
+- `/brighterscript/latest/<page>` redirects to that page in the current version, for links that should always show the newest docs (like the repo README). Search engines only see the versioned URLs.
 - `branch` is where that version is developed. It's used for the "Edit this page" links.
 
 What `npm run build-docs` does (see [`scripts/site.mjs`](scripts/site.mjs)):

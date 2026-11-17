@@ -325,25 +325,49 @@ function writeSharedFiles(siteRootDir, options = { include404: true }) {
     ));
 
     //the site root redirects to the current version. Every version keeps its own permanent url, so changing `current` never moves a page
-    fs.writeFileSync(path.join(siteRootDir, 'index.html'), [
-        '<!doctype html>',
-        '<html lang="en">',
-        '<head>',
-        '    <meta charset="utf-8">',
-        '    <title>BrighterScript</title>',
-        `    <meta http-equiv="refresh" content="0; url=${currentUrl}">`,
-        `    <link rel="canonical" href="${siteUrl}${currentUrl}">`,
-        `    <script>location.replace(${JSON.stringify(currentUrl)} + location.hash);</script>`,
-        '</head>',
-        `<body><a href="${currentUrl}">BrighterScript docs</a></body>`,
-        '</html>',
-        ''
-    ].join('\n'));
+    writeRedirect(path.join(siteRootDir, 'index.html'), currentUrl);
 
     //GitHub Pages serves the root 404.html for any missing page, in any version
     if (options.include404) {
         fs.copyFileSync(path.join(siteRootDir, current.name, '404.html'), path.join(siteRootDir, '404.html'));
     }
+
+    //`/latest/<page>` redirects to that page in the current version, for links that should always show the newest docs
+    //(i.e. the README). Search engines are pointed at the versioned page (canonical), so `latest` never shows up in results.
+    //Missing `latest` pages are handled by the 404 page (src/theme/NotFound/Content)
+    const pagesPath = path.join(siteRootDir, current.name, 'pages.json');
+    if (fs.existsSync(pagesPath)) {
+        for (const page of JSON.parse(fs.readFileSync(pagesPath, 'utf8'))) {
+            //(built like the docs themselves: `classes.html` is served at `classes`, since trailingSlash is false)
+            const file = page.path ? `${page.path}.html` : 'index.html';
+            writeRedirect(path.join(siteRootDir, 'latest', file), `${currentUrl}${page.path}`, page.title);
+        }
+    }
+}
+
+/**
+ * A page that immediately redirects to `url` (keeping the #hash), and tells search engines `url` is the real page
+ */
+function writeRedirect(filePath, url, title = 'BrighterScript') {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, [
+        '<!doctype html>',
+        '<html lang="en">',
+        '<head>',
+        '    <meta charset="utf-8">',
+        `    <title>${escapeHtml(title)}</title>`,
+        `    <meta http-equiv="refresh" content="0; url=${escapeHtml(url)}">`,
+        `    <link rel="canonical" href="${escapeHtml(siteUrl + url)}">`,
+        `    <script>location.replace(${JSON.stringify(url)} + location.hash);</script>`,
+        '</head>',
+        `<body><a href="${escapeHtml(url)}">${escapeHtml(title)}</a></body>`,
+        '</html>',
+        ''
+    ].join('\n'));
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /**

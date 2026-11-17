@@ -19,8 +19,10 @@ export function getMissingPageUrl(pathname, rootBaseUrl, versions) {
         return undefined;
     }
     const segments = pathname.substring(rootBaseUrl.length).replace(/\.html$/i, '').split('/').filter(x => x);
-    const version = versions.find(x => x.name === segments[0]);
-    const targetVersion = version ?? versions.find(x => x.current) ?? versions[0];
+    const current = versions.find(x => x.current) ?? versions[0];
+    //(`latest` is an alias for the current version. See writeSharedFiles in scripts/site.mjs)
+    const version = segments[0] === 'latest' ? current : versions.find(x => x.name === segments[0]);
+    const targetVersion = version ?? current;
     const missing = (version ? segments.slice(1) : segments).join('/');
     //a version's own root is missing (i.e. a version that doesn't exist), so there's nowhere better to go
     if (!targetVersion || !missing) {
