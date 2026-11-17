@@ -453,3 +453,24 @@ html.docs-missing-page .theme-doc-sidebar-menu .menu__link--active:not(.menu__li
 img {
     height: auto;
 }
+
+/* the "Used by" logos on the introduction page (docs/readme.md) */
+.used-by {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.75rem;
+}
+
+.used-by img {
+    display: block;
+    height: 38px;
+    width: auto;
+}
+
+/* some logos are dark on a transparent background, so give them a light backdrop in dark mode */
+[data-theme='dark'] .used-by a {
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    background: #f5f6f7;
+}

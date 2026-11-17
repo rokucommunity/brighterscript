@@ -2,38 +2,38 @@
 
 BrighterScript provides a means of grouping functions and classes into Namespaces. BrightScript has no support for namespaces. Generally Roku developers will simulate namespaces by using underscores. However, that causes a large amount of clutter for the intellisense results.
 
-## Basic function example
+## Basic usage
 ```BrighterScript
-namespace Vertibrates.Birds
+namespace Vertebrates.Birds
     function GetDucks()
     end function
 end namespace
 sub main()
-    Vertibrates.Birds.GetDucks()
+    Vertebrates.Birds.GetDucks()
 end sub
 ```
 
 transpiles to
 
 ```BrightScript
-function Vertibrates_Birds_GetDucks()
+function Vertebrates_Birds_GetDucks()
 end function
 
 sub main()
-    Vertibrates_Birds_GetDucks()
+    Vertebrates_Birds_GetDucks()
 end sub
 ```
 
 As you can see, behind the scenes, BrighterScript will convert all periods found within namespace names into underscores so that it will be compatible with regular BrightScript.
 
 ## Classes
-Namespaces can also contain classes. See the [classes](classes.md#namespaces) for more detailed information.
+Namespaces can also contain classes, [interfaces](interfaces.md#namespaces) and [constants](constants.md#namespaced-consts). See [Classes](classes.md#namespaces) for more detailed information.
 
 ## Namespace inference
 Functions and classes within a namespace do not need to be prefixed with the full namespace name when called from another location in the same namespace. For example,
 
 ```BrighterScript
-namespace Vertibrates.Birds
+namespace Vertebrates.Birds
     function GetAllBirds()
         return [
             GetDuck(),
@@ -53,28 +53,28 @@ end namespace
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-function Vertibrates_Birds_GetAllBirds()
+function Vertebrates_Birds_GetAllBirds()
     return [
-        Vertibrates_Birds_GetDuck()
-        Vertibrates_Birds_GetGoose()
+        Vertebrates_Birds_GetDuck()
+        Vertebrates_Birds_GetGoose()
     ]
 end function
 
-function Vertibrates_Birds_GetDuck()
+function Vertebrates_Birds_GetDuck()
 end function
 
-function Vertibrates_Birds_GetGoose()
+function Vertebrates_Birds_GetGoose()
 end function
 ```
 </details>
 
-Notice how we didn't need to specify `Vertibrates.Birds` in front of `GetDuck()` and `GetGoose()`. That's because the compiler is smart enough to recognize where those functions come from.
+Notice how we didn't need to specify `Vertebrates.Birds` in front of `GetDuck()` and `GetGoose()`. That's because the compiler is smart enough to recognize where those functions come from.
 
 ## Works in assignments as well
 The compiler is smart enough to recognize namespaces in assignments as well.
 
 ```BrighterScript
-namespace Vertibrates.Birds
+namespace Vertebrates.Birds
     sub Quack()
     end sub
 
@@ -83,7 +83,7 @@ namespace Vertibrates.Birds
 
     sub Live()
         'assign based on fully-qualified namespace name
-        speak = Vertibrates.Birds.Quack
+        speak = Vertebrates.Birds.Quack
 
         'infer Current namespace
         walk = Waddle
@@ -95,17 +95,17 @@ end namespace
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub Vertibrates_Birds_Quack()
+sub Vertebrates_Birds_Quack()
 end sub
 
-sub Vertibrates_Birds_Waddle()
+sub Vertebrates_Birds_Waddle()
 end sub
 
-sub Vertibrates_Birds_Live()
+sub Vertebrates_Birds_Live()
     'assign based on fully-qualified namespace name
-    speak = Vertibrates_Birds_Quack
+    speak = Vertebrates_Birds_Quack
     'infer Current namespace
-    walk = Vertibrates_Birds_Waddle
+    walk = Vertebrates_Birds_Waddle
 end sub
 ```
 </details>
@@ -116,7 +116,7 @@ The compiler will throw an error whenever it encounters a namespaced function wi
 ```BrighterScript
 sub Quack()
 end sub
-namespace Vertibrates.Birds
+namespace Vertebrates.Birds
     sub Quack() ' this will result in a compile error.
     end sub
 end namespace
@@ -128,7 +128,7 @@ end namespace
 ```BrightScript
 sub Quack()
 end sub
-sub Vertibrates_Birds_Quack() ' this will result in a compile error.
+sub Vertebrates_Birds_Quack() ' this will result in a compile error.
 end sub
 ```
 </details>
@@ -138,7 +138,7 @@ end sub
 In the above examples, nested namespaces are formed by specifying a _dotted identifier_ (`NameA.NameB`). You can also declare namespaces within other namespaces to form a dotted namespace identifier which contains its parent namespaces.
 
 ```BrighterScript
-namespace Vertibrates
+namespace Vertebrates
     namespace Birds
         sub Quack()
         end sub
@@ -155,9 +155,9 @@ end namespace
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub Vertibrates_Birds_Quack()
+sub Vertebrates_Birds_Quack()
 end sub
-sub Vertibrates_Reptiles_Hiss()
+sub Vertebrates_Reptiles_Hiss()
 end sub
 ```
 </details>
@@ -165,14 +165,14 @@ end sub
 
 ## Caveats
 ### ObserveField and ObserveFieldScoped
-It's incredibly difficult for brighterscript to know when it's safe to transpile strings that happen to look like namespace names. As such, the `ObserveField` and `ObserveFieldScoped` functions in BrighterScript do not automatically transpile string-based function names into their BrightScript-compatible underscore format.
+It's incredibly difficult for BrighterScript to know when it's safe to transpile strings that happen to look like namespace names. As such, the `ObserveField` and `ObserveFieldScoped` functions in BrighterScript do not automatically transpile string-based function names into their BrightScript-compatible underscore format.
 
-This means that if you pass a namespaced identifier as a string (i.e `Vertibrates.Birds.Quack`) it will not be converted to `Vertibrates_Birds_Quack` during transpilation. Developers need to ensure they manually provide the transpiled function name when using these functions to avoid runtime errors (i.e. `Vertibrates_Birds_Quack`).
+This means that if you pass a namespaced identifier as a string (i.e `Vertebrates.Birds.Quack`) it will not be converted to `Vertebrates_Birds_Quack` during transpilation. Developers need to ensure they manually provide the transpiled function name when using these functions to avoid runtime errors (i.e. `Vertebrates_Birds_Quack`).
 
 ```brighterscript
 'this does not work
-m.top.observeField("someField", "Vertibrates.Birds.Quack")
+m.top.observeField("someField", "Vertebrates.Birds.Quack")
 
 'you need to do this instead
-m.top.observeField("someField", "Vertibrates_Birds_Quack")
+m.top.observeField("someField", "Vertebrates_Birds_Quack")
 ```

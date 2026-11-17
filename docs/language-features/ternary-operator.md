@@ -1,5 +1,5 @@
 # Ternary Operator
-The ternary (conditional) operator takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shorthand version of an if statement. It can be used in assignments or any place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) section for more information.
+The ternary (conditional) operator takes three operands: a condition followed by a question mark (?), then an expression to execute (consequent) if the condition is true followed by a colon (:), and finally the expression to execute (alternate) if the condition is false. This operator is frequently used as a shorthand version of an if statement. It can be used in assignments or any place where an expression is valid. Due to ambiguity in the brightscript syntax, ternary operators cannot be used as standalone statements. See the [No standalone statements](#no-standalone-statements) section for more information. To fall back to a default only when a value is `invalid`, see the [null-coalescing operator](null-coalescing-operator.md).
 
 ## Warning
 <p style="background-color: #fdf8e3; color: #333; padding: 20px">The <a href="https://developer.roku.com/docs/references/brightscript/language/expressions-variables-types.md#optional-chaining-operators">optional chaining operator</a> was added to the BrightScript runtime in <a href="https://developer.roku.com/docs/developer-program/release-notes/roku-os-release-notes.md#roku-os-110">Roku OS 11</a>, which introduced a slight limitation to the BrighterScript ternary operator. As such, all ternary expressions must have a space to the right of the question mark when followed by <b>[</b> or <b>(</b>. See the <a href="#">optional chaning</a> section for more information.
@@ -23,8 +23,8 @@ else
 end if
 ```
 
-As you can see, when used in the right-hand-side of an assignment, brighterscript transpiles the ternary expression into a simple `if else` block.
-The `bslib_ternary` function checks the condition, and returns either the consequent or alternate. In these optimal situations, brighterscript can generate the most efficient code possible which is equivalent to what you'd write yourself without access to the ternary expression.
+As you can see, when used in the right-hand-side of an assignment, BrighterScript transpiles the ternary expression into a simple `if else` block.
+The `bslib_ternary` function checks the condition, and returns either the consequent or alternate. In these optimal situations, BrighterScript can generate the most efficient code possible which is equivalent to what you'd write yourself without access to the ternary expression.
 
 This also works for nested ternary expressions:
 ```BrighterScript
@@ -46,7 +46,7 @@ end if
 ```
 
 ## Use in complex expressions
-Ternary can also be used in any location where expressions are supported, such as function calls or within array or associative array declarations. In some  situations it's much more difficult to convert the ternary expression into an `if else` statement, so we need to leverage the brighterscript `bslib_ternary` library function instead. Consider the following example:
+Ternary can also be used in any location where expressions are supported, such as function calls or within array or associative array declarations. In some  situations it's much more difficult to convert the ternary expression into an `if else` statement, so we need to leverage the BrighterScript `bslib_ternary` library function instead. Consider the following example:
 
 ```BrighterScript
  printAuthStatus(user2 <> invalid ? "logged in" : "not logged in")
@@ -90,7 +90,7 @@ If we were to transpile this to leverage the `bslib_ternary` function, it would 
 Sometimes BrighterScript needs to protect against unintended performance hits. There are 3 possible ways that your code can be transpiled:
 
 ### Optimized `if else` block
-In this situation, brighterscript can safely convert the ternary expression into an `if else` block. This is typically available when ternary is used in assignments.
+In this situation, BrighterScript can safely convert the ternary expression into an `if else` block. This is typically available when ternary is used in assignments.
 
 ```BrighterScript
 m.username = m.user <> invalid ? m.user.name : invalid

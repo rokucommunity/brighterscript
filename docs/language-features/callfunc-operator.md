@@ -1,6 +1,6 @@
 # Callfunc Operator
 
-In BrightScript, calling a function on a custom comment requires you to use the [callfunc](https://developer.roku.com/docs/developer-program/core-concepts/handling-application-events.md) function. A standard callfunc expression looks something like this: `node.callFunc("functionName", someArg, someOtherArg)`. This deviates from the conventional `object.someMethod()` synax you are used to with standard objects.
+In BrightScript, calling a function on a custom component requires you to use the [callfunc](https://developer.roku.com/docs/developer-program/core-concepts/handling-application-events.md) function. A standard callfunc expression looks something like this: `node.callFunc("functionName", someArg, someOtherArg)`. This deviates from the conventional `object.someMethod()` syntax you are used to with standard objects.
 
 Which leads us to the callfunc operator in BrighterScript. This is denoted by an at symbol followed by a period. ( `@.` ). Whenever BrighterScript encounters the callfunc operator, it will transpile the code into a valid callfunc expression, while allowing you to write _mostly_ the same type of syntax you're used to for object method calls.
 
@@ -29,4 +29,4 @@ will be transpiled into this:
 node.callfunc("doSomething", invalid)
 ```
 
-It is the developer's responsiblity to ensure that the target function has at least one parameter, and that the type is dynamic, otherwise a type mismatch runtime error will occur.
+It is the developer's responsibility to ensure that the target function has at least one parameter, and that the type is dynamic, otherwise a type mismatch runtime error will occur.

@@ -79,3 +79,7 @@ For better performance in large projects, consider excluding:
 ## Compatibility
 
 Both `projectDiscoveryExclude` and `files.watcherExclude` support work with existing exclusion mechanisms and maintain backward compatibility with existing configurations.
+
+## Other editors
+
+The language server follows Microsoft's [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), so BrightScript and BrighterScript support can be added to any editor that supports the protocol, using the `LanguageServer` class from this package. The [BrightScript Language extension](https://github.com/rokucommunity/vscode-brightscript-language) for VS Code is built on it.

@@ -1,8 +1,10 @@
 # Classes
 
-Traditional BrightScript supports object creation (see [roAssociativeArray](https://developer.roku.com/docs/references/brightscript/components/roassociativearray.md)), but these can get a bit complicated at times, are generally created in a factory function. These objects are also difficult to track from a type-checking perspective, as their shape can morph over time. In BrighterScript, you can declare actual classes, and compile them into pure BrightScript which can be used on any Roku device.
+Traditional BrightScript supports object creation (see [roAssociativeArray](https://developer.roku.com/docs/references/brightscript/components/roassociativearray.md)), but these can get complicated, and are usually created in a factory function. These objects are also difficult to track from a type-checking perspective, as their shape can morph over time. In BrighterScript, you can declare actual classes, and compile them into pure BrightScript which can be used on any Roku device.
 
-## Classes
+Classes are often used together with [namespaces](namespaces.md) and [interfaces](interfaces.md).
+
+## Basic usage
 Here's an example of a simple BrighterScript class
 
 ```vb
@@ -531,7 +533,7 @@ daisy = Person("Daisy")
 Classes can also be contained within a namespace. At runtime, all namespace periods are replaced with underscores.
 
 ```BrighterScript
-namespace Vertibrates.Birds
+namespace Vertebrates.Birds
     class Animal
     end class
 
@@ -543,29 +545,29 @@ end namespace
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub __Vertibrates_Birds_Animal_method_new()
+sub __Vertebrates_Birds_Animal_method_new()
 end sub
-function __Vertibrates_Birds_Animal_builder()
+function __Vertebrates_Birds_Animal_builder()
     instance = {}
-    instance.new = __Vertibrates_Birds_Animal_method_new
+    instance.new = __Vertebrates_Birds_Animal_method_new
     return instance
 end function
-function Vertibrates_Birds_Animal()
-    instance = __Vertibrates_Birds_Animal_builder()
+function Vertebrates_Birds_Animal()
+    instance = __Vertebrates_Birds_Animal_builder()
     instance.new()
     return instance
 end function
-sub __Vertibrates_Birds_Duck_method_new()
+sub __Vertebrates_Birds_Duck_method_new()
     m.super0_new()
 end sub
-function __Vertibrates_Birds_Duck_builder()
-    instance = __Vertibrates_Birds_Animal_builder()
+function __Vertebrates_Birds_Duck_builder()
+    instance = __Vertebrates_Birds_Animal_builder()
     instance.super0_new = instance.new
-    instance.new = __Vertibrates_Birds_Duck_method_new
+    instance.new = __Vertebrates_Birds_Duck_method_new
     return instance
 end function
-function Vertibrates_Birds_Duck()
-    instance = __Vertibrates_Birds_Duck_builder()
+function Vertebrates_Birds_Duck()
+    instance = __Vertebrates_Birds_Duck_builder()
     instance.new()
     return instance
 end function

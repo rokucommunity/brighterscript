@@ -1,7 +1,7 @@
 # Interfaces
-Interfaces are a way to describe properties and methods on an object.
+Interfaces are a way to describe properties and methods on an object. Unlike [classes](classes.md), they only exist at compile time: they're used for type checking, and are removed from the transpiled code.
 
-## Simple example
+## Basic usage
 Interfaces can have both properties and methods.
 
 ```BrighterScript
@@ -73,7 +73,7 @@ end sub
 ```
 
 ## Advanced types
-Interface member types can be defined as any valid brighterscript type, and even reference themselves.
+Interface member types can be defined as any valid BrighterScript type, and even reference themselves.
 ```brighterscript
 interface Dog
     owner as Human

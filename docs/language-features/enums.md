@@ -1,6 +1,6 @@
 # Enums
 
-BrighterScript Enums are a way to define a set of named constants, sharing many similarities to their implementations in other languages such as [TypeScript](https://www.typescriptlang.org/docs/handbook/enums.html) and [C#](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/enum).
+Enums are a way to define a set of named constants, sharing many similarities to their implementations in other languages such as [TypeScript](https://www.typescriptlang.org/docs/handbook/enums.html) and [C#](https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/enum).
 
 ## Enums at runtime
 Enums do not exist at runtime. Instead, the literal values are inserted into the code. See the next section for an example.

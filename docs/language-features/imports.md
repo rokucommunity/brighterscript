@@ -1,8 +1,8 @@
 # Imports
 
-Managing script tags in component XML files can be tedius and time consuming. BrighterScript provides the `import` statement, which can be added to the top of your `.bs` files. Any xml file that includes that `.bs` file will automatically have all of its imports added as `<script` includes.
+Managing script tags in component XML files can be tedious and time consuming. BrighterScript provides the `import` statement, which can be added to the top of your `.bs` files. Any XML file that includes that `.bs` file automatically gets a `<script>` tag for each of its imports, and for their imports in turn. An import of a file that doesn't exist is reported as an error at compile time.
 
-## Basic example
+## Basic usage
 **src/components/Widget.bs**
 ```BrighterScript
 import "pkg:/source/lib.bs"

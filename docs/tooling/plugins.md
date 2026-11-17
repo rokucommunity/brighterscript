@@ -1,6 +1,6 @@
 # Plugins
 
-The brighterscript compiler is extensible using **JavaScript** plugins.
+The BrighterScript compiler is extensible using **JavaScript** plugins.
 
 **NOTE**: The plugin system is currently in `alpha`. It's brand new, and while we hope there won't be any significant changes to the API, we reserve the right to change things before moving the plugin system out of `alpha`.
 
@@ -132,7 +132,7 @@ Semantic Tokens
 
 ## Compiler API
 
-Objects in the brighterscript compiler dispatch a number of events that you can listen to. These events allow you to peek / modify the objects that the compiler manipulates.
+Objects in the BrighterScript compiler dispatch a number of events that you can listen to. These events allow you to peek / modify the objects that the compiler manipulates.
 
 The top level object is the `ProgramBuilder` which runs the overall process: preparation, running the compiler (`Program`) and producing the output.
 
@@ -315,7 +315,7 @@ interface CallableContainer {
 ```
 
 ### PluginFactory
-To register a plugin, you need to have a default export that returns a factory. BrighterScript will call this factory once for every instance of a program that needs the plugin. This means that you might have multiple instances of a plugin in one NodeJS process (one for each brighterscript project).
+To register a plugin, you need to have a default export that returns a factory. BrighterScript will call this factory once for every instance of a program that needs the plugin. This means that you might have multiple instances of a plugin in one NodeJS process (one for each BrighterScript project).
 
 ```typescript
 export default function () {
@@ -326,9 +326,9 @@ export default function () {
 ```
 
 ### BrighterScript v1 compatability
-There is currently a v1 rewrite of BrighterScript which includes some significant breaking changes. This has caused challenges with brighterscript plugins, as you need to maintain separate versions for v0 and v1. You can utilize the `pluginOptions.version` property in your factory to determine what brighterscript version is running your plugin, and adjust accordingly.
+There is currently a v1 rewrite of BrighterScript which includes some significant breaking changes. This has caused challenges with BrighterScript plugins, as you need to maintain separate versions for v0 and v1. You can utilize the `pluginOptions.version` property in your factory to determine what BrighterScript version is running your plugin, and adjust accordingly.
 
-This options object is only available starting with brighterscript `v0.69.4` and `v1.0.0-alpha.45`. It's important to support backwards compatibility that an `undefined` `version` value be treated as a v0 plugin.
+This options object is only available starting with BrighterScript `v0.69.4` and `v1.0.0-alpha.45`. It's important to support backwards compatibility that an `undefined` `version` value be treated as a v0 plugin.
 
 Here's a small example:
 
@@ -358,7 +358,7 @@ To walk/modify the AST, a number of helpers are provided in `brighterscript/dist
 It is highly recommended to use TypeScript as intellisense helps greatly writing code against new APIs.
 
 ### Using ts-node to transpile plugin dynamically
-The ts-node module can transpile typescript on the fly. This is by far the easiest way to develop a brighterscript plugin, as you can elimintate the manual typescript transpile step.
+The ts-node module can transpile typescript on the fly. This is by far the easiest way to develop a BrighterScript plugin, as you can eliminate the manual typescript transpile step.
 
 ```bash
 # install modules needed to compile a plugin
@@ -467,7 +467,7 @@ export default function () {
 };
 ```
 
-This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the brighterscript compiler will `undo` those edits once the file has been transpiled.
+This plugin will search through every LiteralExpression in the entire project, and every time we find a string literal, we will replace `<FIRST_NAME>` with `world`. This is done with the `event.editor` object. `editor` allows you to apply edits to the AST, and then the BrighterScript compiler will `undo` those edits once the file has been transpiled.
 
 ## Remove Comment and Print Statements
 

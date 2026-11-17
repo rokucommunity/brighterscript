@@ -2,7 +2,7 @@
 
 Template strings, also known as template literals, are string literals that can have embedded expressions and also capture newlines.
 
-## Syntax
+## Basic usage
 ```BrighterScript
 
 name = `John Smith`
