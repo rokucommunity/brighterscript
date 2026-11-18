@@ -10,6 +10,13 @@
                 "active": true,
                 "notes": "`braces` <=3.0.3 (prod, via `chokidar`/`micromatch`/`fast-glob`/`roku-deploy`): stack exhaustion on deeply nested brace patterns. No patched version is published, so it cannot be upgraded or overridden. The only patterns reaching it are globs from the caller's own project config (bsconfig `files`, watch paths); no untrusted party supplies them, and a crash only affects the caller's own local process."
             }
+        },
+        {
+            "GHSA-fc5q-39xc-vjpf": {
+                // Added: 2026-11-18
+                "active": true,
+                "notes": "`picomatch` <=4.0.7 (prod, via `chokidar`/`micromatch`/`fast-glob`/`roku-deploy`): ReDoS on single-branch repeated extglob patterns such as `+(*)`. GitHub has withdrawn this advisory but npm still reports it, and no patched version exists to upgrade or override to. The only patterns reaching it are globs from the caller's own project config (bsconfig `files`, watch paths), not untrusted input. Remove once npm drops the withdrawn advisory."
+            }
         }
     ]
 }
