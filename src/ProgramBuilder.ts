@@ -1,5 +1,6 @@
 import * as debounce from 'debounce-promise';
 import * as path from 'path';
+import chalk from 'chalk';
 import { rokuDeploy } from 'roku-deploy';
 import type { BsConfig, FinalizedBsConfig } from './BsConfig';
 import type { BsDiagnostic, FileObj, FileResolver } from './interfaces';
@@ -16,6 +17,7 @@ import * as requireRelative from 'require-relative';
 import { Throttler } from './Throttler';
 import type { BrsFile } from './files/BrsFile';
 import { DiagnosticManager } from './DiagnosticManager';
+import { discoverRsgProject } from './rsg/RsgProject';
 
 /**
  * A runner class that handles
@@ -144,6 +146,27 @@ export class ProgramBuilder {
 
         //parse every file in the entire project
         await this.loadFiles();
+
+        this.discoverRsgProject();
+    }
+
+    /**
+     * If this is an RSG 2.0 SDK app (`rokuConfig` is set), discover its TypeScript sources and anchor nodes
+     */
+    private discoverRsgProject() {
+        if (!this.options.rokuConfig) {
+            return;
+        }
+        const rokuConfigPath = path.resolve(this.options.cwd ?? process.cwd(), this.options.rokuConfig);
+        this.program.rsgProject = this.logger.time(LogLevel.log, ['discover RSG project', chalk.green(rokuConfigPath)], () => {
+            return discoverRsgProject(rokuConfigPath);
+        });
+        const { anchorNodes, sourceFiles, problems } = this.program.rsgProject;
+        for (const problem of problems) {
+            this.logger.warn(problem);
+        }
+        this.logger.log(`Found ${anchorNodes.length} anchor node(s) in ${sourceFiles.length} TypeScript file(s)`);
+        this.logger.debug('Anchor nodes:', anchorNodes.map(x => x.componentName));
     }
 
     public async run(options: BsConfig) {
