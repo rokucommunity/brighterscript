@@ -3,7 +3,7 @@
  *
  * Every docs version (v0, v1, ...) is its own independent Docusaurus site, built from that version's own checkout of the repo
  * and served at /brighterscript/<name>/. This repo's mainline build (the "host") builds itself, builds every other version listed
- * in doc-versions.json from its newest release tag, and puts them all side by side. See scripts/site.mjs.
+ * in doc-versions.json from its branch, and puts them all side by side. See scripts/site.mjs.
  */
 import fs from 'node:fs';
 import path from 'node:path';

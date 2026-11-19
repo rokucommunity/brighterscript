@@ -12,11 +12,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      #full history + tags, so the docs build can find (and clone) the newest release tag for each docs version
+      #full history, so the docs build can build each docs version from its own branch
       - uses: actions/checkout@master
         with:
           fetch-depth: 0
-          fetch-tags: true
       - uses: actions/setup-node@master
         with:
           node-version: "18.20.4"

@@ -24,14 +24,29 @@ const websiteDir = path.dirname(fileURLToPath(import.meta.url));
 export const grammarPath = path.join(websiteDir, '.grammars', 'brightscript.tmLanguage.json');
 
 /**
+ * A committed copy of the grammar, for when the download fails
+ */
+export const fallbackGrammarPath = path.join(websiteDir, 'grammars', 'brightscript.tmLanguage.json');
+
+/**
+ * All the text in a hast node
+ */
+function toText(node) {
+    if (node.type === 'text') {
+        return node.value;
+    }
+    return (node.children ?? []).map(toText).join('');
+}
+
+/**
  * Docusaurus-style code block options that shiki doesn't handle on its own
  * @type {import('shiki').ShikiTransformer}
  */
 const transformerDocusaurusMeta = {
     name: 'docusaurus-meta',
     pre(node) {
-        //keep the raw source so the copy button can copy it
-        node.properties['data-code'] = this.source;
+        //the code for the copy button: the rendered text, so it doesn't include `[!code ...]` comments (which shiki already removed)
+        node.properties['data-code'] = toText(node);
 
         const meta = this.options.meta?.__raw ?? '';
         const title = /\btitle=(["'])(.*?)\1/.exec(meta)?.[2];

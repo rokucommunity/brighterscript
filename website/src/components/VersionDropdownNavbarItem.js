@@ -3,7 +3,7 @@
  *
  * Every version is its own separately built site (see scripts/site.mjs), so:
  *   - the version list is loaded at runtime from /brighterscript/versions.json (written by the host build). That way a version
- *     built from an old release tag still lists versions added after it.
+ *     built from an older commit still lists versions added after it.
  *   - the links are plain `<a>` tags (full page loads), pointing at the same page in the other version. If that page doesn't
  *     exist there, that version's 404 page sends you to its "not in this version" page (see src/theme/NotFound/Content),
  *     which keeps the sidebar, and goes straight to the page if it only moved.

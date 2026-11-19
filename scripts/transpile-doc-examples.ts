@@ -121,8 +121,8 @@ class DocCompiler {
 
         const lines = [] as string[];
 
-        //get the language from this code block
-        result.language = openingLine.trimLeft().replace('```', '').trim().toLowerCase();
+        //get the language from this code block (the first word, i.e. not options like `title="..."` or `{2,4}`)
+        result.language = openingLine.trimLeft().replace('```', '').trim().split(/\s+/)[0].toLowerCase();
 
         //find the rest of the source code block
         while (this.nextLine !== undefined && this.advance().includes('```') === false) {

@@ -2,7 +2,7 @@
  * Builds and runs the docs site.
  *
  *   node scripts/site.mjs start   dev server: this checkout's docs live (at /brighterscript/<this version>/), plus every other
- *                                 version built from its newest tag in the background (rebuilt on every start), and a
+ *                                 version built from its branch in the background (rebuilt on every start), and a
  *                                 search index that's rebuilt in the background as you edit
  *   node scripts/site.mjs build   the full site: every version in doc-versions.json, side by side, into website/build
  *   node scripts/site.mjs serve   serve that full build locally, like production
@@ -10,11 +10,11 @@
  * How the full build works:
  *   - Every version is its own independent Docusaurus site, built by that version's own checkout of the repo.
  *   - This checkout builds itself into build/<this version>/ by running its own `npm run build-docs` with the contract args below.
- *   - Every other version is cloned at its newest release tag (semver sorted, prereleases included, i.e. `v1` -> newest `v1.*` tag)
+ *   - Every other version is cloned at the newest commit of its branch (`branch` in doc-versions.json, i.e. `origin/v1`)
  *     into website/.versions/<name>/, and built there the exact same way (after `npm ci`), writing straight into build/<name>/.
  *   - Then the shared files are written: build/versions.json (read by the version dropdown), build/index.html (redirects to the
  *     current version) and build/404.html.
- *   - Any version that can't be built (no tag, or its tag doesn't have the docs site yet) fails the whole build.
+ *   - Any version that can't be built (no branch, or no docs/ folder) fails the whole build.
  *
  * The contract between the host and each version. This is ALL the host knows about a version, so a version is free to move
  * its site tooling, restructure it, or even switch site generators. From the version's repo root:
@@ -27,8 +27,8 @@
  *     --out-dir      where to write the built site (relative paths resolve from where you ran the command)
  *     --edit-branch  (optional) the branch for "Edit this page" links
  *
- *   The host only ever builds the newest tag of each version, so changing this contract means updating and releasing the
- *   active branches first (or teaching the host both contracts for a while).
+ *   The host builds each version from its branch, so changing this contract means updating the active branches first
+ *   (or teaching the host both contracts for a while).
  *
  * (Internally, this script hands those settings to docusaurus.config.js via the DOCS_BASE_URL / DOCS_EDIT_BRANCH env vars.
  * That's a private detail, not part of the contract.)
@@ -39,9 +39,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import zlib from 'node:zlib';
-import semver from 'semver';
 import { versions, localVersionName, localDocsDir, rootBaseUrl, siteUrl, repoDir, websiteDir } from '../versions.mjs';
-import { grammarPath } from '../code-highlighting.mjs';
+import { grammarPath, fallbackGrammarPath } from '../code-highlighting.mjs';
 import { syncSidebarFile, otherCategoryLabel } from '../sidebar.mjs';
 
 const buildDir = path.join(websiteDir, 'build');
@@ -104,7 +103,12 @@ function createLinkedSiteDir(siteDir) {
     for (const name of linkNames) {
         const linkPath = path.join(siteDir, name);
         if (fs.lstatSync(linkPath, { throwIfNoEntry: false })?.isSymbolicLink()) {
-            fs.rmdirSync(linkPath);
+            //(junctions on windows are removed like folders, symlinks everywhere else like files)
+            if (process.platform === 'win32') {
+                fs.rmdirSync(linkPath);
+            } else {
+                fs.unlinkSync(linkPath);
+            }
         }
     }
     fs.rmSync(siteDir, { recursive: true, force: true });
@@ -180,7 +184,7 @@ function keepSearchIndexUpToDate() {
 
 /**
  * Download the latest BrightScript TextMate grammar from the vscode extension, so code blocks are highlighted exactly like VS Code does.
- * Falls back to the previously downloaded copy when offline (except in CI, where we always want the latest)
+ * Falls back to the copy committed in website/grammars/ if the download fails
  */
 async function downloadGrammar() {
     const url = 'https://raw.githubusercontent.com/rokucommunity/vscode-brightscript-language/master/syntaxes/brightscript.tmLanguage.json';
@@ -196,10 +200,9 @@ async function downloadGrammar() {
         fs.writeFileSync(grammarPath, grammar);
         console.log(`[site] downloaded brightscript grammar from ${url}`);
     } catch (e) {
-        if (process.env.CI || !fs.existsSync(grammarPath)) {
-            throw new Error(`Failed to download the brightscript grammar from ${url}: ${e.message}`);
-        }
-        console.warn(`[site] WARNING: failed to download the brightscript grammar (${e.message}). Using the previously downloaded copy.`);
+        console.warn(`[site] WARNING: failed to download the brightscript grammar (${e.message}). Using the committed copy in ${path.relative(repoDir, fallbackGrammarPath)}`);
+        fs.mkdirSync(path.dirname(grammarPath), { recursive: true });
+        fs.copyFileSync(fallbackGrammarPath, grammarPath);
     }
 }
 
@@ -234,33 +237,37 @@ function syncSidebar() {
 }
 
 /**
- * Find the newest tag for a version like `v1` (i.e. the highest semver tag with major version 1)
+ * The newest commit of a version's branch: the remote's copy (i.e. `origin/v1`) if there is one, otherwise the local branch
  */
-function findLatestTag(versionName) {
-    const major = parseInt(versionName.replace(/^v/i, ''));
-    const tags = git(['tag', '--list', `v${major}.*`], { encoding: 'utf8' })
-        .split(/\r?\n/)
-        .filter(x => semver.valid(x) && semver.major(x) === major);
-    return semver.rsort(tags)[0];
+function findBranchCommit(version) {
+    for (const ref of [`origin/${version.branch}`, version.branch]) {
+        const result = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: repoDir, encoding: 'utf8' });
+        if (result.status === 0) {
+            return { ref: ref, commit: result.stdout.trim() };
+        }
+    }
 }
 
 /**
- * Build another version from its newest release tag, using that tag's own docs tooling
+ * Build another version from the newest commit of its branch, using that commit's own docs tooling
  */
 function buildOtherVersion(version, outDir) {
-    const tag = findLatestTag(version.name);
-    if (!tag) {
-        throw new Error(`No git tags found for docs version "${version.name}". If you're building locally, try running: git fetch --tags`);
+    const branch = findBranchCommit(version);
+    if (!branch) {
+        throw new Error(`Couldn't find branch "${version.branch}" for docs version "${version.name}". If you're building locally, try running: git fetch origin ${version.branch}`);
     }
-    console.log(`\n[site] ${version.name}: building from tag ${tag}`);
+    const source = `${branch.ref} (${branch.commit.substring(0, 8)})`;
+    console.log(`\n[site] ${version.name}: building from ${source}`);
 
     const cloneDir = path.join(websiteDir, '.versions', version.name);
     fs.rmSync(cloneDir, { recursive: true, force: true });
-    git(['-c', 'advice.detachedHead=false', 'clone', '--quiet', '--depth', '1', '--branch', tag, pathToFileURL(repoDir).href, cloneDir], { stdio: 'inherit' });
+    //(a local clone has every commit, including the remote branches, so check out the commit itself)
+    git(['clone', '--quiet', '--no-checkout', pathToFileURL(repoDir).href, cloneDir], { stdio: 'inherit' });
+    git(['-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', branch.commit], { cwd: cloneDir, stdio: 'inherit' });
 
     const scripts = JSON.parse(fs.readFileSync(path.join(cloneDir, 'package.json'), 'utf8')).scripts ?? {};
     if (!scripts['build-docs']) {
-        buildVersionWithOurTooling(version, tag, cloneDir, outDir);
+        buildVersionWithOurTooling(version, source, cloneDir, outDir);
         return;
     }
 
@@ -269,17 +276,17 @@ function buildOtherVersion(version, outDir) {
 }
 
 /**
- * Fallback for releases from before the docs site existed (no `build-docs` script): build that release's docs/ markdown
- * with THIS checkout's site tooling. Once a version ships its own `build-docs`, it's built with that instead.
+ * Fallback for branches that don't have the docs site yet (no `build-docs` script): build that branch's docs/ markdown
+ * with THIS checkout's site tooling. Once a version's branch has its own `build-docs`, it's built with that instead.
  */
-function buildVersionWithOurTooling(version, tag, cloneDir, outDir) {
+function buildVersionWithOurTooling(version, source, cloneDir, outDir) {
     const docsDir = path.join(cloneDir, 'docs');
     if (!fs.existsSync(docsDir)) {
-        throw new Error(`Tag ${tag} (docs version "${version.name}") has no docs/ folder to build`);
+        throw new Error(`${source} (docs version "${version.name}") has no docs/ folder to build`);
     }
-    console.warn(`[site] WARNING: tag ${tag} doesn't have the docs site yet (no "build-docs" npm script), so building its docs/ folder with this checkout's tooling instead`);
+    console.warn(`[site] WARNING: ${source} doesn't have the docs site yet (no "build-docs" npm script), so building its docs/ folder with this checkout's tooling instead`);
 
-    //skips transpile-doc-examples on purpose: that release's examples were already transpiled by its own compiler.
+    //skips transpile-doc-examples on purpose: that branch's examples are transpiled by its own compiler.
     //Builds from a linked site folder, so it doesn't share .docusaurus/ with a running dev server (or the host's own build)
     const siteDir = createLinkedSiteDir(path.join(websiteDir, '.versions', `${version.name}-site`));
     docusaurus(docusaurusBuildArgs(siteDir, outDir), {
@@ -287,11 +294,11 @@ function buildVersionWithOurTooling(version, tag, cloneDir, outDir) {
         DOCS_EDIT_BRANCH: version.branch,
         DOCS_VERSION_NAME: version.name,
         DOCS_DIR: docsDir,
-        //a release's docs can't be fixed anymore, so broken links there only warn
+        //that branch's links are checked by its own docs build once it has one, so broken links only warn here
         DOCS_STRICT_LINKS: 'false'
     });
     if (!fs.existsSync(path.join(outDir, 'index.html'))) {
-        throw new Error(`Building docs version "${version.name}" from tag ${tag} didn't write a site to ${outDir}`);
+        throw new Error(`Building docs version "${version.name}" from ${source} didn't write a site to ${outDir}`);
     }
 }
 
@@ -442,7 +449,7 @@ function writeBuildingPlaceholder(version, dir) {
 }
 
 /**
- * For the dev server: build every OTHER version (from its newest tag, same as the full build) in the background, one at a
+ * For the dev server: build every OTHER version (from its branch, same as the full build) in the background, one at a
  * time, so the dev server starts right away. Until a version is ready, it shows a "still building" page that opens the
  * real page when it's done. Rebuilt on every start, so they're never stale. A version that can't be built only warns.
  */
@@ -551,7 +558,7 @@ try {
     } else if (command === 'build') {
         await build(rest);
     } else if (command === 'build-version') {
-        //(internal, for the dev server's background builds) build one other version from its newest tag into a folder
+        //(internal, for the dev server's background builds) build one other version from its branch into a folder
         const [name, outDir] = rest;
         buildOtherVersion(versions.find(x => x.name === name), outDir);
     } else if (command === 'serve') {
