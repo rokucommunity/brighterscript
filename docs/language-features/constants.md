@@ -11,12 +11,17 @@ sub main()
     print GREETING_MESSAGE
 end sub
 ```
-transpiles to
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```BrightScript
 sub main()
     print "Hello world"
 end sub
 ```
+
+</details>
 
 ## Namespaced Consts
 Consts can be defined within namespaces, and accessed like a property.
@@ -34,7 +39,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 sub networking_printBaseUrl()
@@ -46,6 +52,8 @@ sub main()
     print "https://your-app.com/api/v1"
 end sub
 ```
+
+</details>
 
 ## Complex objects
 Constants can contain complex objects or arrays as well, but keep in mind that these are inlined at compile-time, so it is not recommended to reach into these objects for specific values all the time.
@@ -106,7 +114,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
 sub main()
@@ -114,3 +123,5 @@ sub main()
     print ((bslib_toString("https://api.domain.com") + "/some/error"))
 end sub
 ```
+
+</details>

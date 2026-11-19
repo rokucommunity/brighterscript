@@ -12,7 +12,9 @@ function Init()
 end function
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 **pkg:/components/Widget.brs**
 ```BrightScript
 'import "pkg:/source/lib.bs"
@@ -33,3 +35,5 @@ end function
   <script uri="pkg:/source/lib.brs" />
 </component>
 ```
+
+</details>

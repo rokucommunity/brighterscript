@@ -10,10 +10,14 @@ Which leads us to the callfunc operator in BrighterScript. This is denoted by an
 node@.someMethod(1,2,3)
 ```
 
-Gets transpiled to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```BrightScript
 node.callfunc("someMethod", 1, 2, 3)
 ```
+
+</details>
 
 ## Callfunc evaluation with no arguments
 It is a well-known issue in BrightScript development that calling `callfunc` without at least one parameter has the potential to result in the function not being called at all. So to mitigate this issue, BrighterScript will automatically insert `invalid` as the first argument if you use the callfunc operator with no parameters.
@@ -24,9 +28,13 @@ For example, this:
 node@.doSomething()
 ```
 
-will be transpiled into this:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```brightscript
 node.callfunc("doSomething", invalid)
 ```
+
+</details>
 
 It is the developer's responsibility to ensure that the target function has at least one parameter, and that the type is dynamic, otherwise a type mismatch runtime error will occur.

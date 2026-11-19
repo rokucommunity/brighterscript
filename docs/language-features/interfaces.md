@@ -15,13 +15,16 @@ sub test(bob as Person)
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 sub test(bob as object)
     print bob.name, bob.getName()
 end sub
 ```
+
+</details>
 
 ## Use in functions
 Interfaces can be used as function parameter types and return types. These types will be converted into `dynamic` when the project is transpiled.
@@ -64,13 +67,16 @@ sub test(bob as humanoids.Person)
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 sub test(bob as object)
     print bob.name, bob.getName()
 end sub
 ```
+
+</details>
 
 ## Advanced types
 Interface member types can be defined as any valid BrighterScript type, and even reference themselves.

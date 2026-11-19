@@ -206,6 +206,10 @@ const config = {
     themeConfig:
         /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
         ({
+            //for search engines and link previews (i.e. Slack). Each doc page also gets its own description from its first paragraph
+            metadata: [
+                { name: 'description', content: 'Documentation for BrighterScript, a superset of Roku\'s BrightScript language that compiles to standard BrightScript.' }
+            ],
             colorMode: {
                 defaultMode: 'light',
                 respectPrefersColorScheme: true

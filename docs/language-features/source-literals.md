@@ -11,11 +11,14 @@ The absolute path to the source file, including a leading `file:/` scheme indica
 print SOURCE_FILE_PATH
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
-```vb
+```brightscript
 print "file" + ":///C:/projects/RokuApp/source/main.bs"
 ```
+
+</details>
 
 _note: the literal is concatenated to keep the roku static analysis tool happy_
 
@@ -27,12 +30,15 @@ The 1-based line number of the source file.
 print SOURCE_LINE_NUM 'I am line 2
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 'I am line 1
 print 2 'I am line 2
 ```
+
+</details>
 
 ## FUNCTION_NAME
 ### Basic
@@ -43,13 +49,16 @@ function RunFromZombie()
 end function
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function RunFromZombie()
     print "RunFromZombie"
 end function
 ```
+
+</details>
 
 ### Namespaced
 if the function is contained in a namespace, that name will be included in the function name
@@ -61,13 +70,17 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function Human_Versus_Zombie_RunFromZombie()
     print "Human_Versus_Zombie_RunFromZombie"
 end function
 ```
+
+</details>
+
 ### Anonymous Functions
 For anonymous functions, FUNCTION_NAME will include the enclosing function name, followed by `anon` and the index of the function in its parent. If there are multiple nested anonymous functions, each level will have its own `anon[index]` in the name. Function indexes start at 0 within each enclosing function.
 
@@ -94,7 +107,8 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function main()
@@ -116,6 +130,8 @@ function Human_Versus_Zombie_Eat()
 end function
 ```
 
+</details>
+
 ## SOURCE_FUNCTION_NAME
 This works the same as FUNCTION_NAME except that it will use a dot in namespace names instead of the transpiled underscores.
 
@@ -131,7 +147,8 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function Human_Versus_Zombie_Eat()
@@ -141,6 +158,8 @@ function Human_Versus_Zombie_Eat()
     end function
 end function
 ```
+
+</details>
 
 ## SOURCE_NAMESPACE_NAME
 
@@ -156,13 +175,16 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function Human_Versus_Zombie_Eat()
     print "Human.Versus.Zombie"
 end function
 ```
+
+</details>
 
 ## SOURCE_NAMESPACE_ROOT_NAME
 
@@ -178,13 +200,16 @@ namespace Human.Versus.Zombie
 end namespace
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function Human_Versus_Zombie_Eat()
     print "Human"
 end function
 ```
+
+</details>
 
 ## SOURCE_LOCATION
 A combination of SOURCE_FILE_PATH and SOURCE_LINE_NUM.
@@ -195,13 +220,16 @@ function main()
 end function
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
-```vb
+```brightscript
 function main()
     print "file" + ":///C:/projects/RokuApp/source/main.bs:2"
 end function
 ```
+
+</details>
 
 _note: the literal is concatenated to keep the roku static analysis tool happy_
 
@@ -215,7 +243,8 @@ function main()
 end function
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function main()
@@ -223,14 +252,19 @@ function main()
 end function
 ```
 
+</details>
+
 ## PKG_LOCATION
 A combination of PKG_PATH and LINE_NUM. Keep in mind, LINE_NUM is a runtime variable provided by Roku.
 ```BrighterScript
 print PKG_LOCATION
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 print "pkg:/source/main.brs:" + str(LINE_NUM)
 ```
+
+</details>

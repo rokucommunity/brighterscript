@@ -13,7 +13,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 function Vertebrates_Birds_GetDucks()
@@ -23,6 +24,8 @@ sub main()
     Vertebrates_Birds_GetDucks()
 end sub
 ```
+
+</details>
 
 As you can see, behind the scenes, BrighterScript will convert all periods found within namespace names into underscores so that it will be compatible with regular BrightScript.
 

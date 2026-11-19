@@ -6,11 +6,14 @@ You can create a regular expression literal in BrighterScript. This simplifies p
 print /hello world/ig
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 print CreateObject("roRegex", "hello world", "ig")
 ```
+
+</details>
 
 ## Considerations
 ### Escape the forward slash character
@@ -21,7 +24,11 @@ Example:
 print /hello\/world/
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```brightscript
 print CreateObject("roRegex", "hello\/world", "")
 ```
+
+</details>

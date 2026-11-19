@@ -6,10 +6,14 @@ The null-coalescing operator (`??`) evaluates and returns the value of the left-
 value = someVariable ?? someDefault
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```brightscript
 value = bslib_coalesce(someVariable, someDefault)
 ```
+
+</details>
 
 ## Scope protection
 Sometimes BrighterScript will need to protect against unintended performance issues.
@@ -21,10 +25,15 @@ In this situation, BrighterScript has determined that both the consequent and th
 ```brighterscript
 userId = createdUserId ?? -1
 ```
-transpiles to:
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```brightscript
 userId = bslib_coalesce(createdUserId, -1)
 ```
+
+</details>
 
 ## Scope capturing
 In this situation, BrighterScript has detected that your null-coalescing expression could have have side-effects or could result in a rendezvous. BrighterScript will create an immediately-invoked-function-expression to capture all of the referenced local variables. This is in order to only execute the consequent if the condition is true, and only execute the alternate if the condition is false.
@@ -34,7 +43,9 @@ The consequent is guaranteed to be evaluated exactly once, so you can be confide
 ```brighterscript
 name = userA.name ?? userB.name
 ```
-transpiles to:
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
 name = (function(userA, userB)
@@ -47,12 +58,17 @@ name = (function(userA, userB)
     end function)(userA, userB)
 ```
 
+</details>
+
 ### Nested scope protection
 The scope protection works for multiple levels as well
 ```brighterscript
 user = getUser(userId ?? globalSettings.defaultUserId) ?? getDefaultUser()
 ```
-transpiles to:
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```brightscript
 user = (function(getDefaultUser, getUser, globalSettings, userId)
         __bsConsequent = getUser((function(globalSettings, userId)
@@ -70,6 +86,8 @@ user = (function(getDefaultUser, getUser, globalSettings, userId)
         end if
     end function)(getDefaultUser, getUser, globalSettings, userId)
 ```
+
+</details>
 
 ## Library functions
 The following bslib library functions are called in the transpiled code

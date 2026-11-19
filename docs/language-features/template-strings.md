@@ -14,13 +14,18 @@ second line text`
 
 text = tag`hello ${name} how are you`
 ```
-transpiles to
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```BrightScript
 name = "John Smith"
 text = ("hello " + bslib_toString(name))
 text = ("first line text" + chr(10) + "second line text")
 text = tag(["hello ", " how are you"], [name])
 ```
+
+</details>
 
 ## Description
 Template strings begin and end with the backtick ( ` )  character instead of double quotes.
@@ -36,11 +41,14 @@ line2
 `
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 text = ("line1" + chr(10) + "line2" + chr(10))
 ```
+
+</details>
 
 You can also use escape characters in your text. For example, `\n` for unix-style line endings and `\r\n` for windows-style line endings.
 ```BrighterScript
@@ -101,10 +109,15 @@ Quotemarks found within template strings will be transpiled to `chr(34)` calls.
 ```BrighterScript
 stringWithQuotes = `hello "John"`
 ```
-transpiles to
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
 ```BrightScript
 stringWithQuotes = ("hello " + chr(34) + "John" + chr(34))
 ```
+
+</details>
 
 
 ## Tagged Template Strings

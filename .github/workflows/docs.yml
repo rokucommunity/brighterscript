@@ -1,62 +1,31 @@
+#builds every docs version and deploys the site to GitHub Pages
 name: docs
 on:
-  #deploy after every release, from any version's branch (master, v1, ...). GitHub always runs `workflow_run` from the default
-  #branch's copy of this file, so a v1 release rebuilds the whole site from master too, and this file can be the same on every branch.
-  #(a tag trigger wouldn't work: the release tags are pushed with GITHUB_TOKEN, which doesn't trigger other workflows)
+  push:
+    branches:
+      - master
+  #after a release of any version (a `release` trigger wouldn't fire, since releases are created by the workflow's GITHUB_TOKEN)
   workflow_run:
     workflows: ['Publish Release']
     types: [completed]
-  #build only, as a check
-  pull_request:
-    paths:
-      - 'docs/**'
-      - 'website/**'
-      - '.github/workflows/docs.yml'
-  #deploy by hand (from master)
   workflow_dispatch:
-  #TEMPORARY: deploy every push to the docs PR, to test publishing. Remove before merging
-  push:
-    branches:
-      - docs-website
-
-permissions:
-  contents: read
 
 jobs:
-  #"Publish Release" also runs when a release PR is closed without merging (to clean it up), so only deploy for real releases:
-  #a merged release PR, or a release published by hand
-  release-check:
-    if: github.event_name == 'workflow_run'
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: read
-    outputs:
-      released: ${{ steps.check.outputs.released }}
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          RUN_EVENT: ${{ github.event.workflow_run.event }}
-          BRANCH: ${{ github.event.workflow_run.head_branch }}
-        run: |
-          released=false
-          if [ "$CONCLUSION" = "success" ]; then
-            if [ "$RUN_EVENT" = "workflow_dispatch" ]; then
-              released=true
-            elif [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state merged --json number --jq length)" != "0" ]; then
-              released=true
-            fi
-          fi
-          echo "released=$released" >> "$GITHUB_OUTPUT"
-
-  build:
-    needs: release-check
-    #(release-check is skipped for everything but releases, hence the !cancelled())
-    if: ${{ !cancelled() && (github.event_name != 'workflow_run' || needs.release-check.outputs.released == 'true') }}
-    runs-on: ubuntu-latest
-    steps:
-      #full history + tags, so website/scripts/site.mjs can find (and clone) the newest release tag for each docs version
+      #full history and tags, to build each version from its newest release tag
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -70,33 +39,16 @@ jobs:
             package-lock.json
             website/package-lock.json
 
-      #the root deps are needed to transpile the doc examples
       - run: npm ci
 
-      #builds every version in website/doc-versions.json into website/build
+      - run: npm ci
+        working-directory: website
+
       - run: npm run build-docs
 
       - uses: actions/upload-pages-artifact@v5
-        if: github.event_name != 'pull_request'
         with:
           path: website/build
 
-  deploy:
-    #TEMPORARY: docs-website is allowed too, to test publishing. Remove before merging
-    #(build's own dependency, release-check, is skipped for everything but releases, and a skipped job anywhere upstream
-    #skips this one too unless the condition says otherwise, hence the explicit check on build's result)
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/docs-website') }}
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - id: deployment
         uses: actions/deploy-pages@v5

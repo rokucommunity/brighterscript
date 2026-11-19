@@ -45,7 +45,9 @@ end function
 function main()
 end
 ```
-transpiles to
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
 sub __MyComp_method_new()
@@ -67,6 +69,8 @@ end function
 function main()
 end
 ```
+
+</details>
 
 Notice the annotations were completely removed (because annotations are not available at runtime).
 

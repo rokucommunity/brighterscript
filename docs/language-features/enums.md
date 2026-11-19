@@ -22,7 +22,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 sub main()
@@ -32,6 +33,8 @@ sub main()
     print 3
 end sub
 ```
+
+</details>
 
 Notice how the enum completely disappears from the output code? That's because enums only exist at compile-time. At runtime, their literal values are injected into their reference locations.
 
@@ -52,7 +55,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 sub main()
@@ -62,6 +66,8 @@ sub main()
     print 11
 end sub
 ```
+
+</details>
 
 In this scenario, `Direction.down` is given the next whole number after its previous member. Same with `Direction.right`.
 
@@ -83,7 +89,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 sub main()
@@ -93,6 +100,8 @@ sub main()
     print "right"
 end sub
 ```
+
+</details>
 
 ## Hex Integer enums
 Since hex integers are treated as normal integers at runtime, you can mix and match hex integers and regular integers in enums. The numeric value of a hex integer will be considered when incrementing the next enum member value as well.
@@ -109,7 +118,8 @@ sub main()
 end sub
 ```
 
-transpiles to
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
 sub main()
@@ -118,6 +128,9 @@ sub main()
     print 256
 end sub
 ```
+
+</details>
+
 Notice how `Colors.moreRed` is one number higher than the 255 used in `Colors.red`?
 
 ## Other enum types

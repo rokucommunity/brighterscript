@@ -13,7 +13,8 @@ Here's an example:
 authStatus = user2 <> invalid ? "logged in" : "not logged in"
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 if user2 <> invalid then
@@ -23,6 +24,8 @@ else
 end if
 ```
 
+</details>
+
 As you can see, when used in the right-hand-side of an assignment, BrighterScript transpiles the ternary expression into a simple `if else` block.
 The `bslib_ternary` function checks the condition, and returns either the consequent or alternate. In these optimal situations, BrighterScript can generate the most efficient code possible which is equivalent to what you'd write yourself without access to the ternary expression.
 
@@ -31,7 +34,8 @@ This also works for nested ternary expressions:
 result = true ? (true ? "one" : "two") : "three"
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 if true then
@@ -45,6 +49,8 @@ else
 end if
 ```
 
+</details>
+
 ## Use in complex expressions
 Ternary can also be used in any location where expressions are supported, such as function calls or within array or associative array declarations. In some  situations it's much more difficult to convert the ternary expression into an `if else` statement, so we need to leverage the BrighterScript `bslib_ternary` library function instead. Consider the following example:
 
@@ -52,11 +58,14 @@ Ternary can also be used in any location where expressions are supported, such a
  printAuthStatus(user2 <> invalid ? "logged in" : "not logged in")
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 printAuthStatus(bslib_ternary(user2 <> invalid, "logged in", "not logged in"))
 ```
+
+</details>
 
 The `bslib_ternary` function checks the condition, and returns either the consequent or alternate.
 
@@ -96,7 +105,8 @@ In this situation, BrighterScript can safely convert the ternary expression into
 m.username = m.user <> invalid ? m.user.name : invalid
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 if m.user <> invalid then
@@ -106,6 +116,8 @@ else
 end if
 ```
 
+</details>
+
 ### BrighterScript `bslib_ternary` library function
 In this situation, BrighterScript has determined that both the consequent and the alternate are side-effect free and will not cause rendezvous or cloning, but the code was too complex to safely transpile to an `if else` block so we will leverage the `bslib_ternary` function instead.
 
@@ -113,11 +125,14 @@ In this situation, BrighterScript has determined that both the consequent and th
 printAuthStatus(user = invalid ? "not logged in" : "logged in")
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 printAuthStatus(bslib_ternary(user = invalid, "not logged in", "logged in"))
 ```
+
+</details>
 
 
 ### Scope capturing
@@ -127,7 +142,8 @@ In this situation, BrighterScript has detected that your ternary operation will 
   printUsername(user = invalid ? "no name" : user.name)
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 printUsername((function(__bsCondition, user)
@@ -139,11 +155,14 @@ printUsername((function(__bsCondition, user)
     end function)(user = invalid, user))
 ```
 
+</details>
+
 ```BrighterScript
 printMessage(user = invalid ? getNoNameMessage(m.config) : user.name + m.accountType)
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 printMessage((function(__bsCondition, getNoNameMessage, m, user)
@@ -154,6 +173,8 @@ printMessage((function(__bsCondition, getNoNameMessage, m, user)
         end if
     end function)(user = invalid, getNoNameMessage, m, user))
 ```
+
+</details>
 
 ### Nested Scope Protection
 The scope protection works for multiple levels as well
@@ -166,7 +187,8 @@ end function
 printResult((m.increment() = 1 ? m.increment() : -1) = -1 ? m.increment(): -1)
 ```
 
-transpiles to:
+<details>
+  <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
 m.count = 1
@@ -188,6 +210,8 @@ printResult((function(__bsCondition, m)
             end if
         end function)(m.increment() = 1, m)) = -1, m))
 ```
+
+</details>
 
 
 ## Library functions

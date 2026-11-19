@@ -333,6 +333,21 @@ function writeSharedFiles(siteRootDir, options = { include404: true }) {
         fs.copyFileSync(path.join(siteRootDir, current.name, '404.html'), path.join(siteRootDir, '404.html'));
     }
 
+    //one sitemap that lists every version's own sitemap.xml, to submit to search engines (i.e. Google Search Console).
+    //(a robots.txt can't point at it: crawlers only read robots.txt at the domain root, which this site doesn't own)
+    const sitemaps = versions
+        .filter(x => fs.existsSync(path.join(siteRootDir, x.name, 'sitemap.xml')))
+        .map(x => `    <sitemap><loc>${siteUrl}${rootBaseUrl}${x.name}/sitemap.xml</loc></sitemap>`);
+    if (sitemaps.length > 0) {
+        fs.writeFileSync(path.join(siteRootDir, 'sitemap.xml'), [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+            ...sitemaps,
+            '</sitemapindex>',
+            ''
+        ].join('\n'));
+    }
+
     //`/latest/<page>` redirects to that page in the current version, for links that should always show the newest docs
     //(i.e. the README). Search engines are pointed at the versioned page (canonical), so `latest` never shows up in results.
     //Missing `latest` pages are handled by the 404 page (src/theme/NotFound/Content)
