@@ -80,6 +80,7 @@ BrighterScript adds several new features to the BrightScript language such as na
   - Configure the language server behavior using [language server settings](https://github.com/rokucommunity/brighterscript/blob/master/docs/language-server.md).
 
   - And if it's not enough, the [plugin API](https://github.com/rokucommunity/brighterscript/blob/master/docs/plugins.md) allows extending the compiler to provide extra diagnostics or transformations.
+  - Building a [Roku RSG SDK](https://gitlab.com/rokudev/rsg-sdk) app? [`withBrighterScript`](https://github.com/rokucommunity/brighterscript/blob/v1/docs/roku-sdk.md) compiles BrighterScript in its static `pkg/` folder during `rk build` and `rk dev`.
 
 ## Who uses Brighterscript?
 <br/>
