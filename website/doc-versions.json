@@ -1,0 +1,13 @@
+[
+    {
+        "name": "v0",
+        "label": "v0",
+        "branch": "master",
+        "current": true
+    },
+    {
+        "name": "v1",
+        "label": "v1 (alpha)",
+        "branch": "v1"
+    }
+]
