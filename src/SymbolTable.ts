@@ -755,10 +755,12 @@ export class SymbolTable implements SymbolTypeGetter {
             return this.pocketTables;
         }
         const pocketTablesBetweenAssignmentAndPosition = this.pocketTables.filter(pt => {
-            const isBeforePosition = options.statementIndex === 'end' ? true : options.statementIndex > pt.index;
+            //read once: `index` is a getter that tracks the current AST
+            const pocketIndex = pt.index;
+            const isBeforePosition = options.statementIndex === 'end' ? true : options.statementIndex > pocketIndex;
             let isAfterPrecedingAssignment = true;
             if (Number.isInteger(precedingAssignmentIndex)) {
-                isAfterPrecedingAssignment = precedingAssignmentIndex < pt.index;
+                isAfterPrecedingAssignment = precedingAssignmentIndex < pocketIndex;
             }
             return isAfterPrecedingAssignment && isBeforePosition;
         });
@@ -835,9 +837,10 @@ export interface TypeCacheEntry {
 export interface PocketTable {
     table: SymbolTable;
     /**
-     * The index of the statement that contains this table within its parent block
+     * The index of the statement that contains this table within its parent block.
+     * Should reflect the current AST (not a snapshot), since AST edits can shift statements after linking
      */
-    index: number;
+    readonly index: number;
     /**
      * Will the code this pocket table represents always be executed?
      * Eg. Conditional Compile blocks will always be executed because only valid #if blocks are validated

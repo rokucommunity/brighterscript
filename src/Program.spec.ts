@@ -10,7 +10,8 @@ import type { BscFile } from './files/BscFile';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
-import type { FunctionStatement, PrintStatement } from './parser/Statement';
+import type { Block, FunctionStatement, PrintStatement } from './parser/Statement';
+import { Parser } from './parser/Parser';
 import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
@@ -2525,6 +2526,64 @@ describe('Program', () => {
 
             //our literalExpression should have been restored to its original value
             expect(literalExpression!.tokens.value.text).to.eql('"hello world"');
+        });
+
+        it('keeps resolving locals over namespace members when a plugin inserts statements after validation', async () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                namespace user.settings
+                    sub save()
+                    end sub
+                end namespace
+                namespace guide
+                    function isWanted() as boolean
+                        return true
+                    end function
+                    function evictions(held as object, wanted as object, cap as integer) as object
+                        excess = held.count() - cap
+                        if excess <= 0 then return []
+                        isWanted = {}
+                        for each block in wanted
+                            isWanted[block.toStr()] = true
+                        end for
+                        offset = 0
+                        user = m.global.user
+                        if user <> invalid then offset = user.settings.offset
+                        return isWanted
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //insert a statement before every statement in every block (like a code coverage plugin would)
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforePrepareFile: (event) => {
+                    if (event.file !== file) {
+                        return;
+                    }
+                    const blocks: Block[] = [];
+                    file.ast.walk(createVisitor({
+                        Block: (block) => {
+                            blocks.push(block);
+                        }
+                    }), {
+                        walkMode: WalkMode.visitAllRecursive
+                    });
+                    for (const block of blocks) {
+                        for (let i = block.statements.length - 1; i >= 0; i--) {
+                            event.editor.addToArray(block.statements, i, Parser.parse('print "hit"').ast.statements[0]);
+                        }
+                    }
+                }
+            });
+            await program.build({
+                outDir: outDir
+            });
+            const output = fsExtra.readFileSync(`${outDir}/source/main.brs`).toString();
+            expect(output).to.include('isWanted[block.toStr()] = true');
+            expect(output).to.include('offset = user.settings.offset');
+            expect(output).not.to.include('guide_isWanted[');
+            expect(output).not.to.include('user_settings_offset');
         });
 
         it('handles Editor for beforeBuildProgram', async () => {
