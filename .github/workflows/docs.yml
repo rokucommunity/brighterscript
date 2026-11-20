@@ -1,0 +1,64 @@
+#builds every docs version and deploys the site to GitHub Pages
+name: docs
+on:
+  push:
+    branches:
+      - master
+      #every version's branch (v1, v2, ...)
+      - 'v[0-9]+'
+  workflow_dispatch:
+
+jobs:
+  #a push to another version's branch (or a manual run from one) runs this workflow on master instead,
+  #so the site is always built and deployed by master's copy of this workflow
+  run-on-master:
+    if: github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH"
+
+  deploy:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      #full history, to build each version from its own branch
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            website/package-lock.json
+
+      - run: npm ci
+
+      - run: npm ci
+        working-directory: website
+
+      - run: npm run build-docs
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/build
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,481 @@
+/**
+ * BrighterScript theme, layered on top of Docusaurus' default (Infima) theme.
+ *
+ * Brand color: the blue of the BrighterScript file icon in the editor (the same as TypeScript's), modeled after the
+ * TypeScript docs. A subtle blue gradient is used sparingly as an accent stripe.
+ */
+/* code font, same as the TypeScript docs. The text font (Segoe UI) is proprietary, so we use it via the system font stack */
+@import '@fontsource/cascadia-mono/400.css';
+@import '@fontsource/cascadia-mono/600.css';
+/* navbar wordmark: Open Sans is by Segoe UI's designer and is a near match for the TypeScript wordmark */
+@import '@fontsource/open-sans/600.css';
+
+:root {
+    /* the same blue as the BrighterScript file icon in the editor (and TypeScript's brand blue) */
+    --bs-blue: #3178c6;
+    --bs-blue-deep: #235a97;
+    --bs-gradient: linear-gradient(90deg, #235a97 0%, #3178c6 50%, #5fa8ee 100%);
+
+    --ifm-color-primary: #3178c6;
+    --ifm-color-primary-dark: #2c6cb2;
+    --ifm-color-primary-darker: #2a66a8;
+    --ifm-color-primary-darkest: #22548b;
+    --ifm-color-primary-light: #3f85d1;
+    --ifm-color-primary-lighter: #4a8cd4;
+    --ifm-color-primary-lightest: #6aa0dc;
+
+    --ifm-background-color: #fdfdfd;
+    --ifm-font-color-base: #292929;
+
+    /* modeled after https://www.typescriptlang.org/docs/ */
+    --ifm-font-family-base: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+    --ifm-heading-font-family: var(--ifm-font-family-base);
+    --ifm-font-family-monospace: 'Cascadia Mono', Menlo, Monaco, Consolas, monospace;
+    --ifm-heading-font-weight: 600;
+    --ifm-code-font-size: 88%;
+    --ifm-code-border-radius: 0.4rem;
+    --ifm-global-radius: 0.5rem;
+
+    --ifm-navbar-height: 3rem;
+    --ifm-navbar-link-hover-color: #fff;
+    --ifm-footer-background-color: #102a43;
+
+    --docusaurus-highlighted-code-line-bg: rgba(49, 120, 198, 0.1);
+}
+
+[data-theme='dark'] {
+    --ifm-color-primary: #5fa8ee;
+    --ifm-color-primary-dark: #4799eb;
+    --ifm-color-primary-darker: #3b92e9;
+    --ifm-color-primary-darkest: #187dd9;
+    --ifm-color-primary-light: #77b6f1;
+    --ifm-color-primary-lighter: #83bcf2;
+    --ifm-color-primary-lightest: #a7cff6;
+
+    --ifm-background-color: #161e27;
+    --ifm-background-surface-color: #111820;
+    --ifm-font-color-base: #e6e8eb;
+
+    --ifm-footer-background-color: #0d1117;
+
+    --docusaurus-highlighted-code-line-bg: rgba(95, 168, 238, 0.15);
+}
+
+/* ---------- Navbar: solid brand bar ---------- */
+/* `.navbar--dark` sets its own background, so the brand color has to be applied here */
+.navbar--dark {
+    --ifm-navbar-background-color: var(--bs-blue);
+    /* Infima's dark navbar uses an off-white (gray-100); use pure white against the blue */
+    --ifm-navbar-link-color: #fff;
+}
+
+[data-theme='dark'] .navbar--dark {
+    --ifm-navbar-background-color: var(--bs-blue-deep);
+}
+
+/* a slim, solid bar like the TypeScript docs, so it doesn't eat vertical space */
+.navbar {
+    box-shadow: none;
+    --ifm-navbar-padding-vertical: 0.25rem;
+}
+
+/* like the TypeScript wordmark: semibold, caps a bit shorter than the logo square */
+.navbar__title {
+    font-family: 'Open Sans', var(--ifm-heading-font-family);
+    font-size: 1.6rem;
+    font-weight: 600;
+    line-height: normal;
+}
+
+.navbar__logo {
+    height: 1.6rem;
+    margin-right: 0.6rem;
+}
+
+.navbar--dark .navbar__link--active {
+    color: #fff;
+    box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.85);
+}
+
+/* ---------- Typography ---------- */
+h1 {
+    font-size: 2.4rem;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+}
+
+h2,
+h3 {
+    letter-spacing: -0.01em;
+}
+
+.markdown h2 {
+    margin-top: 2.5rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+/* ---------- Code ---------- */
+code {
+    border: none;
+}
+
+.theme-code-block {
+    border: 1px solid var(--ifm-color-emphasis-200);
+    box-shadow: none;
+}
+
+/* code blocks highlighted by shiki (see code-highlighting.mjs and src/components/ShikiCodeBlock.js) */
+.shiki-code-block {
+    margin-bottom: var(--ifm-leading);
+}
+
+.shiki-code-block pre {
+    margin: 0;
+    padding: var(--ifm-pre-padding);
+    border: 1px solid var(--ifm-color-emphasis-200);
+    border-radius: var(--ifm-code-border-radius);
+    font-size: var(--ifm-code-font-size);
+    line-height: var(--ifm-pre-line-height);
+}
+
+.shiki-code-block pre code {
+    padding: 0;
+    background: none;
+    font-size: inherit;
+}
+
+.shiki-code-block__body {
+    position: relative;
+}
+
+/* title="..." */
+.shiki-code-block__title {
+    padding: 0.5rem var(--ifm-pre-padding);
+    border: 1px solid var(--ifm-color-emphasis-200);
+    border-bottom: none;
+    border-radius: var(--ifm-code-border-radius) var(--ifm-code-border-radius) 0 0;
+    background: var(--ifm-color-emphasis-100);
+    font-family: var(--ifm-font-family-monospace);
+    font-size: var(--ifm-code-font-size);
+    font-weight: 600;
+}
+
+.shiki-code-block--titled pre {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* highlighted lines ({2,4-6} or a `[!code highlight]` comment) stretch the full width of the block */
+.shiki .line.highlighted {
+    display: inline-block;
+    width: calc(100% + 2 * var(--ifm-pre-padding));
+    margin: 0 calc(-1 * var(--ifm-pre-padding));
+    padding: 0 var(--ifm-pre-padding);
+    background-color: var(--docusaurus-highlighted-code-line-bg) !important;
+    box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+}
+
+/* showLineNumbers */
+.shiki.line-numbers code {
+    counter-reset: line;
+}
+
+.shiki.line-numbers .line::before {
+    counter-increment: line;
+    content: counter(line);
+    display: inline-block;
+    width: 1.5rem;
+    margin-right: 1.25rem;
+    text-align: right;
+    color: var(--ifm-color-emphasis-500) !important;
+    user-select: none;
+}
+
+/* dark mode uses the `--shiki-dark*` colors shiki puts on every token */
+[data-theme='dark'] .shiki,
+[data-theme='dark'] .shiki span {
+    color: var(--shiki-dark) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+}
+
+/* only the block itself gets the background. css variables inherit, so applying it to spans too would paint over line highlights */
+[data-theme='dark'] .shiki {
+    background-color: var(--shiki-dark-bg) !important;
+}
+
+.shiki-code-block__copy {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    padding: 0.4rem;
+    border: 1px solid var(--ifm-color-emphasis-300);
+    border-radius: var(--ifm-global-radius);
+    background: var(--ifm-background-color);
+    color: var(--ifm-color-emphasis-700);
+    opacity: 0;
+    transition: opacity 150ms;
+}
+
+.shiki-code-block:hover .shiki-code-block__copy,
+.shiki-code-block__copy:focus-visible {
+    opacity: 1;
+}
+
+.shiki-code-block__copy svg {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+/* ---------- Sidebar ---------- */
+.theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
+    font-family: var(--ifm-heading-font-family);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ifm-color-emphasis-600);
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+    border-radius: 0 var(--ifm-global-radius) var(--ifm-global-radius) 0;
+}
+
+/* the "not in this version" page is shown on the home page's url, so don't highlight the home page as the current one */
+html.docs-missing-page .theme-doc-sidebar-menu .menu__link--active:not(.menu__link--sublist) {
+    font-weight: inherit;
+    box-shadow: none;
+    background: none;
+    color: var(--ifm-menu-color);
+}
+
+/* ---------- Heading anchors: a link icon in the margin to the left (on hover), instead of a "#" after the text ---------- */
+.markdown :is(h2, h3, h4, h5, h6).anchor {
+    position: relative;
+}
+
+.markdown .hash-link {
+    position: absolute;
+    left: -1.5rem;
+    top: 50%;
+    translate: 0 -50%;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    color: var(--ifm-color-emphasis-600);
+}
+
+.markdown .hash-link:hover {
+    color: var(--ifm-color-primary);
+}
+
+.markdown .hash-link::before {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* phones don't have room in the margin, so the icon goes after the heading text */
+@media (max-width: 996px) {
+    .markdown .hash-link {
+        position: static;
+        display: inline-block;
+        translate: none;
+        margin-left: 0.4rem;
+        vertical-align: middle;
+    }
+}
+
+/* ---------- Headings that are links (i.e. the feature list on the introduction page): look like headings, not links ---------- */
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link) {
+    color: inherit;
+    text-decoration: none;
+    transition: color 150ms;
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link)::after {
+    content: '→';
+    margin-left: 0.4em;
+    font-size: 0.8em;
+    color: var(--ifm-color-emphasis-500);
+    transition: color 150ms, margin-left 150ms;
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link):hover {
+    color: var(--ifm-color-primary);
+}
+
+.markdown :is(h1, h2, h3, h4, h5, h6) > a:not(.hash-link):hover::after {
+    color: var(--ifm-color-primary);
+    margin-left: 0.6em;
+}
+
+/* ---------- "View the transpiled BrightScript code": looks like a code block's title bar, and the code attaches right under it ---------- */
+.markdown details.alert {
+    --docusaurus-details-decoration-color: var(--ifm-color-emphasis-600);
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    color: var(--ifm-font-color-base);
+}
+
+.markdown details.alert > summary {
+    padding: 0.5rem var(--ifm-pre-padding) 0.5rem calc(var(--ifm-pre-padding) + 1rem);
+    border: 1px solid var(--ifm-color-emphasis-200);
+    border-radius: var(--ifm-code-border-radius);
+    background: var(--ifm-color-emphasis-100);
+    font-size: 0.9rem;
+    color: var(--ifm-color-emphasis-800);
+    transition: color 150ms;
+}
+
+/* (docusaurus positions the arrow assuming no padding) */
+.markdown details.alert > summary::before {
+    left: var(--ifm-pre-padding);
+    top: 50%;
+    translate: 0 -50%;
+}
+
+.markdown details.alert > summary:hover {
+    color: var(--ifm-color-primary);
+}
+
+.markdown details.alert[open] > summary {
+    border-bottom: none;
+    border-radius: var(--ifm-code-border-radius) var(--ifm-code-border-radius) 0 0;
+}
+
+/* no divider or gap: the code block is the bottom half of the box */
+.markdown details.alert > div > div {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.markdown details.alert .shiki-code-block {
+    margin-bottom: 0;
+}
+
+.markdown details.alert .shiki-code-block pre {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* ---------- "On this page": a small bar marks the hovered / current heading, instead of recoloring the text ---------- */
+.table-of-contents__link {
+    position: relative;
+    color: var(--ifm-color-emphasis-700);
+}
+
+.table-of-contents__link:hover,
+.table-of-contents__link--active {
+    color: var(--ifm-font-color-base);
+}
+
+.table-of-contents__link::before {
+    content: '';
+    position: absolute;
+    left: -0.6rem;
+    top: 0.15em;
+    bottom: 0.15em;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background-color 150ms;
+}
+
+.table-of-contents__link:hover::before {
+    background: var(--ifm-color-emphasis-400);
+}
+
+.table-of-contents__link--active::before,
+.table-of-contents__link--active:hover::before {
+    background: var(--ifm-color-primary);
+}
+
+/* ---------- Prev / Next: big cards so the docs read like a book ---------- */
+.pagination-nav__link {
+    padding: 1.1rem 1.4rem;
+    border-width: 1px;
+    transition: border-color 150ms, transform 150ms;
+}
+
+.pagination-nav__link:hover {
+    border-color: var(--ifm-color-primary);
+    transform: translateY(-1px);
+}
+
+.pagination-nav__link--next {
+    position: relative;
+    overflow: hidden;
+}
+
+/* gradient stripe on the "Next" card nudges readers forward */
+.pagination-nav__link--next::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--bs-gradient);
+}
+
+.pagination-nav__sublabel {
+    font-family: var(--ifm-heading-font-family);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.7rem;
+}
+
+.pagination-nav__label {
+    font-family: var(--ifm-heading-font-family);
+    font-size: 1.15rem;
+}
+
+/* ---------- Footer ---------- */
+.footer {
+    border-top: 3px solid transparent;
+    border-image: var(--bs-gradient) 1;
+}
+
+.footer__title {
+    font-family: var(--ifm-heading-font-family);
+}
+
+img {
+    height: auto;
+}
+
+/* the sidebar category next to "Next" / "Previous" (src/theme/PaginatorNavLink) */
+.pagination-nav__category {
+    color: var(--ifm-color-emphasis-600);
+}
+
+/* the "Used by" logos on the introduction page (docs/readme.md) */
+.used-by {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.75rem;
+}
+
+.used-by img {
+    display: block;
+    height: 38px;
+    width: auto;
+}
+
+/* some logos are dark on a transparent background, so give them a light backdrop in dark mode */
+[data-theme='dark'] .used-by a {
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    background: #f5f6f7;
+}
