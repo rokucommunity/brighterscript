@@ -264,8 +264,12 @@ export class BrsFileLinker {
                 if (!isFunctionExpression(node.parent) && node.parent) {
                     node.symbolTable.name = `Block-${node.parent.kind}@${util.getLocation(node)?.range?.start?.line}`;
                     // we're a block inside another block (or body). This block is a pocket in the bigger block
+                    //computed live (like `definingNode.statementIndex`) so the two stay comparable when a plugin inserts statements into the block after validation
+                    const getStatementIndex = this.createStatementIndexGetter(node.parent);
                     node.parent.getSymbolTable().addPocketTable({
-                        index: node.parent.statementIndex,
+                        get index() {
+                            return getStatementIndex();
+                        },
                         table: blockSymbolTable,
                         // code always flows through ConditionalCompiles, because we walk according to defined BSConsts
                         willAlwaysBeExecuted: isConditionalCompileStatement(node.parent) || this.isAlwaysExecutedCase(node.parent)
@@ -337,6 +341,26 @@ export class BrsFileLinker {
         // - handle alias statements?
         // - handle const statements?
         // - allow interface definitions?
+    }
+
+    /**
+     * Returns a function that gives the current `statementIndex` of `node`. The index is cached, and only
+     * recomputed (an `indexOf` over the block) once the AST has been edited so the cached index is no longer right
+     */
+    private createStatementIndexGetter(node: AstNode) {
+        let statement: AstNode;
+        let index = -1;
+        return () => {
+            const statements = (statement?.parent as Block | Body)?.statements;
+            if (!statement || statements?.[index] !== statement) {
+                statement = node;
+                while (statement && !isBlock(statement.parent) && !isBody(statement.parent)) {
+                    statement = statement.parent;
+                }
+                index = node.statementIndex;
+            }
+            return index;
+        };
     }
 
     /**
