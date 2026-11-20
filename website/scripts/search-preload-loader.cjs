@@ -9,13 +9,17 @@
 const pattern = /const onInputMouseEnter = useCallback\(\(\) => \{\s*loadIndex\(\);\s*\}, \[loadIndex\]\);/;
 
 const preload = `
-    //(added by website/scripts/search-preload-loader.cjs) load search in the background once the page is idle
+    //(added by website/scripts/search-preload-loader.cjs) load search in the background once the page is idle.
+    //A failed background load shouldn't surface as an uncaught error (i.e. the dev server before its search index is built)
     useEffect(() => {
+        const preload = () => {
+            loadIndex().catch((error) => console.warn("Couldn't preload search:", error));
+        };
         if (typeof window.requestIdleCallback === "function") {
-            const id = window.requestIdleCallback(() => loadIndex(), { timeout: 3000 });
+            const id = window.requestIdleCallback(preload, { timeout: 3000 });
             return () => window.cancelIdleCallback(id);
         }
-        const id = setTimeout(() => loadIndex(), 1000);
+        const id = setTimeout(preload, 1000);
         return () => clearTimeout(id);
     }, [loadIndex]);`;
 

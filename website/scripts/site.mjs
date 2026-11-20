@@ -551,6 +551,8 @@ try {
         fs.rmSync(devSitesDir, { recursive: true, force: true });
         fs.rmSync(devLiveDir, { recursive: true, force: true });
         fs.mkdirSync(devLiveDir, { recursive: true });
+        //an empty search index until the real one is built, so search finds nothing instead of loading the dev server's html page as json
+        fs.writeFileSync(path.join(devLiveDir, 'search-index.json'), '[]');
         writeSharedFiles(devSitesDir, { include404: false });
         buildOtherVersionsForDevInBackground();
         keepSearchIndexUpToDate();
