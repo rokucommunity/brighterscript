@@ -12,6 +12,7 @@
         {
             "label": "Language Features",
             "items": [
+                { "file": "language-features/types.md" },
                 { "file": "language-features/imports.md" },
                 { "file": "language-features/namespaces.md" },
                 { "file": "language-features/classes.md" },
