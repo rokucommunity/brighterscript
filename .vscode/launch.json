@@ -25,11 +25,11 @@
             ]
         },
         {
-            "name": "Debug Doc Generator",
+            "name": "Debug transpile-doc-examples",
             "type": "pwa-node",
             "request": "launch",
             "args": [
-                "scripts/compile-doc-examples.ts"
+                "scripts/transpile-doc-examples.ts"
             ],
             "runtimeArgs": [
                 "--nolazy",

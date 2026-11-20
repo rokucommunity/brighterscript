@@ -16,3 +16,7 @@ isolate-*
 v8*.log
 *.cpuprofile
 scripts/.dev-doc
+website/build
+website/.docusaurus
+website/.versions
+website/.grammars

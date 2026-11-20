@@ -1,0 +1,42 @@
+{
+    "$comment": "The docs site sidebar, which is also the order of the Previous/Next buttons. Each entry is a page (`file` is a markdown file's path within docs/) or a category of pages. A page shows its own `# heading` unless you give it a `label`. `npm run docs` and `npm run build-docs` add new pages here automatically with a best guess for where they belong, so move them if the guess is wrong.",
+    "items": [
+        { "file": "readme.md", "label": "Introduction" },
+        {
+            "label": "Getting Started",
+            "items": [
+                { "file": "getting-started/installation.md" },
+                { "file": "getting-started/configuration.md" }
+            ]
+        },
+        {
+            "label": "Language Features",
+            "items": [
+                { "file": "language-features/imports.md" },
+                { "file": "language-features/namespaces.md" },
+                { "file": "language-features/classes.md" },
+                { "file": "language-features/interfaces.md" },
+                { "file": "language-features/enums.md" },
+                { "file": "language-features/constants.md" },
+                { "file": "language-features/template-strings.md" },
+                { "file": "language-features/ternary-operator.md" },
+                { "file": "language-features/null-coalescing-operator.md" },
+                { "file": "language-features/callfunc-operator.md" },
+                { "file": "language-features/regex-literals.md" },
+                { "file": "language-features/source-literals.md" },
+                { "file": "language-features/computed-property-names.md" },
+                { "file": "language-features/annotations.md" }
+            ]
+        },
+        {
+            "label": "Tooling",
+            "items": [
+                { "file": "tooling/bsconfig.md" },
+                { "file": "tooling/suppressing-compiler-messages.md" },
+                { "file": "tooling/language-server.md" },
+                { "file": "tooling/plugins.md" },
+                { "file": "tooling/ropm.md" }
+            ]
+        }
+    ]
+}
