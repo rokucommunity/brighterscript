@@ -258,6 +258,133 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
+        it('short-circuits indexed get alternate', () => {
+            testTranspile(`
+                sub main(cached, cfg)
+                    a = cached ?? cfg["key"]
+                end sub
+            `, `
+                sub main(cached, cfg)
+                    a = (function(cached, cfg)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return cfg["key"]
+                            end if
+                        end function)(cached, cfg)
+                end sub
+            `);
+        });
+
+        it('short-circuits xml attribute get alternate', () => {
+            testTranspile(`
+                sub main(cached, xml)
+                    a = cached ?? xml@id
+                end sub
+            `, `
+                sub main(cached, xml)
+                    a = (function(cached, xml)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return xml@id
+                            end if
+                        end function)(cached, xml)
+                end sub
+            `);
+        });
+
+        it('short-circuits complex expressions nested inside a grouping', () => {
+            testTranspile(`
+                sub main(cached, alpha)
+                    a = cached ?? (alpha.beta + 2)
+                end sub
+            `, `
+                sub main(cached, alpha)
+                    a = (function(alpha, cached)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return (alpha.beta + 2)
+                            end if
+                        end function)(alpha, cached)
+                end sub
+            `);
+        });
+
+        it('short-circuits binary expressions containing dotted gets', () => {
+            testTranspile(`
+                sub main(cached, alpha, beta)
+                    a = cached ?? alpha + beta.charlie
+                end sub
+            `, `
+                sub main(cached, alpha, beta)
+                    a = (function(alpha, beta, cached)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return alpha + beta.charlie
+                            end if
+                        end function)(alpha, beta, cached)
+                end sub
+            `);
+        });
+
+        it('short-circuits template strings with a dotted get interpolation', () => {
+            testTranspile(`
+                sub main(cached, beta)
+                    a = cached ?? \`alpha\${beta.charlie}\`
+                end sub
+            `, `
+                sub main(cached, beta)
+                    a = (function(beta, cached)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return ("alpha" + bslib_toString(beta.charlie))
+                            end if
+                        end function)(beta, cached)
+                end sub
+            `);
+        });
+
+        it('uses bslib_coalesce for template strings without interpolations', () => {
+            testTranspile(`
+                sub main(cached)
+                    a = cached ?? \`alpha\`
+                end sub
+            `, `
+                sub main(cached)
+                    a = bslib_coalesce(cached, "alpha")
+                end sub
+            `);
+        });
+
+        it('uses bslib_coalesce for plain variables and literals', () => {
+            testTranspile(`
+                sub main(cached, fallback)
+                    a = cached ?? fallback
+                    b = cached ?? [1, "two", {"three": true}]
+                end sub
+            `, `
+                sub main(cached, fallback)
+                    a = bslib_coalesce(cached, fallback)
+                    b = bslib_coalesce(cached, [
+                        1
+                        "two"
+                        {
+                            "three": true
+                        }
+                    ])
+                end sub
+            `);
+        });
+
         it('does not capture restricted OS functions', () => {
             //failOnDiagnostic=false: the bare `eval("print 1")` triggers the rsg_version=1.2
             //deprecation diagnostic under default settings, which is unrelated to what this test covers.
