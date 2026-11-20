@@ -240,10 +240,10 @@ function syncSidebar() {
  * The newest commit of a version's branch: the remote's copy (i.e. `origin/v1`) if there is one, otherwise the local branch
  */
 function findBranchCommit(version) {
-    for (const ref of [`origin/${version.branch}`, version.branch]) {
+    for (const ref of [`refs/remotes/origin/${version.branch}`, `refs/heads/${version.branch}`]) {
         const result = spawnSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: repoDir, encoding: 'utf8' });
         if (result.status === 0) {
-            return { ref: ref, commit: result.stdout.trim() };
+            return { ref: ref, name: ref.replace(/^refs\/(remotes|heads)\//, ''), commit: result.stdout.trim() };
         }
     }
 }
@@ -256,14 +256,15 @@ function buildOtherVersion(version, outDir) {
     if (!branch) {
         throw new Error(`Couldn't find branch "${version.branch}" for docs version "${version.name}". If you're building locally, try running: git fetch origin ${version.branch}`);
     }
-    const source = `${branch.ref} (${branch.commit.substring(0, 8)})`;
+    const source = `${branch.name} (${branch.commit.substring(0, 8)})`;
     console.log(`\n[site] ${version.name}: building from ${source}`);
 
     const cloneDir = path.join(websiteDir, '.versions', version.name);
     fs.rmSync(cloneDir, { recursive: true, force: true });
-    //(a local clone has every commit, including the remote branches, so check out the commit itself)
-    git(['clone', '--quiet', '--no-checkout', pathToFileURL(repoDir).href, cloneDir], { stdio: 'inherit' });
-    git(['-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', branch.commit], { cwd: cloneDir, stdio: 'inherit' });
+    //fetch that exact ref from this repo (a plain clone only brings along local branches and tags, not `origin/*`)
+    git(['init', '--quiet', cloneDir], { stdio: 'inherit' });
+    git(['fetch', '--quiet', '--depth', '1', pathToFileURL(repoDir).href, branch.ref], { cwd: cloneDir, stdio: 'inherit' });
+    git(['-c', 'advice.detachedHead=false', 'checkout', '--quiet', '--detach', 'FETCH_HEAD'], { cwd: cloneDir, stdio: 'inherit' });
 
     const scripts = JSON.parse(fs.readFileSync(path.join(cloneDir, 'package.json'), 'utf8')).scripts ?? {};
     if (!scripts['build-docs']) {
@@ -550,6 +551,8 @@ try {
         fs.rmSync(devSitesDir, { recursive: true, force: true });
         fs.rmSync(devLiveDir, { recursive: true, force: true });
         fs.mkdirSync(devLiveDir, { recursive: true });
+        //an empty search index until the real one is built, so search finds nothing instead of loading the dev server's html page as json
+        fs.writeFileSync(path.join(devLiveDir, 'search-index.json'), '[]');
         writeSharedFiles(devSitesDir, { include404: false });
         buildOtherVersionsForDevInBackground();
         keepSearchIndexUpToDate();

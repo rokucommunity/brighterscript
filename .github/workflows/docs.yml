@@ -5,7 +5,7 @@ on:
     branches:
       - master
       #every version's branch (v1, v2, ...)
-      - 'v[0-9]*'
+      - 'v[0-9]+'
   workflow_dispatch:
 
 jobs:
