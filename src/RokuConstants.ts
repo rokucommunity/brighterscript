@@ -143,6 +143,13 @@ export const CONTINUE_MIN_FIRMWARE_VERSION = '11.5.0';
 export const LINE_CONTINUATION_MIN_FIRMWARE_VERSION = '15.3.0';
 
 /**
+ * Minimum Roku firmware version that evaluates an undeclared `#const` referenced by `#if` as false
+ * instead of failing the compile.
+ * Source: measured on Roku OS 16.0.4.
+ */
+export const UNDECLARED_HASH_CONST_MIN_FIRMWARE_VERSION = '16.0.0';
+
+/**
  * What a given Roku firmware version natively understands.
  *
  * These are facts about the target device, NOT statements about what brighterscript does with
@@ -157,6 +164,8 @@ export interface FirmwareCapabilities {
     continueStatement: boolean;
     /** Line continuation after binary operators in plain BrightScript. */
     lineContinuation: boolean;
+    /** An undeclared `#const` referenced by `#if` evaluates to false instead of being a compile error. */
+    undeclaredHashConstIsFalse: boolean;
 }
 
 /**
@@ -173,6 +182,7 @@ export function getFirmwareCapabilities(minFirmwareVersion?: string): FirmwareCa
     return {
         optionalChaining: semver.gte(version, OPTIONAL_CHAINING_MIN_FIRMWARE_VERSION),
         continueStatement: semver.gte(version, CONTINUE_MIN_FIRMWARE_VERSION),
-        lineContinuation: semver.gte(version, LINE_CONTINUATION_MIN_FIRMWARE_VERSION)
+        lineContinuation: semver.gte(version, LINE_CONTINUATION_MIN_FIRMWARE_VERSION),
+        undeclaredHashConstIsFalse: semver.gte(version, UNDECLARED_HASH_CONST_MIN_FIRMWARE_VERSION)
     };
 }

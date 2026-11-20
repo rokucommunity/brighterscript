@@ -1,22 +1,16 @@
-import type { BrsFile } from '../../src/files/BrsFile';
+import type { BrsFile } from '../../src';
 import type { TargetOptions } from '../target-runner';
+import { createBuilder, getConfig } from '../helpers';
 
 module.exports = async (options: TargetOptions) => {
     const { suite, name, version, fullName, brighterscript, projectPath, suiteOptions } = options;
-    const { ProgramBuilder, Parser } = brighterscript;
+    const { Parser } = brighterscript;
 
-    const builder = new ProgramBuilder();
+    const builder = createBuilder(options);
     //run the first run
-    await builder.run({
-        cwd: projectPath,
-        createPackage: false,
-        copyToStaging: false,
-        //disable diagnostic reporting (they still get collected)
-        diagnosticFilters: ['**/*'],
-        logLevel: 'error'
-    });
+    await builder.run(getConfig(options));
     //collect all the brighterscript files
-    const brsFiles = Object.values(builder.program.files).filter(x => x.extension === '.brs' || x.extension === '.bs') as Array<BrsFile>;
+    const brsFiles = Object.values(builder.program!.files as Record<string, BrsFile>).filter(x => x.extension === '.brs' || x.extension === '.bs') as Array<BrsFile>;
     if (brsFiles.length === 0) {
         throw new Error('No files found in program');
     }

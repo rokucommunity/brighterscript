@@ -21,11 +21,28 @@
                 { "file": "language-features/template-strings.md" },
                 { "file": "language-features/ternary-operator.md" },
                 { "file": "language-features/null-coalescing-operator.md" },
+                { "file": "language-features/spread-operator.md" },
                 { "file": "language-features/callfunc-operator.md" },
+                { "file": "language-features/select-case.md" },
+                { "file": "language-features/exceptions.md" },
                 { "file": "language-features/regex-literals.md" },
                 { "file": "language-features/source-literals.md" },
                 { "file": "language-features/computed-property-names.md" },
-                { "file": "language-features/annotations.md" }
+                { "file": "language-features/annotations.md" },
+                { "file": "language-features/variable-shadowing.md" }
+            ]
+        },
+        {
+            "label": "Type System",
+            "items": [
+                { "file": "language-features/assignments.md", "label": "Typed Assignments" },
+                { "file": "language-features/typecasts.md" },
+                { "file": "language-features/typed-arrays.md" },
+                { "file": "language-features/union-types.md" },
+                { "file": "language-features/intersection-types.md" },
+                { "file": "language-features/type-statements.md" },
+                { "file": "language-features/function-types.md" },
+                { "file": "language-features/type-checking-without-transpile.md" }
             ]
         },
         {

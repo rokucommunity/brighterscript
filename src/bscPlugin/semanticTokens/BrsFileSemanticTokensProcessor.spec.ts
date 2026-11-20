@@ -1,12 +1,13 @@
 import { expect } from '../../chai-config.spec';
 import { SemanticTokenModifiers, SemanticTokenTypes } from 'vscode-languageserver-protocol';
 import type { BrsFile } from '../../files/BrsFile';
-import type { BscFile, SemanticToken } from '../../interfaces';
+import type { BscFile } from '../../files/BscFile';
+import type { SemanticToken } from '../../interfaces';
 import { Program } from '../../Program';
-import { expectZeroDiagnostics } from '../../testHelpers.spec';
+import { expectDiagnostics, expectZeroDiagnostics } from '../../testHelpers.spec';
+import { DiagnosticMessages } from '../../DiagnosticMessages';
 import { util } from '../../util';
 import { rootDir } from '../../testHelpers.spec';
-
 
 describe('BrsFileSemanticTokensProcessor', () => {
     let program: Program;
@@ -19,32 +20,98 @@ describe('BrsFileSemanticTokensProcessor', () => {
         program.dispose();
     });
 
-    function expectSemanticTokens(file: BscFile, tokens: SemanticToken[], validateDiagnostics = true) {
+    /**
+     * Ensure the specified tokens are present in the full list
+     */
+    function expectSemanticTokensIncludes(file: BscFile, expected: Array<SemanticToken | [SemanticTokenTypes, number, number, number, number, SemanticTokenModifiers[]?]>, validateDiagnostics = true) {
+        const result = getSemanticTokenResults(file, expected, validateDiagnostics);
+        expect(result.actual).to.include.members(result.expected);
+    }
+
+    /**
+     * Ensure that the full list of tokens exactly equals the expected list
+     */
+    function expectSemanticTokens(file: BscFile, expected: Array<SemanticToken | [SemanticTokenTypes, number, number, number, number, SemanticTokenModifiers[]?]>, validateDiagnostics = true) {
+        const result = getSemanticTokenResults(file, expected, validateDiagnostics);
+        expect(result.actual).to.eql(result.expected);
+    }
+
+    function getSemanticTokenResults(file: BscFile, expected: Array<SemanticToken | [SemanticTokenTypes, number, number, number, number, SemanticTokenModifiers[]?]>, validateDiagnostics = true) {
         program.validate();
         if (validateDiagnostics) {
-            expectZeroDiagnostics(program);
+            //the hints that fade inactive `#if` branches don't affect the tokens
+            expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== 'inactive-conditional-compile-branch'));
         }
         const result = util.sortByRange(
             program.getSemanticTokens(file.srcPath)!
         );
 
         //sort modifiers
-        for (const collection of [result, tokens]) {
-            for (const token of collection) {
+        for (let collection of [result, expected]) {
+            for (let i = 0; i < collection.length; i++) {
+                if (Array.isArray(collection[i])) {
+                    const parts = collection[i];
+                    collection[i] = {
+                        tokenType: parts[0],
+                        range: util.createRange(parts[1], parts[2], parts[3], parts[4]),
+                        tokenModifiers: parts[5] ?? []
+                    };
+                }
+                let token = collection[i] as SemanticToken;
                 token.tokenModifiers ??= [];
                 token.tokenModifiers.sort();
             }
         }
 
-        expect(
-            result
-        ).to.eql(
-            util.sortByRange(
-                tokens
-            )
-        );
-        return result;
+        function stringify(token: SemanticToken) {
+            return `${token.tokenType}|${util.rangeToString(token.range)}|${token.tokenModifiers?.join(',')}`;
+        }
+
+        return {
+            actual: result.map(x => stringify(x)),
+            expected: (expected as SemanticToken[]).map(x => stringify(x))
+        };
     }
+
+    it('emits tokens for the active branch and for what can be resolved in the inactive branch of a conditional compile block', () => {
+        const file = program.setFile<BrsFile>('source/main.brs', `
+            #const LOGGING = true
+            sub main()
+            #if LOGGING
+                activeVar = 1
+                print activeVar
+            #else
+                inactiveVar = 2
+                print inactiveVar
+            #end if
+            end sub
+        `);
+        program.validate();
+        expectDiagnostics(program, [
+            { ...DiagnosticMessages.inactiveConditionalCompileBranch(), location: { range: util.createRange(7, 0, 9, 0) } }
+        ]);
+        const tokenLines = program.getSemanticTokens(file.srcPath)!.map(token => token.range.start.line);
+        expect(tokenLines).to.include(5);
+        //the assignment in the inactive branch
+        expect(tokenLines).to.include(7);
+    });
+
+    it('colors a class in an inactive branch like a class', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            #const LOGGING = false
+            class Widget
+            end class
+            sub main()
+            #if LOGGING
+                widget = new Widget()
+            #end if
+            end sub
+        `);
+        expectSemanticTokensIncludes(file, [
+            //widget = new |Widget|()
+            [SemanticTokenTypes.class, 6, 29, 6, 35]
+        ]);
+    });
 
     it('matches each namespace section for class', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
@@ -52,6 +119,7 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 sub new()
                     m.alien = new Humanoids.Aliens.Alien()
                 end sub
+                public alien
             end class
 
             namespace Humanoids.Aliens
@@ -59,16 +127,14 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end class
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(3, 34, 3, 43),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(3, 44, 3, 50),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(3, 51, 3, 56),
-            tokenType: SemanticTokenTypes.class
-        }]);
+        expectSemanticTokensIncludes(file, [
+            //m.alien = new |Humanoids|.Aliens.Alien()
+            [SemanticTokenTypes.namespace, 3, 34, 3, 43],
+            //m.alien = new Humanoids.|Aliens|.Alien()
+            [SemanticTokenTypes.namespace, 3, 44, 3, 50],
+            //m.alien = new Humanoids.Aliens.|Alien|()
+            [SemanticTokenTypes.class, 3, 51, 3, 56]
+        ]);
     });
 
     it('matches each namespace section for namespaced function calls', () => {
@@ -81,16 +147,28 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end function
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 16, 2, 25),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 26, 2, 32),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 33, 2, 39),
-            tokenType: SemanticTokenTypes.function
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // |Humanoids|.Aliens.Invade("earth")
+            [SemanticTokenTypes.namespace, 2, 16, 2, 25],
+            // Humanoids.|Aliens|.Invade("earth")
+            [SemanticTokenTypes.namespace, 2, 26, 2, 32],
+            // Humanoids.Aliens.|Invade|("earth")
+            [SemanticTokenTypes.function, 2, 33, 2, 39]
+        ]);
+    });
+
+    it('matches class name in assignment statement', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub test()
+                ctor = Person
+            end sub
+            class Person
+            end class
+        `);
+        expectSemanticTokensIncludes(file, [
+            // ctor = |Person|
+            [SemanticTokenTypes.class, 2, 23, 2, 29]
+        ]);
     });
 
     it('matches namespace-relative parts', () => {
@@ -104,15 +182,12 @@ describe('BrsFileSemanticTokensProcessor', () => {
             namespace alpha.lineHeight
             end namespace
         `);
-        expectSemanticTokens(file, [{
+        expectSemanticTokensIncludes(file, [
             //|lineHeight| = 1
-            range: util.createRange(3, 20, 3, 30),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
+            [SemanticTokenTypes.variable, 3, 20, 3, 30],
             //print |lineHeight|
-            range: util.createRange(4, 26, 4, 36),
-            tokenType: SemanticTokenTypes.namespace
-        }], false);
+            [SemanticTokenTypes.variable, 4, 26, 4, 36]
+        ], false);
     });
 
     it('matches namespace-relative parts in parameters', () => {
@@ -124,14 +199,13 @@ describe('BrsFileSemanticTokensProcessor', () => {
             namespace alpha.lineHeight
             end namespace
         `);
-        expectSemanticTokens(file, [{
+        expectSemanticTokensIncludes(file, [
             //sub test(|lineHeight| as integer)
-            range: util.createRange(2, 25, 2, 35),
-            tokenType: SemanticTokenTypes.namespace
-        }], false);
+            [SemanticTokenTypes.parameter, 2, 25, 2, 35]
+        ], false);
     });
 
-    it('matches namespace-relative parts in parameters', () => {
+    it('matches parameters variable names', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
             namespace designSystem
                 function getIcon(image = "" as string, size = -1 as float) as object
@@ -141,11 +215,12 @@ describe('BrsFileSemanticTokensProcessor', () => {
             namespace designSystem.size
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            //sub test(|lineHeight| as integer)
-            range: util.createRange(2, 55, 2, 59),
-            tokenType: SemanticTokenTypes.namespace
-        }], false);
+        expectSemanticTokensIncludes(file, [
+            // function getIcon(|image| = "" as string, size = -1 as float) as object
+            [SemanticTokenTypes.parameter, 2, 33, 2, 38],
+            // function getIcon(image = "" as string, |size| = -1 as float) as object
+            [SemanticTokenTypes.parameter, 2, 55, 2, 59]
+        ], false);
     });
 
     it('matches each namespace section for namespaced function assignment', () => {
@@ -158,16 +233,14 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end function
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 25, 2, 34),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 35, 2, 41),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 42, 2, 48),
-            tokenType: SemanticTokenTypes.function
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // action = |Humanoids|.Aliens.Invade
+            [SemanticTokenTypes.namespace, 2, 25, 2, 34],
+            // action = Humanoids.|Aliens|.Invade
+            [SemanticTokenTypes.namespace, 2, 35, 2, 41],
+            // action = Humanoids.Aliens.|Invade|
+            [SemanticTokenTypes.function, 2, 42, 2, 48]
+        ]);
     });
 
     it('matches each namespace section for namespaced function as function parameter', () => {
@@ -180,20 +253,16 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end function
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            //`type` function call
-            range: util.createRange(2, 29, 2, 33),
-            tokenType: SemanticTokenTypes.function
-        }, {
-            range: util.createRange(2, 34, 2, 43),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 44, 2, 50),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 51, 2, 57),
-            tokenType: SemanticTokenTypes.function
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // actionName = |type|(Humanoids.Aliens.Invade)
+            [SemanticTokenTypes.function, 2, 29, 2, 33],
+            // actionName = type(|Humanoids|.Aliens.Invade)
+            [SemanticTokenTypes.namespace, 2, 34, 2, 43],
+            // actionName = type(Humanoids.|Aliens|.Invade)
+            [SemanticTokenTypes.namespace, 2, 44, 2, 50],
+            // actionName = type(Humanoids.Aliens.|Invade|)
+            [SemanticTokenTypes.function, 2, 51, 2, 57]
+        ]);
     });
 
     it('matches each namespace section for namespaced function in print statement', () => {
@@ -206,43 +275,27 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end function
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 22, 2, 31),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 32, 2, 38),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 39, 2, 45),
-            tokenType: SemanticTokenTypes.function
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // print |Humanoids|.Aliens.Invade
+            [SemanticTokenTypes.namespace, 2, 22, 2, 31],
+            // print Humanoids.|Aliens|.Invade
+            [SemanticTokenTypes.namespace, 2, 32, 2, 38],
+            // print Humanoids.Aliens.|Invade|
+            [SemanticTokenTypes.function, 2, 39, 2, 45]
+        ]);
     });
 
-    it('matches each namespace section for enums', () => {
+    it('matches each namespace section for namespace declaration', () => {
         const file = program.setFile<BrsFile>('source/main.bs', `
-            sub main()
-                print Earthlings.Species.Human.Male
-            end sub
-            namespace Earthlings.Species
-                enum Human
-                    Male
-                    Female
-                end enum
+            namespace Sentients.Humanoids
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 22, 2, 32),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 33, 2, 40),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 41, 2, 46),
-            tokenType: SemanticTokenTypes.enum
-        }, {
-            range: util.createRange(2, 47, 2, 51),
-            tokenType: SemanticTokenTypes.enumMember
-        }]);
+        expectSemanticTokens(file, [
+            // namespace |Sentients|.Humanoids
+            [SemanticTokenTypes.namespace, 1, 22, 1, 31],
+            // namespace Sentients.|Humanoids|
+            [SemanticTokenTypes.namespace, 1, 32, 1, 41]
+        ]);
     });
 
     it('matches each namespace section for enum', () => {
@@ -258,19 +311,16 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end enum
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 22, 2, 31),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 32, 2, 41),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 42, 2, 54),
-            tokenType: SemanticTokenTypes.enum
-        }, {
-            range: util.createRange(2, 55, 2, 60),
-            tokenType: SemanticTokenTypes.enumMember
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // print |Sentients|.Humanoids.HumanoidType.Cylon
+            [SemanticTokenTypes.namespace, 2, 22, 2, 31],
+            // print Sentients.|Humanoids|.HumanoidType.Cylon
+            [SemanticTokenTypes.namespace, 2, 32, 2, 41],
+            // print Sentients.Humanoids.|HumanoidType|.Cylon
+            [SemanticTokenTypes.enum, 2, 42, 2, 54],
+            // print Sentients.Humanoids.HumanoidType.|Cylon|
+            [SemanticTokenTypes.enumMember, 2, 55, 2, 60]
+        ]);
     });
 
     it('matches enums in if statements', () => {
@@ -288,16 +338,14 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end enum
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 19, 2, 28),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 29, 2, 41),
-            tokenType: SemanticTokenTypes.enum
-        }, {
-            range: util.createRange(2, 42, 2, 47),
-            tokenType: SemanticTokenTypes.enumMember
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // if |Humanoids|.HumanoidType.Cylon = "Cylon" then
+            [SemanticTokenTypes.namespace, 2, 19, 2, 28],
+            // if Humanoids.|HumanoidType|.Cylon = "Cylon" then
+            [SemanticTokenTypes.enum, 2, 29, 2, 41],
+            // if Humanoids.HumanoidType.|Cylon| = "Cylon" then
+            [SemanticTokenTypes.enumMember, 2, 42, 2, 47]
+        ]);
     });
 
     it('matches enum with invalid member name', () => {
@@ -313,13 +361,12 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end enum
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 22, 2, 31),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 32, 2, 44),
-            tokenType: SemanticTokenTypes.enum
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // print |Humanoids|.HumanoidType.INVALID_VALUE 'bs:disable-line
+            [SemanticTokenTypes.namespace, 2, 22, 2, 31],
+            // print Humanoids.|HumanoidType|.INVALID_VALUE 'bs:disable-line
+            [SemanticTokenTypes.enum, 2, 32, 2, 44]
+        ]);
     });
 
     it('matches class with invalid stuff after it', () => {
@@ -333,16 +380,39 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 end class
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 30, 2, 39),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 40, 2, 46),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(2, 47, 2, 52),
-            tokenType: SemanticTokenTypes.class
-        }]);
+        expectSemanticTokensIncludes(file, [
+            // m.alien = new |Humanoids|.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
+            [SemanticTokenTypes.namespace, 2, 30, 2, 39],
+            // m.alien = new Humanoids.|Aliens|.Alien.NOT_A_CLASS() 'bs:disable-line
+            [SemanticTokenTypes.namespace, 2, 40, 2, 46],
+            // m.alien = new Humanoids.Aliens.|Alien|.NOT_A_CLASS() 'bs:disable-line
+            [SemanticTokenTypes.class, 2, 47, 2, 52]
+        ]);
+    });
+
+    it('matches aliases', () => {
+        program.setFile('source/alpha.bs', `
+            namespace alpha
+                sub test()
+                end sub
+            end namespace
+        `);
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            alias alpha2 = alpha
+            sub main()
+                print alpha2.test()
+            end sub
+        `);
+        expectSemanticTokensIncludes(file, [
+            // alias |alpha2| = alpha
+            [SemanticTokenTypes.namespace, 1, 18, 1, 24],
+            // alias alpha2 = |alpha|
+            [SemanticTokenTypes.namespace, 1, 27, 1, 32],
+            // print |alpha2|.test()
+            [SemanticTokenTypes.namespace, 3, 22, 3, 28],
+            // print alpha2.|test|()
+            [SemanticTokenTypes.function, 3, 29, 3, 33]
+        ]);
     });
 
     it('matches consts', () => {
@@ -356,26 +426,22 @@ describe('BrsFileSemanticTokensProcessor', () => {
                 const FIRST_NAME = "bob"
             end namespace
         `);
-        expectSemanticTokens(file, [{
-            range: util.createRange(2, 22, 2, 29),
-            tokenType: SemanticTokenTypes.variable,
-            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-        }, {
-            range: util.createRange(3, 22, 3, 26),
-            tokenType: SemanticTokenTypes.namespace
-        }, {
-            range: util.createRange(3, 27, 3, 37),
-            tokenType: SemanticTokenTypes.variable,
-            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-        }, {
-            range: util.createRange(5, 18, 5, 25),
-            tokenType: SemanticTokenTypes.variable,
-            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-        }, {
-            range: util.createRange(7, 22, 7, 32),
-            tokenType: SemanticTokenTypes.variable,
-            tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-        }]);
+        expectSemanticTokens(file, [
+            // sub |init|()
+            [SemanticTokenTypes.function, 1, 16, 1, 20],
+            // print |API_URL|
+            [SemanticTokenTypes.variable, 2, 22, 2, 29, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+            // print |info|.FIRST_NAME
+            [SemanticTokenTypes.namespace, 3, 22, 3, 26],
+            // print info.|FIRST_NAME|
+            [SemanticTokenTypes.variable, 3, 27, 3, 37, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+            // const |API_URL| = "some_url"
+            [SemanticTokenTypes.variable, 5, 18, 5, 25, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+            // namespace |info|
+            [SemanticTokenTypes.namespace, 6, 22, 6, 26],
+            // const |FIRST_NAME| = "bob"
+            [SemanticTokenTypes.variable, 7, 22, 7, 32, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]]
+        ]);
     });
 
     it('matches consts in assignment expressions', () => {
@@ -391,35 +457,354 @@ describe('BrsFileSemanticTokensProcessor', () => {
             const API_URL = "url"
         `);
         expectSemanticTokens(file, [
+            // sub |main|()
+            [SemanticTokenTypes.function, 1, 16, 1, 20],
+            // |value| = ""
+            [SemanticTokenTypes.variable, 2, 16, 2, 21],
+            // |value| += constants.API_KEY
+            [SemanticTokenTypes.variable, 3, 16, 3, 21],
             // value += |constants|.API_KEY
-            {
-                range: util.createRange(3, 25, 3, 34),
-                tokenType: SemanticTokenTypes.namespace
-            },
+            [SemanticTokenTypes.namespace, 3, 25, 3, 34],
             // value += constants.|API_KEY|
-            {
-                range: util.createRange(3, 35, 3, 42),
-                tokenType: SemanticTokenTypes.variable,
-                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-            },
+            [SemanticTokenTypes.variable, 3, 35, 3, 42, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+            // |value| += API_URL
+            [SemanticTokenTypes.variable, 4, 16, 4, 21],
             // value += |API_URL|
-            {
-                range: util.createRange(4, 25, 4, 32),
-                tokenType: SemanticTokenTypes.variable,
-                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-            },
+            [SemanticTokenTypes.variable, 4, 25, 4, 32, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+            // namespace |constants|
+            [SemanticTokenTypes.namespace, 6, 22, 6, 31],
             // const |API_KEY| = "test"
-            {
-                range: util.createRange(7, 22, 7, 29),
-                tokenType: SemanticTokenTypes.variable,
-                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-            },
+            [SemanticTokenTypes.variable, 7, 22, 7, 29, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
             //const |API_URL| = "url"
-            {
-                range: util.createRange(9, 18, 9, 25),
-                tokenType: SemanticTokenTypes.variable,
-                tokenModifiers: [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]
-            }
+            [SemanticTokenTypes.variable, 9, 18, 9, 25, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]]
         ]);
+    });
+
+    it('matches new statement of non-class', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub init()
+                m.alien = new Humanoids.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
+            end sub
+
+            namespace Humanoids.Aliens
+                class Alien
+                end class
+            end namespace
+        `);
+        expectSemanticTokens(file, [
+            // sub |init|()
+            [SemanticTokenTypes.function, 1, 16, 1, 20],
+            // m.alien = new |Humanoids|.Aliens.Alien.NOT_A_CLASS() 'bs:disable-line
+            [SemanticTokenTypes.namespace, 2, 30, 2, 39],
+            // m.alien = new Humanoids.|Aliens|.Alien.NOT_A_CLASS() 'bs:disable-line
+            [SemanticTokenTypes.namespace, 2, 40, 2, 46],
+            // m.alien = new Humanoids.Aliens.|Alien|.NOT_A_CLASS() 'bs:disable-line
+            [SemanticTokenTypes.class, 2, 47, 2, 52],
+            // namespace |Humanoids|.Aliens
+            [SemanticTokenTypes.namespace, 5, 22, 5, 31],
+            // namespace Humanoids.|Aliens|
+            [SemanticTokenTypes.namespace, 5, 32, 5, 38],
+            // class |Alien|
+            [SemanticTokenTypes.class, 6, 22, 6, 27]
+        ]);
+    });
+
+    it('matches interface names', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            interface Human
+                name as string
+            end interface
+
+            namespace Humanoids
+                interface Alien
+                    name as string
+                end interface
+            end namespace
+        `);
+        expectSemanticTokensIncludes(file, [
+            // interface |Human|
+            [SemanticTokenTypes.interface, 1, 22, 1, 27],
+            // interface |Alien|
+            [SemanticTokenTypes.interface, 6, 26, 6, 31]
+        ]);
+    });
+
+    it('marks setPort as deprecated', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                url = createObject("roUrlTransfer") as roUrlTransfer
+                url.setPort(80)
+            end sub
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // url.|setPort|(80)
+            [SemanticTokenTypes.method, 3, 20, 3, 27, [SemanticTokenModifiers.deprecated]]
+        ], false);
+    });
+
+    it('does not color variable of type roSGNode as a type', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main()
+                node = CreateObject("roSGNode", "ContentNode")
+                node.id = "content"
+            end sub
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // |node|.id = "content"
+            [SemanticTokenTypes.variable, 3, 16, 3, 20]
+        ], false);
+    });
+
+    it('does not color variable when it is an instance of an interface', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub main(video as Movie)
+                video.url = "http://example.com"
+            end sub
+            interface Movie
+                url as string
+            end interface
+        `);
+        program.validate();
+        expectSemanticTokensIncludes(file, [
+            // |video|.url = "http://example.com"
+            [SemanticTokenTypes.variable, 2, 16, 2, 21]
+        ], false);
+    });
+
+    it('works for `new` statement', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            class Person
+                sub speak()
+                end sub
+            end class
+            sub test()
+                dude = new Person()
+                dude.speak()
+            end sub
+        `);
+        expectSemanticTokens(file, [
+            // class |Person|
+            [SemanticTokenTypes.class, 1, 18, 1, 24],
+            // sub |test|()
+            [SemanticTokenTypes.function, 5, 16, 5, 20],
+            // |dude| = new Person()
+            [SemanticTokenTypes.variable, 6, 16, 6, 20],
+            // dude = new |Person|()
+            [SemanticTokenTypes.class, 6, 27, 6, 33],
+            // |dude|.speak()
+            [SemanticTokenTypes.variable, 7, 16, 7, 20],
+            // dude.|speak|()
+            [SemanticTokenTypes.method, 7, 21, 7, 26]
+        ]);
+    });
+
+    it('ignores primitive types in type expressions', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub test(data as string)
+                x as string = data
+            end sub
+        `);
+        expectSemanticTokens(file, [
+            // sub |test|(data as string)
+            [SemanticTokenTypes.function, 1, 16, 1, 20],
+            // sub test(|data| as string)
+            [SemanticTokenTypes.parameter, 1, 21, 1, 25],
+            // |x| as string = data
+            [SemanticTokenTypes.variable, 2, 16, 2, 17],
+            // x as string = |data|
+            [SemanticTokenTypes.variable, 2, 30, 2, 34]
+        ]);
+    });
+
+    it('ignores dynamic and function in type expressions', () => {
+        const file = program.setFile<BrsFile>('source/main.bs', `
+            sub test(data as dynamic, func as function)
+                func(data)
+            end sub
+        `);
+        expectSemanticTokens(file, [
+            // sub |test|(data as dynamic, func as function)
+            [SemanticTokenTypes.function, 1, 16, 1, 20],
+            // sub test(|data| as dynamic, func as function)
+            [SemanticTokenTypes.parameter, 1, 21, 1, 25],
+            // sub test(data as dynamic, |func| as function)
+            [SemanticTokenTypes.parameter, 1, 38, 1, 42],
+            // |func|(data)
+            [SemanticTokenTypes.function, 2, 16, 2, 20]
+        ]);
+    });
+
+    describe('location boundaries', () => {
+        it('computes exact token ranges for nested multi-line constructs in a .bs file with no trailing newline', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', [
+                'namespace alpha',
+                '    namespace beta.charlie',
+                '        class Person',
+                '            name as string',
+                '            sub speak()',
+                '            end sub',
+                '        end class',
+                '    end namespace',
+                '    enum Direction',
+                '        up = "up"',
+                '        down = "down"',
+                '    end enum',
+                '    interface Shape',
+                '        width as integer',
+                '        function area() as float',
+                '    end interface',
+                '    const PI = 3.14',
+                'end namespace',
+                'function empty()',
+                'end function',
+                'const LAST_ONE = true'
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // namespace |alpha|
+                [SemanticTokenTypes.namespace, 0, 10, 0, 15],
+                // class |Person|
+                [SemanticTokenTypes.class, 2, 14, 2, 20],
+                // enum |Direction|
+                [SemanticTokenTypes.enum, 8, 9, 8, 18],
+                // interface |Shape|
+                [SemanticTokenTypes.interface, 12, 14, 12, 19],
+                // const |PI| = 3.14
+                [SemanticTokenTypes.variable, 16, 10, 16, 12, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+                // function |empty|()
+                [SemanticTokenTypes.function, 18, 9, 18, 14],
+                // const |LAST_ONE| = true
+                [SemanticTokenTypes.variable, 20, 6, 20, 14, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]]
+            ]);
+        });
+
+        it('computes exact token ranges in a .brs file with CRLF line endings, emoji, and elseif', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                '\' 😀 header comment',
+                'function alpha(a, b)',
+                '    if a then',
+                '        print "😀"',
+                '    elseif b then',
+                '        print 2',
+                '    else',
+                '        print 3',
+                '    end if',
+                'end function',
+                'sub beta() : print "😀😀" : end sub : sub charlie() : end sub',
+                'sub empty()',
+                'end sub',
+                ''
+            ].join('\r\n'));
+            expectSemanticTokens(file, [
+                // function |alpha|(a, b)
+                [SemanticTokenTypes.function, 1, 9, 1, 14],
+                // function alpha(|a|, b)
+                [SemanticTokenTypes.parameter, 1, 15, 1, 16],
+                // function alpha(a, |b|)
+                [SemanticTokenTypes.parameter, 1, 18, 1, 19],
+                // sub |beta|() : print "😀😀" : end sub : sub charlie() : end sub
+                [SemanticTokenTypes.function, 10, 4, 10, 8],
+                // sub beta() : print "😀😀" : end sub : sub |charlie|() : end sub
+                [SemanticTokenTypes.function, 10, 42, 10, 49],
+                // sub |empty|()
+                [SemanticTokenTypes.function, 11, 4, 11, 9]
+            ]);
+        });
+
+        it('uses utf-16 code units for tokens that follow an emoji on the same line', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', [
+                'const A = "😀" : const B = 2',
+                'enum E',
+                '    x = "😀😀" : y = "b"',
+                'end enum'
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // const |A| = "😀" : const B = 2
+                [SemanticTokenTypes.variable, 0, 6, 0, 7, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+                // const A = "😀" : const |B| = 2
+                [SemanticTokenTypes.variable, 0, 23, 0, 24, [SemanticTokenModifiers.readonly, SemanticTokenModifiers.static]],
+                // enum |E|
+                [SemanticTokenTypes.enum, 1, 5, 1, 6]
+            ]);
+        });
+
+        it('computes exact token ranges inside and after a multi-line template string', () => {
+            const file = program.setFile<BrsFile>('source/main.bs', [
+                'sub main(who as string)',
+                '    count = 1',
+                '    text = `line one 😀',
+                // eslint-disable-next-line no-template-curly-in-string
+                'two ${who} and ${count}',
+                // eslint-disable-next-line no-template-curly-in-string
+                'three ${ lcase(who) }`',
+                '    print text',
+                'end sub',
+                'function after()',
+                'end function',
+                ''
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // sub |main|(who as string)
+                [SemanticTokenTypes.function, 0, 4, 0, 8],
+                // sub main(|who| as string)
+                [SemanticTokenTypes.parameter, 0, 9, 0, 12],
+                // |count| = 1
+                [SemanticTokenTypes.variable, 1, 4, 1, 9],
+                // |text| = `line one 😀
+                [SemanticTokenTypes.variable, 2, 4, 2, 8],
+                // two ${|who|} and ${count}
+                [SemanticTokenTypes.variable, 3, 6, 3, 9],
+                // two ${who} and ${|count|}
+                [SemanticTokenTypes.variable, 3, 17, 3, 22],
+                // three ${ |lcase|(who) }`
+                [SemanticTokenTypes.function, 4, 9, 4, 14],
+                // three ${ lcase(|who|) }`
+                [SemanticTokenTypes.variable, 4, 15, 4, 18],
+                // print |text|
+                [SemanticTokenTypes.variable, 5, 10, 5, 14],
+                // function |after|()
+                [SemanticTokenTypes.function, 7, 9, 7, 14]
+            ]);
+        });
+
+        it('computes exact token ranges in loops, exitwhile, and an empty function at the end of a .brs file', () => {
+            const file = program.setFile<BrsFile>('source/main.brs', [
+                'sub main()',
+                '    value = 1',
+                '    while value < 10',
+                '        value = value + 1',
+                '        if value = 5',
+                '            exitwhile',
+                '        end if',
+                '    end while',
+                '    for i = 0 to 3',
+                '        print i',
+                '    end for',
+                'end sub',
+                'sub empty()',
+                'end sub'
+            ].join('\n'));
+            expectSemanticTokens(file, [
+                // sub |main|()
+                [SemanticTokenTypes.function, 0, 4, 0, 8],
+                // |value| = 1
+                [SemanticTokenTypes.variable, 1, 4, 1, 9],
+                // while |value| < 10
+                [SemanticTokenTypes.variable, 2, 10, 2, 15],
+                // |value| = value + 1
+                [SemanticTokenTypes.variable, 3, 8, 3, 13],
+                // value = |value| + 1
+                [SemanticTokenTypes.variable, 3, 16, 3, 21],
+                // if |value| = 5
+                [SemanticTokenTypes.variable, 4, 11, 4, 16],
+                // for |i| = 0 to 3
+                [SemanticTokenTypes.variable, 8, 8, 8, 9],
+                // print |i|
+                [SemanticTokenTypes.variable, 9, 14, 9, 15],
+                // sub |empty|()
+                [SemanticTokenTypes.function, 12, 4, 12, 9]
+            ]);
+        });
     });
 });

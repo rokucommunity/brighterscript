@@ -11,44 +11,37 @@ A superset of Roku's BrightScript language. Compiles to standard BrightScript.
 [![license](https://img.shields.io/npm/l/brighterscript.svg)](LICENSE)
 [![Slack](https://img.shields.io/badge/Slack-RokuCommunity-4A154B?logo=slack)](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA)
 
-BrighterScript adds [classes, namespaces, imports, enums, interfaces, type annotations and modern operators](https://rokucommunity.github.io/brighterscript/latest/#language-features) to Roku's BrightScript language, and compiles them to plain BrightScript that runs on every Roku device. Every BrightScript file is already valid BrighterScript, so projects can adopt it one file at a time.
+BrighterScript adds [classes, namespaces, imports, enums, interfaces, type annotations and modern operators](https://rokucommunity.github.io/brighterscript/v1/#language-features) to Roku's BrightScript language, and compiles them to plain BrightScript that runs on every Roku device. Every BrightScript file is already valid BrighterScript, so projects can adopt it one file at a time.
 
-The compiler validates entire projects, BrightScript and BrighterScript alike, and reports errors with their exact location before anything reaches a device. It powers the [BrightScript Language](https://marketplace.visualstudio.com/items?itemName=RokuCommunity.brightscript) extension for VS Code, and its [plugin API](https://rokucommunity.github.io/brighterscript/latest/tooling/plugins) lets teams add their own validations and code transforms.
+The compiler validates entire projects, BrightScript and BrighterScript alike, and reports errors with their exact location before anything reaches a device. It powers the [BrightScript Language](https://marketplace.visualstudio.com/items?itemName=RokuCommunity.brightscript) extension for VS Code, and its [plugin API](https://rokucommunity.github.io/brighterscript/v1/tooling/plugins) lets teams add their own validations and code transforms.
 
 ## Documentation
 
-The full documentation is at **[rokucommunity.github.io/brighterscript](https://rokucommunity.github.io/brighterscript/)**.
+The full v1 documentation is at **[rokucommunity.github.io/brighterscript/v1](https://rokucommunity.github.io/brighterscript/v1/)**.
 
-- [Introduction](https://rokucommunity.github.io/brighterscript/): what BrighterScript is, with a tour of the language.
-- [Installation](https://rokucommunity.github.io/brighterscript/latest/getting-started/installation): install the compiler and run your first build.
-- [Configuration](https://rokucommunity.github.io/brighterscript/latest/getting-started/configuration): set up your project's `bsconfig.json`.
-- [Plugins](https://rokucommunity.github.io/brighterscript/latest/tooling/plugins): extend the compiler with your own validations and code transforms.
+- [Introduction](https://rokucommunity.github.io/brighterscript/v1/): what BrighterScript is, with a tour of the language.
+- [Installation](https://rokucommunity.github.io/brighterscript/v1/getting-started/installation): install the compiler and run your first build.
+- [Configuration](https://rokucommunity.github.io/brighterscript/v1/getting-started/configuration): set up your project's `bsconfig.json`.
+- [Plugins](https://rokucommunity.github.io/brighterscript/v1/tooling/plugins): extend the compiler with your own validations and code transforms.
 
-## BrighterScript v1 is coming
+## This is the v1 branch
 
 > [!IMPORTANT]
-> BrighterScript v1 is a complete overhaul of the compiler's core, and it's getting close to release. We'd love your help testing it before it ships.
+> BrighterScript v1 is a complete overhaul of the compiler's core, and it's getting close to release. It's published under the `next` tag on npm. We'd love your help testing it before it ships.
 
-To try it in your project:
-
-```bash
-npm install brighterscript@next
-```
-
-- Read the [v1 docs](https://rokucommunity.github.io/brighterscript/v1/) to see what's new and what's changed.
-- Follow the work on the [`v1` branch](https://github.com/rokucommunity/brighterscript/tree/v1).
 - Share bugs and feedback in the [v1 discussion](https://github.com/rokucommunity/brighterscript/discussions) or on [Slack](https://join.slack.com/t/rokudevelopers/shared_invite/zt-4vw7rg6v-NH46oY7hTktpRIBM_zGvwA).
+- For the current stable release (v0), see the [`master` branch](https://github.com/rokucommunity/brighterscript/tree/master) and the [v0 docs](https://rokucommunity.github.io/brighterscript/v0/).
 
 ## Quick start
 
 ```bash
-npm install brighterscript --save-dev
+npm install brighterscript@next --save-dev
 npx bsc
 ```
 
-From the root of a standard Roku project, that validates every file and, if there are no errors, creates `./out/project.zip`. Run `npx bsc --init` to create a `bsconfig.json`, or `npx bsc --help` for every option.
+From the root of a standard Roku project, that validates every file and, if there are no errors, writes the transpiled app to `./out`. Run `npx bsc --init` to create a `bsconfig.json`, or `npx bsc --help` for every option.
 
-See [Installation](https://rokucommunity.github.io/brighterscript/latest/getting-started/installation) for more examples, and the [bsconfig.json reference](https://rokucommunity.github.io/brighterscript/latest/tooling/bsconfig) for every config option.
+See [Installation](https://rokucommunity.github.io/brighterscript/v1/getting-started/installation) for more examples, and the [bsconfig.json reference](https://rokucommunity.github.io/brighterscript/v1/tooling/bsconfig) for every config option.
 
 ## Used by
 <br/>

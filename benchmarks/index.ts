@@ -7,12 +7,13 @@ const tempDir = path.join(cwd, '.tmp');
 let MAX_OLD_SPACE = 8192;
 
 clean();
-execSync('npm install');
+//installing here would prune the brighterscriptN packages from the last run, which is exactly what --noprepare wants to reuse
+if (!(process.argv.includes('--noprepare') || process.argv.includes('--noinstall')) || !fs.existsSync(path.join(cwd, 'node_modules'))) {
+    execSync('npm install');
+}
 
 import * as fsExtra from 'fs-extra';
 import * as yargs from 'yargs';
-import * as rimraf from 'rimraf';
-import * as fastGlob from 'fast-glob';
 
 interface RunnerOptions {
     versions: string[];
@@ -22,6 +23,7 @@ interface RunnerOptions {
     quick: boolean;
     profile: boolean;
     tar: boolean;
+    config: string;
 }
 class Runner {
     constructor(
@@ -65,6 +67,10 @@ class Runner {
             }
             //store the file system path for the project
             this.options.project = projectDir;
+        } else {
+            //a local path was provided - resolve it to absolute so it's not silently
+            //misinterpreted relative to whatever cwd `target-runner.ts` happens to run with
+            this.options.project = path.resolve(this.options.project);
         }
     }
 
@@ -126,10 +132,6 @@ class Runner {
             return curr.length > acc ? curr.length : acc;
         }, 0);
 
-        if (this.options.profile) {
-            console.log('Deleting previous profile runs\n');
-            rimraf.sync(path.join(__dirname, 'isolate-*'), { glob: true });
-        }
 
         //run one target at a time
         for (const target of this.options.targets) {
@@ -139,24 +141,18 @@ class Runner {
                 process.stdout.write(`Benchmarking ${target}@${version}`);
                 const alias = `brighterscript${versionIndex + 1}`;
 
-                //get the list of current profiler logs
-                const beforeLogs = fastGlob.sync('isolate-*.log', {
-                    cwd: cwd
-                });
-
-                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}"`, {
+                execSync(`npx ts-node target-runner.ts "${version}" "${maxVersionLength}" "${target}" "${maxTargetLength}" "${alias}" "${this.options.project}" "${this.options.quick}" "${this.options.profile}" "${(this.options.config ?? '{}').replaceAll('\"', '\\"')}"`, {
                     env: {
+                        ...process.env,
                         'NODE_OPTIONS': `--max-old-space-size=${MAX_OLD_SPACE}`
                     }
                 });
-                if (this.options.profile) {
-                    const logFile = fastGlob.sync('isolate-*.log', {
-                        cwd: cwd
-                    }).filter(x => !beforeLogs.includes(x))[0];
-                }
             }
             //print a newline to separate the targets
             console.log('');
+        }
+        if (this.options.profile) {
+            console.log(`benchmark: cpu profiles written to ${path.join(tempDir, 'profiles')}`);
         }
     }
 }
@@ -205,6 +201,11 @@ let options = yargs
         description: 'use a npm-packed tarball for local files instead of using the files directly',
         default: true
     })
+    .option('config', {
+        type: 'string',
+        description: 'add additional BsConfig settings as JSON - eg. \'{"removeParameterTypes":true}\'',
+        default: '{}'
+    })
     .strict()
     .check(argv => {
         const idx = argv.versions.indexOf('latest');
@@ -234,4 +235,16 @@ function clean() {
         }
     }
     fs.writeFileSync(`${cwd}/package.json`, JSON.stringify(packageJson, null, 4));
+
+    //regenerate package-lock.json to match the now-cleaned package.json. A hand-edited removal
+    //isn't safe here: npm's dedupe can hoist brighterscript's own transitive deps to the top level
+    //of node_modules, so there's no reliable way to tell "only needed by brighterscriptN" apart with
+    //a regex. Only bother if the lockfile actually still references a brighterscriptN dependency.
+    const packageLockPath = `${cwd}/package-lock.json`;
+    if (fs.existsSync(packageLockPath)) {
+        const packageLockText = fs.readFileSync(packageLockPath).toString();
+        if (/brighterscript\d+/.exec(packageLockText)) {
+            execSync('npm install --package-lock-only');
+        }
+    }
 }

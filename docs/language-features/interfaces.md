@@ -1,7 +1,9 @@
 # Interfaces
+
 Interfaces are a way to describe properties and methods on an object. Unlike [classes](classes.md), they only exist at compile time: they're used for type checking, and are removed from the transpiled code.
 
 ## Basic usage
+
 Interfaces can have both properties and methods.
 
 ```BrighterScript
@@ -19,7 +21,7 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub test(bob as object)
+sub test(bob as dynamic)
     print bob.name, bob.getName()
 end sub
 ```
@@ -27,7 +29,9 @@ end sub
 </details>
 
 ## Use in functions
+
 Interfaces can be used as function parameter types and return types. These types will be converted into `dynamic` when the project is transpiled.
+
 ```brighterscript
 interface Dog
     name as string
@@ -44,14 +48,16 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub walkThePuppy(puppy as object) as object
+sub walkThePuppy(puppy as dynamic) as dynamic
     puppy.walk()
     return puppy
 end sub
 ```
+
 </details>
 
 ## Namespaces
+
 Interfaces can also be defined inside namespaces
 
 ```BrighterScript
@@ -71,7 +77,7 @@ end sub
   <summary>View the transpiled BrightScript code</summary>
 
 ```BrightScript
-sub test(bob as object)
+sub test(bob as dynamic)
     print bob.name, bob.getName()
 end sub
 ```
@@ -79,7 +85,9 @@ end sub
 </details>
 
 ## Advanced types
+
 Interface member types can be defined as any valid BrighterScript type, and even reference themselves.
+
 ```brighterscript
 interface Dog
     owner as Human
@@ -97,12 +105,15 @@ end interface
 ```BrightScript
 
 ```
+
 </details>
 
 </details>
 
 ## Methods
+
 Interfaces can describe complex methods as well
+
 ```brighterscript
 interface Dog
     sub barkAt(nemesis as Cat)
@@ -115,6 +126,7 @@ end interface
 ```BrightScript
 
 ```
+
 </details>
 
 ## Optional members
@@ -127,7 +139,7 @@ interface Video
     length as float
     optional subtitleUrl as string
     optional rating as string
-    optional genre as string
+    optional genres as string[]
 end interface
 ```
 
@@ -136,6 +148,29 @@ end interface
 
 ```BrightScript
 
+```
+
+</details>
+
+## Inline Interfaces
+
+Interfaces can be declared inline in any type expression. This provides a quick way to declare the members of an object without having to specify the name of the object or interface.
+
+```brighterscript
+
+function getId(obj as {id as string}) as string
+    return obj.id ' obj.id must exist, and it must be a string
+end function
+
+```
+
+<details>
+  <summary>View the transpiled BrightScript code</summary>
+
+```BrightScript
+function getId(obj as dynamic) as string
+    return obj.id ' obj.id must exist, and it must be a string
+end function
 ```
 
 </details>

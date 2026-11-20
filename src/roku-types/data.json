@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2026-11-13T18:18:07.720Z",
+    "generatedDate": "2026-11-12T15:04:51.979Z",
     "nodes": {
         "animatedimage": {
             "description": "Extends [**Group**](https://developer.roku.com/dev/docs/group)\n\nThe AnimatedImage node enables developers to render animated GIFs, stickers, and small videos. It is designed for low-frame-rate, simple animations that reside in a small area.\n\nOnly use a single, small animated image at a time to minimize CPU load and memory usage (large animations may consume CPU and memory resources; using too many animated images may cause choppy animations).\n\nThe AnimatedImage downloads the entire resource before decoding. Playback begins only after the download hasbeen completed.\n\n> \\[!NOTE\\] This node is not supported on older Roku device models (Liberty, Littlefield, Austin, Briscoe, Ft. Worth, Gilbert, Amarillo).",
@@ -4132,27 +4132,6 @@
             "fields": [
                 {
                     "accessPermission": "READ_WRITE",
-                    "default": "-99999",
-                    "description": "Specifies the horizontal distance between each arrow and its edge of the screen. The left arrow is this distance from the left edge of the screen, and the right arrow is this distance from the right edge. The default value of -99999 means that the PanelSet node uses the system default.",
-                    "name": "arrowHorizOffset",
-                    "type": "float"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
-                    "default": "-99999",
-                    "description": "Specifies the vertical position of both arrows within the PanelSet node. The default value of -99999 means that the PanelSet node uses the system default.",
-                    "name": "arrowVertOffset",
-                    "type": "float"
-                },
-                {
-                    "accessPermission": "WRITE_ONLY",
-                    "default": "false",
-                    "description": "Set to true to move back one panel, as if the user pressed the \\*\\*Back\\*\\* key.",
-                    "name": "goBack",
-                    "type": "Boolean"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
                     "default": "605",
                     "description": "Specifies the height of the PanelSet node. In most cases, this is set to the display height minus the overhang height.",
                     "name": "height",
@@ -4166,20 +4145,6 @@
                     "type": "Boolean"
                 },
                 {
-                    "accessPermission": "READ_WRITE",
-                    "default": "system default",
-                    "description": "Specifies the bitmap file used for the left arrow, which indicates that the user can go back to a panel that is off screen to the left. Only set this field to specify a custom bitmap that differs in appearance from the default bitmap.",
-                    "name": "leftArrowBitmapUri",
-                    "type": "uri"
-                },
-                {
-                    "accessPermission": "READ_ONLY",
-                    "default": "0",
-                    "description": "The index of the Panel node that is currently in the left position. The first Panel node has index 0.",
-                    "name": "leftPanelIndex",
-                    "type": "integer"
-                },
-                {
                     "accessPermission": "READ_ONLY",
                     "default": "0",
                     "description": "Contains the current number of Panel nodes that are children of the PanelSet node.",
@@ -4188,24 +4153,10 @@
                 },
                 {
                     "accessPermission": "READ_WRITE",
-                    "default": "system default",
-                    "description": "Specifies the bitmap file used for the right arrow, which appears when the panel on the right indicates that another panel follows it (see the \\[\\*\\*hasNextPanel\\*\\*\\](https://developer.roku.com/dev/docs/panel) field of the Panel node). Only set this field to specify a custom bitmap that differs in appearance from the default bitmap.",
-                    "name": "rightArrowBitmapUri",
-                    "type": "uri"
-                },
-                {
-                    "accessPermission": "READ_WRITE",
                     "default": "500",
                     "description": "Milliseconds of the slide transition. The default is 1/2 second.",
                     "name": "slideDuration",
                     "type": "integer"
-                },
-                {
-                    "accessPermission": "READ_ONLY",
-                    "default": "false",
-                    "description": "Set to true while the panels are sliding, and false when they are not.",
-                    "name": "slidingStatus",
-                    "type": "Boolean"
                 },
                 {
                     "accessPermission": "READ_WRITE",
@@ -16649,7 +16600,7 @@
                     "returnType": "Void"
                 },
                 {
-                    "description": "Removes the connections that any component created with `observeField()` between the subject node field identified by fieldName and a callback function or message port.",
+                    "description": "Removes the previously established connections between the subject node field identified by fieldName and any callback functions or message ports.",
                     "name": "unobserveField",
                     "params": [
                         {

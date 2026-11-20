@@ -51,14 +51,10 @@ sub __catalog_Movie_method_new(title as string, rating = invalid)
     m.rating = rating
 end sub
 function __catalog_Movie_method_describe() as string
-    rating = (function(m)
-            __bsConsequent = m.rating
-            if __bsConsequent <> invalid then
-                return __bsConsequent
-            else
-                return "not rated"
-            end if
-        end function)(m)
+    rating = m.rating
+    if rating = invalid then
+        rating = "not rated"
+    end if
     return (bslib_toString(m.title) + " (" + bslib_toString(rating) + ")")
 end function
 function __catalog_Movie_builder()
@@ -87,8 +83,10 @@ end sub
 - [Namespaces](language-features/namespaces.md) and [Classes](language-features/classes.md): organize your code, with inheritance and access modifiers.
 - [Interfaces](language-features/interfaces.md), [Enums](language-features/enums.md) and [Constants](language-features/constants.md): name your shapes and values, checked at compile time.
 - [Template Strings](language-features/template-strings.md): ``print `hello ${name}` ``.
-- [Ternary](language-features/ternary-operator.md) and [Null-Coalescing](language-features/null-coalescing-operator.md) operators: `a ? b : c` and `a ?? b`.
+- [Ternary](language-features/ternary-operator.md), [Null-Coalescing](language-features/null-coalescing-operator.md) and [Spread](language-features/spread-operator.md) operators: `a ? b : c`, `a ?? b` and `[...a, ...b]`.
 - [Callfunc Operator](language-features/callfunc-operator.md): `node@.someMethod()` instead of `node.callfunc("someMethod")`.
+- [Select Case](language-features/select-case.md) statements and [Exceptions](language-features/exceptions.md) without an exception variable.
+- A type system: [typed assignments](language-features/assignments.md), [typecasts](language-features/typecasts.md), [typed arrays](language-features/typed-arrays.md), [union](language-features/union-types.md) and [intersection](language-features/intersection-types.md) types, [type statements](language-features/type-statements.md) and [function types](language-features/function-types.md). You can even [type check plain BrightScript](language-features/type-checking-without-transpile.md) with comments.
 - [Regular Expression Literals](language-features/regex-literals.md), [Source Literals](language-features/source-literals.md), [Computed Property Names](language-features/computed-property-names.md) and [Annotations](language-features/annotations.md).
 
 ## Used by
