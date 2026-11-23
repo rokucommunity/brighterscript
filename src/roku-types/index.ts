@@ -25,6 +25,7 @@ export interface BRSBaseMethodData extends PossiblyDeprecated {
         isRequired: boolean;
         type: string;
     }[];
+    isVariadic?: boolean;
     returnType: string;
 }
 export interface BRSEventMethodData extends BRSBaseMethodData {
@@ -61,6 +62,7 @@ export interface SGNodeData extends BrightScriptDocLookup {
      * The node this node extends. Absent on the root `Node` type.
      */
     extends?: BrightScriptDocLookup;
+    methods?: BRSInterfaceMethodData[];
 }
 
 export interface BRSComponentData extends BrightScriptDocLookup, PossiblyDeprecated {

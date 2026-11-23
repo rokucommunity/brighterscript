@@ -3,6 +3,7 @@ import type { Range, Position } from 'vscode-languageserver-protocol';
 import { isBrsFile } from '../../astUtils/reflection';
 import type { ProvideSelectionRangesEvent } from '../../interfaces';
 import type { AstNode } from '../../parser/AstNode';
+import { util } from '../../util';
 
 export class SelectionRangesProcessor {
     public constructor(
@@ -30,7 +31,8 @@ export class SelectionRangesProcessor {
 
         // Find the deepest AST node containing this position
         const innerNode = file.ast.findChildAtPosition(position);
-        if (!innerNode?.range) {
+        const innerNodeRange = util.getLocation(innerNode)?.range;
+        if (!innerNodeRange) {
             return undefined;
         }
 
@@ -42,8 +44,9 @@ export class SelectionRangesProcessor {
         // the JS/TS smart-select behaviour — we look up the exact lexer token at the
         // cursor position and use its range as the initial step.
         const token = file.getTokenAt(position);
-        if (token?.range && !rangesEqual(token.range, innerNode.range)) {
-            ranges.push(token.range);
+        const tokenRange = util.getLocation(token)?.range;
+        if (tokenRange && !rangesEqual(tokenRange, innerNodeRange)) {
+            ranges.push(tokenRange);
         }
 
         // Walk up the AST parent chain, collecting each node's range.
@@ -51,7 +54,7 @@ export class SelectionRangesProcessor {
         // only child statement, or an ExpressionStatement === its expression).
         let node: AstNode | undefined = innerNode;
         while (node) {
-            const nodeRange = node.range;
+            const nodeRange = util.getLocation(node)?.range;
             if (nodeRange && !rangesEqual(nodeRange, ranges[ranges.length - 1])) {
                 ranges.push(nodeRange);
             }

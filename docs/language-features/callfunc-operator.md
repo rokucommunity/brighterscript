@@ -32,7 +32,7 @@ node@.doSomething()
   <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
-node.callfunc("doSomething", invalid)
+node.callfunc("doSomething")
 ```
 
 </details>

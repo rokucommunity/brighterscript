@@ -21,7 +21,9 @@ import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
 import { SymbolTable } from '../src/SymbolTable';
-import { TokenKind } from '../src/lexer/TokenKind';
+import { SymbolTypeFlag } from '../src/SymbolTypeFlag';
+import { referenceTypeFactory } from '../src/types/ReferenceType';
+import { unionTypeFactory } from '../src/types/UnionType';
 
 
 type Token = marked.Token;
@@ -36,7 +38,9 @@ const foundTypesTranslation = {
     'uri string': 'uri',
     'oassociativearray': 'roAssociativeArray',
     'int': 'Integer',
-    'bool': 'Boolean'
+    'bool': 'Boolean',
+    //"Number" means any numeric type (e.g. `ifUtils.isNumber(val as Number)`), which has no single brighterscript type
+    'number': 'dynamic'
 };
 
 const turndownService = new TurndownService({
@@ -65,6 +69,8 @@ class Runner {
         const outPath = s`${__dirname}/../src/roku-types/data.json`;
         const previousData = fsExtra.pathExistsSync(outPath) ? fsExtra.readJsonSync(outPath) : undefined;
 
+        SymbolTable.referenceTypeFactory = referenceTypeFactory;
+        SymbolTable.unionTypeFactory = unionTypeFactory;
         //make sure we have a local copy of the roku docs repo
         this.docsDir = ensureDocsRepo();
         //load the base level roku docs data
@@ -336,7 +342,7 @@ class Runner {
                         } as Signature;
                         const call = (statements[0] as ExpressionStatement).expression as CallExpression;
                         //only scan createObject calls for our own name
-                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${component.name}"`) {
+                        if ((call.args[0] as LiteralExpression)?.tokens?.value.text === `"${component.name}"`) {
                             //skip the first arg because that's the name of the component
                             for (let i = 1; i < call.args.length; i++) {
                                 const arg = call.args[i];
@@ -348,8 +354,7 @@ class Runner {
                                     name: paramName,
                                     default: undefined,
                                     isRequired: true,
-                                    //v1 expressions have no `.type`, so v1 always emits 'dynamic' here. Match it to keep data.json in sync with v1
-                                    type: 'dynamic',
+                                    type: (arg as any).type?.toString() ?? 'dynamic',
                                     description: undefined
                                 });
                             }
@@ -616,7 +621,7 @@ class Runner {
         ];
         for (const table of tables) {
             const rows = manager.tableToObjects(table);
-            const descriptionIndex = table.header.findIndex(header => header.text.toLowerCase() === 'description');
+            const descriptionIndex = getTableHeaders(table).indexOf('description');
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
                 let description = table.rows[i][descriptionIndex].text;
@@ -916,14 +921,6 @@ class Runner {
             .replace(/as\s+bool\s*\)/ig, 'as boolean)');
     }
 
-    private getReturnTypeString(func: FunctionStatement) {
-        const token = func.func.returnTypeToken;
-        if (!token) {
-            return undefined;
-        }
-        return token.kind === TokenKind.Identifier ? token.text : token.text.toLowerCase();
-    }
-
     private getMethod(text: string) {
         // var state = new TranspileState(new BrsFile({ srcPath: '', destPath: '', program: new Program({})});
         let functionSignatureToParse = `function ${this.fixFunctionParams(this.sanitizeMarkdownSymbol(text, { allowSpaces: true }))}\nend function`;
@@ -944,10 +941,9 @@ class Runner {
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
-                name: func.name?.text,
+                name: func.tokens.name?.text,
                 params: [],
-                //match v1, whose `getType().toTypeString()` lowercases built-in types but keeps custom type names as written
-                returnType: this.getReturnTypeString(func) ?? returnTypeString ?? 'Void'
+                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? returnTypeString ?? 'Void'
             } as Func;
 
             if (variadicMatch) {
@@ -2161,6 +2157,14 @@ function convertHTMLTable(description: string): string {
 }
 
 /**
+ * Get the header names of a markdown table, lower-cased and without any markdown emphasis or code marks
+ * (some docs bold their headers, like `| **Field** | **Type** |`), so they can be compared and used as keys
+ */
+function getTableHeaders(table: marked.Tokens.Table) {
+    return table?.header?.map(x => x.text.trim().replace(/^[*_`]+|[*_`]+$/g, '').trim().toLowerCase());
+}
+
+/**
  * A class to help manage the parsed markdown tokens
  */
 class TokenManager {
@@ -2219,7 +2223,7 @@ class TokenManager {
         for (let i = startIndex + 1; i < this.tokens.length; i++) {
             const token = this.tokens[i];
             if (token?.type === 'table') {
-                const headers = token?.header?.map(x => x.text.toLowerCase());
+                const headers = getTableHeaders(token);
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
@@ -2252,7 +2256,7 @@ class TokenManager {
                         continue;
                     }
                 }
-                const headers = token?.header?.map(x => x.text.toLowerCase());
+                const headers = getTableHeaders(token);
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
@@ -2272,7 +2276,7 @@ class TokenManager {
      */
     public tableToObjects(table: marked.Tokens.Table) {
         const result = [] as Record<string, string>[];
-        const headers = table?.header?.map(x => x.text.toLowerCase());
+        const headers = getTableHeaders(table);
         for (const row of table?.rows ?? []) {
             const data = {} as Record<string, string>;
             for (let i = 0; i < headers.length; i++) {

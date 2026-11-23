@@ -5,13 +5,13 @@
 Install BrighterScript as a dev dependency of your project, so everyone on the team (and your CI) builds with the same version:
 
 ```bash
-npm install brighterscript --save-dev
+npm install brighterscript@next --save-dev
 ```
 
-Then run the compiler with `npx bsc`. You can also install it globally to get a `bsc` command everywhere:
+v1 is published under the `next` tag on npm until it's released. Then run the compiler with `npx bsc`. You can also install it globally to get a `bsc` command everywhere:
 
 ```bash
-npm install brighterscript -g
+npm install brighterscript@next -g
 ```
 
 ## Your first build
@@ -22,7 +22,7 @@ If your project's files are laid out the way Roku expects (`manifest`, `source/`
 npx bsc
 ```
 
-That's it. The compiler finds every file in your project, checks it for syntax and validation errors, and if there are none, creates a zip of your app at `./out/project.zip`.
+That's it. The compiler finds every file in your project, checks it for syntax and validation errors, and if there are none, writes the transpiled app to the `./out` folder.
 
 To configure your build, see [Configuration](configuration.md).
 
@@ -31,19 +31,13 @@ To configure your build, see [Configuration](configuration.md).
 Your project's files are in a subfolder of your workspace:
 
 ```bash
-bsc --root-dir ./rokuSourceFiles
+bsc --rootDir ./rokuSourceFiles
 ```
 
 Rebuild every time a file changes:
 
 ```bash
 bsc --watch
-```
-
-Rebuild and redeploy to a Roku device every time a file changes:
-
-```bash
-bsc --watch --deploy --host 192.168.1.10 --password secret_password
 ```
 
 Use a `bsconfig.json` that isn't in the current directory:
@@ -55,7 +49,7 @@ bsc --project ./some_folder/bsconfig.json
 Only check for errors, like a linter (works with `--watch` too):
 
 ```bash
-bsc --create-package false --copy-to-staging false
+bsc --noEmit
 ```
 
 ## Editor support

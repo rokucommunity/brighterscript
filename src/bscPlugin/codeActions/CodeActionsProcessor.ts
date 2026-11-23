@@ -1,27 +1,26 @@
-import type { Diagnostic } from 'vscode-languageserver';
 import { CodeActionKind } from 'vscode-languageserver';
 import { codeActionUtil } from '../../CodeActionUtil';
 import type { DeleteChange, InsertChange, ReplaceChange } from '../../CodeActionUtil';
 import type { DiagnosticMessageType } from '../../DiagnosticMessages';
 import { DiagnosticCodeMap, isDiagnosticOfType } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
-import type { XmlFile } from '../../files/XmlFile';
-import type { BscFile, BsDiagnostic, OnGetCodeActionsEvent } from '../../interfaces';
+import type { BscFile } from '../../files/BscFile';
+import type { BsDiagnostic, ProvideCodeActionsEvent } from '../../interfaces';
 import { ParseMode } from '../../parser/Parser';
 import { util } from '../../util';
-import { isBrsFile, isFunctionExpression, isMethodStatement, isXmlFile } from '../../astUtils/reflection';
-import type { FunctionExpression } from '../../parser/Expression';
+import { isBrsFile, isFunctionExpression, isMethodStatement, isVoidType, isXmlFile } from '../../astUtils/reflection';
+import type { FunctionExpression, FunctionParameterExpression } from '../../parser/Expression';
 import type { MethodStatement } from '../../parser/Statement';
-import { WalkMode } from '../../astUtils/visitors';
+import { createVisitor, WalkMode } from '../../astUtils/visitors';
+import type { Locatable } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
-import { getMissingExtendsInsertPosition } from './codeActionHelpers';
+import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import { rangeFromTokenValue } from '../../parser/SGParser';
 import type { Range } from 'vscode-languageserver';
-import type { IToken } from 'chevrotain';
 
 export class CodeActionsProcessor {
     public constructor(
-        public event: OnGetCodeActionsEvent
+        public event: ProvideCodeActionsEvent
     ) {
 
     }
@@ -32,21 +31,13 @@ export class CodeActionsProcessor {
     public process() {
         // First pass: individual fixes for each diagnostic at the cursor position
         for (const diagnostic of this.event.diagnostics) {
-            if (isDiagnosticOfType(diagnostic, 'cannotFindName') || isDiagnosticOfType(diagnostic, 'cannotFindFunction')) {
-                this.suggestCannotFindNameQuickFix(diagnostic);
-            } else if (isDiagnosticOfType(diagnostic, 'classCouldNotBeFound')) {
-                this.suggestClassImportQuickFix(diagnostic);
-            } else if (isDiagnosticOfType(diagnostic, 'xmlComponentMissingExtendsAttribute')) {
-                this.suggestMissingExtendsQuickFix(diagnostic);
+            if (diagnostic.code === DiagnosticCodeMap.cannotFindName || diagnostic.code === DiagnosticCodeMap.cannotFindFunction) {
+                this.suggestCannotFindNameQuickFix(diagnostic as DiagnosticMessageType<'cannotFindName'>);
             } else if (diagnostic.code === DiagnosticCodeMap.voidFunctionMayNotReturnValue) {
                 this.suggestVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
                 this.suggestNonVoidFunctionReturnQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
-                this.suggestRemoveScriptImportQuickFixes([diagnostic]);
-            } else if (diagnostic.code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
                 this.suggestRemoveScriptImportQuickFixes([diagnostic]);
             } else if (diagnostic.code === DiagnosticCodeMap.scriptImportCaseMismatch) {
                 this.suggestScriptImportCasingQuickFixes([diagnostic as DiagnosticMessageType<'scriptImportCaseMismatch'>]);
@@ -56,6 +47,8 @@ export class CodeActionsProcessor {
                 this.suggestRemoveOverrideFromConstructorQuickFixes([diagnostic]);
             } else if (isDiagnosticOfType(diagnostic, 'mismatchedEndingToken')) {
                 this.suggestMismatchedEndingTokenQuickFixes([diagnostic]);
+            } else if (isDiagnosticOfType(diagnostic, 'typeDesignatorMismatch')) {
+                this.suggestTypeDesignatorMismatchQuickFixes([diagnostic]);
             }
         }
 
@@ -71,13 +64,9 @@ export class CodeActionsProcessor {
                     this.suggestVoidFunctionReturnQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.nonVoidFunctionMustReturnValue) {
                     this.suggestNonVoidFunctionReturnQuickFixes(allInFile);
-                } else if (code === DiagnosticCodeMap.unnecessaryCodebehindScriptImport) {
-                    this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.cannotUseOverrideKeywordOnConstructorFunction) {
                     this.suggestRemoveOverrideFromConstructorQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.referencedFileDoesNotExist) {
-                    this.suggestRemoveScriptImportQuickFixes(allInFile);
-                } else if (code === DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent) {
                     this.suggestRemoveScriptImportQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.scriptImportCaseMismatch) {
                     this.suggestScriptImportCasingQuickFixes(allInFile as DiagnosticMessageType<'scriptImportCaseMismatch'>[]);
@@ -85,6 +74,8 @@ export class CodeActionsProcessor {
                     this.suggestMissingOverrideQuickFixes(allInFile);
                 } else if (code === DiagnosticCodeMap.mismatchedEndingToken) {
                     this.suggestMismatchedEndingTokenQuickFixes(allInFile as DiagnosticMessageType<'mismatchedEndingToken'>[]);
+                } else if (code === DiagnosticCodeMap.typeDesignatorMismatch) {
+                    this.suggestTypeDesignatorMismatchQuickFixes(allInFile as DiagnosticMessageType<'typeDesignatorMismatch'>[]);
                 }
             }
         }
@@ -92,8 +83,7 @@ export class CodeActionsProcessor {
         // Import fix-all aggregates across multiple codes so it runs as its own step
         if (
             eventCodes.has(DiagnosticCodeMap.cannotFindName) ||
-            eventCodes.has(DiagnosticCodeMap.cannotFindFunction) ||
-            eventCodes.has(DiagnosticCodeMap.classCouldNotBeFound)
+            eventCodes.has(DiagnosticCodeMap.cannotFindFunction)
         ) {
             this.suggestMissingImportsFixAllQuickFix();
         }
@@ -114,12 +104,14 @@ export class CodeActionsProcessor {
      *   - "Disable {code} for this file": adds the code to an existing header-level `bs:disable`
      *     directive if present, otherwise inserts a new `bs:disable: {code}` at the top of the file.
      *
+     * The `inactive-conditional-compile-branch` hint only fades code that is active under other constants, so it gets no quick fixes.
+     *
      * Comment placement and the line-vs-next-line preference are centralized here so they can be
      * revisited without touching the directive parser.
      */
     private suggestDisableDiagnosticQuickFixes(diagnostic: BsDiagnostic) {
         const code = diagnostic.code;
-        if (code === undefined || code === null) {
+        if (code === undefined || code === null || code === DiagnosticCodeMap.inactiveConditionalCompileBranch) {
             return;
         }
         const file = this.event.file;
@@ -130,7 +122,7 @@ export class CodeActionsProcessor {
         const isXml = isXmlFile(file);
         //existing.forLine: any line/next-line directive on or above the diagnostic line that the line action could extend
         //existing.forFile: any header-level bs:disable that the file action could extend
-        const existing = this.findExistingDisableDirectives(file, diagnostic.range.start.line);
+        const existing = this.findExistingDisableDirectives(file, diagnostic.location?.range.start.line);
 
         //format helpers wrap the directive body in the right comment syntax (`'` for brs, `<!-- -->` for xml)
         const formatLineDirective = (token: 'line' | 'next-line', codes: string[]) => {
@@ -146,13 +138,13 @@ export class CodeActionsProcessor {
         //the two lambdas passed to getDiagnosticSuppressionChange are the "extend existing" and "insert fresh" branches:
         //  1) rebuild the existing directive comment with the new code merged into its code list (preserving line vs next-line)
         //  2) insert a fresh `bs:disable-next-line: {code}` on the line above the diagnostic, matching its indent
-        const indent = ' '.repeat(diagnostic.range.start.character);
+        const indent = ' '.repeat(diagnostic.location.range.start.character);
         const lineAction = this.getDiagnosticSuppressionChange(
             existing.forLine,
             codeStr,
             () => formatLineDirective(existing.forLine!.type as 'line' | 'next-line', this.mergeCodes(existing.forLine?.codes, codeStr)),
             () => ({
-                position: util.createPosition(diagnostic.range.start.line, 0),
+                position: util.createPosition(diagnostic.location.range.start.line, 0),
                 newText: `${indent}${formatLineDirective('next-line', [codeStr])}\n`
             })
         );
@@ -249,7 +241,7 @@ export class CodeActionsProcessor {
         let forLine: ExistingDirective | null = null;
         let forFile: ExistingDirective | null = null;
         for (const token of tokens) {
-            const isComment = isXml ? token.tokenType?.name === 'Comment' : token.kind === TokenKind.Comment;
+            const isComment = isXml ? token.tokenType?.name === 'Comment' : token.leadingTrivia?.some(t => t.kind === TokenKind.Comment);
             if (!isComment) {
                 if (isXml) {
                     if (token.tokenType?.name === 'OPEN') {
@@ -260,20 +252,26 @@ export class CodeActionsProcessor {
                 }
                 continue;
             }
-            const tokenRange: Range = isXml ? rangeFromTokenValue(token as IToken) : token.range;
-            const tokenText: string = isXml ? token.image : token.text;
-            const parsed = parseDisableComment(tokenText);
-            if (!parsed) {
-                continue;
-            }
-            const directive: ExistingDirective = { type: parsed.directiveType, codes: parsed.codes, range: tokenRange };
-            if (!forLine && parsed.directiveType === 'line' && tokenRange.start.line === diagLine) {
-                forLine = directive;
-            } else if (!forLine && parsed.directiveType === 'next-line' && tokenRange.start.line === diagLine - 1) {
-                forLine = directive;
-            } else if (!forFile && parsed.directiveType === 'block' && inHeader) {
-                //only header-level `bs:disable` directives are extended for the file-level quick fix
-                forFile = directive;
+            const commentTokens = isXml ? [token] : token.leadingTrivia.filter(t => t.kind === TokenKind.Comment);
+
+            for (const commentToken of commentTokens) {
+                //`tokens` is an `any[]` union of brs/xml token shapes (see declaration above)
+                //eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+                const tokenRange: Range = isXml ? rangeFromTokenValue(commentToken) : util.getLocation(commentToken).range;
+                const tokenText: string = isXml ? commentToken.image : commentToken.text;
+                const parsed = parseDisableComment(tokenText);
+                if (!parsed) {
+                    continue;
+                }
+                const directive: ExistingDirective = { type: parsed.directiveType, codes: parsed.codes, range: tokenRange };
+                if (!forLine && parsed.directiveType === 'line' && tokenRange.start.line === diagLine) {
+                    forLine = directive;
+                } else if (!forLine && parsed.directiveType === 'next-line' && tokenRange.start.line === diagLine - 1) {
+                    forLine = directive;
+                } else if (!forFile && parsed.directiveType === 'block' && inHeader) {
+                    //only header-level `bs:disable` directives are extended for the file-level quick fix
+                    forFile = directive;
+                }
             }
         }
         return { forLine: forLine, forFile: forFile };
@@ -287,10 +285,11 @@ export class CodeActionsProcessor {
     private getDisableFileInsertion(file: BscFile): { position: ReturnType<typeof util.createPosition>; prefix: string; suffix: string } {
         if (isXmlFile(file)) {
             //insert after the `<?xml ?>` declaration if present, otherwise at the very top
-            const declCloseToken = file.parser.tokens?.find(t => t.tokenType?.name === 'SPECIAL_CLOSE');
+            const declCloseToken = file.parser.tokens?.find(t => (t as any).tokenType?.name === 'SPECIAL_CLOSE');
             if (declCloseToken) {
-                const endLine = declCloseToken.endLine - 1;
-                const endColumn = declCloseToken.endColumn;
+                //xml declaration tokens carry chevrotain's positional fields, which aren't on the brs Token type
+                const endLine: number = (declCloseToken as any).endLine - 1;
+                const endColumn: number = (declCloseToken as any).endColumn;
                 return {
                     position: util.createPosition(endLine, endColumn),
                     prefix: '\n',
@@ -311,32 +310,22 @@ export class CodeActionsProcessor {
      * are sourced from `program.getDiagnostics()` (fetched lazily, only when needed).
      */
     private collectFixAllDiagnostics(eventCodes: Set<number | string>): Map<number | string, BsDiagnostic[]> {
-        const scopeLevelCodes = new Set<number | string>([
-            DiagnosticCodeMap.referencedFileDoesNotExist,
-            DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent,
-            DiagnosticCodeMap.scriptImportCaseMismatch,
-            DiagnosticCodeMap.missingOverrideKeyword
-        ]);
+        const fileUri = util.pathToUri(this.event.file.srcPath);
+        const fileDiagnostics = this.event.program.getDiagnostics().filter(d => d.location?.uri === fileUri) as BsDiagnostic[];
 
         const fileDiagsByCode = new Map<number | string, BsDiagnostic[]>();
-        for (const d of this.event.file.getDiagnostics()) {
+        for (const d of fileDiagnostics) {
             if (!fileDiagsByCode.has(d.code)) {
                 fileDiagsByCode.set(d.code, []);
             }
             fileDiagsByCode.get(d.code).push(d);
         }
 
-        const allScopeFileDiags: BsDiagnostic[] = [...eventCodes].some(c => scopeLevelCodes.has(c))
-            ? this.event.program.getDiagnostics().filter(d => (d as BsDiagnostic).file === this.event.file) as BsDiagnostic[]
-            : [];
-
         const result = new Map<number | string, BsDiagnostic[]>();
         for (const code of eventCodes) {
             result.set(
                 code,
-                scopeLevelCodes.has(code)
-                    ? allScopeFileDiags.filter(d => d.code === code)
-                    : fileDiagsByCode.get(code) ?? []
+                fileDiagsByCode.get(code) ?? []
             );
         }
         return result;
@@ -347,20 +336,21 @@ export class CodeActionsProcessor {
     /**
      * Generic import suggestion function. Shouldn't be called directly from the main loop, but instead called by more specific diagnostic handlers
      */
-    private suggestImportQuickFix(diagnostic: Diagnostic, key: string, files: BscFile[]) {
+    private suggestImportQuickFix(diagnostic: BsDiagnostic, key: string, files: BscFile[]) {
         //skip if we already have this suggestion
         if (this.suggestedImports.has(key)) {
             return;
         }
 
         this.suggestedImports.add(key);
-        const importStatements = (this.event.file as BrsFile).parser.references.importStatements;
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const importStatements = (this.event.file as BrsFile)['_cachedLookups'].importStatements;
         //find the position of the first import statement, or the top of the file if there is none
-        const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? util.createPosition(0, 0);
 
         //find all files that reference this function
         for (const file of files) {
-            const pkgPath = util.getRokuPkgPath(file.pkgPath);
+            const pkgPath = util.sanitizePkgPath(file.destPath);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: `import "${pkgPath}"`,
@@ -381,9 +371,9 @@ export class CodeActionsProcessor {
     /**
      * Suggests import statements for an unresolved name (function, class, namespace, or enum).
      */
-    private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'> | DiagnosticMessageType<'cannotFindFunction'>) {
+    private suggestCannotFindNameQuickFix(diagnostic: DiagnosticMessageType<'cannotFindName'>) {
         //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
+        if (!isBrsFile(this.event.file) || (this.event.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
             return;
         }
         const lowerName = (diagnostic.data.fullName ?? diagnostic.data.name).toLowerCase();
@@ -392,27 +382,11 @@ export class CodeActionsProcessor {
             diagnostic,
             lowerName,
             [
-                ...this.event.file.program.findFilesForFunction(lowerName),
-                ...this.event.file.program.findFilesForClass(lowerName),
-                ...this.event.file.program.findFilesForNamespace(lowerName),
-                ...this.event.file.program.findFilesForEnum(lowerName)
+                ...this.event.program.findFilesForFunction(lowerName),
+                ...this.event.program.findFilesForClass(lowerName),
+                ...this.event.program.findFilesForNamespace(lowerName),
+                ...this.event.program.findFilesForEnum(lowerName)
             ]
-        );
-    }
-
-    /**
-     * Suggests import statements for an unresolved class name.
-     */
-    private suggestClassImportQuickFix(diagnostic: DiagnosticMessageType<'classCouldNotBeFound'>) {
-        //skip if not a BrighterScript file
-        if ((diagnostic.file as BrsFile).parseMode !== ParseMode.BrighterScript) {
-            return;
-        }
-        const lowerClassName = diagnostic.data.className.toLowerCase();
-        this.suggestImportQuickFix(
-            diagnostic,
-            lowerClassName,
-            this.event.file.program.findFilesForClass(lowerClassName)
         );
     }
 
@@ -427,15 +401,17 @@ export class CodeActionsProcessor {
             return;
         }
         const file = this.event.file;
-        const importStatements = file.parser.references.importStatements;
-        const insertPosition = importStatements[importStatements.length - 1]?.importToken.range?.start ?? util.createPosition(0, 0);
+        // eslint-disable-next-line @typescript-eslint/dot-notation
+        const importStatements = file['_cachedLookups'].importStatements;
+        const insertPosition = util.getLocation(importStatements[importStatements.length - 1]?.tokens.import)?.range?.start ?? util.createPosition(0, 0);
 
         const changes: InsertChange[] = [];
         const addedPaths = new Set<string>();
 
         // cannotFindName/classCouldNotBeFound are scope-level diagnostics, so we must
         // use program.getDiagnostics() (filtered by file) rather than file.getDiagnostics().
-        const allFileDiagnostics = this.event.program.getDiagnostics().filter(d => d.file === file);
+        const fileUri = util.pathToUri(file.srcPath);
+        const allFileDiagnostics = this.event.program.getDiagnostics().filter(d => d.location?.uri === fileUri);
 
         for (const diagnostic of allFileDiagnostics) {
             let files: BscFile[] = [];
@@ -445,17 +421,11 @@ export class CodeActionsProcessor {
                 const lowerName = (cannotFindNameDiagnostic.data?.fullName ?? cannotFindNameDiagnostic.data?.name)?.toLowerCase();
                 if (lowerName) {
                     files = [
-                        ...file.program.findFilesForFunction(lowerName),
-                        ...file.program.findFilesForClass(lowerName),
-                        ...file.program.findFilesForNamespace(lowerName),
-                        ...file.program.findFilesForEnum(lowerName)
+                        ...this.event.program.findFilesForFunction(lowerName),
+                        ...this.event.program.findFilesForClass(lowerName),
+                        ...this.event.program.findFilesForNamespace(lowerName),
+                        ...this.event.program.findFilesForEnum(lowerName)
                     ];
-                }
-            } else if (diagnostic.code === DiagnosticCodeMap.classCouldNotBeFound) {
-                const classCouldNotBeFoundDiagnostic = diagnostic as DiagnosticMessageType<'classCouldNotBeFound'>;
-                const lowerClassName = classCouldNotBeFoundDiagnostic.data?.className?.toLowerCase();
-                if (lowerClassName) {
-                    files = file.program.findFilesForClass(lowerClassName);
                 }
             }
 
@@ -464,7 +434,7 @@ export class CodeActionsProcessor {
                 continue;
             }
 
-            const pkgPath = util.getRokuPkgPath(files[0].pkgPath);
+            const pkgPath = util.sanitizePkgPath(files[0].destPath);
             if (!addedPaths.has(pkgPath)) {
                 addedPaths.add(pkgPath);
                 changes.push({
@@ -488,93 +458,44 @@ export class CodeActionsProcessor {
     }
 
     /**
-     * Adds code actions to insert a missing `extends` attribute on an XML component tag.
-     * Offers Group, Task, and ContentNode as common choices.
-     */
-    private suggestMissingExtendsQuickFix(diagnostic: DiagnosticMessageType<'xmlComponentMissingExtendsAttribute'>) {
-        const srcPath = this.event.file.srcPath;
-        const pos = getMissingExtendsInsertPosition(this.event.file as XmlFile);
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Extend "Group"`,
-                diagnostics: [diagnostic],
-                isPreferred: true,
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'insert',
-                    filePath: srcPath,
-                    position: pos,
-                    newText: ' extends="Group"'
-                }]
-            })
-        );
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Extend "Task"`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'insert',
-                    filePath: srcPath,
-                    position: pos,
-                    newText: ' extends="Task"'
-                }]
-            })
-        );
-        this.event.codeActions.push(
-            codeActionUtil.createCodeAction({
-                title: `Extend "ContentNode"`,
-                diagnostics: [diagnostic],
-                kind: CodeActionKind.QuickFix,
-                changes: [{
-                    type: 'insert',
-                    filePath: srcPath,
-                    position: pos,
-                    newText: ' extends="ContentNode"'
-                }]
-            })
-        );
-    }
-
-    /**
      * Adds code actions to resolve a `voidFunctionMayNotReturnValue` diagnostic.
      * Offers removing the return value, converting sub→function, or removing an `as void` return type.
      */
-    private suggestVoidFunctionReturnQuickFixes(diagnostics: Diagnostic[]) {
+    private suggestVoidFunctionReturnQuickFixes(diagnostics: BsDiagnostic[]) {
         const changes = diagnostics.map(d => this.getRemoveReturnValueChange(d));
         this.emitOrFixAll(`Remove return value`, `Fix all: Remove void return values`, changes, diagnostics[0]);
 
         //contextual BrsFile actions only apply to the individual (single-violation) case
         if (changes.length === 1 && isBrsFile(this.event.file)) {
             const diagnostic = diagnostics[0];
-            const expression = this.event.file.getClosestExpression(diagnostic.range.start);
-            const func = expression.findAncestor(isFunctionExpression);
+            const expression = this.event.file.getClosestExpression(diagnostic.location.range.start);
+            const func = expression.findAncestor<FunctionExpression>(isFunctionExpression);
 
             //if we're in a sub and we do not have a return type, suggest converting to a function
-            if (func.functionType.kind === TokenKind.Sub && !func.returnTypeToken) {
+            if (func.tokens.functionType.kind === TokenKind.Sub && !func.returnTypeExpression) {
                 //find the first function in a file that uses the `function` keyword
                 const referenceFunction = this.event.file.parser.ast.findChild<FunctionExpression>((node) => {
-                    return isFunctionExpression(node) && node.functionType.kind === TokenKind.Function;
+                    return isFunctionExpression(node) && node.tokens.functionType.kind === TokenKind.Function;
                 });
-                const functionTypeText = referenceFunction?.functionType.text ?? 'function';
-                const endFunctionTypeText = referenceFunction?.end?.text ?? 'end function';
+                const functionTypeText = referenceFunction?.tokens.functionType.text ?? 'function';
+                const endFunctionTypeText = referenceFunction?.tokens.endFunctionType?.text ?? 'end function';
                 this.event.codeActions.push(
                     codeActionUtil.createCodeAction({
-                        title: `Convert ${func.functionType.text} to ${functionTypeText}`,
+                        title: `Convert ${func.tokens.functionType.text} to ${functionTypeText}`,
                         diagnostics: [diagnostic],
                         kind: CodeActionKind.QuickFix,
                         changes: [
                             //function
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.functionType.range, newText: functionTypeText },
+                            { type: 'replace', filePath: this.event.file.srcPath, range: util.getLocation(func.tokens.functionType).range, newText: functionTypeText },
                             //end function
-                            { type: 'replace', filePath: this.event.file.srcPath, range: func.end.range, newText: endFunctionTypeText }
+                            { type: 'replace', filePath: this.event.file.srcPath, range: util.getLocation(func.tokens.endFunctionType).range, newText: endFunctionTypeText }
                         ]
                     })
                 );
             }
 
             //function `as void` return type. Suggest removing the return type
-            if (func.functionType.kind === TokenKind.Function && func.returnTypeToken?.kind === TokenKind.Void) {
+            if (func.tokens.functionType.kind === TokenKind.Function && func.returnTypeExpression && isVoidType(func.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime }))) {
                 this.event.codeActions.push(
                     codeActionUtil.createCodeAction({
                         title: `Remove return type from function declaration`,
@@ -591,7 +512,7 @@ export class CodeActionsProcessor {
      * Adds code actions to resolve a `nonVoidFunctionMustReturnValue` diagnostic.
      * Offers removing the return type from a sub, adding `as void` to a function, or converting function→sub.
      */
-    private suggestNonVoidFunctionReturnQuickFixes(diagnostics: Diagnostic[]) {
+    private suggestNonVoidFunctionReturnQuickFixes(diagnostics: BsDiagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
         }
@@ -624,24 +545,24 @@ export class CodeActionsProcessor {
         const seenFunctions = new Set<string>();
 
         for (const d of diagnostics) {
-            const expr = file.getClosestExpression(d.range.start);
-            const fn = expr?.findAncestor(isFunctionExpression);
+            const expr = file.getClosestExpression(d.location.range.start);
+            const fn = expr?.findAncestor<FunctionExpression>(isFunctionExpression);
             if (!fn) {
                 continue;
             }
-            const fnKey = `${fn.range.start.line}:${fn.range.start.character}`;
+            const fnKey = `${util.getLocation(fn).range.start.line}:${util.getLocation(fn).range.start.character}`;
             if (seenFunctions.has(fnKey)) {
                 continue;
             }
             seenFunctions.add(fnKey);
 
-            if (fn.functionType.kind === TokenKind.Sub && fn.returnTypeToken && fn.returnTypeToken.kind !== TokenKind.Void) {
+            if (fn.tokens.functionType.kind === TokenKind.Sub && fn.returnTypeExpression && !isVoidType(fn.returnTypeExpression.getType({ flags: SymbolTypeFlag.typetime }))) {
                 removeReturnTypeChanges.push(this.getRemoveFunctionReturnTypeChange(fn));
-            } else if (fn.functionType.kind === TokenKind.Function && !fn.returnTypeToken) {
+            } else if (fn.tokens.functionType.kind === TokenKind.Function && !fn.returnTypeExpression) {
                 addVoidChanges.push({
                     type: 'insert',
                     filePath: this.event.file.srcPath,
-                    position: fn.rightParen.range.end,
+                    position: util.getLocation(fn.tokens.rightParen).range.end,
                     newText: ` ${asText ?? 'as'} ${voidText ?? 'void'}`
                 });
             }
@@ -663,15 +584,15 @@ export class CodeActionsProcessor {
 
         //'Convert function to sub' has no fix-all variant; only add it for the individual case
         if (addVoidChanges.length === 1 && diagnostics.length === 1) {
-            const func = file.getClosestExpression(diagnostics[0].range.start).findAncestor(isFunctionExpression);
+            const func = file.getClosestExpression(diagnostics[0].location.range.start).findAncestor<FunctionExpression>(isFunctionExpression);
             this.event.codeActions.push(
                 codeActionUtil.createCodeAction({
                     title: `Convert function to sub`,
                     diagnostics: [diagnostics[0]],
                     kind: CodeActionKind.QuickFix,
                     changes: [
-                        { type: 'replace', filePath: file.srcPath, range: func.functionType.range, newText: subText ?? 'sub' },
-                        { type: 'replace', filePath: file.srcPath, range: func.end.range, newText: endSubText ?? 'end sub' }
+                        { type: 'replace', filePath: file.srcPath, range: util.getLocation(func.tokens.functionType).range, newText: subText ?? 'sub' },
+                        { type: 'replace', filePath: file.srcPath, range: util.getLocation(func.tokens.endFunctionType).range, newText: endSubText ?? 'end sub' }
                     ]
                 })
             );
@@ -681,27 +602,22 @@ export class CodeActionsProcessor {
     // ---- script import fixes ----
 
     /**
-     * Adds code actions to delete one or more unnecessary or broken script import lines.
+     * Adds code actions to delete one or more broken script import lines.
      */
-    private suggestRemoveScriptImportQuickFixes(diagnostics: Diagnostic[]) {
-        const titles: Record<number, [string, string]> = {
-            [DiagnosticCodeMap.unnecessaryScriptImportInChildFromParent]: ['Remove redundant script import', 'Fix all: Remove redundant script imports'],
-            [DiagnosticCodeMap.unnecessaryCodebehindScriptImport]: ['Remove unnecessary codebehind import', 'Fix all: Remove unnecessary codebehind imports']
-        };
-        const [singleTitle, fixAllTitle] = titles[diagnostics[0]?.code as number] ?? ['Remove script import', 'Fix all: Remove script imports'];
+    private suggestRemoveScriptImportQuickFixes(diagnostics: BsDiagnostic[]) {
         const changes = diagnostics.map<DeleteChange>(diagnostic => {
             return {
                 type: 'delete',
                 filePath: this.event.file.srcPath,
                 range: util.createRange(
-                    diagnostic.range.start.line,
+                    diagnostic.location.range.start.line,
                     0,
-                    diagnostic.range.start.line + 1,
+                    diagnostic.location.range.start.line + 1,
                     0
                 )
             };
         });
-        this.emitOrFixAll(singleTitle, fixAllTitle, changes, diagnostics[0]);
+        this.emitOrFixAll('Remove script import', 'Fix all: Remove script imports', changes, diagnostics[0]);
     }
 
     /**
@@ -717,7 +633,7 @@ export class CodeActionsProcessor {
             changes.push({
                 type: 'replace',
                 filePath: this.event.file.srcPath,
-                range: diagnostic.range,
+                range: diagnostic.location.range,
                 newText: correctFilePath
             });
         }
@@ -734,7 +650,7 @@ export class CodeActionsProcessor {
     /**
      * Adds code actions to insert the missing `override` keyword before a method declaration.
      */
-    private suggestMissingOverrideQuickFixes(diagnostics: Diagnostic[]) {
+    private suggestMissingOverrideQuickFixes(diagnostics: BsDiagnostic[]) {
         if (!isBrsFile(this.event.file)) {
             return;
         }
@@ -746,10 +662,10 @@ export class CodeActionsProcessor {
             file.ast.walk((node) => {
                 if (
                     isMethodStatement(node) &&
-                    node.range?.start?.line === diagnostic.range.start.line &&
-                    node.range?.start?.character === diagnostic.range.start.character
+                    util.getLocation(node)?.range?.start?.line === diagnostic.location.range.start.line &&
+                    util.getLocation(node)?.range?.start?.character === diagnostic.location.range.start.character
                 ) {
-                    insertPosition = (node as MethodStatement).func.functionType?.range?.start;
+                    insertPosition = util.getLocation((node as MethodStatement).func.tokens.functionType)?.range?.start;
                 }
             }, { walkMode: WalkMode.visitStatementsRecursive });
 
@@ -782,7 +698,7 @@ export class CodeActionsProcessor {
             const changes = diagnostics.map<ReplaceChange>(diagnostic => ({
                 type: 'replace',
                 filePath: this.event.file.srcPath,
-                range: diagnostic.range,
+                range: diagnostic.location.range,
                 newText: replacement
             }));
             this.emitOrFixAll(
@@ -795,19 +711,81 @@ export class CodeActionsProcessor {
         }
     }
 
+    // ---- type designator fixes ----
+
+    /**
+     * Adds code actions to resolve a `typeDesignatorMismatch` diagnostic (i.e. `name$ as integer`):
+     *   - change the `as` type to the designator's type (`name$ as string`)
+     *   - remove the ` as <type>` clause entirely (`name$`), leaving the designator to determine the type
+     */
+    private suggestTypeDesignatorMismatchQuickFixes(diagnostics: DiagnosticMessageType<'typeDesignatorMismatch'>[]) {
+        if (!isBrsFile(this.event.file)) {
+            return;
+        }
+        const file = this.event.file;
+        //the diagnostic spans the whole parameter, so index the file's parameters by their range to find each one
+        const paramsByRange = new Map<string, FunctionParameterExpression>();
+        file.ast.walk(createVisitor({
+            FunctionParameterExpression: (param) => {
+                const range = util.getLocation(param)?.range;
+                if (range) {
+                    paramsByRange.set(util.rangeToString(range), param);
+                }
+            }
+        }), { walkMode: WalkMode.visitAllRecursive });
+
+        const changeTypeChanges: ReplaceChange[] = [];
+        const removeAsChanges: DeleteChange[] = [];
+        for (const diagnostic of diagnostics) {
+            const param = diagnostic.location?.range && paramsByRange.get(util.rangeToString(diagnostic.location.range));
+            const typeRange = util.getLocation(param?.typeExpression)?.range;
+            if (!typeRange || !diagnostic.data?.designatorType) {
+                continue;
+            }
+            changeTypeChanges.push({
+                type: 'replace',
+                filePath: file.srcPath,
+                range: typeRange,
+                newText: diagnostic.data.designatorType
+            });
+            //the ` as <type>` clause starts right after whatever precedes the `as` (the default value, or else the name)
+            const asClauseStart = util.getLocation(util.firstLocatable<Locatable>(param.defaultValue, param.tokens.name))?.range.end;
+            if (asClauseStart) {
+                removeAsChanges.push({
+                    type: 'delete',
+                    filePath: file.srcPath,
+                    range: util.createRangeFromPositions(asClauseStart, typeRange.end)
+                });
+            }
+        }
+        const { designatorType, declaredType } = diagnostics[0]?.data ?? {};
+        this.emitOrFixAll(
+            `Change type to '${designatorType}'`,
+            `Fix all: Change types to match their type designators`,
+            changeTypeChanges,
+            diagnostics[0]
+        );
+        this.emitOrFixAll(
+            `Remove 'as ${declaredType}'`,
+            `Fix all: Remove 'as' types that conflict with their type designators`,
+            removeAsChanges,
+            diagnostics[0]
+        );
+    }
+
     /**
      * Adds code actions to remove the invalid `override` keyword from a constructor method.
      */
-    private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: Diagnostic[]) {
+    private suggestRemoveOverrideFromConstructorQuickFixes(diagnostics: BsDiagnostic[]) {
         const changes: DeleteChange[] = diagnostics.map(d => ({
             type: 'delete' as const,
             filePath: this.event.file.srcPath,
             // delete "override " (the keyword token plus the trailing space before function/sub)
             range: util.createRange(
-                d.range.start.line,
-                d.range.start.character,
-                d.range.end.line,
-                d.range.end.character + 1
+                d.location.range.start.line,
+                d.location.range.start.character,
+                d.location.range.end.line,
+                d.location.range.end.character + 1
             )
         }));
         this.emitOrFixAll(
@@ -824,15 +802,15 @@ export class CodeActionsProcessor {
      * Builds a delete change that removes the return value from a `return <expr>` statement,
      * leaving just a bare `return`.
      */
-    private getRemoveReturnValueChange(diagnostic: Diagnostic): DeleteChange {
+    private getRemoveReturnValueChange(diagnostic: BsDiagnostic): DeleteChange {
         return {
             type: 'delete',
             filePath: this.event.file.srcPath,
             range: util.createRange(
-                diagnostic.range.start.line,
-                diagnostic.range.start.character + 'return'.length,
-                diagnostic.range.end.line,
-                diagnostic.range.end.character
+                diagnostic.location.range.start.line,
+                diagnostic.location.range.start.character + 'return'.length,
+                diagnostic.location.range.end.line,
+                diagnostic.location.range.end.character
             )
         };
     }
@@ -847,10 +825,10 @@ export class CodeActionsProcessor {
             filePath: this.event.file.srcPath,
             // )| as <type>|
             range: util.createRange(
-                func.rightParen.range.start.line,
-                func.rightParen.range.start.character + 1,
-                func.returnTypeToken.range.end.line,
-                func.returnTypeToken.range.end.character
+                util.getLocation(func.tokens.rightParen).range.start.line,
+                util.getLocation(func.tokens.rightParen).range.start.character + 1,
+                util.getLocation(func.returnTypeExpression).range.end.line,
+                util.getLocation(func.returnTypeExpression).range.end.character
             )
         };
     }
@@ -864,7 +842,7 @@ export class CodeActionsProcessor {
         singleTitle: string,
         fixAllTitle: string,
         changes: Array<InsertChange | DeleteChange | ReplaceChange>,
-        diagnostic: Diagnostic,
+        diagnostic: BsDiagnostic,
         isPreferred?: boolean
     ) {
         if (changes.length === 0) {

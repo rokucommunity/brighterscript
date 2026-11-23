@@ -3,11 +3,13 @@ import { DiagnosticMessages } from '../DiagnosticMessages';
 import { TokenKind, AllowedLocalIdentifiers, AllowedProperties } from '../lexer/TokenKind';
 import { Lexer } from '../lexer/Lexer';
 import { Parser, ParseMode } from './Parser';
-import type { FunctionStatement, AssignmentStatement, FieldStatement } from './Statement';
+import type { FunctionStatement, AssignmentStatement, FieldStatement, ConditionalCompileStatement, MethodStatement, Block } from './Statement';
 import { ClassStatement } from './Statement';
 import { NewExpression } from './Expression';
 import { expectDiagnostics, expectDiagnosticsIncludes, expectZeroDiagnostics } from '../testHelpers.spec';
-import { isClassStatement } from '../astUtils/reflection';
+import { isClassStatement, isConditionalCompileStatement, isMethodStatement } from '../astUtils/reflection';
+import { StringType } from '../types/StringType';
+import { SymbolTypeFlag } from '../SymbolTypeFlag';
 import util from '../util';
 
 describe('parser class', () => {
@@ -42,9 +44,9 @@ describe('parser class', () => {
                     ${keyword} as string
                 end class
             `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements[0]).instanceof(ClassStatement);
+            expect(ast.statements[0]).instanceof(ClassStatement);
         });
 
         it(`supports ${keyword} as method name`, () => {
@@ -55,9 +57,9 @@ describe('parser class', () => {
                    end sub
                 end class
             `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics[0]?.message).not.to.exist;
-            expect(statements[0]).instanceof(ClassStatement);
+            expect(ast.statements[0]).instanceof(ClassStatement);
         });
     }
 
@@ -68,9 +70,9 @@ describe('parser class', () => {
                 class ${keyword}
                 end class
             `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            expect(statements[0]).instanceof(ClassStatement);
+            expect(ast.statements[0]).instanceof(ClassStatement);
         });
     }
 
@@ -103,7 +105,7 @@ describe('parser class', () => {
 
         expectDiagnostics(parser, [{
             ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
-            range: util.createRange(1, 21, 1, 25)
+            location: util.createLocation(1, 21, 1, 25)
         }]);
     });
 
@@ -117,7 +119,7 @@ describe('parser class', () => {
 
         expectDiagnostics(parser, [{
             ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
-            range: util.createRange(2, 25, 2, 29)
+            location: util.createLocation(2, 25, 2, 29)
         }]);
     });
 
@@ -130,7 +132,7 @@ describe('parser class', () => {
 
         expectDiagnostics(parser, [{
             ...DiagnosticMessages.cannotUseReservedWordAsIdentifier('type'),
-            range: util.createRange(2, 25, 2, 29)
+            location: util.createLocation(2, 25, 2, 29)
         }]);
     });
 
@@ -186,9 +188,9 @@ describe('parser class', () => {
                 class Person
                 end class
             `);
-        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics).to.be.lengthOf(0);
-        expect(statements[0]).instanceof(ClassStatement);
+        expect(ast.statements[0]).instanceof(ClassStatement);
     });
 
     it('bad property does not invalidate next sibling method', () => {
@@ -199,10 +201,10 @@ describe('parser class', () => {
                     end sub
                 end class
             `);
-        let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-        let classStatement = statements[0] as ClassStatement;
+        let { ast } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        let classStatement = ast.statements[0] as ClassStatement;
         expect(classStatement.methods[0]).to.exist;
-        expect(classStatement.methods[0].name.text).to.equal('new');
+        expect(classStatement.methods[0].tokens.name.text).to.equal('new');
     });
 
     it('catches class without name', () => {
@@ -210,19 +212,19 @@ describe('parser class', () => {
                 class
                 end class
             `);
-        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics).length.to.be.greaterThan(0);
-        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('class').code);
-        expect(statements[0]).instanceof(ClassStatement);
+        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifier('class').code);
+        expect(ast.statements[0]).instanceof(ClassStatement);
     });
 
     it('catches malformed class', () => {
         let { tokens } = Lexer.scan(`
                 class Person
             `);
-        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics).length.to.be.greaterThan(0);
-        expect(statements[0]).instanceof(ClassStatement);
+        expect(ast.statements[0]).instanceof(ClassStatement);
     });
 
     describe('fields', () => {
@@ -232,14 +234,14 @@ describe('parser class', () => {
                         public firstName as string
                     end class
                 `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.empty;
-            expect(statements[0]).instanceof(ClassStatement);
-            let field = (statements[0] as ClassStatement).body[0] as FieldStatement;
-            expect(field.accessModifier!.kind).to.equal(TokenKind.Public);
-            expect(field.name!.text).to.equal('firstName');
-            expect(field.as!.text).to.equal('as');
-            expect(field.type!.text).to.equal('string');
+            expect(ast.statements[0]).instanceof(ClassStatement);
+            let field = (ast.statements[0] as ClassStatement).body[0] as FieldStatement;
+            expect(field.tokens.accessModifier!.kind).to.equal(TokenKind.Public);
+            expect(field.tokens.name!.text).to.equal('firstName');
+            expect(field.tokens.as!.text).to.equal('as');
+            expect(field.getType({ flags: SymbolTypeFlag.typetime }))!.to.be.instanceOf(StringType);
         });
 
         it('can be solely an identifier', () => {
@@ -248,10 +250,10 @@ describe('parser class', () => {
                         firstName
                     end class
                 `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name!.text).to.equal('firstName');
+            let cls = ast.statements[0] as ClassStatement;
+            expect(cls.fields[0].tokens.name!.text).to.equal('firstName');
         });
 
         it('malformed field does not impact leading and trailing fields', () => {
@@ -262,23 +264,23 @@ describe('parser class', () => {
                         lastName as string
                     end class
                 `);
-            let { statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name!.text).to.equal('firstName');
-            expect(cls.fields[cls.fields.length - 1].name!.text).to.equal('lastName');
+            let { ast } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let cls = ast.statements[0] as ClassStatement;
+            expect(cls.fields[0].tokens.name!.text).to.equal('firstName');
+            expect(cls.fields[cls.fields.length - 1].tokens.name!.text).to.equal('lastName');
         });
 
         it(`detects missing type after 'as' keyword`, () => {
             let { tokens } = Lexer.scan(`
-                    class Person
-                        middleName as
-                    end class
-                `);
-            let { diagnostics, statements } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                class Person
+                    middleName as
+                end class
+            `);
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics.length).to.be.greaterThan(0);
-            let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].name!.text).to.equal('middleName');
-            expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('as').code);
+            let cls = ast.statements[0] as ClassStatement;
+            expect(cls.fields[0].tokens.name!.text).to.equal('middleName');
+            expectDiagnosticsIncludes(diagnostics, DiagnosticMessages.expectedIdentifier('as'));
         });
 
         it('field access modifier defaults to undefined when omitted', () => {
@@ -287,10 +289,10 @@ describe('parser class', () => {
                         firstName as string
                     end class
                 `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            let cls = statements[0] as ClassStatement;
-            expect(cls.fields[0].accessModifier).to.be.undefined;
+            let cls = ast.statements[0] as ClassStatement;
+            expect(cls.fields[0].tokens.accessModifier).to.be.undefined;
         });
     });
 
@@ -303,12 +305,12 @@ describe('parser class', () => {
                         end function
                     end class
                 `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            let theClass = statements[0] as ClassStatement;
+            let theClass = ast.statements[0] as ClassStatement;
             expect(theClass).to.be.instanceof(ClassStatement);
             let method = theClass.methods[0];
-            expect(method.name.text).to.equal('getName');
+            expect(method.tokens.name.text).to.equal('getName');
             expect(method.accessModifier!.text).to.equal('public');
             expect(method.func).to.exist;
         });
@@ -321,9 +323,9 @@ describe('parser class', () => {
                         end function
                     end class
                 `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            let theClass = statements[0] as ClassStatement;
+            let theClass = ast.statements[0] as ClassStatement;
             let method = theClass.methods[0];
             expect(method.accessModifier!.text).to.equal('public');
             expect(method.func).to.exist;
@@ -337,9 +339,9 @@ describe('parser class', () => {
                         end function
                     end class
                     `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics).to.be.lengthOf(0);
-            let cls = statements[0] as ClassStatement;
+            let cls = ast.statements[0] as ClassStatement;
             expect(cls.methods[0].accessModifier).to.be.undefined;
         });
 
@@ -354,9 +356,9 @@ describe('parser class', () => {
                     end sub
                 end class
             `);
-            let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+            let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
             expect(diagnostics[0]?.message).not.to.exist;
-            let cls = statements[0] as ClassStatement;
+            let cls = ast.statements[0] as ClassStatement;
             expect((cls.memberMap['name'] as FieldStatement).initialValue).to.exist;
             expect((cls.memberMap['age'] as FieldStatement).initialValue).to.exist;
             expect((cls.memberMap['isalive'] as FieldStatement).initialValue).to.exist;
@@ -403,11 +405,11 @@ describe('parser class', () => {
             class Toddler extends Person
             end class
         `);
-        let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+        let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
         expect(diagnostics[0]?.message).to.not.exist;
-        let stmt = (statements[1] as ClassStatement);
-        expect(stmt.extendsKeyword!.text).to.equal('extends');
-        expect(stmt.parentClassName!.getName(ParseMode.BrighterScript)).to.equal('Person');
+        let stmt = (ast.statements[1] as ClassStatement);
+        expect(stmt.tokens.extends!.text).to.equal('extends');
+        expect(stmt.parentClassName.getName()).to.equal('Person');
     });
 
     it('catches missing identifier after "extends" keyword', () => {
@@ -422,12 +424,12 @@ describe('parser class', () => {
             end class
         `);
         let { diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifierAfterKeyword('extends').code);
+        expect(diagnostics[0].code).to.equal(DiagnosticMessages.expectedIdentifier('extends').code);
     });
 
     describe('new keyword', () => {
         it('parses properly', () => {
-            let { statements, diagnostics } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 sub main()
                     a = new Animal()
                 end sub
@@ -436,7 +438,7 @@ describe('parser class', () => {
             `, { mode: ParseMode.BrighterScript });
 
             expect(diagnostics[0]?.message).to.not.exist;
-            let body = (statements[0] as FunctionStatement).func.body;
+            let body = (ast.statements[0] as FunctionStatement).func.body;
             let stmt = (body.statements[0] as AssignmentStatement);
             expect(stmt.value).to.be.instanceof(NewExpression);
         });
@@ -455,85 +457,340 @@ describe('parser class', () => {
 
     describe('optional members', () => {
         it('allows optional fields', () => {
-            let { statements, diagnostics } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 class HasOptional
                     optional name as string
                     optional height
                 end class
             `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements.length).to.eq(1);
-            expect(isClassStatement(statements[0])).to.be.true;
-            const klass = statements[0] as ClassStatement;
+            expect(ast.statements.length).to.eq(1);
+            expect(isClassStatement(ast.statements[0])).to.be.true;
+            const klass = ast.statements[0] as ClassStatement;
             klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            // eslint-disable-next-line no-bitwise
+            klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime).forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
         });
 
         it('allows fields named optional', () => {
-            let { statements, diagnostics } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional
                     someThingElse
                 end class
             `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements.length).to.eq(1);
-            expect(isClassStatement(statements[0])).to.be.true;
-            const klass = statements[0] as ClassStatement;
+            expect(ast.statements.length).to.eq(1);
+            expect(isClassStatement(ast.statements[0])).to.be.true;
+            const klass = ast.statements[0] as ClassStatement;
             klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(2);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
         });
 
         it('allows typed fields named optional', () => {
-            let { statements, diagnostics } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional as string
                 end class
             `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements.length).to.eq(1);
-            expect(isClassStatement(statements[0])).to.be.true;
-            const klass = statements[0] as ClassStatement;
+            expect(ast.statements.length).to.eq(1);
+            expect(isClassStatement(ast.statements[0])).to.be.true;
+            const klass = ast.statements[0] as ClassStatement;
             klass.fields.forEach(f => expect(f.isOptional).to.be.false);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(0));
         });
 
         it('allows fields named optional that are also optional', () => {
-            let { statements, diagnostics } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional optional
                 end class
             `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements.length).to.eq(1);
-            expect(isClassStatement(statements[0])).to.be.true;
-            const klass = statements[0] as ClassStatement;
+            expect(ast.statements.length).to.eq(1);
+            expect(isClassStatement(ast.statements[0])).to.be.true;
+            const klass = ast.statements[0] as ClassStatement;
             klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
         });
 
         it('disallows optional methods', () => {
-            let { statements, diagnostics } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 class HasOptional
+
                     optional function getValue() as boolean
                         return false
                     end function
                 end class
             `, { mode: ParseMode.BrighterScript });
-
             expectDiagnosticsIncludes(diagnostics, [
                 DiagnosticMessages.expectedNewlineOrColon().message
             ]);
-            expect(statements.length).to.eq(1);
+            expect(ast.statements.length).to.eq(1);
         });
 
         it('allows fields named `as` that are also optional', () => {
-            let { statements, diagnostics } = Parser.parse(`
+            let { ast, diagnostics } = Parser.parse(`
                 class IsJustOptional
                     optional as
                 end class
             `, { mode: ParseMode.BrighterScript });
             expectZeroDiagnostics(diagnostics);
-            expect(statements.length).to.eq(1);
-            expect(isClassStatement(statements[0])).to.be.true;
-            const klass = statements[0] as ClassStatement;
+            expect(ast.statements.length).to.eq(1);
+            expect(isClassStatement(ast.statements[0])).to.be.true;
+            const klass = ast.statements[0] as ClassStatement;
             klass.fields.forEach(f => expect(f.isOptional).to.be.true);
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            const klassMembers = klassType.getMemberTable().getAllSymbols(SymbolTypeFlag.runtime);
+            expect(klassMembers.length).to.eq(1);
+            // eslint-disable-next-line no-bitwise
+            klassMembers.forEach(sym => expect(sym.flags & SymbolTypeFlag.optional).to.eq(SymbolTypeFlag.optional));
+        });
+    });
+
+    describe('conditional compile', () => {
+        it('allows methods inside conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    sub speak()
+                    end sub
+
+                    #if DEBUG
+                        sub debugSpeak()
+                            print "debug"
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            expect(isClassStatement(klass)).to.be.true;
+            expect(isConditionalCompileStatement(klass.body[1])).to.be.true;
+            const cc = klass.body[1] as ConditionalCompileStatement;
+            expect(isMethodStatement(cc.thenBranch.statements[0])).to.be.true;
+            //both methods are registered on the class
+            expect(klass.methods.map(x => x.tokens.name.text)).to.eql(['speak', 'debugSpeak']);
+            expect(klass.memberMap['debugspeak']).to.exist;
+        });
+
+        it('allows fields inside conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    name as string
+                    #if DEBUG
+                        debugName as string
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            expect(klass.fields.map(x => x.tokens.name.text)).to.eql(['name', 'debugName']);
+        });
+
+        it('allows #else and #else if branches with members', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                            print "debug"
+                        end sub
+                    #else if BETA
+                        sub speak()
+                            print "beta"
+                        end sub
+                    #else
+                        sub speak()
+                            print "prod"
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const cc = klass.body[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(cc)).to.be.true;
+            expect(isMethodStatement(cc.thenBranch.statements[0])).to.be.true;
+            const elseIf = cc.elseBranch as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(elseIf)).to.be.true;
+            expect(elseIf.tokens.condition.text).to.eq('BETA');
+            expect(isMethodStatement(elseIf.thenBranch.statements[0])).to.be.true;
+            expect(isMethodStatement((elseIf.elseBranch as Block).statements[0])).to.be.true;
+            //all three speak() methods are registered
+            expect(klass.methods).to.be.lengthOf(3);
+        });
+
+        it('allows nested conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        #if BETA
+                            sub speak()
+                            end sub
+                        #end if
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const outer = klass.body[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(outer)).to.be.true;
+            const inner = outer.thenBranch.statements[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(inner)).to.be.true;
+            expect(isMethodStatement(inner.thenBranch.statements[0])).to.be.true;
+            expect(klass.methods).to.be.lengthOf(1);
+        });
+
+        it('allows empty conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            expect(isConditionalCompileStatement(klass.body[0])).to.be.true;
+        });
+
+        it('allows annotations on members inside conditional compile blocks', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        @it("does something")
+                        sub speak()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const cc = klass.body[0] as ConditionalCompileStatement;
+            const method = cc.thenBranch.statements[0] as MethodStatement;
+            expect(method.annotations?.[0]?.name).to.eq('it');
+        });
+
+        it('attaches an annotation preceding a conditional compile block to the block itself', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    @deprecated
+                    #if DEBUG
+                        sub debugSpeak()
+                        end sub
+                    #end if
+
+                    sub speak()
+                    end sub
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const cc = klass.body[0] as ConditionalCompileStatement;
+            expect(isConditionalCompileStatement(cc)).to.be.true;
+            expect(cc.annotations?.[0]?.name).to.eq('deprecated');
+
+            const speak = klass.body[1] as MethodStatement;
+            expect(speak.annotations ?? []).to.be.empty;
+        });
+
+        it('includes members of an active conditional compile branch in the class type', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript, bsConsts: new Map([['debug', true]]) });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const klassType = klass.getType({ flags: SymbolTypeFlag.typetime });
+            expect(klassType.getMemberTable().getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
+        });
+
+        it('leaves members of an inactive branch out of the class type of a parsed tree that does not belong to a file', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                        end sub
+                    #else
+                        sub whisper()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript, bsConsts: new Map([['debug', false]]) });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const memberTable = klass.getType({ flags: SymbolTypeFlag.typetime }).getMemberTable();
+            expect(memberTable.getSymbol('speak', SymbolTypeFlag.runtime)).not.to.exist;
+            expect(memberTable.getSymbol('whisper', SymbolTypeFlag.runtime)).to.exist;
+            expect(klass.methods.map(method => method.tokens.name.text)).to.eql(['speak', 'whisper']);
+        });
+
+        it('includes a member that no walk has reached in the class type', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    sub speak()
+                    end sub
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            //like a member a plugin just created
+            klass.methods[0].isActive = undefined;
+            const memberTable = klass.getType({ flags: SymbolTypeFlag.typetime }).getMemberTable();
+            expect(memberTable.getSymbol('speak', SymbolTypeFlag.runtime)).to.exist;
+        });
+
+        it('prefers the active member in memberMap when both branches declare the same name', () => {
+            let { ast, diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        name as string
+                    #else
+                        name as integer
+                    #end if
+                    #if DEBUG
+                        sub debugOnly()
+                        end sub
+                    #end if
+                end class
+            `, { mode: ParseMode.BrighterScript, bsConsts: new Map([['debug', true]]) });
+            expectZeroDiagnostics(diagnostics);
+            const klass = ast.statements[0] as ClassStatement;
+            const conditionalCompile = klass.body[0] as ConditionalCompileStatement;
+            expect(klass.memberMap['name']).to.equal((conditionalCompile.thenBranch.statements[0]));
+
+            //flip the constant: the else branch's member wins, and a name only declared in an inactive branch still maps to its member
+            ast.bsConsts = new Map([['debug', false]]);
+            ast.link();
+            expect(klass.memberMap['name']).to.equal((conditionalCompile.elseBranch as Block).statements[0]);
+            expect(klass.memberMap['debugonly']?.isActive).to.be.false;
+        });
+
+        it('flags unterminated conditional compile blocks in class bodies', () => {
+            let { diagnostics } = Parser.parse(`
+                class Person
+                    #if DEBUG
+                        sub speak()
+                        end sub
+                end class
+            `, { mode: ParseMode.BrighterScript });
+            expect(diagnostics.length).to.be.greaterThan(0);
         });
     });
 });

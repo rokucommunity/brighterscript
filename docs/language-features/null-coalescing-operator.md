@@ -48,14 +48,10 @@ name = userA.name ?? userB.name
   <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
-name = (function(userA, userB)
-        __bsConsequent = userA.name
-        if __bsConsequent <> invalid then
-            return __bsConsequent
-        else
-            return userB.name
-        end if
-    end function)(userA, userB)
+name = userA.name
+if name = invalid then
+    name = userB.name
+end if
 ```
 
 </details>
@@ -70,21 +66,17 @@ user = getUser(userId ?? globalSettings.defaultUserId) ?? getDefaultUser()
   <summary>View the transpiled BrightScript code</summary>
 
 ```brightscript
-user = (function(getDefaultUser, getUser, globalSettings, userId)
-        __bsConsequent = getUser((function(globalSettings, userId)
-                __bsConsequent = userId
-                if __bsConsequent <> invalid then
-                    return __bsConsequent
-                else
-                    return globalSettings.defaultUserId
-                end if
-            end function)(globalSettings, userId))
+user = getUser((function(globalSettings, userId)
+        __bsConsequent = userId
         if __bsConsequent <> invalid then
             return __bsConsequent
         else
-            return getDefaultUser()
+            return globalSettings.defaultUserId
         end if
-    end function)(getDefaultUser, getUser, globalSettings, userId)
+    end function)(globalSettings, userId))
+if user = invalid then
+    user = getDefaultUser()
+end if
 ```
 
 </details>
