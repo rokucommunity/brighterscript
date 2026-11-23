@@ -38,7 +38,9 @@ const foundTypesTranslation = {
     'uri string': 'uri',
     'oassociativearray': 'roAssociativeArray',
     'int': 'Integer',
-    'bool': 'Boolean'
+    'bool': 'Boolean',
+    //"Number" means any numeric type (e.g. `ifUtils.isNumber(val as Number)`), which has no single brighterscript type
+    'number': 'dynamic'
 };
 
 const turndownService = new TurndownService({
@@ -619,7 +621,7 @@ class Runner {
         ];
         for (const table of tables) {
             const rows = manager.tableToObjects(table);
-            const descriptionIndex = table.header.findIndex(header => header.text.toLowerCase() === 'description');
+            const descriptionIndex = getTableHeaders(table).indexOf('description');
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
                 let description = table.rows[i][descriptionIndex].text;
@@ -2155,6 +2157,14 @@ function convertHTMLTable(description: string): string {
 }
 
 /**
+ * Get the header names of a markdown table, lower-cased and without any markdown emphasis or code marks
+ * (some docs bold their headers, like `| **Field** | **Type** |`), so they can be compared and used as keys
+ */
+function getTableHeaders(table: marked.Tokens.Table) {
+    return table?.header?.map(x => x.text.trim().replace(/^[*_`]+|[*_`]+$/g, '').trim().toLowerCase());
+}
+
+/**
  * A class to help manage the parsed markdown tokens
  */
 class TokenManager {
@@ -2213,7 +2223,7 @@ class TokenManager {
         for (let i = startIndex + 1; i < this.tokens.length; i++) {
             const token = this.tokens[i];
             if (token?.type === 'table') {
-                const headers = token?.header?.map(x => x.text.toLowerCase());
+                const headers = getTableHeaders(token);
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
@@ -2246,7 +2256,7 @@ class TokenManager {
                         continue;
                     }
                 }
-                const headers = token?.header?.map(x => x.text.toLowerCase());
+                const headers = getTableHeaders(token);
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
@@ -2266,7 +2276,7 @@ class TokenManager {
      */
     public tableToObjects(table: marked.Tokens.Table) {
         const result = [] as Record<string, string>[];
-        const headers = table?.header?.map(x => x.text.toLowerCase());
+        const headers = getTableHeaders(table);
         for (const row of table?.rows ?? []) {
             const data = {} as Record<string, string>;
             for (let i = 0; i < headers.length; i++) {
