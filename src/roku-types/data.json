@@ -1,5 +1,5 @@
 {
-    "generatedDate": "2026-11-12T15:04:51.979Z",
+    "generatedDate": "2026-11-23T19:29:51.029Z",
     "nodes": {
         "animatedimage": {
             "description": "Extends [**Group**](https://developer.roku.com/dev/docs/group)\n\nThe AnimatedImage node enables developers to render animated GIFs, stickers, and small videos. It is designed for low-frame-rate, simple animations that reside in a small area.\n\nOnly use a single, small animated image at a time to minimize CPU load and memory usage (large animations may consume CPU and memory resources; using too many animated images may cause choppy animations).\n\nThe AnimatedImage downloads the entire resource before decoding. Playback begins only after the download hasbeen completed.\n\n> \\[!NOTE\\] This node is not supported on older Roku device models (Liberty, Littlefield, Austin, Briscoe, Ft. Worth, Gilbert, Amarillo).",
