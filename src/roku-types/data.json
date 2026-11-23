@@ -8,7 +8,120 @@
                 "name": "Group",
                 "url": "https://developer.roku.com/dev/docs/group"
             },
-            "fields": [],
+            "fields": [
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "-",
+                    "description": "If not provided the system will attempt to automatically detect the file type. Playback control. \\`loop\\` \\`pause\\` \\`play\\` \\`rewind\\`",
+                    "name": "control",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "-",
+                    "description": "Error message if failed.",
+                    "name": "error",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "1.0",
+                    "description": "Controls the rendering opacity of the image that indicates the animated image failed to load. This value multiplies the AnimatedImage node opacity.",
+                    "name": "failedBitmapOpacity",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "-",
+                    "description": "Specifies a bitmap file to display when the animated image failed to load. The failed bitmap is rendered when the node is in the \\`error\\` state. This must be a single image, not an animated image.",
+                    "name": "failedBitmapUri",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0.0f",
+                    "description": "Display height in pixels.",
+                    "name": "height",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "**scaleToFit**",
+                    "description": "The scaling behavior to be used. Select one of the following: \\\\- \\*\\*scaleToFit\\*\\*: Scale preserving aspect ratio. Fit within bounds. \\\\- \\*\\*scaleToZoom\\*\\*: Scale preserving aspect ratio. Fill entire bounds (crop overflow). \\\\- \\*\\*scaleToFill:\\*\\* Fill node. Does not preserve aspect ratio. \\\\- \\*\\*noScale\\*\\*: Fill node. Does not preserve aspect ratio. \\\\- \\*\\*limitSize\\*\\*: Only scale down, if needed. Does not scale up.",
+                    "name": "loadDisplayMode",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0.0f",
+                    "description": "Height for decoding animation (default is original dimensions).",
+                    "name": "loadHeight",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "1.0",
+                    "description": "Controls the rendering opacity of the image that indicates the animated image is loading. This value multiplies the AnimatedImage node opacity.",
+                    "name": "loadingBitmapOpacity",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "-",
+                    "description": "Specifies a bitmap file to display while the animated image is loading. The loading bitmap is rendered when the node is in the \\`downloading\\` or \\`init\\` state. This must be a single image, not an animated image.",
+                    "name": "loadingBitmapUri",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0.0f",
+                    "description": "Width for decoding animation (default is the original dimensions).",
+                    "name": "loadWidth",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "0",
+                    "description": "Decoded image height.",
+                    "name": "mediaHeight",
+                    "type": "Integer"
+                },
+                {
+                    "accessPermission": "READ_ONLY",
+                    "default": "0",
+                    "description": "Decoded image width.",
+                    "name": "mediaWidth",
+                    "type": "Integer"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "-",
+                    "description": "Optional MIME type hint, which may be one of the following values: \\\\- \\*\\*video/mp4\\*\\*: vp9 encoded video in mp4 video container \\\\- \\*\\*video/webp\\*\\*: animated WebP \\\\-\\*\\*video/lottie+json\\*\\*: json Lottie or compressed dotLottie",
+                    "name": "mimeType",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "**stop**",
+                    "description": "Current playback state (read-only). This may be one of the following values: \\\\- \\*\\*downloading\\*\\* \\\\- \\*\\*init\\*\\* \\\\- \\*\\*first\\*\\* \\\\- \\*\\*decode\\*\\* \\\\- \\*\\*stop\\*\\* \\\\- \\*\\*error\\*\\*",
+                    "name": "state",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "-",
+                    "description": "Path/URL to animated image.",
+                    "name": "uri",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0.0f",
+                    "description": "Display width in pixels.",
+                    "name": "width",
+                    "type": "float"
+                }
+            ],
             "interfaces": [],
             "name": "AnimatedImage",
             "url": "https://developer.roku.com/dev/docs/animatedimage"
@@ -3990,7 +4103,92 @@
             "availableSince": "14.0",
             "description": "_Available since [Roku OS 14.0](https://developer.roku.com/dev/docs/release-notes#roku-os-140)_\n\nThe **MonospaceLabel** node is used to draw a single line of text with all characters spaced at a fixed distance from each other. It transforms proportional fonts into monospaced fonts. It is a substitute for using a monospace font with the **Label** node.\n\n**Fields**\n\n| **Field** | **Type** | **Default** | **Access Permission** | **Description** |\n| :-- | :-- | :-- | :-- | :-- |\n| text | string |  | READ\\_WRITE | Specifies the text to be displayed |\n| color | color | 0xddddddff | READ\\_WRITE | Specifies the text color |\n| font | Font | system default | READ\\_WRITE | Specifies the Font node to be used |\n| horizAlign | string | left | READ\\_WRITE | See [Horizontal Alignment](https://developer.roku.com/dev/docs/label-base#horizontal-alignment) |\n| vertAlign | string | top | READ\\_WRITE | See [Vertical Alignment](https://developer.roku.com/dev/docs/label-base#vertical-alignment) |\n| width | float | 0 | READ\\_WRITE | Specifies the width of the label. If set to zero, the width of the label will be set automatically |\n| height | float | 0 | READ\\_WRITE | Specifies the height of the label. If set to zero, the height of the label will be set automatically |\n| characterWidth | float | 0 | READ\\_WRITE | Specifies the width of the label characters. If set to zero, width of font’s character 'M' will be used |\n| ellipsizeOnBoundary | Boolean | false | READ\\_WRITE | If the width field value is greater than zero, controls whether or not the last line of text displayed should be ellipsized if it extends beyond the specified width. It is ignored if the truncateOnDelimiter field value is set to a non-empty stringWhen set to true, text will be ellipsized by whole words. Example: \"This is the last line of...\"When set to false, text will be ellipsized by characters. Example: \"This is the last line of tex...\" |\n| firstCharTrueLeftAlign | Boolean | false | READ\\_WRITE | Forces the first character to left align completely instead of rendering centered in the character box. Subsequent characters are centered in their character box. If enabled monospace text strings with different first characters will shift around. This is primarily used for single characters strings |\n| wordBreakChars | string |  | READ\\_WRITE | By default, space and hyphen characters are used to determine where lines can be divided. In addition, this field can specify additional characters to be used to determine where the text can be broken into lines |\n| isTextEllipsized | Boolean | false | READ | Tells whether or not currently displayed text is clipped. |",
             "events": [],
-            "fields": [],
+            "fields": [
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0",
+                    "description": "Specifies the width of the label characters. If set to zero, width of font’s character 'M' will be used",
+                    "name": "characterWidth",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0xddddddff",
+                    "description": "Specifies the text color",
+                    "name": "color",
+                    "type": "color"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
+                    "description": "If the width field value is greater than zero, controls whether or not the last line of text displayed should be ellipsized if it extends beyond the specified width. It is ignored if the truncateOnDelimiter field value is set to a non-empty stringWhen set to true, text will be ellipsized by whole words. Example: \"This is the last line of...\"When set to false, text will be ellipsized by characters. Example: \"This is the last line of tex...\"",
+                    "name": "ellipsizeOnBoundary",
+                    "type": "Boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "false",
+                    "description": "Forces the first character to left align completely instead of rendering centered in the character box. Subsequent characters are centered in their character box. If enabled monospace text strings with different first characters will shift around. This is primarily used for single characters strings",
+                    "name": "firstCharTrueLeftAlign",
+                    "type": "Boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "system default",
+                    "description": "Specifies the Font node to be used",
+                    "name": "font",
+                    "type": "Font"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0",
+                    "description": "Specifies the height of the label. If set to zero, the height of the label will be set automatically",
+                    "name": "height",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "left",
+                    "description": "See \\[Horizontal Alignment\\](https://developer.roku.com/dev/docs/label-base#horizontal-alignment)",
+                    "name": "horizAlign",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ",
+                    "default": "false",
+                    "description": "Tells whether or not currently displayed text is clipped.",
+                    "name": "isTextEllipsized",
+                    "type": "Boolean"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "Specifies the text to be displayed",
+                    "name": "text",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "top",
+                    "description": "See \\[Vertical Alignment\\](https://developer.roku.com/dev/docs/label-base#vertical-alignment)",
+                    "name": "vertAlign",
+                    "type": "string"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "0",
+                    "description": "Specifies the width of the label. If set to zero, the width of the label will be set automatically",
+                    "name": "width",
+                    "type": "float"
+                },
+                {
+                    "accessPermission": "READ_WRITE",
+                    "default": "",
+                    "description": "By default, space and hyphen characters are used to determine where lines can be divided. In addition, this field can specify additional characters to be used to determine where the text can be broken into lines",
+                    "name": "wordBreakChars",
+                    "type": "string"
+                }
+            ],
             "interfaces": [],
             "name": "MonospaceLabel",
             "url": "https://developer.roku.com/dev/docs/monospace-label"
@@ -15393,12 +15591,14 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The ID of the message channel to which this handler should be registered.",
                             "isRequired": true,
                             "name": "message_id",
                             "type": "String"
                         },
                         {
                             "default": null,
+                            "description": "The name of the handler function to be called for each message received.",
                             "isRequired": true,
                             "name": "handler",
                             "type": "String"
@@ -15413,12 +15613,14 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The ID of the channel to which this message should be posted.",
                             "isRequired": true,
                             "name": "message_id",
                             "type": "String"
                         },
                         {
                             "default": null,
+                            "description": "Contents of the message that will be passed to any registered handlers.",
                             "isRequired": true,
                             "name": "data",
                             "type": "Object"
@@ -15439,12 +15641,14 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The ID of the app to which this message should be posted.",
                             "isRequired": true,
                             "name": "message_id",
                             "type": "String"
                         },
                         {
                             "default": null,
+                            "description": "The contents of the message to be passed to any registered handlers. This must be recursively copyable. Non-copyable objects are ignored silently.   Copyable objects include:  *   roAssociativeArray *   roArray *   integer, long integer *   string *   bool *   float, double *   invalid *   roSGNode",
                             "isRequired": true,
                             "name": "data",
                             "type": "Object"
@@ -16368,6 +16572,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The name of the node's field to be referenced.",
                             "isRequired": true,
                             "name": "field_name",
                             "type": "String"
@@ -16397,6 +16602,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The source field that contains the associative array to be moved.",
                             "isRequired": true,
                             "name": "field_name",
                             "type": "String"
@@ -16411,12 +16617,14 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The target field (an associativeArray) of the node where you want to move the source object.",
                             "isRequired": true,
                             "name": "field_name",
                             "type": "String"
                         },
                         {
                             "default": null,
+                            "description": "The source object to be moved.",
                             "isRequired": true,
                             "name": "data",
                             "type": "Object"
@@ -16585,12 +16793,14 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The name of the node's field to be assigned the associative array.",
                             "isRequired": true,
                             "name": "field_name",
                             "type": "String"
                         },
                         {
                             "default": null,
+                            "description": "The associative array to be referenced by the field.",
                             "isRequired": true,
                             "name": "data",
                             "type": "Object"
@@ -19405,6 +19615,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The object to be copied",
                             "isRequired": true,
                             "name": "data",
                             "type": "Object"
@@ -19419,6 +19630,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The component name to check for an existing registration.",
                             "isRequired": true,
                             "name": "componentName",
                             "type": "String"
@@ -19433,6 +19645,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The value to be evlauated.",
                             "isRequired": true,
                             "name": "val",
                             "type": "Float"
@@ -19447,6 +19660,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The value to be evlauated.",
                             "isRequired": true,
                             "name": "val",
                             "type": "Integer"
@@ -19461,6 +19675,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The value to be evlauated.",
                             "isRequired": true,
                             "name": "val",
                             "type": "dynamic"
@@ -19475,12 +19690,14 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "First object",
                             "isRequired": true,
                             "name": "data1",
                             "type": "Object"
                         },
                         {
                             "default": null,
+                            "description": "Second object",
                             "isRequired": true,
                             "name": "data2",
                             "type": "Object"
@@ -19495,6 +19712,7 @@
                     "params": [
                         {
                             "default": null,
+                            "description": "The value to be evlauated.",
                             "isRequired": true,
                             "name": "val",
                             "type": "String"
