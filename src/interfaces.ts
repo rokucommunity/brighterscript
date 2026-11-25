@@ -1274,6 +1274,28 @@ export interface ExtraSymbolData {
     isFromTypeStatement?: boolean;
 }
 
+/**
+ * Create an `ExtraSymbolData` with every field present (and `undefined`). Lookups fill these in one field at a time, and starting from `{}`
+ * leaves most of them in a separate out-of-object property store and gives the objects many different hidden classes.
+ * Starting with every field keeps them all in the object, with one shared hidden class
+ */
+export function createExtraSymbolData(): ExtraSymbolData {
+    return {
+        definingNode: undefined,
+        description: undefined,
+        completionPriority: undefined,
+        flags: undefined,
+        memberOfAncestor: undefined,
+        doNotMerge: undefined,
+        isAlias: undefined,
+        isInstance: undefined,
+        isFromDocComment: undefined,
+        isBuiltIn: undefined,
+        isFromCallFunc: undefined,
+        isFromTypeStatement: undefined
+    };
+}
+
 export interface GetTypeOptions {
     flags: SymbolTypeFlag;
     typeChain?: TypeChainEntry[];
@@ -1316,7 +1338,7 @@ export class TypeChainEntry {
     }) {
         this.name = options.name;
         // make a copy of this data
-        this.data = { ...options.data };
+        this.data = Object.assign(createExtraSymbolData(), options.data);
         this.type = options.type;
         this.locatableOverride = options.locatable;
         this.separatorToken = options.separatorToken ?? createToken(TokenKind.Dot);

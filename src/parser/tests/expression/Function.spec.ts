@@ -404,56 +404,48 @@ describe('parser', () => {
                 kind: TokenKind.Identifier,
                 text: '_',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 0, 0, 1)
             },
             {
                 kind: TokenKind.Equal,
                 text: '=',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 2, 0, 3)
             },
             {
                 kind: TokenKind.Sub,
                 text: 'sub',
                 leadingTrivia: [],
-                isReserved: true,
                 ...testLocatable(0, 4, 0, 7)
             },
             {
                 kind: TokenKind.LeftParen,
                 text: '(',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 11, 0, 12)
             },
             {
                 kind: TokenKind.RightParen,
                 text: ')',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 12, 0, 13)
             },
             {
                 kind: TokenKind.Newline,
                 text: '\n',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(0, 13, 0, 14)
             },
             {
                 kind: TokenKind.EndSub,
                 text: 'end sub',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 0, 2, 7)
             },
             {
                 kind: TokenKind.Eof,
                 text: '\0',
                 leadingTrivia: [],
-                isReserved: false,
                 ...testLocatable(2, 7, 2, 8)
             }
         ]);

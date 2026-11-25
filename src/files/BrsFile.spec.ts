@@ -596,6 +596,50 @@ describe('BrsFile', () => {
         expectZeroDiagnostics(program);
     });
 
+    it('supports roUtils methods from ifUtils', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                utils = CreateObject("roUtils")
+                copy = utils.DeepCopy({ name: "bob" })
+                print utils.IsSameObject(copy, copy)
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports roWebSocket and its ifWebSocket methods', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                port = CreateObject("roMessagePort")
+                ws = CreateObject("roWebSocket")
+                ws.SetMessagePort(port)
+                ws.AddHeader("Authorization", "Bearer abc")
+                ws.SetUrl("wss://example.com/socket")
+                ws.Open()
+                ws.PingTest(1000, "ping")
+                ws.SetTimer("heartbeat", 5000)
+                ws.Close(1000, "done")
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
+    it('supports the Effect node', () => {
+        program.setFile('source/main.brs', `
+            sub test()
+                effect = CreateObject("roSGNode", "Effect")
+                effect.borderRadius = [12]
+                effect.gradientStyle = "linear"
+                poster = CreateObject("roSGNode", "Poster")
+                poster.effect = effect
+            end sub
+        `);
+        program.validate();
+        expectZeroDiagnostics(program);
+    });
+
     it('sets needsTranspiled to true for .bs files', () => {
         //BrightScript
         expect(new BrsFile({
@@ -3350,6 +3394,32 @@ describe('BrsFile', () => {
             `);
         });
 
+        describe('type designators', () => {
+            it('drops an `as` type that conflicts with the parameter type designator', async () => {
+                await testTranspile(`
+                    sub one(a$ as integer, c! as dynamic, d# as object, e& as float, b% = 1 as string)
+                    end sub
+                `, `
+                    sub one(a$, c!, d#, e&, b% = 1)
+                    end sub
+                `, 'trim', 'source/main.bs', false);
+            });
+
+            it('keeps an `as` type that matches the parameter type designator', async () => {
+                await testTranspile(`
+                    sub one(a$ as string, c! as float, d# as double, e& as LongInteger, b% = 1 as integer)
+                    end sub
+                `);
+            });
+
+            it('keeps `as` types on parameters without a type designator', async () => {
+                await testTranspile(`
+                    sub one(a as integer, c as dynamic, d as object, b = "" as string)
+                    end sub
+                `);
+            });
+        });
+
         it('discard return type when removeParameterTypes is true', async () => {
             program.options.removeParameterTypes = true;
             await testTranspile(`
@@ -5152,6 +5222,34 @@ describe('BrsFile', () => {
                 `);
             });
 
+            it('does not inline an enum member when the first part of the expression is shadowed', async () => {
+                await testTranspile(`
+                    sub shadowed()
+                        direction = { up: "north" }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print direction.up
+                    end sub
+
+                    enum Direction
+                        up = "up"
+                    end enum
+                    `, `
+                    sub shadowed()
+                        direction = {
+                            up: "north"
+                        }
+                        print direction.up
+                    end sub
+
+                    sub notShadowed()
+                        print "up"
+                    end sub
+                `);
+            });
+
             it('handles shadowed enum names in namespace', async () => {
                 await testTranspile(`
                     namespace alpha
@@ -5344,6 +5442,36 @@ describe('BrsFile', () => {
                 `);
                 program.validate();
                 expectZeroDiagnostics(program);
+            });
+
+            it('transpiles optional chaining on callfunc', async () => {
+                await testTranspile(`
+                    sub main(focusedRow, m)
+                        a = focusedRow?@.getProgram(m.focusedTime)
+                        b = focusedRow@.getProgram?(m.focusedTime)
+                        c = focusedRow?@.getProgram?(m.focusedTime)
+                        d = m.a?.b?@.getProgram()
+                    end sub
+                `, `
+                    sub main(focusedRow, m)
+                        a = focusedRow?.callfunc("getProgram", m.focusedTime)
+                        b = focusedRow.callfunc?("getProgram", m.focusedTime)
+                        c = focusedRow?.callfunc?("getProgram", m.focusedTime)
+                        d = m.a?.b?.callfunc("getProgram")
+                    end sub
+                `);
+            });
+
+            it('flags optional callfunc on the left side of an assignment', () => {
+                program.setFile('source/main.bs', `
+                    sub main(node)
+                        node?@.getChild().title = "x"
+                    end sub
+                `);
+                program.validate();
+                expectDiagnostics(program, [
+                    DiagnosticMessages.noOptionalChainingInLeftHandSideOfAssignment()
+                ]);
             });
 
             it('sets invalid on empty callfunc with legacyCallfuncHandling=true', async () => {

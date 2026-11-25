@@ -7,6 +7,7 @@ import { getUniqueType } from './types/helpers';
 import { isAnyReferenceType, isNamespaceType, isReferenceType } from './astUtils/reflection';
 import { SymbolTypeFlag } from './SymbolTypeFlag';
 import type { UninitializedType } from './types/UninitializedType';
+import { createExtraSymbolData } from './interfaces';
 
 /**
  * Stores the types associated with variables and functions in the Brighterscript code
@@ -33,7 +34,7 @@ export class SymbolTable implements SymbolTypeGetter {
      * Indexed by lower symbol name
      */
     //lazy -- most member tables (ReferenceType, BscType, etc) never get a symbol added
-    private symbolMap: Map<string, BscSymbol[]> | undefined;
+    private symbolMap: Map<string, BscSymbol[]> | undefined = undefined;
 
     private parentProviders = [] as SymbolTableProvider[];
 
@@ -90,7 +91,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     //lazy -- most SymbolTables never get a sibling
-    private siblings: Set<SymbolTable> | undefined;
+    private siblings: Set<SymbolTable> | undefined = undefined;
 
     /**
      * Add a sibling symbol table (which will be inspected first before walking upward to the parent
@@ -168,7 +169,7 @@ export class SymbolTable implements SymbolTypeGetter {
     }
 
     //lazy -- only branch-complement tables ever use this
-    private complementsTables: Set<SymbolTable> | undefined;
+    private complementsTables: Set<SymbolTable> | undefined = undefined;
 
     /**
      * This table complements this other table
@@ -387,7 +388,7 @@ export class SymbolTable implements SymbolTypeGetter {
                     if (depth === 0) {
                         // we got pocket tables results, and this is the top recursion
                         // add uninitialized
-                        result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: {}, flags: bitFlags }, ...pocketTableResults];
+                        result = [{ name: name, type: SymbolTable.uninitializedTypeFactory(), data: createExtraSymbolData(), flags: bitFlags }, ...pocketTableResults];
                     } else {
                         //just return pocket table results:
                         result = pocketTableResults;
@@ -497,7 +498,7 @@ export class SymbolTable implements SymbolTypeGetter {
         if (doSetCache || newNonReferenceType) {
             this.setCachedType(name, { type: resolvedType, data: data, flags: foundFlags }, options);
         }
-        options.data ??= {};
+        options.data ??= createExtraSymbolData();
         if (options.data) {
             options.data.definingNode = data?.definingNode;
             options.data.description = data?.description;
@@ -754,10 +755,12 @@ export class SymbolTable implements SymbolTypeGetter {
             return this.pocketTables;
         }
         const pocketTablesBetweenAssignmentAndPosition = this.pocketTables.filter(pt => {
-            const isBeforePosition = options.statementIndex === 'end' ? true : options.statementIndex > pt.index;
+            //read once: `index` is a getter that tracks the current AST
+            const pocketIndex = pt.index;
+            const isBeforePosition = options.statementIndex === 'end' ? true : options.statementIndex > pocketIndex;
             let isAfterPrecedingAssignment = true;
             if (Number.isInteger(precedingAssignmentIndex)) {
-                isAfterPrecedingAssignment = precedingAssignmentIndex < pt.index;
+                isAfterPrecedingAssignment = precedingAssignmentIndex < pocketIndex;
             }
             return isAfterPrecedingAssignment && isBeforePosition;
         });
@@ -834,9 +837,10 @@ export interface TypeCacheEntry {
 export interface PocketTable {
     table: SymbolTable;
     /**
-     * The index of the statement that contains this table within its parent block
+     * The index of the statement that contains this table within its parent block.
+     * Should reflect the current AST (not a snapshot), since AST edits can shift statements after linking
      */
-    index: number;
+    readonly index: number;
     /**
      * Will the code this pocket table represents always be executed?
      * Eg. Conditional Compile blocks will always be executed because only valid #if blocks are validated

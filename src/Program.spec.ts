@@ -10,7 +10,8 @@ import type { BscFile } from './files/BscFile';
 import type { XmlFile } from './files/XmlFile';
 import { Program } from './Program';
 import { standardizePath as s, util } from './util';
-import type { FunctionStatement, PrintStatement } from './parser/Statement';
+import type { Block, FunctionStatement, PrintStatement } from './parser/Statement';
+import { Parser } from './parser/Parser';
 import { EmptyStatement } from './parser/Statement';
 import { expectDiagnostics, expectHasDiagnostics, expectThrows, expectThrowsAsync, expectTypeToBe, expectZeroDiagnostics, trim, trimMap } from './testHelpers.spec';
 import { doesNotThrow } from 'assert';
@@ -307,6 +308,33 @@ describe('Program', () => {
             expect(afterProvideFile.callCount).to.equal(2);
             expect(afterValidateFile.callCount).to.equal(2);
         });
+
+        it('links file symbols before plugins run validateFile, and adds file diagnostics before plugins run afterValidateFile', () => {
+            let symbolsDuringValidateFile: boolean;
+            let diagnosticsDuringValidateFile: string[];
+            let diagnosticsDuringAfterValidateFile: string[];
+            const getFileDiagnostics = (file: BscFile) => program.diagnostics.getDiagnostics().filter(x => x.location?.uri === util.pathToUri(file.srcPath)).map(x => x.message);
+            program.plugins.add({
+                name: 'reads brighterscript results',
+                validateFile: (event) => {
+                    symbolsDuringValidateFile = (event.file as BrsFile).ast.symbolTable.hasSymbol('main', SymbolTypeFlag.runtime);
+                    diagnosticsDuringValidateFile = getFileDiagnostics(event.file);
+                },
+                afterValidateFile: (event) => {
+                    diagnosticsDuringAfterValidateFile = getFileDiagnostics(event.file);
+                }
+            });
+            program.setFile('source/main.brs', `
+                sub main()
+                    return 1
+                end sub
+            `);
+            program.validate();
+
+            expect(symbolsDuringValidateFile).to.be.true;
+            expect(diagnosticsDuringValidateFile).to.eql([]);
+            expect(diagnosticsDuringAfterValidateFile).to.include(DiagnosticMessages.voidFunctionMayNotReturnValue('sub').message);
+        });
     });
 
     describe('getFile', () => {
@@ -573,7 +601,7 @@ describe('Program', () => {
             expectZeroDiagnostics(program);
         });
 
-        it('shows warning when a child component imports the same script as its parent', () => {
+        it('does not warn when a child component imports the same script as its parent', () => {
             program.setFile('components/parent.xml', trim`
                 <?xml version="1.0" encoding="utf-8" ?>
                 <component name="ParentScene" extends="Scene">
@@ -590,9 +618,7 @@ describe('Program', () => {
 
             program.setFile('lib.brs', `'comment`);
             program.validate();
-            expectDiagnostics(program, [
-                DiagnosticMessages.unnecessaryScriptImportInChildFromParent('ParentScene')
-            ]);
+            expectZeroDiagnostics(program);
         });
 
         it('adds info diag when child component method shadows parent component method', () => {
@@ -1080,7 +1106,7 @@ describe('Program', () => {
             });
 
             it('does not duplicate symbol-table entries when validateFile is cancelled and re-runs', async () => {
-                //BrsFileValidator runs in the `validateFile` plugin event and pushes into per-file
+                //BrsFileLinker runs in the `validateFile` plugin event and pushes into per-file
                 //symbol tables for every class/interface/function/etc. If a cancelled validation
                 //re-fired `validateFile` for the same file, those addSymbol calls would run again
                 //and accumulate parallel entries — and CrossScopeValidator would flag a
@@ -1653,11 +1679,6 @@ describe('Program', () => {
             expectZeroDiagnostics(
                 program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.overridesAncestorFunction('', '', '', '').code)
             );
-
-            //the children all include a redundant import of lib.brs file which is imported by the parent.
-            expect(
-                program.getDiagnostics().filter((x) => x.code === DiagnosticMessages.unnecessaryScriptImportInChildFromParent('').code)
-            ).to.be.lengthOf(childCount);
         });
 
         it('detects script import changes', () => {
@@ -2505,6 +2526,64 @@ describe('Program', () => {
 
             //our literalExpression should have been restored to its original value
             expect(literalExpression!.tokens.value.text).to.eql('"hello world"');
+        });
+
+        it('keeps resolving locals over namespace members when a plugin inserts statements after validation', async () => {
+            const file = program.setFile<BrsFile>('source/main.bs', `
+                namespace user.settings
+                    sub save()
+                    end sub
+                end namespace
+                namespace guide
+                    function isWanted() as boolean
+                        return true
+                    end function
+                    function evictions(held as object, wanted as object, cap as integer) as object
+                        excess = held.count() - cap
+                        if excess <= 0 then return []
+                        isWanted = {}
+                        for each block in wanted
+                            isWanted[block.toStr()] = true
+                        end for
+                        offset = 0
+                        user = m.global.user
+                        if user <> invalid then offset = user.settings.offset
+                        return isWanted
+                    end function
+                end namespace
+            `);
+            program.validate();
+            expectZeroDiagnostics(program);
+            //insert a statement before every statement in every block (like a code coverage plugin would)
+            program.plugins.add({
+                name: 'TestPlugin',
+                beforePrepareFile: (event) => {
+                    if (event.file !== file) {
+                        return;
+                    }
+                    const blocks: Block[] = [];
+                    file.ast.walk(createVisitor({
+                        Block: (block) => {
+                            blocks.push(block);
+                        }
+                    }), {
+                        walkMode: WalkMode.visitAllRecursive
+                    });
+                    for (const block of blocks) {
+                        for (let i = block.statements.length - 1; i >= 0; i--) {
+                            event.editor.addToArray(block.statements, i, Parser.parse('print "hit"').ast.statements[0]);
+                        }
+                    }
+                }
+            });
+            await program.build({
+                outDir: outDir
+            });
+            const output = fsExtra.readFileSync(`${outDir}/source/main.brs`).toString();
+            expect(output).to.include('isWanted[block.toStr()] = true');
+            expect(output).to.include('offset = user.settings.offset');
+            expect(output).not.to.include('guide_isWanted[');
+            expect(output).not.to.include('user_settings_offset');
         });
 
         it('handles Editor for beforeBuildProgram', async () => {

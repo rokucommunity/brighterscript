@@ -3069,7 +3069,7 @@ describe('Scope', () => {
                         end function
                     end namespace
                 `);
-                //BrsFileValidator populates each body's symbolTable during validate; the
+                //BrsFileLinker populates each body's symbolTable during validate; the
                 //namespace contribution's symbolTable is built from those bodies.
                 program.validate();
                 const lib = program['scopes']['source'].buildNamespaceLookup().get('lib');

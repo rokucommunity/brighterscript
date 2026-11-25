@@ -127,9 +127,13 @@ function setIsActive(element: AstNode, parent: AstNode) {
  * @param filter a function used to filter items from the array. return true if that item should be walked
  */
 export function walkArray<T extends AstNode = AstNode>(array: Array<T>, visitor: WalkVisitor, options: WalkOptions, parent?: AstNode, filter?: (element: T) => boolean) {
+    //empty arrays (no call args, empty blocks, etc) are common, so don't allocate anything for them
+    if (!array?.length) {
+        return;
+    }
     let processedNodes = new Set<AstNode>();
 
-    for (let i = 0; i < array?.length; i++) {
+    for (let i = 0; i < array.length; i++) {
         if (!filter || filter(array[i])) {
             let item = array[i];
             //skip already processed nodes for this array walk

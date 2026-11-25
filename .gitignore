@@ -18,3 +18,8 @@ v8*.log
 .cache.json
 benchmarks/scenarios/results
 benchmarks/scenarios/projects.local.json
+scripts/.dev-doc
+website/build
+website/.docusaurus
+website/.versions
+website/.grammars

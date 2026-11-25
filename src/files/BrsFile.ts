@@ -58,6 +58,11 @@ export interface ProvidedSymbolInfo {
 /**
  * Holds all details about this file within the scope of the whole program
  */
+/**
+ * Token kinds that can make up a (possibly dotted) variable name, see `BrsFile.getPartialVariableName`
+ */
+const IdentifierAndDotKinds: ReadonlySet<TokenKind> = new Set<TokenKind>([TokenKind.Identifier, ...AllowedLocalIdentifiers, TokenKind.Dot]);
+
 export class BrsFile implements BscFile {
     constructor(options: {
         /**
@@ -770,14 +775,12 @@ export class BrsFile implements BscFile {
      * Given a current token, walk
      */
     public getPartialVariableName(currentToken: Token, excludeTokens: TokenKind[] = null) {
-        let identifierAndDotKinds = [TokenKind.Identifier, ...AllowedLocalIdentifiers, TokenKind.Dot];
-
         //consume tokens backwards until we find something other than a dot or an identifier
         let tokens = [];
         const parser = this.parser;
         for (let i = parser.tokens.indexOf(currentToken); i >= 0; i--) {
             currentToken = parser.tokens[i];
-            if (identifierAndDotKinds.includes(currentToken.kind) && (!excludeTokens || !excludeTokens.includes(currentToken.kind))) {
+            if (IdentifierAndDotKinds.has(currentToken.kind) && (!excludeTokens || !excludeTokens.includes(currentToken.kind))) {
                 tokens.unshift(currentToken.text);
             } else {
                 break;

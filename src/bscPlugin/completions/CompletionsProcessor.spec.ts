@@ -600,6 +600,32 @@ describe('CompletionsProcessor', () => {
             ).to.eql(['sayHello']);
         });
 
+        it('gets completions when using optional callfunc invocation', () => {
+            program.setFile('source/main.bs', `
+                function doStuff(myNode)
+                    myNode?@.sayHello(1, 2)
+                end function
+            `);
+            program.setFile('components/MyNode.bs', `
+                function sayHello(text, text2)
+                end function
+            `);
+            program.setFile<XmlFile>('components/MyNode.xml',
+                trim`<?xml version="1.0" encoding="utf-8" ?>
+            <component name="Component1" extends="Scene">
+                <script type="text/brightscript" uri="pkg:/components/MyNode.bs" />
+                <interface>
+                    <function name="sayHello"/>
+                </interface>
+            </component>`);
+            program.validate();
+            expectZeroDiagnostics(program);
+
+            expect(
+                (program.getCompletions(`${rootDir}/source/main.bs`, Position.create(2, 31))).map(x => x.label).sort()
+            ).to.eql(['sayHello']);
+        });
+
         it('gets completions for callfunc invocation with multiple nodes', () => {
             program.setFile('source/main.bs', `
                 function main()

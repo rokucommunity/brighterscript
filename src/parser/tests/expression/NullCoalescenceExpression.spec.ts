@@ -249,6 +249,132 @@ describe('NullCoalescingExpression', () => {
             `);
         });
 
+        it('short-circuits indexed get alternate', async () => {
+            await testTranspile(`
+                sub main(cached, cfg)
+                    a = cached ?? cfg["key"]
+                end sub
+            `, `
+                sub main(cached, cfg)
+                    a = cached
+                    if a = invalid then
+                        a = cfg["key"]
+                    end if
+                end sub
+            `);
+        });
+
+        it('short-circuits indexed get alternate when not an assignment', async () => {
+            await testTranspile(`
+                sub main(cached, cfg)
+                    print cached ?? cfg["key"]
+                end sub
+            `, `
+                sub main(cached, cfg)
+                    print (function(cached, cfg)
+                            __bsConsequent = cached
+                            if __bsConsequent <> invalid then
+                                return __bsConsequent
+                            else
+                                return cfg["key"]
+                            end if
+                        end function)(cached, cfg)
+                end sub
+            `);
+        });
+
+        it('short-circuits xml attribute get alternate', async () => {
+            await testTranspile(`
+                sub main(cached, xml)
+                    a = cached ?? xml@id
+                end sub
+            `, `
+                sub main(cached, xml)
+                    a = cached
+                    if a = invalid then
+                        a = xml@id
+                    end if
+                end sub
+            `);
+        });
+
+        it('short-circuits complex expressions nested inside a grouping', async () => {
+            await testTranspile(`
+                sub main(cached, alpha)
+                    a = cached ?? (alpha.beta + 2)
+                end sub
+            `, `
+                sub main(cached, alpha)
+                    a = cached
+                    if a = invalid then
+                        a = (alpha.beta + 2)
+                    end if
+                end sub
+            `);
+        });
+
+        it('short-circuits binary expressions containing dotted gets', async () => {
+            await testTranspile(`
+                sub main(cached, alpha, beta)
+                    a = cached ?? alpha + beta.charlie
+                end sub
+            `, `
+                sub main(cached, alpha, beta)
+                    a = cached
+                    if a = invalid then
+                        a = alpha + beta.charlie
+                    end if
+                end sub
+            `);
+        });
+
+        it('short-circuits template strings with a dotted get interpolation', async () => {
+            await testTranspile(`
+                sub main(cached, beta)
+                    a = cached ?? \`alpha\${beta.charlie}\`
+                end sub
+            `, `
+                sub main(cached, beta)
+                    a = cached
+                    if a = invalid then
+                        a = ("alpha" + bslib_toString(beta.charlie))
+                    end if
+                end sub
+            `);
+        });
+
+        it('uses bslib_coalesce for template strings without interpolations', async () => {
+            await testTranspile(`
+                sub main(cached)
+                    a = cached ?? \`alpha\`
+                end sub
+            `, `
+                sub main(cached)
+                    a = bslib_coalesce(cached, "alpha")
+                end sub
+            `);
+        });
+
+        it('uses bslib_coalesce for plain variables and literals', async () => {
+            await testTranspile(`
+                sub main(cached, fallback)
+                    a = cached ?? fallback
+                    b = cached ?? [1, "two", {"three": true}]
+                end sub
+            `, `
+                sub main(cached, fallback)
+                    a = bslib_coalesce(cached, fallback)
+                    b = bslib_coalesce(cached, [
+                        1
+                        "two"
+                        {
+                            "three": true
+                        }
+                    ])
+                end sub
+            `);
+        });
+
         it('does not capture restricted OS functions', async () => {
             //failOnDiagnostic=false: the bare `eval("print 1")` triggers the rsg_version=1.2
             //deprecation diagnostic under default settings, which is unrelated to what this test covers.
@@ -513,6 +639,78 @@ describe('NullCoalescingExpression', () => {
                             __bsc_tmp_coalesce = {}
                         end if
                         m.value = __bsc_tmp_coalesce
+                    end sub
+                `);
+            });
+
+            it('keeps comments above a statement ahead of its temps', async () => {
+                await testTranspile(`
+                    sub main(a)
+                        m.x = a.x ?? "" ' first
+
+                        ' section
+                        ' about y
+                        m.y = a.y ?? ""
+                    end sub
+                `, `
+                    sub main(a)
+                        __bsc_tmp_coalesce = a.x
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.x = __bsc_tmp_coalesce ' first
+
+                        ' section
+                        ' about y
+                        __bsc_tmp_coalesce = a.y
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.y = __bsc_tmp_coalesce
+                    end sub
+                `);
+            });
+
+            it('keeps trailing comments on their own statement when temps are used', async () => {
+                await testTranspile(`
+                    sub main(a)
+                        m.x = a.x ?? "" ' first
+                        m.y = a.y ?? "" ' second
+                    end sub
+                `, `
+                    sub main(a)
+                        __bsc_tmp_coalesce = a.x
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.x = __bsc_tmp_coalesce ' first
+                        __bsc_tmp_coalesce = a.y
+                        if __bsc_tmp_coalesce = invalid then
+                            __bsc_tmp_coalesce = ""
+                        end if
+                        m.y = __bsc_tmp_coalesce ' second
+                    end sub
+                `);
+            });
+
+            it('keeps trailing comments on their own statement for local targets', async () => {
+                await testTranspile(`
+                    sub main(a)
+                        x = a.x ?? "" ' first
+                        y = a.y ?? "" ' second
+                        print x + y
+                    end sub
+                `, `
+                    sub main(a)
+                        x = a.x ' first
+                        if x = invalid then
+                            x = ""
+                        end if
+                        y = a.y ' second
+                        if y = invalid then
+                            y = ""
+                        end if
+                        print x + y
                     end sub
                 `);
             });

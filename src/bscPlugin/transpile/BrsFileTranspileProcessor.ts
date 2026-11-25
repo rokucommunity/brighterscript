@@ -3,7 +3,7 @@ import type { Editor } from '../../astUtils/Editor';
 import { isDottedGetExpression, isLiteralExpression, isVariableExpression, isUnaryExpression, isAliasStatement, isCallExpression, isCallfuncExpression, isEnumType, isAssignmentStatement, isBlock, isBody, isDottedSetStatement, isGroupingExpression, isIndexedSetStatement, isAugmentedAssignmentStatement, isNamespaceStatement, isSpreadExpression, isArrayLiteralExpression, isAAIndexedMemberExpression, isAAMemberExpression } from '../../astUtils/reflection';
 import { createVisitor, InternalWalkMode, WalkMode } from '../../astUtils/visitors';
 import type { BrsFile } from '../../files/BrsFile';
-import type { ExtraSymbolData, OnPrepareFileEvent } from '../../interfaces';
+import type { OnPrepareFileEvent } from '../../interfaces';
 import type { Identifier, Locatable, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
@@ -16,6 +16,7 @@ import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
+import { createExtraSymbolData } from '../../interfaces';
 
 /**
  * When at least this many plain array elements follow a spread, they are appended as one literal
@@ -146,14 +147,20 @@ export class BrsFilePreTranspileProcessor {
         if (isAssignmentStatement(statement) && !this.expressionReferencesLocal(statement.tokens.name.text, expression.alternate)) {
             //local variable target: assign the consequent directly, then fall back to the alternate
             editor.setProperty(statement, 'value', expression.consequent);
-            newStatements = [createFallback(statement.tokens.name.text)];
+            const fallback = createFallback(statement.tokens.name.text);
+            newStatements = [fallback];
+            //this statement's trailing comment is stored on the next statement, which the fallback now comes before
+            this.moveLeadingComments(block.statements[index + 1], fallback.tokens.if, true);
             editor.arraySplice(block.statements, index + 1, 0, ...newStatements);
         } else {
             const tmpName = '__bsc_tmp_coalesce';
+            const tmpNameToken = createIdentifier(tmpName, locatable);
             newStatements = [
-                createAssignmentStatement({ name: createIdentifier(tmpName, locatable), value: expression.consequent }),
+                createAssignmentStatement({ name: tmpNameToken, value: expression.consequent }),
                 createFallback(tmpName)
             ];
+            //this statement's comments (and the previous statement's trailing comment) belong ahead of the temp statements that now come first
+            this.moveLeadingComments(statement, tmpNameToken, false);
             editor.setProperty(statement, 'value', createVariableExpression(tmpName, locatable));
             editor.arraySplice(block.statements, index, 0, ...newStatements);
         }
@@ -163,6 +170,38 @@ export class BrsFilePreTranspileProcessor {
             newStatement.parent = block;
             newStatement.walk(visitor, { walkMode: walkMode });
         }
+    }
+
+    /**
+     * Comments live in the leading trivia of whatever comes after them, including a comment at the end of the previous line (everything
+     * up to the first newline). When statements get inserted in front of `node`, move its comments onto `token` (the first token of the
+     * inserted statements), so they stay where they were written.
+     * @param node the node whose leading comments should move
+     * @param token the token to move them onto
+     * @param onlySameLine only move the comment at the end of the previous line, leaving the comments above `node` on it
+     */
+    private moveLeadingComments(node: { leadingTrivia?: Token[] } | undefined, token: Token, onlySameLine: boolean) {
+        const trivia = node?.leadingTrivia;
+        if (!trivia) {
+            return;
+        }
+        let lastCommentIndex = -1;
+        for (let i = 0; i < trivia.length; i++) {
+            if (onlySameLine && trivia[i].kind === TokenKind.Newline) {
+                break;
+            }
+            if (trivia[i].kind === TokenKind.Comment) {
+                lastCommentIndex = i;
+            }
+        }
+        if (lastCommentIndex < 0) {
+            return;
+        }
+        //include the newline that ends the last comment, but leave the indentation before `node` where it is
+        const newlineIndex = trivia.findIndex((x, i) => i > lastCommentIndex && x.kind === TokenKind.Newline);
+        const count = newlineIndex < 0 ? trivia.length : newlineIndex + 1;
+        token.leadingTrivia = trivia.slice(0, count);
+        this.event.editor.arraySplice(trivia, 0, count);
     }
 
     /**
@@ -609,13 +648,15 @@ export class BrsFilePreTranspileProcessor {
             // skip any changes in an Alias Statement
             return;
         }
-        let containingNamespaceStmt = this.event.file.getNamespaceStatementForPosition(util.getLocation(expression)?.range.start);
-        let containingNamespace = containingNamespaceStmt?.getName(ParseMode.BrighterScript);
+        let containingNamespace = expression.findAncestor<NamespaceStatement>(isNamespaceStatement)?.getName(ParseMode.BrighterScript);
 
         const parts = util.splitExpression(expression);
         const processedNames: string[] = [];
         let isAlias = false;
         let isCall = isCallExpression(expression) || isCallfuncExpression(expression);
+        //the expression's first part and its name, for the shadowing check
+        let firstPartToCheck: Expression;
+        let firstPartName: string;
         for (let part of parts) {
             let entityName: string;
 
@@ -635,9 +676,9 @@ export class BrsFilePreTranspileProcessor {
                 return;
             }
 
-            if (!currentPartIsAlias && firstPart && util.isVariableShadowingSomething(entityName, part)) {
-                // this expression starts with a variable that has been redefined, so skip it
-                return;
+            if (!currentPartIsAlias && firstPart) {
+                firstPartToCheck = part;
+                firstPartName = entityName;
             }
 
             let value: Expression;
@@ -665,6 +706,11 @@ export class BrsFilePreTranspileProcessor {
             }
 
             if (value && !isCircular) {
+                //only now check for shadowing, since it resolves types and most expressions don't refer to anything we'd replace
+                if (firstPartToCheck && util.isVariableShadowingSomething(firstPartName, firstPartToCheck)) {
+                    // this expression starts with a variable that has been redefined, so skip it
+                    return;
+                }
                 //If the const's value is a complex expression (e.g. an aa literal containing
                 //enum refs), recursively process inner refs so they're inlined too. Without
                 //this step, cross-file const usage leaves nested enum/const refs unresolved
@@ -783,7 +829,7 @@ export class BrsFilePreTranspileProcessor {
 
         if (isVariableExpression(potentiallyAliased) && potentialAliasedTextsLower.includes(potentiallyAliased.getName().toLowerCase())) {
             //check if it is an alias
-            let data = {} as ExtraSymbolData;
+            let data = createExtraSymbolData();
 
             potentiallyAliased.getSymbolTable().getSymbolType(potentiallyAliased.getName(), {
                 data: data,

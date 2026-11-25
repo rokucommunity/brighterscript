@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIndexedGetExpression, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -37,6 +37,7 @@ import type { BrightScriptDoc } from './BrightScriptDocParser';
 import { InlineInterfaceType } from '../types/InlineInterfaceType';
 import { IntersectionType } from '../types/IntersectionType';
 import type { BrsFile } from '../files/BrsFile';
+import { createExtraSymbolData } from '../interfaces';
 
 export type ExpressionVisitor = (expression: Expression, parent: Expression) => void;
 
@@ -448,7 +449,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         const docs = getFunctionDocs(this);
 
         // resolve return and param types with their own typeChain and data, so they don't leak into this function's (eg. hover name and description)
-        const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: {} });
+        const innerOptions = (): GetTypeOptions => ({ ...options, typeChain: undefined, data: createExtraSymbolData() });
 
         returnType = util.chooseTypeFromCodeOrDocComment(
             this.returnTypeExpression?.getType(innerOptions()),
@@ -574,11 +575,35 @@ export class FunctionParameterExpression extends Expression {
     public readonly defaultValue?: Expression;
     public readonly typeExpression?: TypeExpression;
 
+    /**
+     * If this parameter has a type designator (i.e. `name$`) and an `as` type that doesn't match it (i.e. `name$ as integer`),
+     * get the type the designator implies. The device compiler rejects such a mismatch, so the designator wins:
+     * it determines the parameter's type, and the conflicting `as` clause is dropped at transpile.
+     * Parameters of function type annotations (i.e. `callback as function(name$ as integer) as void`) are never emitted, so they are ignored.
+     * @returns the designator's type when it conflicts with the declared `as` type, otherwise `undefined`
+     */
+    public getMismatchedTypeDesignatorType(): BscType | undefined {
+        if (!this.typeExpression || isTypedFunctionTypeExpression(this.parent)) {
+            return undefined;
+        }
+        const designatorType = util.getTypeDesignatorType(this.tokens.name?.text);
+        if (!designatorType) {
+            return undefined;
+        }
+        const declaredType = this.typeExpression.getName(ParseMode.BrighterScript);
+        if (declaredType?.toLowerCase() === designatorType.toString()) {
+            return undefined;
+        }
+        return designatorType;
+    }
+
     public getType(options: GetTypeOptions) {
         const docs = getFunctionDocs(this.parent);
         const paramName = this.tokens.name.text;
 
-        let paramTypeFromCode = this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
+        //a type designator that conflicts with the `as` type wins, since that's what the device uses
+        let paramTypeFromCode = this.getMismatchedTypeDesignatorType() ??
+            this.typeExpression?.getType({ ...options, flags: SymbolTypeFlag.typetime, typeChain: undefined }) ??
             util.getDefaultTypeFromValueType(this.defaultValue?.getType({ ...options, flags: SymbolTypeFlag.runtime, typeChain: undefined }));
         if (isInvalidType(paramTypeFromCode) || isVoidType(paramTypeFromCode)) {
             paramTypeFromCode = undefined;
@@ -588,7 +613,7 @@ export class FunctionParameterExpression extends Expression {
 
         const docDescription = docs.getParam(paramName)?.description;
         if (docDescription) {
-            options.data = options.data ?? {};
+            options.data = options.data ?? createExtraSymbolData();
             options.data.description = docDescription;
         }
         options.typeChain?.push(new TypeChainEntry({ name: paramName, type: paramType, data: options.data, astNode: this }));
@@ -609,8 +634,8 @@ export class FunctionParameterExpression extends Expression {
             result.push(' = ');
             result.push(this.defaultValue.transpile(state));
         }
-        //type declaration
-        if (this.typeExpression && !state.options.removeParameterTypes) {
+        //type declaration (omitted when it conflicts with the type designator, since the device rejects that and the designator wins)
+        if (this.typeExpression && !state.options.removeParameterTypes && !this.getMismatchedTypeDesignatorType()) {
             result.push(' ');
             result.push(state.transpileToken(this.tokens.as, 'as'));
             result.push(' ');
@@ -2088,7 +2113,9 @@ export class CallfuncExpression extends Expression {
         let result = [] as TranspileResult;
         result.push(
             ...this.callee.transpile(state),
-            state.sourceNode(this.tokens.operator, '.callfunc'),
+            //`?@.` is the optional chaining form of `@.`, so it becomes `?.callfunc`
+            state.sourceNode(this.tokens.operator, this.tokens.operator?.kind === TokenKind.QuestionCallfunc ? '?.callfunc' : '.callfunc'),
+            //this is `?(` when the call itself is optional (i.e. `node@.doSomething?()`)
             state.transpileToken(this.tokens.openingParen, '('),
             //the name of the function
             state.sourceNode(this.tokens.methodName, ['"', this.tokens.methodName.text, '"'])
@@ -2556,13 +2583,13 @@ export class TernaryExpression extends Expression {
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
         //discard names of global functions that cannot be passed by reference
         allUniqueVarNames = allUniqueVarNames.filter(name => {
-            return !nonReferenceableFunctions.includes(name.toLowerCase());
+            return !nonReferenceableFunctions.has(name.toLowerCase());
         });
 
         let mutatingExpressions = [
             ...consequentInfo.expressions,
             ...alternateInfo.expressions
-        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression);
+        ].filter(e => e instanceof CallExpression || e instanceof CallfuncExpression || e instanceof DottedGetExpression || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
 
         if (mutatingExpressions.length > 0) {
             result.push(
@@ -2670,14 +2697,14 @@ export class NullCoalescingExpression extends Expression {
     public readonly alternate: Expression;
 
     /**
-     * Does either side contain a call, callfunc, or dotted get? Those may have side effects, so they can't be passed to
-     * `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
+     * Does either side contain a call, callfunc, dotted get, indexed get, or xml attribute get? Those may have side effects or crash,
+     * so they can't be passed to `bslib_coalesce()` (which evaluates both sides up front) and the alternate must only be evaluated when needed.
      */
     public hasMutatingExpression(file: BrsFile) {
         return [
             ...util.getExpressionInfo(this.consequent, file).expressions,
             ...util.getExpressionInfo(this.alternate, file).expressions
-        ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e));
+        ].some(e => isCallExpression(e) || isCallfuncExpression(e) || isDottedGetExpression(e) || isIndexedGetExpression(e) || isXmlAttributeGetExpression(e));
     }
 
     transpile(state: BrsTranspileState) {
@@ -2689,7 +2716,7 @@ export class NullCoalescingExpression extends Expression {
         let allUniqueVarNames = [...new Set([...consequentInfo.uniqueVarNames, ...alternateInfo.uniqueVarNames])].sort();
         //discard names of global functions that cannot be passed by reference
         allUniqueVarNames = allUniqueVarNames.filter(name => {
-            return !nonReferenceableFunctions.includes(name.toLowerCase());
+            return !nonReferenceableFunctions.has(name.toLowerCase());
         });
 
         if (this.hasMutatingExpression(state.file)) {
@@ -3362,7 +3389,7 @@ export class TypedFunctionTypeExpression extends Expression {
  * variable, property, or passed as an argument. (i.e. `type` or `createobject`).
  * Names are stored in lower case.
  */
-const nonReferenceableFunctions = [
+const nonReferenceableFunctions: ReadonlySet<string> = new Set([
     'createobject',
     'type',
     'getglobalaa',
@@ -3373,4 +3400,4 @@ const nonReferenceableFunctions = [
     'getlastrunruntimeerror',
     'tab',
     'pos'
-];
+]);
