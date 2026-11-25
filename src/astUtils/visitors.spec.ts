@@ -5,12 +5,12 @@ import { expect } from '../chai-config.spec';
 import * as sinon from 'sinon';
 import { Program } from '../Program';
 import type { BrsFile } from '../files/BrsFile';
-import type { FunctionStatement } from '../parser/Statement';
-import { PrintStatement, Block, ReturnStatement, ExpressionStatement } from '../parser/Statement';
+import type { FunctionStatement, Body as BsBody } from '../parser/Statement';
+import { PrintStatement, Block, ReturnStatement, ExpressionStatement, AssignmentStatement } from '../parser/Statement';
 import { TokenKind } from '../lexer/TokenKind';
 import { createVisitor, walkArray, WalkMode, walkStatements } from './visitors';
-import { isBlock, isLiteralExpression, isPrintStatement } from './reflection';
-import { createCall, createIntegerLiteral, createToken, createVariableExpression } from './creators';
+import { isAssignmentStatement, isBlock, isLiteralExpression, isPrintStatement } from './reflection';
+import { createCall, createIntegerLiteral, createStringLiteral, createToken, createVariableExpression } from './creators';
 import { createStackedVisitor } from './stackedVisitor';
 import { AstEditor } from './AstEditor';
 import { Parser } from '../parser/Parser';
@@ -1248,6 +1248,390 @@ describe('astUtils visitors', () => {
             });
 
             expect(walkedLiterals).to.eql(['3', '4']);
+        });
+
+        it('walks an if statement body when a statement is inserted above it', () => {
+            const editor = new AstEditor();
+            let walkedNodes: AstNode[] = [];
+            const ast = Parser.parse(`
+                sub main()
+                    if true then
+                        result = 1 + 2
+                    end if
+                end sub
+            `).ast;
+            ast.walk(createVisitor({
+                AssignmentStatement: (node) => {
+                    walkedNodes.push(node);
+                },
+                IfStatement: (node, parent, owner: Statement[], key) => {
+                    //insert a print above every if statement
+                    editor.arraySplice(owner, key, 0, new PrintStatement(
+                        { print: createToken(TokenKind.Print) },
+                        [createStringLiteral('"Hello world"')]
+                    ));
+                }
+            }), {
+                walkMode: WalkMode.visitAllRecursive,
+                editor: editor
+            });
+
+            const expectedAssignment = ast.findChild(isAssignmentStatement);
+            expect(walkedNodes).to.include(expectedAssignment);
+        });
+
+        describe('ast mutation during walk', () => {
+            /**
+             * Parse the source, walk it with the given visitor, and return the text of every
+             * print statement and assignment the walk visited (in visit order).
+             */
+            function walkAndCollect(source: string, visitor: Parameters<typeof createVisitor>[0], useEditor = false) {
+                const editor = new AstEditor();
+                const visited: string[] = [];
+                const { ast } = Parser.parse(source);
+                const collectingVisitor = createVisitor({
+                    ...visitor,
+                    PrintStatement: (node, parent, owner, key) => {
+                        visited.push(`print ${(node.expressions[0] as LiteralExpression)?.token?.text}`);
+                        return visitor.PrintStatement?.(node, parent, owner, key);
+                    },
+                    AssignmentStatement: (node, parent, owner, key) => {
+                        visited.push(`assign ${node.name.text}`);
+                        return visitor.AssignmentStatement?.(node, parent, owner, key);
+                    }
+                });
+                ast.walk(collectingVisitor, {
+                    walkMode: WalkMode.visitAllRecursive,
+                    ...(useEditor ? { editor: editor } : {})
+                });
+                return { visited: visited, ast: ast, editor: editor };
+            }
+
+            function makePrint(text: string) {
+                return new PrintStatement(
+                    { print: createToken(TokenKind.Print) },
+                    [createStringLiteral(text)]
+                );
+            }
+
+            function bodyStatements(ast: BsBody) {
+                return (ast.statements[0] as FunctionStatement).func.body.statements;
+            }
+
+            const THREE_PRINTS = `
+                sub main()
+                    print "1"
+                    print "2"
+                    print "3"
+                end sub
+            `;
+
+            it('visits every statement exactly once when nothing is mutated', () => {
+                const { visited } = walkAndCollect(THREE_PRINTS, {});
+                expect(visited).to.eql(['print "1"', 'print "2"', 'print "3"']);
+            });
+
+            it('does not re-visit a node that was displaced by an insertion above it', () => {
+                //insert one new print above "2". "2" moves from index 1 to index 2, but must not be visited twice.
+                let inserted = false;
+                const { visited, ast } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        if ((node.expressions[0] as LiteralExpression)?.token?.text === '"2"' && !inserted) {
+                            inserted = true;
+                            owner.splice(key, 0, makePrint('"inserted"'));
+                        }
+                    }
+                });
+                //every original node visited once, and the inserted node visited once
+                expect(visited).to.eql(['print "1"', 'print "2"', 'print "inserted"', 'print "3"']);
+                expect(bodyStatements(ast)).to.be.lengthOf(4);
+            });
+
+            it('walks the children of a node that was displaced by an insertion above it', () => {
+                //this is the core regression: inserting above an `if` must not rob the `if` body of its walk
+                const visitedAssignments: string[] = [];
+                let inserted = false;
+                const { ast } = Parser.parse(`
+                    sub main()
+                        if true then
+                            alpha = 1
+                            beta = 2
+                        end if
+                    end sub
+                `);
+                ast.walk(createVisitor({
+                    AssignmentStatement: (node) => {
+                        visitedAssignments.push(node.name.text);
+                    },
+                    IfStatement: (node, parent, owner: Statement[], key) => {
+                        if (!inserted) {
+                            inserted = true;
+                            owner.splice(key, 0, makePrint('"before"'));
+                        }
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+
+                expect(visitedAssignments).to.eql(['alpha', 'beta']);
+            });
+
+            it('walks the children of a displaced node when using an AstEditor', () => {
+                const editor = new AstEditor();
+                const visitedAssignments: string[] = [];
+                let inserted = false;
+                const { ast } = Parser.parse(`
+                    sub main()
+                        if true then
+                            alpha = 1
+                            beta = 2
+                        end if
+                    end sub
+                `);
+                ast.walk(createVisitor({
+                    AssignmentStatement: (node) => {
+                        visitedAssignments.push(node.name.text);
+                    },
+                    IfStatement: (node, parent, owner: Statement[], key) => {
+                        if (!inserted) {
+                            inserted = true;
+                            editor.arraySplice(owner, key, 0, makePrint('"before"'));
+                        }
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive, editor: editor });
+
+                expect(visitedAssignments).to.eql(['alpha', 'beta']);
+
+                //undoing the edit must restore the original AST
+                editor.undoAll();
+                expect(bodyStatements(ast)).to.be.lengthOf(1);
+            });
+
+            it('handles multiple statements inserted above the current node at once', () => {
+                let inserted = false;
+                const { visited, ast } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        if ((node.expressions[0] as LiteralExpression)?.token?.text === '"1"' && !inserted) {
+                            inserted = true;
+                            owner.splice(key, 0, makePrint('"a"'), makePrint('"b"'), makePrint('"c"'));
+                        }
+                    }
+                });
+                //the three inserted nodes are visited, and no original node is visited twice
+                expect(visited).to.eql([
+                    'print "1"', 'print "a"', 'print "b"', 'print "c"', 'print "2"', 'print "3"'
+                ]);
+                expect(bodyStatements(ast)).to.be.lengthOf(6);
+            });
+
+            it('visits a node inserted below the current node', () => {
+                let inserted = false;
+                const { visited } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        if ((node.expressions[0] as LiteralExpression)?.token?.text === '"1"' && !inserted) {
+                            inserted = true;
+                            owner.splice(key + 1, 0, makePrint('"below"'));
+                        }
+                    }
+                });
+                expect(visited).to.eql(['print "1"', 'print "below"', 'print "2"', 'print "3"']);
+            });
+
+            it('does not skip the following node when the current node is deleted', () => {
+                const { visited, ast } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        if ((node.expressions[0] as LiteralExpression)?.token?.text === '"1"') {
+                            owner.splice(key, 1);
+                        }
+                    }
+                });
+                //all three are still visited even though the first one removed itself
+                expect(visited).to.eql(['print "1"', 'print "2"', 'print "3"']);
+                expect(bodyStatements(ast)).to.be.lengthOf(2);
+            });
+
+            it('does not skip the following node when a middle node is deleted', () => {
+                const { visited, ast } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        if ((node.expressions[0] as LiteralExpression)?.token?.text === '"2"') {
+                            owner.splice(key, 1);
+                        }
+                    }
+                });
+                expect(visited).to.eql(['print "1"', 'print "2"', 'print "3"']);
+                expect(bodyStatements(ast)).to.be.lengthOf(2);
+            });
+
+            it('handles every node deleting itself', () => {
+                const { visited, ast } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        owner.splice(key, 1);
+                    }
+                });
+                expect(visited).to.eql(['print "1"', 'print "2"', 'print "3"']);
+                expect(bodyStatements(ast)).to.be.lengthOf(0);
+            });
+
+            it('does not re-walk a node that replaced the current node', () => {
+                //a replacement node has its children walked as part of the replacement, so it must not be visited again
+                let replaced = false;
+                const { visited, ast } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node) => {
+                        if ((node.expressions[0] as LiteralExpression)?.token?.text === '"2"' && !replaced) {
+                            replaced = true;
+                            return makePrint('"replacement"');
+                        }
+                    }
+                });
+                //"replacement" is never visited again after taking "2"'s place
+                expect(visited).to.eql(['print "1"', 'print "2"', 'print "3"']);
+                expect(
+                    (bodyStatements(ast)[1] as PrintStatement).expressions[0]
+                ).to.have.nested.property('token.text', '"replacement"');
+            });
+
+            it('walks the children of a replacement node exactly once', () => {
+                let replaced = false;
+                const walkedLiterals: string[] = [];
+                Parser.parse(`
+                    sub main()
+                        print 1 + 2
+                    end sub
+                `).ast.walk(createVisitor({
+                    BinaryExpression: (node) => {
+                        if (!replaced) {
+                            replaced = true;
+                            return new BinaryExpression(
+                                createIntegerLiteral('3'),
+                                createToken(TokenKind.Plus),
+                                createIntegerLiteral('4')
+                            );
+                        }
+                    },
+                    LiteralExpression: (node) => {
+                        walkedLiterals.push(node.token.text);
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+
+                expect(walkedLiterals).to.eql(['3', '4']);
+            });
+
+            it('handles a node being deleted and a new one inserted in its place', () => {
+                let swapped = false;
+                const { visited, ast } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        if ((node.expressions[0] as LiteralExpression)?.token?.text === '"2"' && !swapped) {
+                            swapped = true;
+                            //remove "2" and put a brand new node at the same index
+                            owner.splice(key, 1, makePrint('"swapped"'));
+                        }
+                    }
+                });
+                //the swapped-in node occupies the same slot, so it counts as a replacement and is not re-visited
+                expect(visited).to.eql(['print "1"', 'print "2"', 'print "3"']);
+                expect(bodyStatements(ast)).to.be.lengthOf(3);
+            });
+
+            it('walks statements inserted into a nested block', () => {
+                let inserted = false;
+                const visitedAssignments: string[] = [];
+                const { ast } = Parser.parse(`
+                    sub main()
+                        if true then
+                            alpha = 1
+                        end if
+                    end sub
+                `);
+                ast.walk(createVisitor({
+                    AssignmentStatement: (node, parent, owner: Statement[], key) => {
+                        visitedAssignments.push(node.name.text);
+                        if (node.name.text === 'alpha' && !inserted) {
+                            inserted = true;
+                            //insert a sibling assignment above alpha, inside the if-block
+                            owner.splice(key, 0, new AssignmentStatement(
+                                createToken(TokenKind.Equal),
+                                createToken(TokenKind.Identifier, 'zulu') as any,
+                                createIntegerLiteral('9')
+                            ));
+                        }
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive });
+
+                //alpha visited once, and the newly inserted zulu also visited
+                expect(visitedAssignments).to.eql(['alpha', 'zulu']);
+            });
+
+            it('stops walking when cancelled mid-array', () => {
+                const cancel = new CancellationTokenSource();
+                const visited: string[] = [];
+                Parser.parse(THREE_PRINTS).ast.walk(createVisitor({
+                    PrintStatement: (node) => {
+                        visited.push((node.expressions[0] as LiteralExpression).token.text);
+                        if (visited.length === 2) {
+                            cancel.cancel();
+                        }
+                    }
+                }), { walkMode: WalkMode.visitAllRecursive, cancel: cancel.token });
+
+                expect(visited).to.eql(['"1"', '"2"']);
+            });
+
+            it('terminates when a visitor inserts a node above on every single visit', () => {
+                //guards against an infinite restart loop: each visit inserts, but each node is only visited once
+                let insertCount = 0;
+                const { visited } = walkAndCollect(THREE_PRINTS, {
+                    PrintStatement: (node, parent, owner: Statement[], key) => {
+                        if (insertCount < 3) {
+                            insertCount++;
+                            owner.splice(key, 0, makePrint(`"gen${insertCount}"`));
+                        }
+                    }
+                });
+                //3 originals + 3 inserted, each visited exactly once
+                expect(visited).to.be.lengthOf(6);
+                expect(new Set(visited).size).to.eql(6);
+            });
+
+            describe('known gaps', () => {
+                //These document mutations that the current walker still gets wrong. They are pending rather than
+                //deleted so the behavior is recorded rather than rediscovered. Both need the `injectedNodes`
+                //option (see the PR description) to resolve properly, because the correct answer depends on
+                //what the plugin intends, which cannot be inferred from the AST alone.
+
+                it.skip('visits every node of a splice that deletes one and inserts several', () => {
+                    //`splice(key, 1, x, y)` leaves the array length unchanged-or-larger, so the walker cannot tell
+                    //"replaced by x" from "deleted, then x and y inserted". Today `x` is treated as a replacement
+                    //(walked + marked processed) and `y` is visited, so `x` is never visited on its own.
+                    let done = false;
+                    const { visited } = walkAndCollect(THREE_PRINTS, {
+                        PrintStatement: (node, parent, owner: Statement[], key) => {
+                            if ((node.expressions[0] as LiteralExpression)?.token?.text === '"2"' && !done) {
+                                done = true;
+                                owner.splice(key, 1, makePrint('"x"'), makePrint('"y"'));
+                            }
+                        }
+                    });
+                    //actual today: ['print "1"', 'print "2"', 'print "y"', 'print "3"'] -- `"x"` is missing
+                    expect(visited).to.eql([
+                        'print "1"', 'print "2"', 'print "x"', 'print "y"', 'print "3"'
+                    ]);
+                });
+
+                it.skip('visits nodes in array order when a visitor reorders the array', () => {
+                    //Moving a node backwards past the cursor means it is never revisited; moving one forwards
+                    //means it is skipped. There is no defined semantic for reordering during a walk today.
+                    let swapped = false;
+                    const { visited } = walkAndCollect(THREE_PRINTS, {
+                        PrintStatement: (node, parent, owner: Statement[], key) => {
+                            if ((node.expressions[0] as LiteralExpression)?.token?.text === '"1"' && !swapped) {
+                                swapped = true;
+                                //move "3" to the front of the array
+                                owner.splice(0, 0, owner.splice(2, 1)[0]);
+                            }
+                        }
+                    });
+                    //actual today: ['print "1"', 'print "3"', 'print "2"']
+                    expect(visited).to.eql(['print "1"', 'print "2"', 'print "3"']);
+                });
+            });
         });
     });
 
