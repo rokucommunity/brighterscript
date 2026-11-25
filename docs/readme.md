@@ -83,6 +83,7 @@ end sub
 
 ## Language features
 
+- [Types](language-features/types.md): use your own classes, interfaces and enums, or Roku components, as parameter and return types.
 - [Imports](language-features/imports.md): declare a script's dependencies in the script itself, instead of in XML `<script>` tags.
 - [Namespaces](language-features/namespaces.md) and [Classes](language-features/classes.md): organize your code, with inheritance and access modifiers.
 - [Interfaces](language-features/interfaces.md), [Enums](language-features/enums.md) and [Constants](language-features/constants.md): name your shapes and values, checked at compile time.
