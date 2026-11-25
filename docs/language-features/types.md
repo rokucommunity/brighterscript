@@ -134,7 +134,7 @@ sub play(item as MediaItme)
 end sub
 ```
 
-```
+```bsc-output
 error BS1044: Function parameter 'item' is of invalid type 'MediaItme'
 ```
 
@@ -148,7 +148,7 @@ function getTitle() as string
 end function
 ```
 
-```
+```bsc-output
 error BS1142: Non-void function must return a value
 ```
 
@@ -166,7 +166,7 @@ class Dog extends Animal
 end class
 ```
 
-```
+```bsc-output
 error BS1098: Field 'name' in class 'Dog' is not assignable to the same field in base class 'Animal'. Type 'integer' is not assignable to type 'string'.
 ```
 
@@ -189,7 +189,7 @@ BrighterScript v1 checks the types of values. See [Preparing for v1](#preparing-
 
 ## Types in the transpiled code
 
-This table shows what each kind of type becomes when your code is transpiled:
+Here's what each kind of type becomes when your code is transpiled:
 
 | You write | Transpiled code |
 |---|---|

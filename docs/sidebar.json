@@ -6,7 +6,9 @@
             "label": "Getting Started",
             "items": [
                 { "file": "getting-started/installation.md" },
-                { "file": "getting-started/configuration.md" }
+                { "file": "getting-started/configuration.md" },
+                { "file": "getting-started/new-projects.md", "label": "New Projects" },
+                { "file": "getting-started/existing-projects.md", "label": "Existing Projects" }
             ]
         },
         {

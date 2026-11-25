@@ -22,7 +22,7 @@ If your project's files are laid out the way Roku expects (`manifest`, `source/`
 npx bsc
 ```
 
-That's it. The compiler finds every file in your project, checks it for syntax and validation errors, and if there are none, creates a zip of your app at `./out/project.zip`.
+That's it. The compiler finds every file in your project, checks it for syntax and validation errors, and if there are none, creates a zip of your app in the `out` folder, named after your project's folder.
 
 To configure your build, see [Configuration](configuration.md).
 
@@ -38,12 +38,6 @@ Rebuild every time a file changes:
 
 ```bash
 bsc --watch
-```
-
-Rebuild and redeploy to a Roku device every time a file changes:
-
-```bash
-bsc --watch --deploy --host 192.168.1.10 --password secret_password
 ```
 
 Use a `bsconfig.json` that isn't in the current directory:
