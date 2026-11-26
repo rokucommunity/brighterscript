@@ -1146,6 +1146,42 @@ describe('lexer', () => {
             expect(f.text).to.equal('1.0');
         });
 
+        it('treats a trailing decimal point as part of the float', () => {
+            expect(
+                Lexer.scan('3.').tokens.map(x => [x.kind, x.text])
+            ).to.eql([
+                [TokenKind.FloatLiteral, '3.'],
+                [TokenKind.Eof, '']
+            ]);
+        });
+
+        it('still supports exponents and designators after a trailing decimal point', () => {
+            expect(Lexer.scan('1.e5').tokens[0].text).to.eql('1.e5');
+            expect(Lexer.scan('1.E-5').tokens[0].text).to.eql('1.E-5');
+            expect(Lexer.scan('2.d3').tokens[0].text).to.eql('2.d3');
+            expect(Lexer.scan('7.!').tokens[0].text).to.eql('7.!');
+            expect(Lexer.scan('7.#').tokens[0].text).to.eql('7.#');
+        });
+
+        it('does not consume the dot when an integer is followed by a member access', () => {
+            expect(
+                Lexer.scan('12.toStr()').tokens.map(x => [x.kind, x.text])
+            ).to.eql([
+                [TokenKind.IntegerLiteral, '12'],
+                [TokenKind.Dot, '.'],
+                [TokenKind.Identifier, 'toStr'],
+                [TokenKind.LeftParen, '('],
+                [TokenKind.RightParen, ')'],
+                [TokenKind.Eof, '']
+            ]);
+        });
+
+        it('does not consume the dot for member access whose name starts with an exponent letter', () => {
+            expect(
+                Lexer.scan('12.dummy 12.e_x 12.edge').tokens.filter(x => x.kind !== TokenKind.Whitespace).map(x => x.text)
+            ).to.eql(['12', '.', 'dummy', '12', '.', 'e_x', '12', '.', 'edge', '']);
+        });
+
         it('forces literals with \'E\' in exponent into floats', () => {
             let f = Lexer.scan('2.5e3').tokens[0];
             expect(f.kind).to.equal(TokenKind.FloatLiteral);
