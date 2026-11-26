@@ -1,5 +1,5 @@
 import type { Expression } from '../parser/AstNode';
-import type { CallExpression, CallfuncExpression, NewExpression } from '../parser/Expression';
+import type { CallExpression, CallfuncExpression, NewExpression, VariableExpression } from '../parser/Expression';
 import type { ClassStatement } from '../parser/Statement';
 import { isCallExpression, isCallfuncExpression, isVariableExpression, isDottedGetExpression, isClassStatement, isNewExpression } from '../astUtils/reflection';
 import type { BrsFile } from '../files/BrsFile';
@@ -25,7 +25,7 @@ export class CallExpressionInfo {
     expression?: Expression;
 
     //the contextually relevant callExpression, which relates to it
-    callExpression?: CallExpression;
+    callExpression?: CallExpression | CallfuncExpression;
     type: CallExpressionType;
 
     file: BrsFile;
@@ -67,35 +67,40 @@ export class CallExpressionInfo {
             this.newExpression = callExpression.parent;
         }
         if (isCallfuncExpression(callExpression)) {
-            this.name = callExpression.methodName.text;
+            this.name = callExpression.tokens.methodName.text;
         } else if (isVariableExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
         } else if (isVariableExpression(callExpression)) {
-            this.name = callExpression.name.text;
+            this.name = (callExpression as VariableExpression).tokens.name.text;
         } else if (isDottedGetExpression(callExpression.callee)) {
-            this.name = callExpression.callee.name.text;
+            this.name = callExpression.callee.tokens.name.text;
             if (isDottedGetExpression(callExpression.callee) && isVariableExpression(callExpression.callee.obj)) {
-                this.isCallingMethodOnMyClass = callExpression.callee.obj.name.text === 'm';
+                this.isCallingMethodOnMyClass = callExpression.callee.obj.tokens.name.text === 'm';
 
             } else {
                 let parts = util.getAllDottedGetParts(callExpression.callee);
-                parts.splice(parts?.length - 1, 1);
-                this.dotPart = parts.map(x => x.text).join('.');
-                this.namespace = this.getNamespace();
+                if (parts) {
+                    parts.splice(parts?.length - 1, 1);
+                    this.dotPart = parts.map(x => x.text).join('.');
+                    this.namespace = this.getNamespace();
+                }
             }
         }
 
-        this.myClass = this.expression.findAncestor<ClassStatement>(isClassStatement);
+        this.myClass = this.expression.findAncestor(isClassStatement);
         this.type = this.ascertainType();
         this.parameterIndex = this.getParameterIndex();
     }
 
     isPositionBetweenParentheses() {
-        let boundingRange = util.createBoundingRange(this.callExpression.openingParen, this.callExpression.closingParen);
+        if (!this.callExpression) {
+            return false;
+        }
+        let boundingRange = util.createBoundingRange(util.getLocation(this.callExpression.tokens.openingParen), util.getLocation(this.callExpression.tokens.closingParen));
         return util.rangeContains(boundingRange, this.position);
     }
 
-    ascertainCallExpression(): CallExpression {
+    ascertainCallExpression(): CallExpression | CallfuncExpression {
         let expression = this.expression;
         function isCallFuncOrCallExpression(expression: Expression) {
             return isCallfuncExpression(expression) || isCallExpression(expression);
@@ -104,14 +109,14 @@ export class CallExpressionInfo {
         let callExpression = expression?.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
         if (callExpression && callExpression.callee === expression) {
             //this expression is the NAME of a CallExpression
-            callExpression = expression.parent.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
-        } else if (isDottedGetExpression(expression.parent) && expression.parent.parent === callExpression) {
+            callExpression = expression.parent?.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
+        } else if (isDottedGetExpression(expression?.parent) && expression?.parent?.parent === callExpression) {
             callExpression = callExpression.findAncestor<CallExpression | CallfuncExpression>(isCallFuncOrCallExpression);
         }
 
         if (!callExpression && isCallExpression(expression)) {
             //let's check to see if we are in a space, in the args of a valid CallExpression
-            let boundingRange = util.createBoundingRange(expression.openingParen, expression.closingParen);
+            let boundingRange = util.createBoundingRange(expression.tokens.openingParen, expression.tokens.closingParen);
             if (util.rangeContains(boundingRange, this.position)) {
                 callExpression = expression;
             }
@@ -149,17 +154,18 @@ export class CallExpressionInfo {
     }
 
     private getParameterIndex() {
+        if (!this.callExpression || !this.callExpression.args) {
+            return 0;
+        }
         for (let i = this.callExpression.args.length - 1; i > -1; i--) {
             let argExpression = this.callExpression.args[i];
-            let comparison = util.comparePositionToRange(this.position, argExpression.range);
+            let comparison = util.comparePositionToRange(this.position, util.getLocation(argExpression)?.range);
             if (comparison >= 0) {
                 return i + comparison;
             }
         }
 
         return 0;
-
     }
 
 }
-

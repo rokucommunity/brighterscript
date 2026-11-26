@@ -3,43 +3,75 @@ import * as fsExtra from 'fs-extra';
 import type { ParseError } from 'jsonc-parser';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import * as path from 'path';
-import { rokuDeploy, DefaultFiles, standardizePath as rokuDeployStandardizePath } from 'roku-deploy';
-import type { Diagnostic, Position, Range, Location, DiagnosticRelatedInformation } from 'vscode-languageserver';
+import { rokuDeploy, DefaultFiles } from 'roku-deploy';
+import type { Diagnostic, Position, DiagnosticRelatedInformation } from 'vscode-languageserver';
+import { Range, Location } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';
-import * as xml2js from 'xml2js';
-import type { BsConfig, FinalizedBsConfig } from './BsConfig';
+import type { BsConfig, BsConfigCompilerOptions, FinalizedBsConfig } from './BsConfig';
+import { deprecatedCompilerOptionKeys } from './BsConfig';
 import { DiagnosticMessages } from './DiagnosticMessages';
-import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, CompilerPluginFactory, CompilerPlugin, ExpressionInfo, TranspileResult } from './interfaces';
+import type { CallableContainer, BsDiagnostic, FileReference, CallableContainerMap, Plugin, ExpressionInfo, TranspileResult, MaybePromise, DisposableLike, ExtraSymbolData, GetTypeOptions, TypeChainProcessResult, PluginFactory, TypeCircularReferenceInfo } from './interfaces';
+import { TypeChainEntry } from './interfaces';
 import { BooleanType } from './types/BooleanType';
 import { DoubleType } from './types/DoubleType';
 import { DynamicType } from './types/DynamicType';
 import { FloatType } from './types/FloatType';
-import { FunctionType } from './types/FunctionType';
 import { IntegerType } from './types/IntegerType';
-import { InvalidType } from './types/InvalidType';
 import { LongIntegerType } from './types/LongIntegerType';
 import { ObjectType } from './types/ObjectType';
 import { StringType } from './types/StringType';
 import { VoidType } from './types/VoidType';
 import { ParseMode } from './parser/Parser';
-import type { DottedGetExpression, VariableExpression } from './parser/Expression';
+import type { AALiteralExpression, ArrayLiteralExpression, CallExpression, CallfuncExpression, DottedGetExpression, FunctionExpression, FunctionParameterExpression, IndexedGetExpression, LiteralExpression, TypeExpression, VariableExpression } from './parser/Expression';
+import type { FunctionScope } from './FunctionScope';
 import { LogLevel, createLogger } from './logging';
-import type { Identifier, Locatable, Token } from './lexer/Token';
+import { isToken, type Identifier, type Locatable, type SourceInfo, type Token } from './lexer/Token';
 import { TokenKind } from './lexer/TokenKind';
-import { isAssignmentStatement, isBrsFile, isCallExpression, isCallfuncExpression, isDottedGetExpression, isExpression, isFunctionParameterExpression, isIndexedGetExpression, isNamespacedVariableNameExpression, isNewExpression, isVariableExpression, isXmlAttributeGetExpression, isXmlFile } from './astUtils/reflection';
+import { isAnyReferenceType, isAssignmentStatement, isFunctionExpression, isBinaryExpression, isBlock, isBody, isBooleanTypeLike, isBrsFile, isCallExpression, isCallableType, isCallfuncExpression, isClassType, isCompoundType, isComponentType, isConstStatement, isDottedGetExpression, isDottedSetStatement, isDoubleTypeLike, isDynamicType, isEnumMemberType, isExpression, isFloatTypeLike, isIndexedGetExpression, isIndexedSetStatement, isIntegerTypeLike, isIntersectionType, isInvalidTypeLike, isLiteralString, isLongIntegerTypeLike, isNamespaceStatement, isNamespaceType, isNewExpression, isNumberTypeLike, isObjectType, isParamTypeFromValueReferenceType, isPrimitiveType, isReferenceType, isStatement, isStringTypeLike, isTypeExpression, isTypedArrayExpression, isTypedFunctionType, isUninitializedType, isUnionType, isVariableExpression, isVoidType, isXmlAttributeGetExpression, isXmlFile, isArrayType, isAssociativeArrayTypeLike, isBuiltInType, isTypedFunctionTypeLike, isGroupingExpression, isInlineInterfaceExpression, isTypedFunctionTypeExpression } from './astUtils/reflection';
 import { WalkMode } from './astUtils/visitors';
-import { CustomType } from './types/CustomType';
-import { SourceNode } from 'source-map';
-import type { SGAttribute } from './parser/SGTypes';
+import { SourceNode, SourceMapConsumer } from 'source-map';
+import type { RawSourceMap, SourceMapGenerator } from 'source-map';
 import * as requireRelative from 'require-relative';
 import type { BrsFile } from './files/BrsFile';
 import type { XmlFile } from './files/XmlFile';
 import type { AstNode, Expression, Statement } from './parser/AstNode';
-import { components, events, interfaces } from './roku-types';
+import { AstNodeKind } from './parser/AstNode';
+import type { UnresolvedSymbol } from './AstValidationSegmenter';
+import type { GetSymbolTypeOptions, SymbolTable } from './SymbolTable';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
+import { createIdentifier, createToken } from './astUtils/creators';
+import { MAX_RELATED_INFOS_COUNT } from './diagnosticUtils';
+import type { BscType } from './types/BscType';
+import { UnionType, unionTypeFactory } from './types/UnionType';
+import { ArrayType } from './types/ArrayType';
+import { BinaryOperatorReferenceType, TypePropertyReferenceType, ParamTypeFromValueReferenceType } from './types/ReferenceType';
+import { AssociativeArrayType } from './types/AssociativeArrayType';
+import { ComponentType } from './types/ComponentType';
+import { FunctionType } from './types/FunctionType';
+import type { AssignmentStatement, ConstStatement, DottedSetStatement, IndexedSetStatement, NamespaceStatement } from './parser/Statement';
+import type { NamespaceType } from './types/NamespaceType';
+import { getUniqueType } from './types/helpers';
+import { InvalidType } from './types/InvalidType';
+import { TypedFunctionType } from './types';
+import { IntersectionType } from './types/IntersectionType';
+import { TokenObject } from './lexer/TokenObject';
+import { DEFAULT_MIN_FIRMWARE_VERSION } from './RokuConstants';
+import { createExtraSymbolData } from './interfaces';
 
 export class Util {
     public clearConsole() {
         // process.stdout.write('\x1Bc');
+    }
+
+    /**
+     * Get the version of brighterscript
+     */
+    public getBrighterScriptVersion() {
+        try {
+            return fsExtra.readJsonSync(`${__dirname}/../package.json`).version;
+        } catch {
+            return undefined;
+        }
     }
 
     /**
@@ -79,45 +111,34 @@ export class Util {
      * Determine if this path is a directory
      */
     public isDirectorySync(dirPath: string | undefined) {
-        return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        try {
+            return dirPath !== undefined && fs.existsSync(dirPath) && fs.lstatSync(dirPath).isDirectory();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Read a file from disk. If a failure occurrs, simply return undefined
+     * @param filePath path to the file
+     * @returns the string contents, or undefined if the file doesn't exist
+     */
+    public readFileSync(filePath: string): Buffer | undefined {
+        try {
+            return fsExtra.readFileSync(filePath);
+        } catch (e) {
+            return undefined;
+        }
     }
 
     /**
      * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
      */
     public sanitizePkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        //if there's no protocol, assume it's supposed to start with `pkg:/`
-        if (!this.startsWithProtocol(pkgPath)) {
-            pkgPath = 'pkg:/' + pkgPath;
-        }
-        return pkgPath;
-    }
-
-    /**
-     * Determine if the given path starts with a protocol
-     */
-    public startsWithProtocol(path: string) {
-        return !!/^[-a-z]+:\//i.exec(path);
-    }
-
-    /**
-     * Given a pkg path of any kind, transform it to a roku-specific pkg path (i.e. "pkg:/some/path.brs")
-     */
-    public getRokuPkgPath(pkgPath: string) {
-        pkgPath = pkgPath.replace(/\\/g, '/');
-        return 'pkg:/' + pkgPath;
-    }
-
-    /**
-     * Given a path to a file/directory, replace all path separators with the current system's version.
-     */
-    public pathSepNormalize(filePath: string, separator?: string) {
-        if (!filePath) {
-            return filePath;
-        }
-        separator = separator ? separator : path.sep;
-        return filePath.replace(/[\\/]+/g, separator);
+        //convert all slashes to forwardslash
+        pkgPath = pkgPath.replace(/[\/\\]+/g, '/');
+        //ensure every path has the leading pkg:/
+        return 'pkg:/' + pkgPath.replace(/^pkg:\//i, '');
     }
 
     /**
@@ -137,6 +158,70 @@ export class Util {
                 configPath = path.join(parentDirPath, 'bsconfig.json');
             }
         }
+    }
+
+    /**
+     * Create a new `bsconfig.json` file in the given directory or at the given `project` path (this powers `bsc --init`).
+     * The file contains recommended defaults, followed by the rest of the supported options commented out.
+     * An existing `bsconfig.json` file is never overwritten.
+     * @param cwd the directory where the `bsconfig.json` file should be created (or against which `project` is resolved)
+     * @param project optional path to the config file, resolved relative to `cwd`
+     * @returns the path to the new file, or `undefined` if the target file already exists
+     */
+    public createConfigFile(cwd = process.cwd(), project = 'bsconfig.json'): string | undefined {
+        const configPath = path.resolve(cwd, project);
+        if (fsExtra.pathExistsSync(configPath)) {
+            return undefined;
+        }
+        //each setting is followed by a short description, aligned like `tsc --init`
+        const option = (setting: string, description: string, indent = '    ') => `${indent}${setting.padEnd(50 - indent.length)} /* ${description} */`;
+        const compilerOption = (setting: string, description: string) => option(setting, description, '        ');
+        const contents = [
+            '{',
+            option('"outDir": "dist",', 'The directory where the transpiled files are placed.'),
+            option('"compilerOptions": {', 'Options that control how your code is validated and transpiled.'),
+            compilerOption(`"minFirmwareVersion": "${DEFAULT_MIN_FIRMWARE_VERSION}",`, 'The minimum Roku firmware version required to run this project.'),
+            compilerOption('"autoImportComponentScript": true,', 'For every xml component, automatically import a .bs or .brs file with the same name (if it exists).'),
+            compilerOption('"sourceMap": true,', 'Generate sourcemap files so debuggers can show the original source code.'),
+            compilerOption('"relativeSourceMaps": true,', 'Write sourcemap `sources` as relative paths instead of absolute paths.'),
+            '',
+            compilerOption('// "allowBrighterScriptInBrightScript": false,', 'Allow BrighterScript features (classes, interfaces, etc...) in BrightScript (`.brs`) files, and force those files to be transpiled.'),
+            compilerOption('// "bslibDestinationDir": "source",', 'Override the output directory location of the bslib.brs file. Using a location outside of `source` will break scripts that depend on it.'),
+            compilerOption('// "emitDefinitions": false,', 'Emit type definition files (`d.bs`) during transpile.'),
+            compilerOption('// "emitFullPaths": false,', 'Emit full paths to files when printing diagnostics to the console.'),
+            compilerOption('// "legacyCallfuncHandling": false,', 'Insert `invalid` as an argument to `callfunc()` calls that have no arguments, for legacy Roku OS versions.'),
+            compilerOption('// "manifest": { "bs_const": {} },', 'Override values in the manifest file (currently only `bs_const` is supported).'),
+            compilerOption('// "pruneEmptyCodeFiles": false,', 'Remove files that are empty (or only contain comments) after transpilation.'),
+            compilerOption('// "removeParameterTypes": false,', 'Remove explicit parameter and return types (the `as type` syntax) from functions.'),
+            compilerOption('// "resolveSourceRoot": false,', 'Resolve `sourceRoot` to an absolute path (relative to this bsconfig.json file).'),
+            compilerOption('// "sourceRoot": "",', 'Override where source files appear to live in sourcemaps and source literals.'),
+            compilerOption('// "strict": false,', 'Enable all strict mode options (`strictCallFunc`, `strictNodeMembers`, and any added in the future).'),
+            compilerOption('// "strictCallFunc": false,', 'Disallow `callfunc()` invocations on generic Node types.'),
+            compilerOption('// "strictNodeMembers": false', 'Treat unknown members on Node types as errors instead of dynamic values.'),
+            '    },',
+            '',
+            option('// "cwd": "./",', 'Override the current working directory.'),
+            option('// "diagnosticFilters": [],', 'A list of filters used to hide diagnostics.'),
+            option('// "diagnosticLevel": "warn",', 'Which diagnostic levels are printed to the console: "hint", "info", "warn", or "error".'),
+            option('// "diagnosticReporters": "detailed",', 'How diagnostics are reported to the console: "detailed", "github-actions", or a custom template string.'),
+            option('// "diagnosticSeverityOverrides": {},', 'A map of diagnostic codes to severity overrides ("hint", "info", "warn", or "error").'),
+            option('// "extends": "",', 'Path to another bsconfig.json file that this file should import and then override.'),
+            option(`// "files": ${JSON.stringify(DefaultFiles).replace(/,/g, ', ')},`, 'The list of files (or globs) to include in your project.'),
+            option('// "logLevel": "log",', 'The log level: "error", "warn", "log", "info", "debug", "trace", or "off".'),
+            option('// "noEmit": false,', 'Validate the project without writing any files to `outDir`.'),
+            option('// "plugins": [],', 'A list of node scripts or npm modules to load as compiler plugins.'),
+            option('// "require": [],', 'A list of node scripts or npm modules to `require()` on startup.'),
+            option('// "rootDir": "./",', 'The root directory of your Roku project (where the manifest lives).'),
+            option('// "showDiagnosticsInConsole": true,', 'Print diagnostics to the console.'),
+            option('// "validate": true,', 'Set to false to skip validation (diagnostics) entirely, which can speed up builds.'),
+            option('// "watch": false', 'Keep running, and recompile on every file change.'),
+            '}',
+            ''
+        ].join('\n');
+        fsExtra.ensureDirSync(path.dirname(configPath));
+        //the `wx` flag guarantees we never overwrite an existing file
+        fsExtra.writeFileSync(configPath, contents, { flag: 'wx' });
+        return configPath;
     }
 
     public getRangeFromOffsetLength(text: string, offset: number, length: number) {
@@ -194,11 +279,11 @@ export class Util {
             if (parseErrors.length > 0) {
                 let err = parseErrors[0];
                 let diagnostic = {
-                    ...DiagnosticMessages.bsConfigJsonHasSyntaxErrors(printParseErrorCode(parseErrors[0].error)),
-                    file: {
-                        srcPath: configFilePath
-                    },
-                    range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    ...DiagnosticMessages.syntaxError(`Syntax errors in bsconfig.json: ${printParseErrorCode(parseErrors[0].error)}`),
+                    location: {
+                        uri: this.pathToUri(configFilePath),
+                        range: this.getRangeFromOffsetLength(projectFileContents, err.offset, err.length)
+                    }
                 } as BsDiagnostic;
                 throw diagnostic; //eslint-disable-line @typescript-eslint/no-throw-literal
             }
@@ -212,11 +297,21 @@ export class Util {
             util.resolvePathsRelativeTo(projectConfig, 'require', projectFileCwd);
 
             let result: BsConfig;
+            let baseProjectConfigDeprecationDiagnostics: BsDiagnostic[] | undefined;
             //if the project has a base file, load it
             if (projectConfig && typeof projectConfig.extends === 'string') {
                 let baseProjectConfig = this.loadConfigFile(projectConfig.extends, [...parentProjectPaths, configFilePath], projectFileCwd);
                 //extend the base config with the current project settings
                 result = { ...baseProjectConfig, ...projectConfig };
+                //`compilerOptions` is deep-merged (like TypeScript does), so a child config only
+                //overriding one option doesn't wipe out the rest of the options set by its parent(s)
+                if (baseProjectConfig?.compilerOptions || projectConfig.compilerOptions) {
+                    result.compilerOptions = {
+                        ...baseProjectConfig?.compilerOptions,
+                        ...projectConfig.compilerOptions
+                    };
+                }
+                baseProjectConfigDeprecationDiagnostics = (baseProjectConfig as any)?._deprecationDiagnostics;
             } else {
                 result = projectConfig;
                 let ancestors = parentProjectPaths ? parentProjectPaths : [];
@@ -225,17 +320,53 @@ export class Util {
             }
 
             //make any paths in the config absolute (relative to the CURRENT config file)
-            if (result.outFile) {
-                result.outFile = path.resolve(projectFileCwd, result.outFile);
-            }
             if (result.rootDir) {
                 result.rootDir = path.resolve(projectFileCwd, result.rootDir);
+            }
+            if (result.outDir) {
+                result.outDir = path.resolve(projectFileCwd, result.outDir);
+            }
+            //map the deprecated staging options to `outDir` (relative to THIS config file).
+            //the deprecated options themselves are left as-is so consumers that still read them keep working
+            if (!('outDir' in projectConfig)) {
+                if (projectConfig.stagingFolderPath) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingFolderPath);
+                } else if (projectConfig.stagingDir) {
+                    result.outDir = path.resolve(projectFileCwd, projectConfig.stagingDir);
+                }
             }
             if (result.cwd) {
                 result.cwd = path.resolve(projectFileCwd, result.cwd);
             }
-            if (result.stagingDir) {
-                result.stagingDir = path.resolve(projectFileCwd, result.stagingDir);
+
+            //flag any deprecated top-level `compilerOptions` options used directly in THIS config file
+            //(this is deliberately scoped to options loaded from an actual bsconfig.json file; options
+            //passed programmatically to `Program`/`ProgramBuilder` are not flagged)
+            const deprecationDiagnostics: BsDiagnostic[] = [...((baseProjectConfigDeprecationDiagnostics) ?? [])];
+            for (const key of deprecatedCompilerOptionKeys) {
+                if (key in projectConfig) {
+                    deprecationDiagnostics.push({
+                        ...DiagnosticMessages.deprecatedBsConfigOption(key),
+                        location: {
+                            uri: this.pathToUri(configFilePath),
+                            range: this.createRange(0, 0, 0, 0)
+                        }
+                    });
+                }
+            }
+            (result as any)._deprecationDiagnostics = deprecationDiagnostics;
+
+            //`sourceRoot`/`resolveSourceRoot` may live at the top level (deprecated) or in `compilerOptions`.
+            //resolve whichever location actually holds the value, relative to THIS config file
+            const sourceRootValue = result.compilerOptions?.sourceRoot ?? result.sourceRoot;
+            const resolveSourceRootValue = result.compilerOptions?.resolveSourceRoot ?? result.resolveSourceRoot;
+            if (sourceRootValue && resolveSourceRootValue) {
+                const resolvedSourceRoot = path.resolve(projectFileCwd, sourceRootValue);
+                if (result.compilerOptions?.sourceRoot !== undefined) {
+                    result.compilerOptions.sourceRoot = resolvedSourceRoot;
+                } else {
+                    result.sourceRoot = resolvedSourceRoot;
+                }
             }
             return result;
         }
@@ -263,62 +394,37 @@ export class Util {
     }
 
     /**
-     * Do work within the scope of a changed current working directory
-     * @param targetCwd the cwd where the work should be performed
-     * @param callback a function to call when the cwd has been changed to `targetCwd`
-     */
-    public cwdWork<T>(targetCwd: string | null | undefined, callback: () => T): T {
-        let originalCwd = process.cwd();
-        if (targetCwd) {
-            process.chdir(targetCwd);
-        }
-
-        let result: T;
-        let err;
-
-        try {
-            result = callback();
-        } catch (e) {
-            err = e;
-        }
-
-        if (targetCwd) {
-            process.chdir(originalCwd);
-        }
-
-        if (err) {
-            throw err;
-        } else {
-            //justification: `result` is set as long as `err` is not set and vice versa
-            return result!;
-        }
-    }
-
-    /**
      * Given a BsConfig object, start with defaults,
      * merge with bsconfig.json and the provided options.
      * @param config a bsconfig object to use as the baseline for the resulting config
      */
     public normalizeAndResolveConfig(config: BsConfig | undefined): FinalizedBsConfig {
-        let result = this.normalizeConfig({});
-
         if (config?.noProject) {
-            return result;
+            return this.normalizeConfig({
+                ...config
+            });
         }
 
+        let project: string | undefined;
         //if no options were provided, try to find a bsconfig.json file
         if (!config || !config.project) {
-            result.project = this.getConfigFilePath(config?.cwd);
+            project = this.getConfigFilePath(config?.cwd);
         } else {
             //use the config's project link
-            result.project = config.project;
+            project = config.project;
         }
-        if (result.project) {
-            let configFile = this.loadConfigFile(result.project, undefined, config?.cwd);
-            result = Object.assign(result, configFile);
+
+        let mergedConfig = { ...config };
+        if (project) {
+            let configFile = this.loadConfigFile(project, undefined, config?.cwd);
+            //the project file values are the defaults; the provided options override them
+            mergedConfig = { ...configFile, ...config };
         }
-        //override the defaults with the specified options
-        result = Object.assign(result, config);
+
+        //set defaults and map deprecated options AFTER merging the project file, so that
+        //deprecated options (i.e. `stagingFolderPath`, `copyToStaging`) from the project file are properly honored
+        let result = this.normalizeConfig(mergedConfig);
+        result.project = project;
         return result;
     }
 
@@ -330,13 +436,28 @@ export class Util {
         config = config ?? {} as BsConfig;
 
         const cwd = config.cwd ?? process.cwd();
-        const rootFolderName = path.basename(cwd);
-        const retainStagingDir = (config.retainStagingDir ?? config.retainStagingFolder) === true ? true : false;
+
+        //Resolve `compilerOptions`: values set there win over their deprecated top-level counterparts.
+        //(deprecation diagnostics for options loaded directly from a bsconfig.json file are collected
+        //separately, in `loadConfigFile`, and simply carried through on `config._deprecationDiagnostics`)
+        const compilerOptions: BsConfigCompilerOptions = { ...(config.compilerOptions ?? {}) };
+        for (const key of deprecatedCompilerOptionKeys) {
+            if (!(key in compilerOptions) && key in config) {
+                (compilerOptions as any)[key] = (config as any)[key];
+            }
+            //push the resolved (winning) value back onto the flat config so the rest of this function
+            //(and any code that still reads the deprecated flat option) sees the correct, resolved value
+            if (key in compilerOptions) {
+                (config as any)[key] = compilerOptions[key];
+            }
+        }
 
         let logLevel: LogLevel = LogLevel.log;
 
         if (typeof config.logLevel === 'string') {
             logLevel = LogLevel[(config.logLevel as string).toLowerCase()] ?? LogLevel.log;
+        } else if (typeof config.logLevel === 'number') {
+            logLevel = config.logLevel;
         }
 
         let bslibDestinationDir = config.bslibDestinationDir ?? 'source';
@@ -345,33 +466,59 @@ export class Util {
             bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
         }
 
+        let noEmit: boolean;
+        if ('noEmit' in config) {
+            noEmit = config.noEmit;
+        } else if ('copyToStaging' in config) {
+            noEmit = !(config as any).copyToStaging; //invert the old value
+        } else {
+            noEmit = false; //default case
+        }
+
+        let outDir: string;
+        if ('outDir' in config) {
+            outDir = config.outDir ?? './out';
+        } else if ('stagingFolderPath' in config) {
+            outDir = (config as any).stagingFolderPath as string;
+        } else if ('stagingDir' in config) {
+            outDir = (config as any).stagingDir as string;
+        } else {
+            outDir = './out'; //default case
+        }
+
+        const strictValue = !!config.strict;
+
         const configWithDefaults: Omit<FinalizedBsConfig, 'rootDir'> = {
             cwd: cwd,
-            deploy: config.deploy === true ? true : false,
             //use default files array from rokuDeploy
             files: config.files ?? [...DefaultFiles],
-            createPackage: config.createPackage === false ? false : true,
-            outFile: config.outFile ?? `./out/${rootFolderName}.zip`,
+            outDir: outDir,
             sourceMap: config.sourceMap === true,
-            username: config.username ?? 'rokudev',
+            relativeSourceMaps: config.relativeSourceMaps === true,
             watch: config.watch === true ? true : false,
             emitFullPaths: config.emitFullPaths === true ? true : false,
-            retainStagingDir: retainStagingDir,
-            retainStagingFolder: retainStagingDir,
-            copyToStaging: config.copyToStaging === false ? false : true,
+            noEmit: noEmit,
             ignoreErrorCodes: config.ignoreErrorCodes ?? [],
             diagnosticSeverityOverrides: config.diagnosticSeverityOverrides ?? {},
             diagnosticFilters: config.diagnosticFilters ?? [],
+            diagnosticFiltersV0Compatibility: config.diagnosticFiltersV0Compatibility === true ? true : false,
             plugins: config.plugins ?? [],
             pruneEmptyCodeFiles: config.pruneEmptyCodeFiles === true ? true : false,
             autoImportComponentScript: config.autoImportComponentScript === true ? true : false,
             showDiagnosticsInConsole: config.showDiagnosticsInConsole === false ? false : true,
             sourceRoot: config.sourceRoot ? standardizePath(config.sourceRoot) : undefined,
+            resolveSourceRoot: config.resolveSourceRoot === true ? true : false,
             allowBrighterScriptInBrightScript: config.allowBrighterScriptInBrightScript === true ? true : false,
             emitDefinitions: config.emitDefinitions === true ? true : false,
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
-            bslibDestinationDir: bslibDestinationDir
+            bslibDestinationDir: bslibDestinationDir,
+            legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
+            validate: config.validate === false ? false : true,
+            strict: strictValue,
+            strictCallFunc: (typeof config.strictCallFunc === 'boolean' ? config.strictCallFunc : strictValue),
+            strictNodeMembers: (typeof config.strictNodeMembers === 'boolean' ? config.strictNodeMembers : strictValue),
+            compilerOptions: compilerOptions
         };
 
         //mutate `config` in case anyone is holding a reference to the incomplete one
@@ -421,13 +568,6 @@ export class Util {
     }
 
     /**
-     * Split a file by newline characters (LF or CRLF)
-     */
-    public getLines(text: string) {
-        return text.split(/\r?\n/);
-    }
-
-    /**
      * Given an absolute path to a source file, and a target path,
      * compute the pkg path for the target relative to the source file's location
      */
@@ -473,6 +613,29 @@ export class Util {
     }
 
     /**
+     * Compute the replacement text for a file-path string (used in `import` statements and XML `<script uri>` attributes)
+     * when the target file is being renamed. Preserves the original path style: `pkg:/...` stays `pkg:/...`,
+     * relative paths stay relative (recomputed from the containing file's pkg path).
+     *
+     * @param originalText the path string as it appears in source (no surrounding quotes)
+     * @param containingFilePkgPath pkg path of the file containing the reference
+     * @param newTargetPkgPath pkg path of the renamed file (path-separator agnostic)
+     * @returns the new path string, or `null` if the original style is unsupported
+     */
+    public computeRenamedReferencePath(originalText: string, containingFilePkgPath: string, newTargetPkgPath: string): string | null {
+        if (!originalText) {
+            return null;
+        }
+        const newPkgPathForwardSlash = path.normalize(newTargetPkgPath).split(path.sep).join('/');
+        const schemeMatch = /^(pkg|libpkg):\//i.exec(originalText);
+        if (schemeMatch) {
+            return `${schemeMatch[1]}:/${newPkgPathForwardSlash}`;
+        }
+        const relative = this.getRelativePath(containingFilePkgPath, newTargetPkgPath);
+        return relative.split(path.sep).join('/');
+    }
+
+    /**
      * Compute the relative path from the source file to the target file
      * @param pkgSrcPath  - the absolute path to the source, where cwd is the package location
      * @param pkgTargetPath  - the absolute path to the target, where cwd is the package location
@@ -510,11 +673,22 @@ export class Util {
         return path.join(...resultParts);
     }
 
+    public getImportPackagePath(srcPath: string, pkgTargetPath: string) {
+        const srcExt = this.getExtension(srcPath);
+        const lowerSrcExt = srcExt.toLowerCase();
+        const lowerTargetExt = this.getExtension(pkgTargetPath).toLowerCase();
+        if (lowerSrcExt === '.bs' && lowerTargetExt === '.brs') {
+            // if source is .bs, use that as the import extenstion
+            return pkgTargetPath.substring(0, pkgTargetPath.length - lowerTargetExt.length) + srcExt;
+        }
+        return pkgTargetPath;
+    }
+
     /**
      * Walks left in a DottedGetExpression and returns a VariableExpression if found, or undefined if not found
      */
-    public findBeginningVariableExpression(dottedGet: DottedGetExpression): VariableExpression | undefined {
-        let left: any = dottedGet;
+    public findBeginningVariableExpression(expression: Expression): VariableExpression | undefined {
+        let left: Expression = expression;
         while (left) {
             if (isVariableExpression(left)) {
                 return left;
@@ -592,67 +766,229 @@ export class Util {
     }
 
     public comparePositionToRange(position: Position | undefined, range: Range | undefined) {
-        //stop if the either range is misisng
+        //stop if the either range is missng
         if (!position || !range) {
             return 0;
         }
 
-        if (position.line < range.start.line || (position.line === range.start.line && position.character < range.start.character)) {
+        if (this.comparePosition(position, range.start) < 0) {
             return -1;
         }
-        if (position.line > range.end.line || (position.line === range.end.line && position.character > range.end.character)) {
+        if (this.comparePosition(position, range.end) > 0) {
+            return 1;
+        }
+        return 0;
+    }
+
+    public comparePosition(a: Position | undefined, b: Position) {
+        //stop if the either position is missing
+        if (!a || !b) {
+            return 0;
+        }
+
+        if (a.line < b.line || (a.line === b.line && a.character < b.character)) {
+            return -1;
+        }
+        if (a.line > b.line || (a.line === b.line && a.character > b.character)) {
             return 1;
         }
         return 0;
     }
 
     /**
-     * Parse an xml file and get back a javascript object containing its results
+     * Convert a file path into a `file://` URL string (e.g. `file:///C:/projects/file.brs`).
+     * Mirrors the `file-url` package: resolves the path, normalizes slashes, prefixes a leading slash
+     * (required for Windows drive letters), and escapes per RFC 3986.
      */
-    public parseXml(text: string) {
-        return new Promise<any>((resolve, reject) => {
-            xml2js.parseString(text, (err, data) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(data);
-                }
-            });
-        });
-    }
-
-    public propertyCount(object: Record<string, unknown>) {
-        let count = 0;
-        for (let key in object) {
-            if (object.hasOwnProperty(key)) {
-                count++;
-            }
+    public fileUrl(filePath: string) {
+        let pathName = path.resolve(filePath).replace(/\\/g, '/');
+        //Windows drive letter must be prefixed with a slash
+        if (!pathName.startsWith('/')) {
+            pathName = `/${pathName}`;
         }
-        return count;
-    }
-
-    public padLeft(subject: string, totalLength: number, char: string) {
-        totalLength = totalLength > 1000 ? 1000 : totalLength;
-        while (subject.length < totalLength) {
-            subject = char + subject;
-        }
-        return subject;
+        //escape required characters for path components
+        return encodeURI(`file://${pathName}`).replace(/[?#]/g, encodeURIComponent);
     }
 
     /**
-     * Given a URI, convert that to a regular fs path
+     * `JSON.stringify` that is safe against circular references and throwing getters. Replaces the
+     * `safe-json-stringify` package.
      */
-    public uriToPath(uri: string) {
-        let parsedPath = URI.parse(uri).fsPath;
+    public safeJsonStringify(data: any, replacer?: (key: string, value: any) => any, space?: string | number) {
+        const seen: any[] = [];
+        const throwsMessage = (err: any) => '[Throws: ' + (err ? err.message : '?') + ']';
+        const safeGetValue = (obj: any, property: string) => {
+            try {
+                return obj[property];
+            } catch (err) {
+                return throwsMessage(err);
+            }
+        };
+        const visit = (obj: any) => {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+            if (seen.includes(obj)) {
+                return '[Circular]';
+            }
+            seen.push(obj);
+            try {
+                if (typeof obj.toJSON === 'function') {
+                    try {
+                        return visit(obj.toJSON());
+                    } catch (err) {
+                        return throwsMessage(err);
+                    }
+                }
+                if (Array.isArray(obj)) {
+                    return obj.map(visit);
+                }
+                return Object.keys(obj as Record<string, unknown>).reduce<Record<string, any>>((result, prop) => {
+                    result[prop] = visit(safeGetValue(obj, prop));
+                    return result;
+                }, {});
+            } finally {
+                seen.pop();
+            }
+        };
+        return JSON.stringify(visit(data), replacer, space);
+    }
 
-        //Uri annoyingly coverts all drive letters to lower case...so this will bring back whatever case it came in as
-        let match = /\/\/\/([a-z]:)/i.exec(uri);
-        if (match) {
-            let originalDriveCasing = match[1];
-            parsedPath = originalDriveCasing + parsedPath.substring(2);
+    /**
+     * Serialize an error (or any thrown value) into a plain object suitable for `JSON.stringify`,
+     * handling circular references. Replaces the `serialize-error` package.
+     */
+    public serializeError(value: any) {
+        const commonProperties = ['name', 'message', 'stack', 'code'];
+        const destroyCircular = (from: any, seen: any[]) => {
+            const to: any = Array.isArray(from) ? [] : {};
+            seen.push(from);
+            for (const [key, val] of Object.entries(from as Record<string, unknown>)) {
+                if (typeof val === 'function') {
+                    continue;
+                }
+                if (!val || typeof val !== 'object') {
+                    to[key] = val;
+                    continue;
+                }
+                if (!seen.includes(from[key])) {
+                    to[key] = destroyCircular(from[key], seen.slice());
+                    continue;
+                }
+                to[key] = '[Circular]';
+            }
+            for (const property of commonProperties) {
+                if (typeof from[property] === 'string') {
+                    to[property] = from[property];
+                }
+            }
+            return to;
+        };
+
+        if (typeof value === 'object' && value !== null) {
+            return destroyCircular(value, []);
         }
-        const normalizedPath = path.normalize(parsedPath);
-        return normalizedPath;
+        //people sometimes throw things besides Error objects…
+        if (typeof value === 'function') {
+            //`JSON.stringify()` discards functions. We do too, unless a function is thrown directly.
+            return `[Function: ${(value.name || 'anonymous')}]`;
+        }
+        return value;
+    }
+
+    /**
+     * Is the inner range completely enclosed in the outer range
+     */
+    public isRangeInRange(inner: Range, outer: Range) {
+        return this.comparePosition(inner.start, outer.start) === 1 &&
+            this.comparePosition(inner.end, outer.end) === -1;
+    }
+
+    /**
+     * Combine all the documentation for a node - uses the AstNode's leadingTrivia property
+     * @param node the node to get the documentation for
+     * @param options extra options
+     * @param options.prettyPrint if true, will format the comment text for markdown
+     * @param options.commentTokens out Array of tokens that match the comment lines
+     */
+    public getNodeDocumentation(node: AstNode, options: { prettyPrint?: boolean; commentTokens?: Token[] } = { prettyPrint: true }) {
+        if (!node) {
+            return '';
+        }
+        options = options ?? { prettyPrint: true };
+        options.commentTokens = options.commentTokens ?? [];
+        const nodeTrivia = node.leadingTrivia ?? [];
+        const leadingTrivia = isStatement(node)
+            ? [...(node.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...nodeTrivia]
+            : nodeTrivia;
+        const tokens = leadingTrivia?.filter(t => t.kind === TokenKind.Newline || t.kind === TokenKind.Comment);
+        const comments = [] as Token[];
+
+        let newLinesInRow = 0;
+        for (let i = tokens.length - 1; i >= 0; i--) {
+            const token = tokens[i];
+            //skip whitespace and newline chars
+            if (token.kind === TokenKind.Comment) {
+                comments.push(token);
+                newLinesInRow = 0;
+            } else if (token.kind === TokenKind.Newline) {
+                //skip these tokens
+                newLinesInRow++;
+
+                if (newLinesInRow > 1) {
+                    // stop processing on empty line.
+                    break;
+                }
+                //any other token means there are no more comments
+            } else {
+                break;
+            }
+        }
+        const jsDocCommentBlockLine = /(\/\*{2,}|\*{1,}\/)/i;
+        let usesjsDocCommentBlock = false;
+        if (comments.length === 0) {
+            return '';
+        }
+        return comments.reverse()
+            .map(x => ({ line: x.text.replace(/^('|rem)/i, '').trim(), token: x }))
+            .filter(({ line }) => {
+                if (jsDocCommentBlockLine.exec(line)) {
+                    usesjsDocCommentBlock = true;
+                    return false;
+                }
+                return true;
+            }).map(({ line, token }) => {
+                if (usesjsDocCommentBlock) {
+                    if (line.startsWith('*')) {
+                        //remove jsDoc leading '*'
+                        line = line.slice(1).trim();
+                    }
+                }
+                if (options.prettyPrint && line.startsWith('@')) {
+                    // Handle jsdoc/brightscriptdoc tags specially
+                    // make sure they are on their own markdown line, and add italics
+                    const firstSpaceIndex = line.indexOf(' ');
+                    if (firstSpaceIndex === -1) {
+                        return `\n_${line}_`;
+                    }
+                    const firstWord = line.substring(0, firstSpaceIndex);
+                    return `\n_${firstWord}_ ${line.substring(firstSpaceIndex + 1)}`;
+                }
+                if (options.commentTokens) {
+                    options.commentTokens.push(token);
+                }
+                return line;
+            }).join('\n');
+    }
+
+    /**
+     * Prefixes a component name so it can be used as type in the symbol table, without polluting available symbols
+     *
+     * @param sgNodeName the Name of the component
+     * @returns the node name, prefixed with `roSGNode`
+     */
+    public getSgNodeTypeName(sgNodeName: string) {
+        return 'roSGNode' + sgNodeName;
     }
 
     /**
@@ -687,39 +1023,47 @@ export class Util {
     }
 
     /**
-     * Determine if two arrays containing primitive values are equal.
-     * This considers order and compares by equality.
+     * Does the string appear to be a uri (i.e. does it start with `file:`)
      */
-    public areArraysEqual(arr1: any[], arr2: any[]) {
-        if (arr1.length !== arr2.length) {
-            return false;
-        }
-        for (let i = 0; i < arr1.length; i++) {
-            if (arr1[i] !== arr2[i]) {
-                return false;
-            }
-        }
-        return true;
+    public isUriLike(filePath: string) {
+        return filePath?.indexOf('file:') === 0;// eslint-disable-line @typescript-eslint/prefer-string-starts-ends-with
     }
 
     /**
      * Given a file path, convert it to a URI string
      */
     public pathToUri(filePath: string) {
-        return URI.file(filePath).toString();
+        if (!filePath) {
+            return filePath;
+        } else if (this.pathToURICache.has(filePath)) {
+            return this.pathToURICache.get(filePath);
+        } else if (this.isUriLike(filePath)) {
+            return filePath;
+        } else {
+            const uri = URI.file(filePath).toString();
+            this.pathToURICache.set(filePath, uri);
+            return uri;
+        }
     }
 
     /**
-     * Get the outDir from options, taking into account cwd and absolute outFile paths
+     * Given a URI, convert that to a regular fs path
      */
-    public getOutDir(options: FinalizedBsConfig) {
-        options = this.normalizeConfig(options);
-        let cwd = path.normalize(options.cwd ? options.cwd : process.cwd());
-        if (path.isAbsolute(options.outFile)) {
-            return path.dirname(options.outFile);
-        } else {
-            return path.normalize(path.join(cwd, path.dirname(options.outFile)));
+    public uriToPath(uri: string) {
+        //if this doesn't look like a URI, then assume it's already a path
+        if (this.isUriLike(uri) === false) {
+            return uri;
         }
+        let parsedPath = URI.parse(uri).fsPath;
+
+        //Uri annoyingly converts all drive letters to lower case...so this will bring back whatever case it came in as
+        let match = /\/\/\/([a-z]:)/i.exec(uri);
+        if (match) {
+            let originalDriveCasing = match[1];
+            parsedPath = originalDriveCasing + parsedPath.substring(2);
+        }
+        const normalizedPath = path.normalize(parsedPath);
+        return normalizedPath;
     }
 
     /**
@@ -749,52 +1093,6 @@ export class Util {
     }
 
     /**
-     * Determine whether this diagnostic should be supressed or not, based on brs comment-flags
-     */
-    public diagnosticIsSuppressed(diagnostic: BsDiagnostic) {
-        const diagnosticCode = typeof diagnostic.code === 'string' ? diagnostic.code.toLowerCase() : diagnostic.code;
-        for (let flag of diagnostic.file?.commentFlags ?? []) {
-            //this diagnostic is affected by this flag
-            if (diagnostic.range && this.rangeContains(flag.affectedRange, diagnostic.range.start)) {
-                //if the flag acts upon this diagnostic's code
-                if (flag.codes === null || (diagnosticCode !== undefined && flag.codes.includes(diagnosticCode))) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    /**
-     * Walks up the chain to find the closest bsconfig.json file
-     */
-    public async findClosestConfigFile(currentPath: string): Promise<string | undefined> {
-        //make the path absolute
-        currentPath = path.resolve(
-            path.normalize(
-                currentPath
-            )
-        );
-
-        let previousPath: string | undefined;
-        //using ../ on the root of the drive results in the same file path, so that's how we know we reached the top
-        while (previousPath !== currentPath) {
-            previousPath = currentPath;
-
-            let bsPath = path.join(currentPath, 'bsconfig.json');
-            let brsPath = path.join(currentPath, 'brsconfig.json');
-            if (await this.pathExists(bsPath)) {
-                return bsPath;
-            } else if (await this.pathExists(brsPath)) {
-                return brsPath;
-            } else {
-                //walk upwards one directory
-                currentPath = path.resolve(path.join(currentPath, '../'));
-            }
-        }
-        //got to the root path, no config file exists
-    }
-
-    /**
      * Set a timeout for the specified milliseconds, and resolve the promise once the timeout is finished.
      * @param milliseconds the minimum number of milliseconds to sleep for
      */
@@ -807,15 +1105,6 @@ export class Util {
                 setTimeout(resolve, milliseconds);
             }
         });
-    }
-
-    /**
-     * Given an array, map and then flatten
-     * @param array the array to flatMap over
-     * @param callback a function that is called for every array item
-     */
-    public flatMap<T, R>(array: T[], callback: (arg: T) => R[]): R[] {
-        return Array.prototype.concat.apply([], array.map(callback));
     }
 
     /**
@@ -843,52 +1132,39 @@ export class Util {
     }
 
     /**
-     * Get a location object back by extracting location information from other objects that contain location
+     * Get a range back from an object that contains (or is) a range
      */
-    public getRange(startObj: { range: Range }, endObj: { range: Range }): Range {
-        if (!startObj?.range || !endObj?.range) {
+    public extractRange(rangeIsh: RangeLike): Range | undefined {
+        if (!rangeIsh) {
             return undefined;
-        }
-        return util.createRangeFromPositions(startObj.range?.start, endObj.range?.end);
-    }
-
-    /**
-     * If the two items both start on the same line
-     */
-    public sameStartLine(first: { range: Range }, second: { range: Range }) {
-        if (first && second && first.range.start.line === second.range.start.line) {
-            return true;
+        } else if ('sourceInfo' in rangeIsh) {
+            return this.getLocation(rangeIsh)?.range;
+        } else if ('location' in rangeIsh) {
+            return rangeIsh.location?.range;
+        } else if ('range' in rangeIsh) {
+            return rangeIsh.range;
+        } else if (Range.is(rangeIsh)) {
+            return rangeIsh;
         } else {
-            return false;
+            return undefined;
         }
     }
 
     /**
      * If the two items have lines that touch
      */
-    public linesTouch(first: { range?: Range | undefined }, second: { range?: Range | undefined }) {
-        if (first && second && (first.range !== undefined) && (second.range !== undefined) && (
-            first.range.start.line === second.range.start.line ||
-            first.range.start.line === second.range.end.line ||
-            first.range.end.line === second.range.start.line ||
-            first.range.end.line === second.range.end.line
+    public linesTouch(first: RangeLike, second: RangeLike) {
+        const firstRange = this.extractRange(first);
+        const secondRange = this.extractRange(second);
+        if (firstRange && secondRange && (
+            firstRange.start.line === secondRange.start.line ||
+            firstRange.start.line === secondRange.end.line ||
+            firstRange.end.line === secondRange.start.line ||
+            firstRange.end.line === secondRange.end.line
         )) {
             return true;
         } else {
             return false;
-        }
-    }
-
-    /**
-     * Given text with (or without) dots separating text, get the rightmost word.
-     * (i.e. given "A.B.C", returns "C". or "B" returns "B because there's no dot)
-     */
-    public getTextAfterFinalDot(name: string) {
-        if (name) {
-            let parts = name.split('.');
-            if (parts.length > 0) {
-                return parts[parts.length - 1];
-            }
         }
     }
 
@@ -955,15 +1231,41 @@ export class Util {
     /**
      * Helper for creating `Location` objects. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
      */
-    public createLocation(uri: string, range: Range): Location {
+    public createLocationFromRange(uri: string, range: Range): Location {
         return {
-            uri: uri,
+            uri: util.pathToUri(uri),
             range: range
         };
     }
 
     /**
-     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower
+     * Helper for creating `Location` objects from a file and range
+     */
+    public createLocationFromFileRange(file: { srcPath: string }, range: Range): Location {
+        return this.createLocationFromRange(this.pathToUri(file?.srcPath), range);
+    }
+
+    /**
+     * Helper for creating `Location` objects by passing each range value in directly. Prefer using this function because vscode-languageserver's `Location.create()` is significantly slower at scale
+     */
+    public createLocation(startLine: number, startCharacter: number, endLine: number, endCharacter: number, uri?: string): Location {
+        return {
+            uri: util.pathToUri(uri),
+            range: {
+                start: {
+                    line: startLine,
+                    character: startCharacter
+                },
+                end: {
+                    line: endLine,
+                    character: endCharacter
+                }
+            }
+        };
+    }
+
+    /**
+     * Helper for creating `Range` objects. Prefer using this function because vscode-languageserver's `Range.create()` is significantly slower.
      */
     public createRange(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Range {
         return {
@@ -981,61 +1283,379 @@ export class Util {
     /**
      * Create a `Range` from two `Position`s
      */
-    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range {
-        return {
-            start: {
-                line: startPosition.line,
-                character: startPosition.character
-            },
-            end: {
-                line: endPosition.line,
-                character: endPosition.character
-            }
-        };
+    public createRangeFromPositions(startPosition: Position, endPosition: Position): Range | undefined {
+        startPosition = startPosition ?? endPosition;
+        endPosition = endPosition ?? startPosition;
+        if (!startPosition && !endPosition) {
+            return undefined;
+        }
+        return this.createRange(startPosition.line, startPosition.character, endPosition.line, endPosition.character);
     }
 
     /**
-     * Given a list of ranges, create a range that starts with the first non-null lefthand range, and ends with the first non-null
-     * righthand range. Returns undefined if none of the items have a range.
+     * Clone a range
      */
-    public createBoundingRange(...locatables: Array<{ range?: Range } | null | undefined>): Range | undefined {
-        let leftmostRange: Range | undefined;
-        let rightmostRange: Range | undefined;
+    public cloneLocation(location: Location) {
+        if (location) {
+            return {
+                uri: location.uri,
+                range: {
+                    start: {
+                        line: location.range.start.line,
+                        character: location.range.start.character
+                    },
+                    end: {
+                        line: location.range.end.line,
+                        character: location.range.end.character
+                    }
+                }
+            };
+        } else {
+            return location;
+        }
+    }
 
-        for (let i = 0; i < locatables.length; i++) {
-            //set the leftmost non-null-range item
-            const left = locatables[i];
-            //the range might be a getter, so access it exactly once
-            const leftRange = left?.range;
-            if (!leftmostRange && leftRange) {
-                leftmostRange = leftRange;
+    /**
+     * Clone every token
+     */
+    /**
+     * The whitespace directly before this token (on the same line), from its leading trivia
+     */
+    public getLeadingWhitespace(token: Token): string {
+        const trivia = token?.leadingTrivia;
+        const last = trivia?.[trivia.length - 1];
+        return last?.kind === TokenKind.Whitespace ? last.text : '';
+    }
+
+    public cloneToken<T extends Token>(token: T): T {
+        if (token) {
+            //keep this field order identical to `Lexer.addToken` so cloned tokens
+            //share the same V8 hidden class as lexer-produced tokens
+            const result = new TokenObject(
+                token.kind,
+                token.text,
+                token.startPosition,
+                token.endPosition,
+                token.sourceInfo,
+                token.leadingTrivia ? token.leadingTrivia.map(x => this.cloneToken(x)) : undefined
+            ) as Token;
+            //handle those tokens that have charCode
+            if ('charCode' in token) {
+                (result as any).charCode = (token as any).charCode;
+            }
+            return result as T;
+        } else {
+            return token;
+        }
+    }
+
+    /**
+     *  Gets the bounding range of a bunch of ranges or objects that have ranges
+     *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
+     */
+    public createBoundingLocation(...locatables: Array<RangeLike>): Location | undefined {
+        let uri: string | undefined;
+        let startPosition: Position | undefined;
+        let endPosition: Position | undefined;
+
+        for (let locatable of locatables) {
+            let range: Range;
+            if (!locatable) {
+                continue;
+            } else if ('sourceInfo' in locatable) {
+                const location = this.getLocation(locatable);
+                range = location?.range;
+                if (!uri) {
+                    uri = location?.uri;
+                }
+            } else if ('location' in locatable) {
+                range = locatable.location?.range;
+                if (!uri) {
+                    uri = locatable.location?.uri;
+                }
+            } else if (Location.is(locatable)) {
+                range = locatable.range;
+                if (!uri) {
+                    uri = locatable.uri;
+                }
+            } else if ('range' in locatable) {
+                range = locatable.range;
+            } else {
+                range = locatable as Range;
             }
 
-            //set the rightmost non-null-range item
-            const right = locatables[locatables.length - 1 - i];
-            //the range might be a getter, so access it exactly once
-            const rightRange = right?.range;
-            if (!rightmostRange && rightRange) {
-                rightmostRange = rightRange;
+            //skip undefined locations or locations without a range
+            if (!range) {
+                continue;
             }
 
-            //if we have both sides, quit
-            if (leftmostRange && rightmostRange) {
-                break;
+            if (!startPosition) {
+                startPosition = range.start;
+            } else if (this.comparePosition(range.start, startPosition) < 0) {
+                startPosition = range.start;
+            }
+            if (!endPosition) {
+                endPosition = range.end;
+            } else if (this.comparePosition(range.end, endPosition) > 0) {
+                endPosition = range.end;
             }
         }
-        if (leftmostRange) {
-            //if we don't have a rightmost range, use the leftmost range for both the start and end
-            return this.createRangeFromPositions(
-                leftmostRange.start,
-                rightmostRange ? rightmostRange.end : leftmostRange.end);
+        if (startPosition && endPosition) {
+            //reuse the positions instead of copying them - positions are never mutated in place, and every AST node gets one of these
+            return {
+                uri: util.pathToUri(uri),
+                range: { start: startPosition, end: endPosition }
+            };
         } else {
             return undefined;
         }
     }
 
     /**
-     * Create a `Position` object. Prefer this over `Position.create` for performance reasons
+     *  Gets the bounding range of a bunch of ranges or objects that have ranges
+     *  TODO: this does a full iteration of the args. If the args were guaranteed to be in range order, we could optimize this
+     */
+    public createBoundingRange(...locatables: Array<RangeLike>): Range | undefined {
+        return this.createBoundingLocation(...locatables)?.range;
+    }
+
+    /**
+     * Set the `startPosition`, `endPosition`, and `sourceInfo` of `target` to the bounds of all the locatables.
+     * Positions from different sources can't be compared, so only locatables from one source are included: the first one that has a uri,
+     * or the first one if none of them do. That way, code parsed from a snippet (which has no uri) never takes over the bounds of real code from a file.
+     * A trailing newline is not included in the bounds, so the target never ends at the start of the next line.
+     * Pass a list that can be large (like a block's statements) as an array instead of spreading it, since spreading a huge array overflows the call stack
+     */
+    public setBounds<T extends Locatable>(target: T, ...locatables: Array<Locatable | ReadonlyArray<Locatable | undefined> | undefined>): T {
+        let startPosition: number;
+        let endPosition: number;
+        let sourceInfo: SourceInfo;
+        for (const item of locatables) {
+            const isGroup = Array.isArray(item);
+            const count = isGroup ? item.length : 1;
+            for (let i = 0; i < count; i++) {
+                const locatable = (isGroup ? item[i] : item) as Locatable | undefined;
+                if (!locatable?.sourceInfo) {
+                    continue;
+                } else if (!sourceInfo || (!sourceInfo.uri && locatable.sourceInfo.uri)) {
+                    sourceInfo = locatable.sourceInfo;
+                    startPosition = locatable.startPosition;
+                    endPosition = this.getContentEnd(locatable);
+                } else if (locatable.sourceInfo === sourceInfo) {
+                    startPosition = Math.min(startPosition, locatable.startPosition);
+                    endPosition = Math.max(endPosition, this.getContentEnd(locatable));
+                }
+            }
+        }
+        target.startPosition = startPosition;
+        target.endPosition = endPosition;
+        target.sourceInfo = sourceInfo;
+        return target;
+    }
+
+    /**
+     * Give a locatable (such as a token or node created by a plugin) a position from a line/character `Location` in the given source
+     * (i.e. `file.sourceInfo`), so it combines with the rest of that source's AST like any parsed item would.
+     * This is meant for building new items. Parsed tokens and nodes describe where they came from in the original source, so don't move them.
+     *
+     * Prefer `util.setBounds(target, someRealToken)` when a token or node from the same file is available.
+     * The position is cleared if there's no location or source, if the location is for a different uri, or if its lines aren't in the source
+     */
+    public setLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo: SourceInfo | undefined): T {
+        const range = location?.range;
+        const startPosition = this.getOffset(sourceInfo, range?.start);
+        const endPosition = this.getOffset(sourceInfo, range?.end);
+        if (startPosition === undefined || endPosition === undefined || (location.uri && location.uri !== sourceInfo.uri)) {
+            target.sourceInfo = undefined;
+            target.startPosition = undefined;
+            target.endPosition = undefined;
+        } else {
+            target.sourceInfo = sourceInfo;
+            target.startPosition = startPosition;
+            target.endPosition = endPosition;
+        }
+        return target;
+    }
+
+    /**
+     * Give a locatable the exact position of a line/character `Location`. This supports code written for the `Location`-based api,
+     * like assigning `token.location` or passing a `Location` to a creator.
+     *
+     * The position is in `sourceInfo` when the location is in it, so the item combines with the rest of that source's AST.
+     * Otherwise it's in a placeholder source for the location's uri, which `util.getLocation()` turns back into the same location,
+     * so items given locations this way still combine with each other. The position is cleared if there's no location
+     */
+    public assignLocation<T extends Locatable>(target: T, location: Location | undefined, sourceInfo?: SourceInfo): T {
+        const range = location?.range;
+        if (!this.isDetachablePosition(range?.start) || !this.isDetachablePosition(range?.end)) {
+            return this.setLocation(target, undefined, undefined);
+        }
+        if (sourceInfo && (!location.uri || location.uri === sourceInfo.uri) && this.isInSource(sourceInfo, range.start) && this.isInSource(sourceInfo, range.end)) {
+            return this.setLocation(target, location, sourceInfo);
+        }
+        target.sourceInfo = this.getDetachedSource(location.uri, Math.max(range.start.line, range.end.line));
+        target.startPosition = (range.start.line * Util.detachedLineLength) + range.start.character;
+        target.endPosition = (range.end.line * Util.detachedLineLength) + range.end.character;
+        return target;
+    }
+
+    /**
+     * Get a `Locatable` for an item that may instead be a line/character `Location` (or an object with a `location`),
+     * for code written against the `Location`-based api. Locatables are returned as-is
+     */
+    public toLocatable(item: Locatable | Location | { location?: Location } | undefined): Locatable | undefined {
+        if (!item || typeof (item as Locatable).startPosition === 'number') {
+            return item as Locatable;
+        }
+        const location = (item as Location).range ? item as Location : (item as { location?: Location }).location;
+        if (location?.range) {
+            return this.assignLocation({} as Locatable, location);
+        }
+        return item as Locatable;
+    }
+
+    /**
+     * Each line in a placeholder source (see `assignLocation`) is this many positions long, so a position there is `(line * detachedLineLength) + character`
+     */
+    private static readonly detachedLineLength = 2 ** 24;
+
+    /**
+     * Placeholder sources for locations that aren't in a parsed source, keyed by uri (see `assignLocation`)
+     */
+    private detachedSources = new Map<string, SourceInfo>();
+
+    /**
+     * Get the placeholder source for the uri, with lines up to at least `lastLine`
+     */
+    private getDetachedSource(uri: string | undefined, lastLine: number): SourceInfo {
+        let source = this.detachedSources.get(uri ?? '');
+        if (!source) {
+            source = { uri: uri, linePositions: [0] };
+            this.detachedSources.set(uri ?? '', source);
+        }
+        const linePositions = source.linePositions;
+        while (linePositions.length <= lastLine) {
+            linePositions.push(linePositions.length * Util.detachedLineLength);
+        }
+        return source;
+    }
+
+    /**
+     * Can this position be represented in a placeholder source (see `assignLocation`)?
+     */
+    private isDetachablePosition(position: Position | undefined) {
+        return Number.isInteger(position?.line) && position.line >= 0 &&
+            Number.isInteger(position.character) && position.character >= 0 && position.character < Util.detachedLineLength;
+    }
+
+    /**
+     * Is the position's line in the source, with the character before the start of the next line?
+     */
+    private isInSource(sourceInfo: SourceInfo, position: Position) {
+        const lineStart = sourceInfo.linePositions[position.line];
+        const nextLineStart = sourceInfo.linePositions[position.line + 1];
+        return lineStart !== undefined && (nextLineStart === undefined || lineStart + position.character < nextLineStart);
+    }
+
+    /**
+     * Get the end position of a locatable, excluding any trailing newline (i.e. a `Newline` token, or an escaped newline in a template string)
+     */
+    public getContentEnd(locatable: Locatable): number {
+        const text = (locatable as Token).text;
+        if (typeof text === 'string' && text.length > 0) {
+            const lastCharCode = text.charCodeAt(text.length - 1);
+            // \n (and \r\n)
+            if (lastCharCode === 10) {
+                return locatable.endPosition - (text.length > 1 && text.charCodeAt(text.length - 2) === 13 ? 2 : 1);
+                // \r
+            } else if (lastCharCode === 13) {
+                return locatable.endPosition - 1;
+            }
+        }
+        return locatable.endPosition;
+    }
+
+    /**
+     * Get the first item that has a real location (a `sourceInfo`), skipping `undefined` and synthetic items.
+     * The locatable equivalent of `util.getLocation(a) ?? util.getLocation(b)`
+     */
+    public firstLocatable<T extends Locatable>(...items: Array<T | undefined>): T | undefined {
+        for (const item of items) {
+            if (item?.sourceInfo) {
+                return item;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Build a line/character `Location` for the locatable. Returns `undefined` for synthetic items (those without a `sourceInfo`)
+     */
+    public getLocation(locatable: Locatable): Location | undefined {
+        const sourceInfo = locatable?.sourceInfo;
+        if (!sourceInfo) {
+            return undefined;
+        }
+        const linePositions = sourceInfo.linePositions;
+        const startLine = this.getLineIndex(linePositions, locatable.startPosition, 0);
+        let endLine = this.getLineIndex(linePositions, locatable.endPosition, startLine);
+        //a token that ends with a newline ends on its own line rather than at the start of the next one
+        if (endLine > startLine && linePositions[endLine] === locatable.endPosition && this.getContentEnd(locatable) !== locatable.endPosition) {
+            endLine--;
+        }
+        return {
+            uri: sourceInfo.uri,
+            range: this.createRange(startLine, locatable.startPosition - linePositions[startLine], endLine, locatable.endPosition - linePositions[endLine])
+        };
+    }
+
+    /**
+     * Get just the start line/character `Position` of a locatable. Cheaper than `getLocation()` when the end isn't needed.
+     * Returns `undefined` for synthetic items (those without a `sourceInfo`)
+     */
+    public getStartPosition(locatable: Locatable): Position | undefined {
+        const linePositions = locatable?.sourceInfo?.linePositions;
+        if (!linePositions) {
+            return undefined;
+        }
+        const line = this.getLineIndex(linePositions, locatable.startPosition, 0);
+        return this.createPosition(line, locatable.startPosition - linePositions[line]);
+    }
+
+    /**
+     * Convert a line/character `Position` into a position counted from the start of the source (see `Locatable.startPosition`).
+     * A character past the end of its line is clamped to that line, so it never lands on the next line.
+     * Returns `undefined` if the source or the position's line is missing
+     */
+    public getOffset(sourceInfo: SourceInfo | undefined, position: Position | undefined): number | undefined {
+        const linePositions = sourceInfo?.linePositions;
+        const lineStart = linePositions?.[position?.line];
+        if (lineStart === undefined) {
+            return undefined;
+        }
+        const offset = lineStart + position.character;
+        const nextLineStart = linePositions[position.line + 1];
+        return nextLineStart !== undefined && offset >= nextLineStart ? nextLineStart - 1 : offset;
+    }
+
+    /**
+     * Binary search `linePositions` (beginning at line index `low`) for the index of the line that contains `position`
+     */
+    private getLineIndex(linePositions: number[], position: number, low: number) {
+        let high = linePositions.length - 1;
+        while (low < high) {
+            const mid = Math.floor((low + high + 1) / 2);
+            if (linePositions[mid] <= position) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return low;
+    }
+
+    /**
+     * Create a `Position` object. Prefer this over `Position.create` for performance reasons.
      */
     public createPosition(line: number, character: number) {
         return {
@@ -1045,119 +1665,576 @@ export class Util {
     }
 
     /**
-     * Convert a list of tokens into a string, including their leading whitespace
+     * Get the type implied by the type designator character at the end of a variable or parameter name
+     * (i.e. `string` for `name$`, `integer` for `count%`).
+     * @returns the designator's type, or `undefined` if the name does not end with a type designator
      */
-    public tokensToString(tokens: Token[]) {
-        let result = '';
-        //skip iterating the final token
-        for (let token of tokens) {
-            result += token.leadingWhitespace + token.text;
+    public getTypeDesignatorType(name: string): BscType | undefined {
+        switch (name?.[name.length - 1]) {
+            case '$':
+                return StringType.instance;
+            case '%':
+                return IntegerType.instance;
+            case '!':
+                return FloatType.instance;
+            case '#':
+                return DoubleType.instance;
+            case '&':
+                return LongIntegerType.instance;
+            default:
+                return undefined;
         }
-        return result;
     }
 
     /**
      * Convert a token into a BscType
      */
-    public tokenToBscType(token: Token, allowCustomType = true) {
+    public tokenToBscType(token: Token) {
         // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
         switch (token.kind) {
             case TokenKind.Boolean:
-                return new BooleanType(token.text);
+                return BooleanType.instance;
             case TokenKind.True:
             case TokenKind.False:
-                return new BooleanType();
+                return BooleanType.instance;
             case TokenKind.Double:
-                return new DoubleType(token.text);
+                return DoubleType.instance;
             case TokenKind.DoubleLiteral:
-                return new DoubleType();
+                return DoubleType.instance;
             case TokenKind.Dynamic:
-                return new DynamicType(token.text);
+                return DynamicType.instance;
             case TokenKind.Float:
-                return new FloatType(token.text);
+                return FloatType.instance;
             case TokenKind.FloatLiteral:
-                return new FloatType();
+                return FloatType.instance;
             case TokenKind.Function:
-                //TODO should there be a more generic function type without a signature that's assignable to all other function types?
-                return new FunctionType(new DynamicType(token.text));
+                return FunctionType.instance;
             case TokenKind.Integer:
-                return new IntegerType(token.text);
+                return IntegerType.instance;
             case TokenKind.IntegerLiteral:
-                return new IntegerType();
+                return IntegerType.instance;
             case TokenKind.Invalid:
-                return new InvalidType(token.text);
+                return InvalidType.instance;
             case TokenKind.LongInteger:
-                return new LongIntegerType(token.text);
+                return LongIntegerType.instance;
             case TokenKind.LongIntegerLiteral:
-                return new LongIntegerType();
+                return LongIntegerType.instance;
             case TokenKind.Object:
-                return new ObjectType(token.text);
+                return ObjectType.instance;
             case TokenKind.String:
-                return new StringType(token.text);
+                return StringType.instance;
             case TokenKind.StringLiteral:
             case TokenKind.TemplateStringExpressionBegin:
             case TokenKind.TemplateStringExpressionEnd:
             case TokenKind.TemplateStringQuasi:
-                return new StringType();
+                return StringType.instance;
             case TokenKind.Void:
-                return new VoidType(token.text);
+                return VoidType.instance;
             case TokenKind.Identifier:
                 switch (token.text.toLowerCase()) {
                     case 'boolean':
-                        return new BooleanType(token.text);
+                        return BooleanType.instance;
                     case 'double':
-                        return new DoubleType(token.text);
+                        return DoubleType.instance;
+                    case 'dynamic':
+                        return DynamicType.instance;
                     case 'float':
-                        return new FloatType(token.text);
+                        return FloatType.instance;
                     case 'function':
-                        return new FunctionType(new DynamicType(token.text));
+                        return FunctionType.instance;
                     case 'integer':
-                        return new IntegerType(token.text);
+                        return IntegerType.instance;
                     case 'invalid':
-                        return new InvalidType(token.text);
+                        return InvalidType.instance;
                     case 'longinteger':
-                        return new LongIntegerType(token.text);
+                        return LongIntegerType.instance;
                     case 'object':
-                        return new ObjectType(token.text);
+                        return ObjectType.instance;
                     case 'string':
-                        return new StringType(token.text);
+                        return StringType.instance;
                     case 'void':
-                        return new VoidType(token.text);
-                }
-                if (allowCustomType) {
-                    return new CustomType(token.text);
+                        return VoidType.instance;
                 }
         }
     }
 
     /**
+     * Deciphers the correct types for fields based on docs
+     * https://developer.roku.com/en-ca/docs/references/scenegraph/xml-elements/interface.md
+     * @param typeDescriptor the type descriptor from the docs
+     * @returns {BscType} the known type, or dynamic
+     */
+    public getNodeFieldType(typeDescriptor: string, lookupTable?: SymbolTable): BscType {
+        let typeDescriptorLower = typeDescriptor.toLowerCase().trim().replace(/\*/g, '');
+
+        if (typeDescriptorLower.startsWith('as ')) {
+            typeDescriptorLower = typeDescriptorLower.substring(3).trim();
+        }
+        const nodeFilter = (new RegExp(/^\[?(.* node)/, 'i')).exec(typeDescriptorLower);
+        if (nodeFilter?.[1]) {
+            typeDescriptorLower = nodeFilter[1].trim();
+        }
+        const parensFilter = (new RegExp(/(.*)\(.*\)/, 'gi')).exec(typeDescriptorLower);
+        if (parensFilter?.[1]) {
+            typeDescriptorLower = parensFilter[1].trim();
+        }
+
+        const bscType = this.tokenToBscType(createToken(TokenKind.Identifier, typeDescriptorLower));
+        if (bscType) {
+            return bscType;
+        }
+
+        function getRect2dType() {
+            const rect2dType = new AssociativeArrayType();
+            rect2dType.addMember('height', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('width', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('x', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            rect2dType.addMember('y', {}, FloatType.instance, SymbolTypeFlag.runtime);
+            return rect2dType;
+        }
+
+        function getColorType() {
+            return unionTypeFactory([IntegerType.instance, StringType.instance]);
+        }
+
+        //check for uniontypes
+        const multipleTypes = typeDescriptorLower.split(' or ').map(s => s.trim());
+        if (multipleTypes.length > 1) {
+            const individualTypes = multipleTypes.map(t => this.getNodeFieldType(t, lookupTable));
+            return unionTypeFactory(individualTypes);
+        }
+
+        const typeIsArray = typeDescriptorLower.startsWith('array of ') || typeDescriptorLower.startsWith('roarray of ');
+
+        if (typeIsArray) {
+            const ofSearch = ' of ';
+            const arrayPrefixLength = typeDescriptorLower.indexOf(ofSearch) + ofSearch.length;
+            let arrayOfTypeName = typeDescriptorLower.substring(arrayPrefixLength); //cut off beginnin, eg. 'array of' or 'roarray of'
+            if (arrayOfTypeName.endsWith('s')) {
+                // remove "s" in "floats", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName.endsWith('\'')) {
+                // remove "'" in "float's", etc.
+                arrayOfTypeName = arrayOfTypeName.substring(0, arrayOfTypeName.length - 1);
+            }
+            if (arrayOfTypeName === 'rectangle') {
+                arrayOfTypeName = 'rect2d';
+            }
+            let arrayType = this.getNodeFieldType(arrayOfTypeName, lookupTable);
+            return new ArrayType(arrayType);
+        } else if (typeDescriptorLower.startsWith('option ')) {
+            const actualTypeName = typeDescriptorLower.substring('option '.length); //cut off beginning 'option '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower.startsWith('value ')) {
+            const actualTypeName = typeDescriptorLower.substring('value '.length); //cut off beginning 'value '
+            return this.getNodeFieldType(actualTypeName, lookupTable);
+        } else if (typeDescriptorLower === 'n/a') {
+            return DynamicType.instance;
+        } else if (typeDescriptorLower === 'uri') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'color') {
+            return getColorType();
+        } else if (typeDescriptorLower === 'vector2d' || typeDescriptorLower === 'floatarray') {
+            return new ArrayType(FloatType.instance);
+        } else if (typeDescriptorLower === 'vector2darray') {
+            return new ArrayType(new ArrayType(FloatType.instance));
+        } else if (typeDescriptorLower === 'intarray') {
+            return new ArrayType(IntegerType.instance);
+        } else if (typeDescriptorLower === 'colorarray') {
+            return new ArrayType(getColorType());
+        } else if (typeDescriptorLower === 'boolarray') {
+            return new ArrayType(BooleanType.instance);
+        } else if (typeDescriptorLower === 'stringarray' || typeDescriptorLower === 'strarray') {
+            return new ArrayType(StringType.instance);
+        } else if (typeDescriptorLower === 'int') {
+            return IntegerType.instance;
+        } else if (typeDescriptorLower === 'time') {
+            return DoubleType.instance;
+        } else if (typeDescriptorLower === 'str') {
+            return StringType.instance;
+        } else if (typeDescriptorLower === 'bool') {
+            return BooleanType.instance;
+        } else if (typeDescriptorLower === 'array' || typeDescriptorLower === 'roarray') {
+            return new ArrayType();
+        } else if (typeDescriptorLower === 'assocarray' ||
+            typeDescriptorLower === 'associative array' ||
+            typeDescriptorLower === 'associativearray' ||
+            typeDescriptorLower === 'roassociativearray' ||
+            typeDescriptorLower.startsWith('associative array of') ||
+            typeDescriptorLower.startsWith('associativearray of') ||
+            typeDescriptorLower.startsWith('roassociativearray of')
+        ) {
+            return new AssociativeArrayType();
+        } else if (typeDescriptorLower === 'node') {
+            return ComponentType.instance;
+        } else if (typeDescriptorLower === 'nodearray') {
+            return new ArrayType(ComponentType.instance);
+        } else if (typeDescriptorLower === 'rect2d') {
+            return getRect2dType();
+        } else if (typeDescriptorLower === 'rect2darray') {
+            return new ArrayType(getRect2dType());
+        } else if (typeDescriptorLower === 'font') {
+            return this.getNodeFieldType('roSGNodeFont', lookupTable);
+        } else if (typeDescriptorLower === 'contentnode') {
+            return this.getNodeFieldType('roSGNodeContentNode', lookupTable);
+        } else if (typeDescriptorLower.endsWith(' node')) {
+            return this.getNodeFieldType('roSgNode' + typeDescriptorLower.substring(0, typeDescriptorLower.length - 5), lookupTable);
+        } else if (lookupTable) {
+            //try doing a lookup
+            return lookupTable.getSymbolType(typeDescriptorLower, {
+                flags: SymbolTypeFlag.typetime,
+                fullName: typeDescriptor,
+                tableProvider: () => lookupTable
+            });
+        }
+
+        return DynamicType.instance;
+    }
+
+    /**
+     * Return the type of the result of a binary operator
+     * Note: compound assignments (eg. +=) internally use a binary expression, so that's why TokenKind.PlusEqual, etc. are here too
+     */
+    public binaryOperatorResultType(leftType: BscType, operator: Token, rightType: BscType): BscType {
+        if ((isAnyReferenceType(leftType) && !leftType.isResolvable()) ||
+            (isAnyReferenceType(rightType) && !rightType.isResolvable())) {
+            return new BinaryOperatorReferenceType(leftType, operator, rightType, (lhs, op, rhs) => {
+                return this.binaryOperatorResultType(lhs, op, rhs);
+            });
+        }
+
+        // Try to find a common value of union type
+        leftType = getUniqueType([leftType], unionTypeFactory);
+        rightType = getUniqueType([rightType], unionTypeFactory);
+
+        if (isUnionType(leftType)) {
+            leftType = this.getHighestPriorityType(leftType.types);
+        }
+        if (isUnionType(rightType)) {
+            rightType = this.getHighestPriorityType(rightType.types);
+        }
+
+        if (isUninitializedType(leftType) || isUninitializedType(rightType)) {
+            return undefined;
+        }
+        if (isVoidType(leftType) || isVoidType(rightType)) {
+            // = and <> can still be used to check a possibly-void value against invalid/dynamic
+            if ((operator.kind === TokenKind.Equal || operator.kind === TokenKind.LessGreater) &&
+                (isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType) || isDynamicType(leftType) || isDynamicType(rightType))) {
+                return BooleanType.instance;
+            }
+            return undefined;
+        }
+
+        if (isEnumMemberType(leftType)) {
+            leftType = leftType.underlyingType;
+        }
+        if (isEnumMemberType(rightType)) {
+            rightType = rightType.underlyingType;
+        }
+
+        // treat object type like dynamic
+        if (isObjectType(leftType)) {
+            leftType = DynamicType.instance;
+        }
+        if (isObjectType(rightType)) {
+            rightType = DynamicType.instance;
+        }
+
+        let hasDouble = isDoubleTypeLike(leftType) || isDoubleTypeLike(rightType);
+        let hasFloat = isFloatTypeLike(leftType) || isFloatTypeLike(rightType);
+        let hasLongInteger = isLongIntegerTypeLike(leftType) || isLongIntegerTypeLike(rightType);
+        let hasInvalid = isInvalidTypeLike(leftType) || isInvalidTypeLike(rightType);
+        let hasDynamic = isDynamicType(leftType) || isDynamicType(rightType);
+        let bothDynamic = isDynamicType(leftType) && isDynamicType(rightType);
+        let bothNumbers = isNumberTypeLike(leftType) && isNumberTypeLike(rightType);
+        let hasNumber = isNumberTypeLike(leftType) || isNumberTypeLike(rightType);
+        let bothStrings = isStringTypeLike(leftType) && isStringTypeLike(rightType);
+        let hasString = isStringTypeLike(leftType) || isStringTypeLike(rightType);
+        let hasBoolean = isBooleanTypeLike(leftType) || isBooleanTypeLike(rightType);
+        let eitherBooleanOrNum = (isNumberTypeLike(leftType) || isBooleanTypeLike(leftType)) && (isNumberTypeLike(rightType) || isBooleanTypeLike(rightType));
+
+        let leftIsPrimitive = isPrimitiveType(leftType);
+        let rightIsPrimitive = isPrimitiveType(rightType);
+        let hasPrimitive = leftIsPrimitive || rightIsPrimitive;
+
+        let nonDynamicType: BscType;
+        if (hasPrimitive) {
+            nonDynamicType = leftIsPrimitive ? leftType : rightType;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Plus:
+            case TokenKind.PlusEqual:
+                if (bothStrings) {
+                    // "string" + "string" is the only binary expression allowed with strings
+                    return StringType.instance;
+                } else if (hasString && hasDynamic) {
+                    // assume dynamicValue is a string
+                    return StringType.instance;
+                }
+            // eslint-disable-next-line no-fallthrough
+            case TokenKind.Minus:
+            case TokenKind.MinusEqual:
+            case TokenKind.Star:
+            case TokenKind.StarEqual:
+            case TokenKind.Mod:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return nonDynamicType;
+                }
+                break;
+            case TokenKind.Forwardslash:
+            case TokenKind.ForwardslashEqual:
+                if (bothNumbers) {
+                    if (hasDouble) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+
+                    } else if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return FloatType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return nonDynamicType;
+                }
+                break;
+            case TokenKind.Backslash:
+            case TokenKind.BackslashEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return IntegerType.instance;
+                }
+                break;
+            case TokenKind.Caret:
+                if (bothNumbers) {
+                    if (hasDouble || hasLongInteger) {
+                        return DoubleType.instance;
+                    } else if (hasFloat) {
+                        return FloatType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return IntegerType.instance;
+                }
+                break;
+            // Bitshift operators
+            case TokenKind.LeftShift:
+            case TokenKind.LeftShiftEqual:
+            case TokenKind.RightShift:
+            case TokenKind.RightShiftEqual:
+                if (bothNumbers) {
+                    if (hasLongInteger) {
+                        return LongIntegerType.instance;
+                    }
+                    // Bitshifts are allowed with non-integer numerics
+                    // but will always truncate to ints
+                    return IntegerType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a number
+                    return IntegerType.instance;
+                }
+                break;
+            // Comparison operators
+            // All comparison operators result in boolean
+            case TokenKind.Equal:
+            case TokenKind.LessGreater:
+                // = and <> can accept invalid / dynamic
+                if (hasDynamic || hasInvalid || bothStrings || eitherBooleanOrNum) {
+                    return BooleanType.instance;
+                }
+                break;
+            case TokenKind.Greater:
+            case TokenKind.Less:
+            case TokenKind.GreaterEqual:
+            case TokenKind.LessEqual:
+                if (bothStrings || bothNumbers) {
+                    return BooleanType.instance;
+                } else if ((hasNumber || hasString) && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return BooleanType.instance;
+                }
+                break;
+            // Logical or bitwise operators
+            case TokenKind.Or:
+            case TokenKind.And:
+                if (bothNumbers) {
+                    // "and"/"or" represent bitwise operators
+                    if (hasLongInteger && !hasDouble && !hasFloat) {
+                        // 2 long ints or long int and int
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                } else if (eitherBooleanOrNum) {
+                    // "and"/"or" represent logical operators
+                    return BooleanType.instance;
+                } else if (hasNumber && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return IntegerType.instance;
+                } else if (hasBoolean && hasDynamic) {
+                    // assume dynamic is a valid type
+                    return BooleanType.instance;
+                }
+                break;
+        }
+        if (bothDynamic) {
+            return DynamicType.instance;
+        }
+        return undefined;
+    }
+
+    public getHighestPriorityType(types: BscType[], depth = 0): BscType {
+        let result: BscType;
+        if (depth > 4) {
+            // shortcut for very complicated types, or self-referencing union types
+            return DynamicType.instance;
+        }
+        for (let type of types) {
+            if (isUnionType(type)) {
+                type = getUniqueType([type], unionTypeFactory);
+                if (isUnionType(type)) {
+                    type = this.getHighestPriorityType(type.types, depth + 1);
+                }
+            }
+            if (!result) {
+                result = type;
+            } else {
+                if (type.binaryOpPriorityLevel < result.binaryOpPriorityLevel) {
+                    result = type;
+                } else if (type.binaryOpPriorityLevel === result.binaryOpPriorityLevel && !result.isEqual(type)) {
+                    // equal priority types, but not equal types, like Boolean and String... just be dynamic at this point
+                    result = DynamicType.instance;
+                }
+            }
+            if (isUninitializedType(type)) {
+                return type;
+            }
+            if (isVoidType(type)) {
+                return type;
+            }
+            if (isInvalidTypeLike(type)) {
+                return type;
+            }
+            if (isObjectType(type) && !isDynamicType(type)) {
+                result = type;
+            }
+            if (isDynamicType(type)) {
+                result = type;
+            }
+        }
+        return result ?? DynamicType.instance;
+    }
+
+    /**
+     * Return the type of the result of a unary operator
+     */
+    public unaryOperatorResultType(operator: Token, exprType: BscType): BscType {
+
+        if (isUnionType(exprType)) {
+            exprType = this.getHighestPriorityType(exprType.types);
+        }
+
+        if (isVoidType(exprType) || isInvalidTypeLike(exprType) || isUninitializedType(exprType)) {
+            return undefined;
+        }
+
+
+        if (isDynamicType(exprType) || isObjectType(exprType)) {
+            return exprType;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+        switch (operator.kind) {
+            // Math operators
+            case TokenKind.Plus: // (`num = +num` is valid syntax)
+            case TokenKind.Minus:
+                if (isNumberTypeLike(exprType)) {
+                    // a negative number will be the same type, eg, double->double, int->int, etc.
+                    return this.getUnboxedType(exprType);
+                }
+                break;
+            case TokenKind.Not:
+                if (isBooleanTypeLike(exprType)) {
+                    return BooleanType.instance;
+                } else if (isNumberTypeLike(exprType)) {
+                    //numbers can be "notted"
+                    // by default they go to ints, except longints, which stay that way
+                    if (isLongIntegerTypeLike(exprType)) {
+                        return LongIntegerType.instance;
+                    }
+                    return IntegerType.instance;
+                }
+                break;
+        }
+        return undefined;
+    }
+
+    public getUnboxedType(boxedType: BscType): BscType {
+        if (isIntegerTypeLike(boxedType)) {
+            return IntegerType.instance;
+        } else if (isLongIntegerTypeLike(boxedType)) {
+            return LongIntegerType.instance;
+        } else if (isFloatTypeLike(boxedType)) {
+            return FloatType.instance;
+        } else if (isDoubleTypeLike(boxedType)) {
+            return DoubleType.instance;
+        } else if (isBooleanTypeLike(boxedType)) {
+            return BooleanType.instance;
+        } else if (isStringTypeLike(boxedType)) {
+            return StringType.instance;
+        } else if (isInvalidTypeLike(boxedType)) {
+            return InvalidType.instance;
+        }
+        return boxedType;
+    }
+
+    /**
      * Get the extension for the given file path. Basically the part after the final dot, except for
      * `d.bs` which is treated as single extension
+     * @returns the file extension (i.e. ".d.bs", ".bs", ".brs", ".xml", ".jpg", etc...)
      */
     public getExtension(filePath: string) {
         filePath = filePath.toLowerCase();
         if (filePath.endsWith('.d.bs')) {
             return '.d.bs';
         } else {
-            const idx = filePath.lastIndexOf('.');
-            if (idx > -1) {
-                return filePath.substring(idx);
-            }
+            return path.extname(filePath).toLowerCase();
         }
     }
 
     /**
      * Load and return the list of plugins
      */
-    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): CompilerPlugin[] {
+    public loadPlugins(cwd: string, pathOrModules: string[], onError?: (pathOrModule: string, err: Error) => void): Plugin[] {
         const logger = createLogger();
-        return pathOrModules.reduce<CompilerPlugin[]>((acc, pathOrModule) => {
+        return pathOrModules.reduce<Plugin[]>((acc, pathOrModule) => {
             if (typeof pathOrModule === 'string') {
                 try {
                     const loaded = requireRelative(pathOrModule, cwd);
-                    const theExport: CompilerPlugin | CompilerPluginFactory = loaded.default ? loaded.default : loaded;
+                    const theExport: Plugin | PluginFactory = loaded.default ? loaded.default : loaded;
 
-                    let plugin: CompilerPlugin | undefined;
+                    let plugin: Plugin | undefined;
 
                     // legacy plugins returned a plugin object. If we find that, then add a warning
                     if (typeof theExport === 'object') {
@@ -1166,7 +2243,9 @@ export class Util {
 
                         // the official plugin format is a factory function that returns a new instance of a plugin.
                     } else if (typeof theExport === 'function') {
-                        plugin = theExport();
+                        plugin = theExport({
+                            version: this.getBrighterScriptVersion()
+                        });
                     } else {
                         //this should never happen; somehow an invalid plugin has made it into here
                         throw new Error(`TILT: Encountered an invalid plugin: ${String(plugin)}`);
@@ -1178,7 +2257,7 @@ export class Util {
                     acc.push(plugin);
                 } catch (err: any) {
                     if (onError) {
-                        onError(pathOrModule, err);
+                        onError(pathOrModule, err as Error);
                     } else {
                         throw err;
                     }
@@ -1197,13 +2276,13 @@ export class Util {
         const variableExpressions = [] as VariableExpression[];
         const uniqueVarNames = new Set<string>();
 
-        function expressionWalker(expression) {
+        function expressionWalker(expression: AstNode) {
             if (isExpression(expression)) {
                 expressions.push(expression);
             }
             if (isVariableExpression(expression)) {
                 variableExpressions.push(expression);
-                uniqueVarNames.add(expression.name.text);
+                uniqueVarNames.add(expression.tokens.name.text);
             }
         }
 
@@ -1217,16 +2296,42 @@ export class Util {
         expressionWalker(expression);
 
         const scope = file.program.getFirstScopeForFile(file);
-        const filteredVarNames = [...uniqueVarNames].filter((varName: string) => {
-            const varNameLower = varName.toLowerCase();
-            // TODO: include namespaces in this filter
-            return !scope.getEnumMap().has(varNameLower) &&
-                !scope.getConstMap().has(varNameLower);
-        });
+        let filteredVarNames = [...uniqueVarNames];
+        if (scope) {
+            //a parameter or local variable can share a namespace's name, so only treat a name as a namespace when the enclosing function doesn't declare it
+            const func = expression?.findAncestor<FunctionExpression>(isFunctionExpression);
+            const functionScope = func ? this.findFunctionScope(file.functionScopes, func) : undefined;
+            filteredVarNames = filteredVarNames.filter((varName: string) => {
+                const varNameLower = varName.toLowerCase();
+                const isNamespace = scope.namespaceLookup.has(varNameLower) && !functionScope?.getVariableByName(varNameLower);
+                return !scope.getEnumMap().has(varNameLower) &&
+                    !scope.getConstMap().has(varNameLower) &&
+                    !isNamespace;
+            });
+        }
 
         return { expressions: expressions, varExpressions: variableExpressions, uniqueVarNames: filteredVarNames };
     }
 
+
+    /**
+     * Find the function scope (searching nested function scopes too) for the given function
+     */
+    private findFunctionScope(functionScopes: FunctionScope[], func: FunctionExpression): FunctionScope | undefined {
+        for (const functionScope of functionScopes ?? []) {
+            if (functionScope.func === func) {
+                return functionScope;
+            }
+            const childScope = this.findFunctionScope(functionScope.childrenScopes, func);
+            if (childScope) {
+                return childScope;
+            }
+        }
+    }
+
+    public concatAnnotationLeadingTrivia(stmt: Statement): Token[] {
+        return [...(stmt.annotations?.map(anno => anno.leadingTrivia ?? []).flat() ?? []), ...stmt.leadingTrivia];
+    }
 
     /**
      * Create a SourceNode that maps every line to itself. Useful for creating maps for files
@@ -1238,64 +2343,67 @@ export class Util {
         let lines = src.split(/\r?\n/g);
         for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
             let line = lines[lineIndex];
-            chunks.push(
-                lineIndex > 0 ? '\n' : '',
-                new SourceNode(lineIndex + 1, 0, source, line)
-            );
+            if (lineIndex > 0) {
+                chunks.push('\n');
+            }
+            //skip wrapping empty lines in a SourceNode, since they'd have empty children
+            if (line.length > 0) {
+                chunks.push(new SourceNode(lineIndex + 1, 0, source, line));
+            }
         }
         return new SourceNode(null, null, source, chunks);
     }
 
-    /**
-     * Creates a new SGAttribute object, but keeps the existing Range references (since those shouldn't ever get changed directly)
-     */
-    public cloneSGAttribute(attr: SGAttribute, value: string) {
-        return {
-            key: {
-                text: attr.key.text,
-                range: attr.range
-            },
-            value: {
-                text: value,
-                range: attr.value.range
-            },
-            range: attr.range
-        } as SGAttribute;
-    }
+    private isWindows = process.platform === 'win32';
+    private standardizePathCache = new Map<string, string>();
+
+    private pathToURICache = new Map<string, string>();
 
     /**
      * Converts a path into a standardized format (drive letter to lower, remove extra slashes, use single slash type, resolve relative parts, etc...)
      */
-    public standardizePath(thePath: string) {
-        return util.driveLetterToLower(
-            rokuDeployStandardizePath(thePath)
-        );
-    }
+    public standardizePath(thePath: string): string {
+        //if we have the value in cache already, return it
+        if (this.standardizePathCache.has(thePath)) {
+            return this.standardizePathCache.get(thePath);
+        }
+        const originalPath = thePath;
 
-    /**
-     * Copy the version of bslib from local node_modules to the staging folder
-     */
-    public async copyBslibToStaging(stagingDir: string, bslibDestinationDir = 'source') {
-        //copy bslib to the output directory
-        await fsExtra.ensureDir(standardizePath(`${stagingDir}/${bslibDestinationDir}`));
-        // eslint-disable-next-line
-        const bslib = require('@rokucommunity/bslib');
-        let source = bslib.source as string;
-
-        //apply the `bslib_` prefix to the functions
-        let match: RegExpExecArray | null;
-        const positions = [] as number[];
-        const regexp = /^(\s*(?:function|sub)\s+)([a-z0-9_]+)/mg;
-        // eslint-disable-next-line no-cond-assign
-        while (match = regexp.exec(source)) {
-            positions.push(match.index + match[1].length);
+        if (typeof thePath !== 'string') {
+            return thePath;
         }
 
-        for (let i = positions.length - 1; i >= 0; i--) {
-            const position = positions[i];
-            source = source.slice(0, position) + 'bslib_' + source.slice(position);
+        //handle `virtual:/` paths specially - just normalize slashes, don't use path.normalize which would mangle the `virtual:` prefix
+        if (/^virtual:[\/\\]/i.test(thePath)) {
+            // Strip the `virtual:` prefix, normalize slashes, then re-add the prefix
+            thePath = 'virtual:/' + thePath.slice(8).replace(/^[\/\\]+/, '').replace(/[\/\\]+/g, '/').toLowerCase();
+            this.standardizePathCache.set(originalPath, thePath);
+            return thePath;
         }
-        await fsExtra.writeFile(`${stagingDir}/${bslibDestinationDir}/bslib.brs`, source);
+
+        //windows path.normalize will convert all slashes to backslashes and remove duplicates
+        if (this.isWindows) {
+            thePath = path.win32.normalize(thePath);
+        } else {
+            //replace all windows or consecutive slashes with path.sep
+            thePath = thePath.replace(/[\/\\]+/g, '/');
+
+            // only use path.normalize if dots are present since it's expensive
+            if (thePath.includes('./')) {
+                thePath = path.posix.normalize(thePath);
+            }
+        }
+
+        // Lowercase drive letter on Windows-like paths (e.g., "C:/...")
+        if (thePath.charCodeAt(1) === 58 /* : */) {
+            // eslint-disable-next-line no-var
+            var firstChar = thePath.charCodeAt(0);
+            if (firstChar >= 65 && firstChar <= 90) {
+                thePath = String.fromCharCode(firstChar + 32) + thePath.slice(1);
+            }
+        }
+        this.standardizePathCache.set(originalPath, thePath);
+        return thePath;
     }
 
     /**
@@ -1304,18 +2412,31 @@ export class Util {
      * @param relatedInformationFallbackLocation a default location to use for all `relatedInformation` entries that are missing a location
      */
     public toDiagnostic(diagnostic: Diagnostic | BsDiagnostic, relatedInformationFallbackLocation: string): Diagnostic {
-        return {
+        let relatedInformation = diagnostic.relatedInformation ?? [];
+        if (relatedInformation.length > MAX_RELATED_INFOS_COUNT) {
+            const relatedInfoLength = relatedInformation.length;
+            relatedInformation = relatedInformation.slice(0, MAX_RELATED_INFOS_COUNT);
+            relatedInformation.push({
+                message: `...and ${relatedInfoLength - MAX_RELATED_INFOS_COUNT} more`,
+                location: util.createLocationFromRange('   ', util.createRange(0, 0, 0, 0))
+            });
+        }
+
+        const range = (diagnostic as BsDiagnostic).location?.range ??
+            (diagnostic as Diagnostic).range;
+
+        let result = {
             severity: diagnostic.severity,
-            range: diagnostic.range,
+            range: range,
             message: diagnostic.message,
-            relatedInformation: diagnostic.relatedInformation?.map(x => {
+            relatedInformation: relatedInformation.map(x => {
 
                 //clone related information just in case a plugin added circular ref info here
                 const clone = { ...x };
                 if (!clone.location) {
                     // use the fallback location if available
                     if (relatedInformationFallbackLocation) {
-                        clone.location = util.createLocation(relatedInformationFallbackLocation, diagnostic.range);
+                        clone.location = util.createLocationFromRange(relatedInformationFallbackLocation, range);
                     } else {
                         //remove this related information so it doesn't bring crash the language server
                         return undefined;
@@ -1324,30 +2445,29 @@ export class Util {
                 return clone;
                 //filter out null relatedInformation items
             }).filter((x): x is DiagnosticRelatedInformation => Boolean(x)),
-            code: diagnostic.code,
-            source: 'brs'
-        };
-    }
-
-    /**
-     * Get the first locatable item found at the specified position
-     * @param locatables an array of items that have a `range` property
-     * @param position the position that the locatable must contain
-     */
-    public getFirstLocatableAt(locatables: Locatable[], position: Position) {
-        for (let token of locatables) {
-            if (util.rangeContains(token.range, position)) {
-                return token;
-            }
+            code: diagnostic.code ? diagnostic.code : (diagnostic as BsDiagnostic).legacyCode,
+            source: diagnostic.source ?? 'brs'
+        } as Diagnostic;
+        if (diagnostic?.tags?.length > 0) {
+            result.tags = diagnostic.tags;
         }
+        return result;
     }
 
     /**
      * Sort an array of objects that have a Range
      */
-    public sortByRange<T extends Locatable>(locatables: T[]) {
+    public sortByRange<T extends { range: Range | undefined }>(locatables: T[]) {
         //sort the tokens by range
-        return locatables.sort((a, b) => {
+        return locatables?.sort((a, b) => {
+            //handle undefined tokens to prevent crashes
+            if (!a?.range) {
+                return 1;
+            }
+            if (!b?.range) {
+                return -1;
+            }
+
             //start line
             if (a.range.start.line < b.range.start.line) {
                 return -1;
@@ -1380,32 +2500,6 @@ export class Util {
     }
 
     /**
-     * Split the given text and return ranges for each chunk.
-     * Only works for single-line strings
-     */
-    public splitGetRange(separator: string, text: string, range: Range) {
-        const chunks = text.split(separator);
-        const result = [] as Array<{ text: string; range: Range }>;
-        let offset = 0;
-        for (let chunk of chunks) {
-            //only keep nonzero chunks
-            if (chunk.length > 0) {
-                result.push({
-                    text: chunk,
-                    range: this.createRange(
-                        range.start.line,
-                        range.start.character + offset,
-                        range.end.line,
-                        range.start.character + offset + chunk.length
-                    )
-                });
-            }
-            offset += chunk.length + separator.length;
-        }
-        return result;
-    }
-
-    /**
      * Wrap the given code in a markdown code fence (with the language)
      */
     public mdFence(code: string, language = '') {
@@ -1417,28 +2511,151 @@ export class Util {
      * @param node any ast expression
      * @returns an array of the parts of the dotted get. If not fully a dotted get, then returns undefined
      */
-    public getAllDottedGetParts(node: Expression | Statement): Identifier[] | undefined {
+    public getAllDottedGetParts(node: AstNode): Identifier[] | undefined {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
         const parts: Identifier[] = [];
-        let nextPart: AstNode | undefined = node;
-        while (nextPart) {
-            if (isAssignmentStatement(node)) {
-                return [node.name];
-            } else if (isDottedGetExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                nextPart = nextPart.obj;
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
-                nextPart = nextPart.expression;
-            } else if (isVariableExpression(nextPart)) {
-                parts.push(nextPart?.name);
-                break;
-            } else if (isFunctionParameterExpression(nextPart)) {
-                return [nextPart.name];
-            } else {
-                //we found a non-DottedGet expression, so return because this whole operation is invalid.
-                return undefined;
+        let nextPart = node;
+        loop: while (nextPart) {
+            switch (nextPart?.kind) {
+                case AstNodeKind.AssignmentStatement:
+                    return [(node as AssignmentStatement).tokens.name];
+                case AstNodeKind.DottedGetExpression:
+                    parts.push((nextPart as DottedGetExpression)?.tokens.name);
+                    nextPart = (nextPart as DottedGetExpression).obj;
+                    continue;
+                case AstNodeKind.CallExpression:
+                    nextPart = (nextPart as CallExpression).callee;
+                    continue;
+                case AstNodeKind.CallfuncExpression:
+                    parts.push((nextPart as CallfuncExpression)?.tokens.methodName);
+                    nextPart = (nextPart as CallfuncExpression).callee;
+                    continue;
+                case AstNodeKind.TypeExpression:
+                    nextPart = (nextPart as TypeExpression).expression;
+                    continue;
+                case AstNodeKind.VariableExpression:
+                    parts.push((nextPart as VariableExpression)?.tokens.name);
+                    break loop;
+                case AstNodeKind.LiteralExpression:
+                    parts.push((nextPart as LiteralExpression)?.tokens.value as Identifier);
+                    break loop;
+                case AstNodeKind.IndexedGetExpression:
+                    nextPart = (nextPart as unknown as IndexedGetExpression).obj;
+                    continue;
+                case AstNodeKind.FunctionParameterExpression:
+                    return [(nextPart as FunctionParameterExpression).tokens.name];
+                case AstNodeKind.GroupingExpression:
+                    parts.push(createIdentifier('()', nextPart));
+                    break loop;
+                default:
+                    //we found a non-DottedGet expression, so return because this whole operation is invalid.
+                    return undefined;
             }
         }
         return parts.reverse();
+    }
+
+    /**
+     * Spread is only supported when the literal is the direct value of an assignment, dotted set, or indexed set
+     * that lives in a statement list. Returns that statement, or undefined when the literal is anywhere else.
+     */
+    public getSpreadLiteralOwnerStatement(literal: ArrayLiteralExpression | AALiteralExpression): AssignmentStatement | DottedSetStatement | IndexedSetStatement | undefined {
+        const parent = literal.parent;
+        if (
+            (isAssignmentStatement(parent) || isDottedSetStatement(parent) || isIndexedSetStatement(parent)) &&
+            parent.value === literal &&
+            (isBlock(parent.parent) || isBody(parent.parent))
+        ) {
+            return parent;
+        }
+    }
+
+    /**
+     * Given an expression, return all the DottedGet name parts as a string.
+     * Mostly used to convert namespaced item full names to a strings
+     */
+    public getAllDottedGetPartsAsString(node: Expression | Statement, parseMode = ParseMode.BrighterScript, lastSep = '.'): string {
+        //this is a hot function and has been optimized. Don't rewrite unless necessary
+        /* eslint-disable no-var */
+        var sep = parseMode === ParseMode.BrighterScript ? '.' : '_';
+
+        const parts = this.getAllDottedGetParts(node) ?? [];
+        var result = parts[0]?.text;
+        for (var i = 1; i < parts.length; i++) {
+            //some parts can be undefined (e.g. an unfinished `widget@.` callfunc with no method name)
+            const part = parts[i];
+            if (!part) {
+                continue;
+            }
+            result += (i === parts.length - 1 && parseMode === ParseMode.BrighterScript ? lastSep : sep) + part.text;
+        }
+        return result;
+        /* eslint-enable no-var */
+    }
+
+    /**
+     * Reconstruct the written name of a "complex" type expression - one that isn't a plain
+     * dotted-get chain, so `getAllDottedGetPartsAsString` can't represent it. Handles
+     * unions/intersections, inline interfaces, typed arrays, typed function types, and groupings.
+     * Returns `undefined` for anything it can't render.
+     */
+    public getTypeExpressionName(node: Expression, parseMode = ParseMode.BrighterScript): string {
+        if (isTypeExpression(node)) {
+            return this.getTypeExpressionName(node.expression, parseMode);
+        }
+        if (isBinaryExpression(node)) {
+            //union (`or`) / intersection (`and`) types
+            const left = this.getTypeExpressionName(node.left, parseMode);
+            const right = this.getTypeExpressionName(node.right, parseMode);
+            if (left === undefined || right === undefined) {
+                return undefined;
+            }
+            return `${left} ${node.tokens.operator?.text ?? 'or'} ${right}`;
+        }
+        if (isGroupingExpression(node)) {
+            const inner = this.getTypeExpressionName(node.expression, parseMode);
+            return inner === undefined ? undefined : `(${inner})`;
+        }
+        if (isTypedArrayExpression(node)) {
+            const inner = this.getTypeExpressionName(node.innerType, parseMode);
+            return inner === undefined ? undefined : `${inner}[]`;
+        }
+        if (isInlineInterfaceExpression(node)) {
+            const members = [];
+            for (const member of node.members ?? []) {
+                const memberType = member.typeExpression
+                    ? this.getTypeExpressionName(member.typeExpression, parseMode)
+                    : undefined;
+                members.push([
+                    member.isOptional ? 'optional ' : '',
+                    member.tokens.name?.text ?? '',
+                    memberType === undefined ? '' : ` as ${memberType}`
+                ].join(''));
+            }
+            return `{ ${members.join(', ')} }`;
+        }
+        if (isTypedFunctionTypeExpression(node)) {
+            const params = [];
+            for (const param of node.params ?? []) {
+                const paramType = param.typeExpression
+                    ? this.getTypeExpressionName(param.typeExpression, parseMode)
+                    : undefined;
+                params.push([
+                    param.tokens.name?.text ?? '',
+                    paramType === undefined ? '' : ` as ${paramType}`
+                ].join(''));
+            }
+            const returnType = node.returnType
+                ? this.getTypeExpressionName(node.returnType, parseMode)
+                : undefined;
+            return [
+                node.tokens.functionType?.text ?? 'function',
+                `(${params.join(', ')})`,
+                returnType === undefined ? '' : ` as ${returnType}`
+            ].join('');
+        }
+        //fall back to the dotted-get chain (variable/dotted-get leaves of the type expression)
+        return this.getAllDottedGetPartsAsString(node, parseMode);
     }
 
     /**
@@ -1454,7 +2671,7 @@ export class Util {
             } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
                 nextPart = nextPart.callee;
 
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
+            } else if (isTypeExpression(nextPart)) {
                 nextPart = nextPart.expression;
             } else {
                 break;
@@ -1465,47 +2682,10 @@ export class Util {
     }
 
     /**
-     * Break an expression into each part, and return any VariableExpression or DottedGet expresisons from left-to-right.
-     */
-    public getDottedGetPath(expression: Expression): [VariableExpression, ...DottedGetExpression[]] {
-        let parts: Expression[] = [];
-        let nextPart = expression;
-        while (nextPart) {
-            if (isDottedGetExpression(nextPart)) {
-                parts.unshift(nextPart);
-                nextPart = nextPart.obj;
-
-            } else if (isIndexedGetExpression(nextPart) || isXmlAttributeGetExpression(nextPart)) {
-                nextPart = nextPart.obj;
-                parts = [];
-
-            } else if (isCallExpression(nextPart) || isCallfuncExpression(nextPart)) {
-                nextPart = nextPart.callee;
-                parts = [];
-
-            } else if (isNewExpression(nextPart)) {
-                nextPart = nextPart.call.callee;
-                parts = [];
-
-            } else if (isNamespacedVariableNameExpression(nextPart)) {
-                nextPart = nextPart.expression;
-
-            } else if (isVariableExpression(nextPart)) {
-                parts.unshift(nextPart);
-                break;
-            } else {
-                parts = [];
-                break;
-            }
-        }
-        return parts as any;
-    }
-
-    /**
      * Returns an integer if valid, or undefined. Eliminates checking for NaN
      */
     public parseInt(value: any) {
-        const result = parseInt(value);
+        const result = parseInt(value as string);
         if (!isNaN(result)) {
             return result;
         } else {
@@ -1522,8 +2702,8 @@ export class Util {
 
     public validateTooDeepFile(file: (BrsFile | XmlFile)) {
         //find any files nested too deep
-        let pkgPath = file.pkgPath ?? (file.pkgPath as any).toString();
-        let rootFolder = pkgPath.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
+        let destPath = file?.destPath?.toString();
+        let rootFolder = destPath?.replace(/^pkg:/, '').split(/[\\\/]/)[0].toLowerCase();
 
         if (isBrsFile(file) && rootFolder !== 'source') {
             return;
@@ -1533,14 +2713,94 @@ export class Util {
             return;
         }
 
-        let fileDepth = this.getParentDirectoryCount(pkgPath);
+        let fileDepth = this.getParentDirectoryCount(destPath);
         if (fileDepth >= 8) {
-            file.addDiagnostics([{
+            file.program?.diagnostics.register({
                 ...DiagnosticMessages.detectedTooDeepFileSource(fileDepth),
-                file: file,
-                range: this.createRange(0, 0, 0, Number.MAX_VALUE)
-            }]);
+                location: util.createLocationFromFileRange(file, this.createRange(0, 0, 0, Number.MAX_VALUE))
+            });
         }
+    }
+
+    /**
+     * Execute dispose for a series of disposable items
+     * @param disposables a list of functions or disposables
+     */
+    public applyDispose(disposables: DisposableLike[]) {
+        for (const disposable of disposables ?? []) {
+            if (typeof disposable === 'function') {
+                disposable();
+            } else {
+                disposable?.dispose?.();
+            }
+        }
+    }
+
+    /**
+     * Race a series of promises, and return the first one that resolves AND matches the matcher function.
+     * If all of the promises reject, then this will emit an AggregatreError with all of the errors.
+     * If at least one promise resolves, then this will log all of the errors to the console
+     * If at least one promise resolves but none of them match the matcher, then this will return undefined.
+     * @param promises all of the promises to race
+     * @param matcher a function that should return true if this value should be kept. Returning any value other than true means `false`
+     * @returns the first resolved value that matches the matcher, or undefined if none of them match
+     */
+    public async promiseRaceMatch<T>(promises: MaybePromise<T>[], matcher: (value: T) => boolean) {
+        const workingPromises = [
+            ...promises
+        ];
+
+        const results: Array<{ value: T; index: number } | { error: Error; index: number }> = [];
+        let returnValue: T;
+
+        while (workingPromises.length > 0) {
+            //race the promises. If any of them resolve, evaluate it against the matcher. If that passes, return the value. otherwise, eliminate this promise and try again
+            const result = await Promise.race(
+                workingPromises.map((promise, i) => {
+                    return Promise.resolve(promise)
+                        .then(value => ({ value: value, index: i }))
+                        .catch(error => ({ error: error, index: i }));
+                })
+            );
+            results.push(result);
+            //if we got a value and it matches the matcher, return it
+            if ('value' in result && matcher?.(result.value) === true) {
+                returnValue = result.value;
+                break;
+            }
+
+            //remove this non-matched (or errored) promise from the list and try again
+            workingPromises.splice(result.index, 1);
+        }
+
+        const errors = (results as Array<{ error: Error }>)
+            .filter(x => 'error' in x)
+            .map(x => x.error);
+
+        //if all of them crashed, then reject
+        if (promises.length > 0 && errors.length === promises.length) {
+            throw new AggregateError(errors, 'All requests failed. First error message: ' + errors[0].message);
+        } else {
+            //log all of the errors
+            for (const error of errors) {
+                console.error(error);
+            }
+        }
+
+        //return the matched value, or undefined if there wasn't one
+        return returnValue;
+    }
+
+    /**
+     * Append every item to the end of `target`, and return `target`.
+     * Use this instead of `target.push(...items)` when `items` could be very large: spreading passes each item
+     * as its own function argument, which throws "Maximum call stack size exceeded" somewhere past ~100k items.
+     */
+    public pushAll<T>(target: T[], items: Iterable<T>): T[] {
+        for (const item of items) {
+            target.push(item);
+        }
+        return target;
     }
 
     /**
@@ -1555,7 +2815,327 @@ export class Util {
     ): SourceNode {
         // we can use a typecast rather than actually transforming the data because SourceNode
         // accepts a more permissive type than its typedef states
-        return new SourceNode(line, column, source, chunks as any, name);
+        return new SourceNode(line, column, source, chunks as string | SourceNode | (string | SourceNode)[], name);
+    }
+
+    /**
+     * Strip a trailing `sourceMappingURL` comment (and the newline preceding it) from the end of a
+     * transpile result, so that appending a freshly-generated one doesn't produce a duplicate. A file
+     * can already carry a comment from a previous build, which is either preserved verbatim (for
+     * files that don't need transpiling) or re-emitted as a comment by the AST transpile.
+     *
+     * Handles both BrightScript-style (`'//# sourceMappingURL=...`) and XML-style
+     * (`<!--//# sourceMappingURL=... -->`) comments. Leaves the node untouched when no trailing
+     * sourceMappingURL comment is present.
+     */
+    public stripTrailingSourceMappingURLComment(node: SourceNode): SourceNode {
+        //`\S+` cannot backtrack across whitespace, so this stays linear-time on adversarial input
+        const pattern = /(?:\r?\n)?[ \t]*(?:'\/\/# sourceMappingURL=\S+|<!--[ \t]*\/\/# sourceMappingURL=\S+[ \t]*-->)\s*$/;
+        //the comment can only be on the last non-blank line, so only look at the end of the output instead of building all of it
+        const match = pattern.exec(this.getSourceNodeTail(node));
+        if (match) {
+            //trim the exact matched length off the right edge, since the match may span multiple sibling leaves
+            this.trimSourceNodeRight(node, match[0].length);
+        }
+        return node;
+    }
+
+    /**
+     * Find the index of the last item in the array that matches.
+     */
+    public findLastIndex<T>(array: T[], matcher: (T) => boolean) {
+        for (let i = array.length - 1; i >= 0; i--) {
+            if (matcher(array[i])) {
+                return i;
+            }
+        }
+    }
+
+    public processTypeChain(typeChain: TypeChainEntry[]): TypeChainProcessResult {
+        let fullChainName = '';
+        let fullErrorName = '';
+        let itemName = '';
+        let previousTypeName = '';
+        let parentTypeName = '';
+        let itemTypeKind = '';
+        let parentTypeKind = '';
+        let astNode: AstNode;
+        let errorLocatable: Locatable;
+        let containsDynamic = false;
+        let continueResolvingAllItems = true;
+        let crossedCallFunc = false;
+        for (let i = 0; i < typeChain.length; i++) {
+            const chainItem = typeChain[i];
+            const dotSep = chainItem.separatorToken?.text ?? '.';
+            if (i > 0) {
+                fullChainName += dotSep;
+            }
+            fullChainName += chainItem.name;
+            if (continueResolvingAllItems) {
+                parentTypeName = previousTypeName;
+                parentTypeKind = itemTypeKind;
+                fullErrorName = previousTypeName ? `${previousTypeName}${dotSep}${chainItem.name}` : chainItem.name;
+                itemTypeKind = (chainItem.type as any)?.kind;
+
+                let typeString = chainItem.type?.toString();
+                let typeToFindStringFor = chainItem.type;
+                while (typeToFindStringFor) {
+                    if (isCompoundType(chainItem.type)) {
+                        typeString = `(${typeToFindStringFor.toString()})`;
+                        break;
+                    } else if (isCallableType(typeToFindStringFor)) {
+                        if (isTypedFunctionType(typeToFindStringFor) && i < typeChain.length - 1) {
+                            typeToFindStringFor = typeToFindStringFor.returnType;
+                        } else {
+                            typeString = 'function';
+                            break;
+                        }
+                        parentTypeName = previousTypeName;
+                    } else if (isNamespaceType(typeToFindStringFor) && parentTypeName) {
+                        const chainItemTypeName = typeToFindStringFor.toString();
+                        typeString = parentTypeName + '.' + chainItemTypeName;
+                        if (chainItemTypeName.toLowerCase().startsWith(parentTypeName.toLowerCase())) {
+                            // the following namespace already knows...
+                            typeString = chainItemTypeName;
+                        }
+                        break;
+                    } else {
+                        typeString = typeToFindStringFor?.toString();
+                        break;
+                    }
+                }
+
+                previousTypeName = typeString ?? '';
+                itemName = chainItem.name;
+                astNode = chainItem.astNode;
+                containsDynamic = containsDynamic || (isDynamicType(chainItem.type) && !isAnyReferenceType(chainItem.type));
+                crossedCallFunc = crossedCallFunc || chainItem.data?.isFromCallFunc;
+                if (!chainItem.isResolved) {
+                    errorLocatable = chainItem.locatable;
+                    continueResolvingAllItems = false;
+                }
+            }
+        }
+        return {
+            itemName: itemName,
+            itemTypeKind: itemTypeKind,
+            itemParentTypeName: parentTypeName,
+            itemParentTypeKind: parentTypeKind,
+            fullNameOfItem: fullErrorName,
+            fullChainName: fullChainName,
+            get location() {
+                return util.getLocation(errorLocatable);
+            },
+            locatable: errorLocatable,
+            containsDynamic: containsDynamic,
+            astNode: astNode,
+            crossedCallFunc: crossedCallFunc
+        };
+    }
+
+    public getCircularReferenceDiagnosticDetail(circularReferenceInfo: TypeCircularReferenceInfo, defaultName = ''): string[] {
+        if (!circularReferenceInfo || !circularReferenceInfo.referenceChainNames) {
+            if (defaultName) {
+                return [defaultName];
+            }
+            return [];
+        }
+
+        if (circularReferenceInfo.referenceChainNames[0] === circularReferenceInfo.referenceChainNames[circularReferenceInfo.referenceChainNames.length - 1]) {
+            // last element is same as first it will read okay
+            return circularReferenceInfo.referenceChainNames;
+        }
+        return [...circularReferenceInfo.referenceChainNames, circularReferenceInfo.referenceChainNames[0]];
+    }
+
+
+    public isInTypeExpression(expression: AstNode): boolean {
+        //TODO: this is much faster than node.findAncestor(), but may need to be updated for "complicated" type expressions
+        if (isTypeExpression(expression) ||
+            isTypeExpression(expression?.parent) ||
+            isTypedArrayExpression(expression) ||
+            isTypedArrayExpression(expression?.parent)) {
+            return true;
+        }
+        if (isBinaryExpression(expression?.parent)) {
+            let currentExpr: AstNode = expression.parent;
+            while (isBinaryExpression(currentExpr) && (currentExpr.tokens.operator.kind === TokenKind.Or || currentExpr.tokens.operator.kind === TokenKind.And)) {
+                currentExpr = currentExpr.parent;
+            }
+            return isTypeExpression(currentExpr) || isTypedArrayExpression(currentExpr);
+        }
+        return false;
+    }
+
+    /**
+     * Trim `charCount` characters off the right edge of a SourceNode tree, walking children right to left.
+     * Collects the edits in a first pass and only applies them if the full `charCount` was accounted for,
+     * so a tree containing an unrecognized child (e.g. a SourceNode from a different installed copy of
+     * `source-map`) is left completely untouched instead of partially trimmed.
+     * Returns true if the full `charCount` was trimmed, false if the walk bailed out or ran out of content.
+     */
+    private trimSourceNodeRight(node: SourceNode, charCount: number): boolean {
+        const trimEdits: TrimEdit[] = [];
+        const trimState: TrimState = { remainingCharCount: charCount, bailedOut: false };
+        this.collectSourceNodeTrimEdits(node, trimState, trimEdits);
+        if (trimState.bailedOut || trimState.remainingCharCount > 0) {
+            return false;
+        }
+        for (const trimEdit of trimEdits) {
+            trimEdit.children[trimEdit.childIndex] = trimEdit.replacement;
+        }
+        return true;
+    }
+
+    /**
+     * Walk a SourceNode tree right to left, recording planned leaf edits into `trimEdits` without mutating
+     * anything, until `trimState.remainingCharCount` reaches zero or an unrecognized child is encountered
+     */
+    private collectSourceNodeTrimEdits(node: SourceNode, trimState: TrimState, trimEdits: TrimEdit[]): void {
+        const children = node.children as unknown as Array<SourceNode | string>;
+        for (let childIndex = children.length - 1; childIndex >= 0 && trimState.remainingCharCount > 0 && !trimState.bailedOut; childIndex--) {
+            const child = children[childIndex];
+            if (typeof child === 'string') {
+                if (child.length <= trimState.remainingCharCount) {
+                    trimState.remainingCharCount -= child.length;
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: '' });
+                } else {
+                    trimEdits.push({ children: children, childIndex: childIndex, replacement: child.slice(0, child.length - trimState.remainingCharCount) });
+                    trimState.remainingCharCount = 0;
+                }
+            } else if (this.isSourceNodeLike(child)) {
+                this.collectSourceNodeTrimEdits(child, trimState, trimEdits);
+            } else {
+                //unrecognized child shape (not a string, not a SourceNode from any installed copy of `source-map`); stop rather than skip past it
+                trimState.bailedOut = true;
+            }
+        }
+    }
+
+    /**
+     * Get the end of a SourceNode's text: enough to include its last non-blank line and the line break before it (plus one
+     * more character, for `\r\n`), or all of it if it doesn't have that many lines
+     */
+    private getSourceNodeTail(node: SourceNode): string {
+        const tailState: SourceNodeTailState = { tail: '', foundNonBlank: false, foundLineBreak: false, isComplete: false, bailedOut: false };
+        this.collectSourceNodeTail(node, tailState);
+        return tailState.bailedOut ? node.toString() : tailState.tail;
+    }
+
+    /**
+     * Walk a SourceNode tree right to left, prepending its strings to `tailState.tail` until it holds the last non-blank line,
+     * the line break before it, and one more character. Each string is only looked at once
+     */
+    private collectSourceNodeTail(node: SourceNode, tailState: SourceNodeTailState): void {
+        const children = node.children as unknown as Array<SourceNode | string>;
+        for (let childIndex = children.length - 1; childIndex >= 0 && !tailState.isComplete && !tailState.bailedOut; childIndex--) {
+            const child = children[childIndex];
+            if (typeof child === 'string') {
+                if (child.length === 0) {
+                    continue;
+                }
+                tailState.tail = child + tailState.tail;
+                if (tailState.foundLineBreak) {
+                    //this is the character before the line break
+                    tailState.isComplete = true;
+                    continue;
+                }
+                let searchEnd = child.length - 1;
+                if (!tailState.foundNonBlank) {
+                    searchEnd = child.search(/\S\s*$/);
+                    if (searchEnd < 0) {
+                        continue;
+                    }
+                    tailState.foundNonBlank = true;
+                }
+                const lineBreakIndex = child.lastIndexOf('\n', searchEnd);
+                if (lineBreakIndex >= 0) {
+                    tailState.foundLineBreak = true;
+                    tailState.isComplete = lineBreakIndex > 0;
+                }
+            } else if (this.isSourceNodeLike(child)) {
+                this.collectSourceNodeTail(child, tailState);
+            } else {
+                tailState.bailedOut = true;
+            }
+        }
+    }
+
+    /**
+     * Duck-check for a SourceNode, matching the same marker property `source-map` itself uses in `SourceNode.prototype.add()`,
+     * so this also recognizes SourceNodes produced by a different installed copy of the `source-map` package
+     */
+    private isSourceNodeLike(value: string | SourceNode): value is SourceNode {
+        return !!value && typeof value === 'object' && (value as any).$$$isSourceNode$$$ === true && Array.isArray((value as any).children);
+    }
+
+    /**
+     * Parse the `sourceMappingURL` comment from file contents and resolve it to a RawSourceMap.
+     * Handles inline base64 data URIs, absolute paths, relative paths (resolved against srcPath's
+     * directory), and falls back to a co-located `<srcPath>.map` file.
+     * Supports both BrightScript-style comments (`'//# sourceMappingURL=...`) and XML-style
+     * comments (`<!--//# sourceMappingURL=... -->`).
+     * Returns undefined if no map can be found.
+     */
+    public async resolveInputSourceMap(fileContents: string, srcPath: string): Promise<RawSourceMap | undefined> {
+        // Match sourceMappingURL - [^\s]+ stops at whitespace (safe, no backtracking risk).
+        // Strip any trailing XML comment close (either --> or --!>) that may have been captured
+        // when the URL is not followed by a space in an XML comment like <!--//# ...=url-->.
+        const match = /['"]?\/\/# sourceMappingURL=([^\s]+)/m.exec(fileContents);
+        if (match) {
+            const url = match[1].replace(/--!?>$/, '').trim();
+            if (url.startsWith('data:')) {
+                // inline base64: data:application/json;base64,<b64>
+                const b64Match = /base64,([A-Za-z0-9+/=]+)$/.exec(url);
+                if (b64Match) {
+                    return JSON.parse(Buffer.from(b64Match[1], 'base64').toString('utf8')) as RawSourceMap;
+                }
+            } else {
+                const mapPath = path.isAbsolute(url) ? url : path.resolve(path.dirname(srcPath), url);
+                if (await fsExtra.pathExists(mapPath)) {
+                    return JSON.parse(await fsExtra.readFile(mapPath, 'utf8')) as RawSourceMap;
+                }
+            }
+        }
+
+        // no usable sourceMappingURL; try co-located <srcPath>.map
+        const colocated = `${srcPath}.map`;
+        if (await fsExtra.pathExists(colocated)) {
+            return JSON.parse(await fsExtra.readFile(colocated, 'utf8')) as RawSourceMap;
+        }
+        return undefined;
+    }
+
+    /**
+     * Apply an input sourcemap to a generated SourceMapGenerator, chaining mappings so the
+     * output traces back through the input map to the original source.
+     */
+    public async applySourceMap(generator: SourceMapGenerator, inputMap: RawSourceMap, sourceFile: string) {
+        await SourceMapConsumer.with(inputMap, null, (consumer) => {
+            generator.applySourceMap(consumer, sourceFile);
+        });
+    }
+
+    /**
+     * Chain a prebuild input sourcemap (loaded from a co-located `.map` file or a
+     * `sourceMappingURL` comment in the file contents) onto an existing serialized output
+     * sourcemap. Returns the chained sourcemap as a JSON string. If no input map is found,
+     * the original output map JSON is returned unchanged.
+     */
+    public async chainInputSourceMap(outputMapJson: string, file: { fileContents?: string; srcPath: string }): Promise<string> {
+        const inputMap = await this.resolveInputSourceMap(file.fileContents ?? '', file.srcPath);
+        if (!inputMap) {
+            return outputMapJson;
+        }
+        const { SourceMapConsumer: Consumer, SourceMapGenerator: Generator } = await import('source-map');
+        const outputMap = JSON.parse(outputMapJson) as RawSourceMap;
+        return Consumer.with(outputMap, null, async (outputConsumer) => {
+            const generator = Generator.fromSourceMap(outputConsumer);
+            await Consumer.with(inputMap, null, (inputConsumer) => {
+                generator.applySourceMap(inputConsumer, file.srcPath);
+            });
+            return generator.toString();
+        });
     }
 
     public isBuiltInType(typeName: string) {
@@ -1564,7 +3144,525 @@ export class Util {
             // NOTE: this is unsafe and only used to avoid validation errors in backported v1 type syntax
             return true;
         }
-        return components[typeNameLower] || interfaces[typeNameLower] || events[typeNameLower];
+        return false;
+    }
+
+    public isGenericNodeType(type: BscType, mustBeCallfuncAble: boolean) {
+        if (isComponentType(type)) {
+            const lowerName = type.toString().toLowerCase();
+            if (lowerName === 'rosgnode' || lowerName === 'rosgnodenode') {
+                return true;
+            }
+            if (!mustBeCallfuncAble && (lowerName === 'rosgnodecontentnode')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    public hasAnyRequiredSymbolChanged(requiredSymbols: UnresolvedSymbol[], changedSymbols: Map<SymbolTypeFlag, Set<string>>) {
+        if (!requiredSymbols || !changedSymbols) {
+            return false;
+        }
+        const runTimeChanges = changedSymbols.get(SymbolTypeFlag.runtime);
+        const typeTimeChanges = changedSymbols.get(SymbolTypeFlag.typetime);
+
+        for (const symbol of requiredSymbols) {
+            if (this.setContainsUnresolvedSymbol(runTimeChanges, symbol) || this.setContainsUnresolvedSymbol(typeTimeChanges, symbol)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public setContainsUnresolvedSymbol(symbolLowerNameSet: Set<string>, symbol: UnresolvedSymbol) {
+        if (!symbolLowerNameSet || symbolLowerNameSet.size === 0) {
+            return false;
+        }
+
+        for (const possibleNameLower of symbol.lookups) {
+            if (symbolLowerNameSet.has(possibleNameLower)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public getCustomTypesInSymbolTree(setToFill: Set<BscType>, type: BscType, filter?: (t: BscType) => boolean) {
+        const subSymbolTypes = isCompoundType(type)
+            ? type.types
+            : type.getMemberTable()?.getAllSymbols(SymbolTypeFlag.runtime).map(sym => sym.type) ?? [];
+        for (const subSymbolType of subSymbolTypes) {
+            if (!subSymbolType?.isBuiltIn && !setToFill.has(subSymbolType)) {
+                if (filter && !filter(subSymbolType)) {
+                    continue;
+                }
+                // if this is a custom type, and we haven't added it to the types to check to see if can add it to the additional types
+                // add the type, and investigate any members
+                setToFill.add(subSymbolType);
+                this.getCustomTypesInSymbolTree(setToFill, subSymbolType, filter);
+            }
+
+        }
+    }
+
+    public truncate<T>(options: {
+        leadingText: string;
+        items: T[];
+        trailingText?: string;
+        maxLength: number;
+        itemSeparator?: string;
+        partBuilder?: (item: T) => string;
+    }): string {
+        let leadingText = options.leadingText;
+        let items = options?.items ?? [];
+        let trailingText = options?.trailingText ?? '';
+        let maxLength = options?.maxLength ?? 160;
+        let itemSeparator = options?.itemSeparator ?? ', ';
+        let partBuilder = options?.partBuilder ?? ((x) => x.toString());
+
+        let parts = [];
+        let length = leadingText.length + (trailingText?.length ?? 0);
+
+        //calculate the max number of items we could fit in the given space
+        for (let i = 0; i < items.length; i++) {
+            let part = partBuilder(items[i]);
+            if (i > 0) {
+                part = itemSeparator + part;
+            }
+            parts.push(part);
+            length += part.length;
+            //exit the loop if we've maxed out our length
+            if (length >= maxLength) {
+                break;
+            }
+        }
+        let message: string;
+        //we have enough space to include all the parts
+        if (parts.length >= items.length) {
+            message = leadingText + parts.join('') + trailingText;
+
+            //we require truncation
+        } else {
+            //account for truncation message length including max possible "more" items digits, trailing text length, and the separator between last item and trailing text
+            length = leadingText.length + `...and ${items.length} more`.length + itemSeparator.length + (trailingText?.length ?? 0);
+            message = leadingText;
+            for (let i = 0; i < parts.length; i++) {
+                //always include at least 2 items. if this part would overflow the max, then skip it and finalize the message
+                if (i > 1 && length + parts[i].length > maxLength) {
+                    message += itemSeparator + `...and ${items.length - i} more` + trailingText;
+                    return message;
+                } else {
+                    message += parts[i];
+                    length += parts[i].length;
+                }
+            }
+        }
+        return message;
+    }
+
+    public getAstNodeFriendlyName(node: AstNode) {
+        return node?.kind.replace(/Statement|Expression/g, '');
+    }
+
+
+    public hasLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
+        return !!leadingTrivia?.find(t => t?.kind === TokenKind.Comment);
+    }
+
+    public getLeadingComments(input: Token | AstNode) {
+        const leadingTrivia = isToken(input) ? input?.leadingTrivia : input?.leadingTrivia ?? [];
+        return leadingTrivia.filter(t => t?.kind === TokenKind.Comment);
+    }
+
+    public isLeadingCommentOnSameLine(line: RangeLike, input: Token | AstNode) {
+        const leadingCommentRange = this.getLeadingComments(input)?.[0];
+        if (leadingCommentRange) {
+            return this.linesTouch(line, util.getLocation(leadingCommentRange));
+        }
+        return false;
+    }
+
+    public isClassUsedAsFunction(potentialClassType: BscType, expression: Expression, options: GetTypeOptions) {
+        // eslint-disable-next-line no-bitwise
+        if ((options?.flags ?? 0) & SymbolTypeFlag.runtime &&
+            isClassType(potentialClassType) &&
+            !options.isExistenceTest &&
+            potentialClassType.name?.toLowerCase() === this.getAllDottedGetPartsAsString(expression)?.toLowerCase() &&
+            !expression?.findAncestor(isNewExpression)) {
+            return true;
+        }
+        return false;
+    }
+
+    public getSpecialCaseCallExpressionReturnType(callExpr: CallExpression, options: GetSymbolTypeOptions) {
+        if (isVariableExpression(callExpr.callee) && callExpr.callee.tokens.name.text.toLowerCase() === 'createobject') {
+            const componentName = isLiteralString(callExpr.args[0]) ? callExpr.args[0].tokens.value?.text?.replace(/"/g, '') : '';
+            const nodeType = componentName.toLowerCase() === 'rosgnode' && isLiteralString(callExpr.args[1]) ? callExpr.args[1].tokens.value?.text?.replace(/"/g, '') : '';
+            if (componentName?.toLowerCase().startsWith('ro')) {
+                let fullName = componentName + nodeType;
+
+                if (nodeType.includes(':')) {
+                    // This node has a colon in its name, most likely from a component Library
+                    // This componentType is most likely unknown, so return `roSGNode`
+                    fullName = 'roSGNode';
+                }
+
+                const data = createExtraSymbolData();
+                const symbolTable = callExpr.getSymbolTable();
+                const foundType = symbolTable.getSymbolType(fullName, {
+                    flags: SymbolTypeFlag.typetime,
+                    data: data,
+                    tableProvider: () => callExpr?.getSymbolTable(),
+                    fullName: fullName
+                });
+                if (foundType) {
+                    return foundType;
+                }
+            }
+        } else if (isDottedGetExpression(callExpr.callee) &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'callfunc' &&
+            isLiteralString(callExpr.args?.[0])) {
+            return this.getCallFuncType(callExpr, callExpr.args?.[0]?.tokens.value, options);
+        } else if (isDottedGetExpression(callExpr.callee) &&
+            callExpr.callee.tokens?.name?.text?.toLowerCase() === 'createchild' &&
+            isComponentType(callExpr.callee.obj?.getType({ flags: SymbolTypeFlag.runtime })) &&
+            isLiteralString(callExpr.args?.[0])) {
+            const fullName = `roSGNode${callExpr.args?.[0].tokens?.value?.text?.replace(/"/g, '')}`;
+            const data = createExtraSymbolData();
+            const symbolTable = callExpr.getSymbolTable();
+            return symbolTable.getSymbolType(fullName, {
+                flags: SymbolTypeFlag.typetime,
+                data: data,
+                tableProvider: () => callExpr?.getSymbolTable(),
+                fullName: fullName
+            });
+        }
+    }
+
+    public getCallFuncType(callExpr: CallExpression | CallfuncExpression, methodNameToken: Token | Identifier, options: GetSymbolTypeOptions) {
+        let result: BscType;
+        let methodName = methodNameToken?.text?.replace(/"/g, ''); // remove quotes if it was the first arg of .callFunc()
+
+        //bail early when there's no method name (e.g. an unfinished `widget@.` callfunc).
+        //downstream getCallFuncType / ReferenceType paths assume a non-empty member name and
+        //will eventually try `name.toLowerCase()` on undefined and crash.
+        if (!methodName) {
+            return undefined;
+        }
+
+        // a little hacky here with checking options.ignoreCall because callFuncExpression has the method name
+        // It's nicer for CallExpression, because it's a call on any expression.
+        let calleeType: BscType;
+        if (isCallfuncExpression(callExpr)) {
+            calleeType = callExpr.callee.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
+        } else if (isCallExpression(callExpr) && isDottedGetExpression(callExpr.callee)) {
+            calleeType = callExpr.callee.obj.getType({ ...options, flags: SymbolTypeFlag.runtime, ignoreCall: false });
+        }
+        const funcType = calleeType?.getCallFuncType?.(methodName, options);
+        if (funcType) {
+            options.typeChain?.push(new TypeChainEntry({
+                name: methodName,
+                type: funcType,
+                data: options.data,
+                locatable: methodNameToken,
+                separatorToken: createToken(isCallfuncExpression(callExpr) && callExpr.tokens.operator?.kind === TokenKind.QuestionCallfunc ? TokenKind.QuestionCallfunc : TokenKind.Callfunc),
+                astNode: callExpr
+            }));
+            if (options.ignoreCall) {
+                result = funcType;
+            } else if (isCallableType(funcType) && (!isReferenceType(funcType.returnType) || funcType.returnType.isResolvable())) {
+                result = funcType.returnType;
+            } else if (!isReferenceType(funcType) && (funcType as any)?.returnType?.isResolvable()) {
+                result = (funcType as any).returnType;
+            } else if (this.isUnionOfFunctions(funcType)) {
+                result = this.getReturnTypeOfUnionOfFunctions(funcType);
+            } else {
+                result = new TypePropertyReferenceType(funcType, 'returnType');
+            }
+        }
+        if (isVoidType(result)) {
+            // CallFunc will always return invalid, even if function called is `as void`
+            result = DynamicType.instance;
+        }
+        if (options.data && !options.ignoreCall) {
+            options.data.isFromCallFunc = true;
+        }
+        return result;
+    }
+
+    public isUnionOfFunctions(type: BscType, allowReferenceTypes = false): type is UnionType {
+        if (isUnionType(type)) {
+            const callablesInUnion = type.types.filter(t => isCallableType(t) || (allowReferenceTypes && isReferenceType(t)));
+            return callablesInUnion.length === type.types.length && callablesInUnion.length > 0;
+        }
+        return false;
+    }
+
+    public isIntersectionOfFunctions(type: BscType, allowReferenceTypes = false): type is IntersectionType {
+        if (isIntersectionType(type)) {
+            const callablesInUnion = type.types.filter(t => isCallableType(t) || (allowReferenceTypes && isReferenceType(t)));
+            return callablesInUnion.length === type.types.length && callablesInUnion.length > 0;
+        }
+        return false;
+    }
+
+    public getFunctionTypeFromUnion(type: BscType): BscType {
+        if (this.isUnionOfFunctions(type)) {
+            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+            if (typedFuncsInUnion.length < type.types.length) {
+                // has non-typedFuncs in union
+                return FunctionType.instance;
+            }
+            const exampleFunc = typedFuncsInUnion[0];
+            const cumulativeFunction = new TypedFunctionType(getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new UnionType(types)))
+                .setName(exampleFunc.name)
+                .setSub(exampleFunc.isSub);
+            for (const param of exampleFunc.params) {
+                cumulativeFunction.addParameter(param.name, param.type, param.isOptional);
+            }
+            return cumulativeFunction;
+        }
+        return undefined;
+    }
+
+    public getFunctionTypeFromIntersection(type: BscType): BscType {
+        if (this.isIntersectionOfFunctions(type)) {
+            const typedFuncsInUnion = type.types.filter(isTypedFunctionType);
+            if (typedFuncsInUnion.length < type.types.length) {
+                // has non-typedFuncs in union
+                return FunctionType.instance;
+            }
+            const exampleFunc = typedFuncsInUnion[0];
+            const cumulativeFunction = new TypedFunctionType(getUniqueType(typedFuncsInUnion.map(f => f.returnType), (types) => new IntersectionType(types)))
+                .setName(exampleFunc.name)
+                .setSub(exampleFunc.isSub);
+            for (const param of exampleFunc.params) {
+                cumulativeFunction.addParameter(param.name, param.type, param.isOptional);
+            }
+            return cumulativeFunction;
+        }
+        return undefined;
+    }
+
+    public getReturnTypeOfUnionOfFunctions(type: UnionType): BscType {
+        if (this.isUnionOfFunctions(type, true)) {
+            const typedFuncsInUnion = type.types.filter(t => isTypedFunctionTypeLike(t) || isReferenceType(t)) as TypedFunctionType[];
+            if (typedFuncsInUnion.length < type.types.length) {
+                // is non-typedFuncs in union
+                return DynamicType.instance;
+            }
+            const funcReturns = typedFuncsInUnion.map(f => f.returnType);
+            return getUniqueType(funcReturns, (types) => new UnionType(types));
+        }
+        return InvalidType.instance;
+    }
+
+    public getReturnTypeOfIntersectionOfFunctions(type: IntersectionType): BscType {
+        if (this.isIntersectionOfFunctions(type, true)) {
+            const typedFuncsInUnion = type.types.filter(t => isTypedFunctionType(t) || isReferenceType(t)) as TypedFunctionType[];
+            if (typedFuncsInUnion.length < type.types.length) {
+                // is non-typedFuncs in union
+                return DynamicType.instance;
+            }
+            const funcReturns = typedFuncsInUnion.map(f => f.returnType);
+            return new IntersectionType(funcReturns);//getUniqueType(funcReturns, (types) => new UnionType(types));
+        }
+        return InvalidType.instance;
+    }
+
+    public symbolComesFromSameNode(symbolName: string, definingNode: AstNode, symbolTable: SymbolTable) {
+        let nsData: ExtraSymbolData = {};
+        let foundType = symbolTable?.getSymbolType(symbolName, { flags: SymbolTypeFlag.runtime, data: nsData });
+        if (foundType && definingNode === nsData?.definingNode) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * If `expression` is used in the initializer of a namespaced const with the same name (i.e. `namespace promises: const chain = chain`),
+     * return that const. A const can't refer to itself by its namespace-relative name, so that name refers to the outer (global) symbol instead.
+     */
+    public getSelfNamedConstOfInitializer(expression: VariableExpression): ConstStatement | undefined {
+        //this runs for every variable expression, so only walk up to the nearest statement instead of all the way to the root.
+        //a const's initializer is an expression, so the nearest statement around it is the const itself
+        let node = expression?.parent;
+        while (node && !isStatement(node)) {
+            node = node.parent;
+        }
+        if (!isConstStatement(node)) {
+            return undefined;
+        }
+        const constStatement = node;
+        if (
+            constStatement.tokens.name?.text.toLowerCase() === expression.tokens.name?.text.toLowerCase() &&
+            constStatement.findAncestor<NamespaceStatement>(isNamespaceStatement)
+        ) {
+            return constStatement;
+        }
+    }
+
+    public isCalleeMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (!this.isVariableMemberOfNamespace(symbolName, nodeWhereUsed, namespace)) {
+            return false;
+        }
+        const exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime });
+
+        if (isCallableType(exprType) || isClassType(exprType)) {
+            return true;
+        }
+        return false;
+    }
+
+    public isVariableMemberOfNamespace(symbolName: string, nodeWhereUsed: AstNode, namespace?: NamespaceStatement) {
+        namespace = namespace ?? nodeWhereUsed.findAncestor<NamespaceStatement>(isNamespaceStatement);
+        if (!isNamespaceStatement(namespace)) {
+            return false;
+        }
+        const namespaceParts = namespace.getNameParts();
+        let namespaceType: NamespaceType;
+        let symbolTable: SymbolTable = namespace.getSymbolTable();
+        for (const part of namespaceParts) {
+            namespaceType = symbolTable.getSymbolType(part.text, { flags: SymbolTypeFlag.runtime }) as NamespaceType;
+            if (namespaceType) {
+                symbolTable = namespaceType.getMemberTable();
+            } else {
+                return false;
+            }
+        }
+
+        let varData: ExtraSymbolData = {};
+        nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        const isFromSameNodeInMemberTable = this.symbolComesFromSameNode(symbolName, varData?.definingNode, namespaceType?.getMemberTable());
+        return isFromSameNodeInMemberTable;
+    }
+
+    public isVariableShadowingSomething(symbolName: string, nodeWhereUsed: AstNode) {
+        let varData: ExtraSymbolData = {};
+        let exprType = nodeWhereUsed.getType({ flags: SymbolTypeFlag.runtime, data: varData });
+        if (isReferenceType(exprType)) {
+            exprType = (exprType as any).getTarget();
+        }
+        const namespace = nodeWhereUsed?.findAncestor<NamespaceStatement>(isNamespaceStatement);
+
+        if (isNamespaceStatement(namespace)) {
+            let namespaceHasSymbol = namespace.getSymbolTable().hasSymbol(symbolName, SymbolTypeFlag.runtime);
+            // the variable is shadowing the namespace's symbol if it resolves to a different definition. If it resolves to the
+            // namespace's own symbol, then nothing is shadowing it, even if a different symbol with this name exists at the file level
+            if (namespaceHasSymbol) {
+                return !this.symbolComesFromSameNode(symbolName, varData.definingNode, namespace.getSymbolTable());
+            }
+        }
+        const bodyTable = nodeWhereUsed.getRoot().getSymbolTable();
+        const hasSymbolAtFileLevel = bodyTable.hasSymbol(symbolName, SymbolTypeFlag.runtime);
+        if (hasSymbolAtFileLevel && !this.symbolComesFromSameNode(symbolName, varData.definingNode, bodyTable)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public chooseTypeFromCodeOrDocComment(codeType: BscType, docType: BscType, options: GetTypeOptions) {
+        let returnType: BscType;
+        if (options.preferDocType && docType) {
+            returnType = docType;
+            if (options.data) {
+                options.data.isFromDocComment = true;
+            }
+        } else {
+            returnType = codeType;
+            if (!returnType && docType) {
+                returnType = docType;
+                if (options.data) {
+                    options.data.isFromDocComment = true;
+                }
+            }
+        }
+        return returnType;
+    }
+
+    /**
+     * Gets the type for a default value (eg. as a function param, class member or typed array)
+     */
+    public getDefaultTypeFromValueType(valueType: (BscType | BscType[])) {
+        if (!valueType) {
+            return undefined;
+        }
+        let resultType: BscType = DynamicType.instance;
+        if (Array.isArray(valueType)) {
+            // passed an array opf types, potential from ArrayType.innerTypes
+            if (valueType.length > 0) {
+                //at least one, use it
+                resultType = valueType[0];
+                if (valueType?.length > 1) {
+                    // more than 1, find union
+                    resultType = getUniqueType(valueType, unionTypeFactory);
+                }
+            }
+        } else {
+            resultType = valueType;
+        }
+        if (!resultType.isResolvable()) {
+            if (isUnionType(resultType)) {
+                resultType = DynamicType.instance;
+            } else if (isParamTypeFromValueReferenceType(resultType)) {
+                //already wrapped — wrapping again would build a recursive proxy chain whose
+                //get handlers loop forever via Reflect.get
+            } else {
+                resultType = new ParamTypeFromValueReferenceType(resultType);
+            }
+
+        } else if (isEnumMemberType(resultType)) {
+            // the type was an enum member... Try to get the parent enum type
+            resultType = resultType.parentEnumType ?? resultType;
+        } else if (isUnionType(resultType)) {
+            // it was a union -- I wonder if they're resolvable now?
+            const moddedTypes = resultType.types.map(t => {
+                if (isEnumMemberType(t)) {
+                    // the type was an enum member... Try to get the parent enum type
+                    return t.parentEnumType ?? resultType;
+                }
+                return t;
+            });
+            resultType = getUniqueType(moddedTypes, unionTypeFactory);
+        }
+        return resultType;
+    }
+
+    /**
+     * Get the default type for an iterator of the given type
+     * Used for `for each` loops
+     */
+    public getIteratorDefaultType(iteratorType: BscType): BscType {
+        if (isArrayType(iteratorType)) {
+            return iteratorType.defaultType;
+        } else if (isAssociativeArrayTypeLike(iteratorType)) {
+            return StringType.instance;
+        } else if (isBuiltInType(iteratorType, 'roByteArray')) {
+            return IntegerType.instance;
+        } else if (isUnionType(iteratorType)) {
+            const iteratorDefaultTypes = iteratorType.types.map(t => this.getIteratorDefaultType(t));
+            return getUniqueType(iteratorDefaultTypes, unionTypeFactory);
+        }
+        return DynamicType.instance;
+    }
+
+    /**
+     * Get a short name that can be used to reference the project in logs. (typically something like `prj1`, `prj8`, etc...)
+     */
+    public getProjectLogName(config: { projectNumber: number }) {
+        //if we have a project number, use it
+        if (config?.projectNumber !== undefined) {
+            return `prj${config.projectNumber}`;
+        }
+        //just return empty string so log functions don't crash with undefined project numbers
+        return '';
     }
 }
 
@@ -1572,17 +3670,46 @@ export class Util {
  * A tagged template literal function for standardizing the path. This has to be defined as standalone function since it's a tagged template literal function,
  * we can't use `object.tag` syntax.
  */
-export function standardizePath(stringParts, ...expressions: any[]) {
+export function standardizePath(stringParts: TemplateStringsArray | string, ...expressions: any[]) {
     let result: string[] = [];
-    for (let i = 0; i < stringParts.length; i++) {
-        result.push(stringParts[i], expressions[i]);
+    for (let i = 0; i < stringParts?.length; i++) {
+        result.push(stringParts[i], expressions[i] as string);
     }
-    return util.driveLetterToLower(
-        rokuDeployStandardizePath(
-            result.join('')
-        )
+    return util.standardizePath(
+        result.join('')
     );
 }
 
+/**
+ * An item that can be coerced into a `Range`
+ */
+export type RangeLike = Locatable | { location?: Location } | Location | { range?: Range } | Range | undefined;
+
 export let util = new Util();
 export default util;
+
+/**
+ * A single planned string replacement for one entry in a SourceNode's `children` array, produced by
+ * `collectSourceNodeTrimEdits` and only applied once the full trim amount has been accounted for
+ */
+interface TrimEdit {
+    children: Array<SourceNode | string>;
+    childIndex: number;
+    replacement: string;
+}
+
+/**
+ * Mutable state threaded through `collectSourceNodeTrimEdits` while walking a SourceNode tree right to left
+ */
+interface SourceNodeTailState {
+    tail: string;
+    foundNonBlank: boolean;
+    foundLineBreak: boolean;
+    isComplete: boolean;
+    bailedOut: boolean;
+}
+
+interface TrimState {
+    remainingCharCount: number;
+    bailedOut: boolean;
+}

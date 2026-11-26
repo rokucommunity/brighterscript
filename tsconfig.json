@@ -13,12 +13,16 @@
         "experimentalDecorators": true,
         "preserveConstEnums": true,
         "downlevelIteration": true,
+        "noEmitOnError": false,
         "noUnusedLocals": true,
         "allowSyntheticDefaultImports": true,
         "resolveJsonModule": true,
         "lib": [
             "es2017",
             "es2019.array",
+            "es2021.promise",
+            "es2021.weakref",
+            "es2022.error",
             "dom"
         ]
     },

@@ -1,10 +1,14 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/dot-notation */
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-require-imports */
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable no-cond-assign */
-import * as phin from 'phin';
+
 import * as fsExtra from 'fs-extra';
+import * as path from 'path';
+import { execSync } from 'child_process';
 import { standardizePath as s } from '../src/util';
 import { ParseMode, Parser } from '../src/parser/Parser';
 import type { CallExpression, LiteralExpression } from '../src/parser/Expression';
@@ -16,6 +20,11 @@ import * as he from 'he';
 import * as deepmerge from 'deepmerge';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 import { isVariableExpression } from '../src/astUtils/reflection';
+import { SymbolTable } from '../src/SymbolTable';
+import { SymbolTypeFlag } from '../src/SymbolTypeFlag';
+import { referenceTypeFactory } from '../src/types/ReferenceType';
+import { unionTypeFactory } from '../src/types/UnionType';
+
 
 type Token = marked.Token;
 
@@ -25,7 +34,13 @@ const foundTypesTranslation = {
     'object (string array)': 'object',
     'robytearray object': 'roByteArray',
     'rolist of roassociativearray items': 'roList',
-    'roassociative array': 'roAssociativeArray'
+    'roassociative array': 'roAssociativeArray',
+    'uri string': 'uri',
+    'oassociativearray': 'roAssociativeArray',
+    'int': 'Integer',
+    'bool': 'Boolean',
+    //"Number" means any numeric type (e.g. `ifUtils.isNumber(val as Number)`), which has no single brighterscript type
+    'number': 'dynamic'
 };
 
 const turndownService = new TurndownService({
@@ -37,6 +52,11 @@ turndownService.use(gfm);
 class Runner {
     private references: any;
 
+    /**
+     * Root dir of the local clone of the roku dev-doc repo
+     */
+    private docsDir: string;
+
     private result = {
         generatedDate: new Date().toISOString(),
         nodes: {} as Record<string, SceneGraphNode>,
@@ -47,16 +67,23 @@ class Runner {
 
     public async run() {
         const outPath = s`${__dirname}/../src/roku-types/data.json`;
-        fsExtra.removeSync(outPath);
-        loadCache();
+        const previousData = fsExtra.pathExistsSync(outPath) ? fsExtra.readJsonSync(outPath) : undefined;
+
+        SymbolTable.referenceTypeFactory = referenceTypeFactory;
+        SymbolTable.unionTypeFactory = unionTypeFactory;
+        //make sure we have a local copy of the roku docs repo
+        this.docsDir = ensureDocsRepo();
         //load the base level roku docs data
-        await this.loadReferences();
+        this.loadReferences();
 
         //build the various types of docs
         await this.buildComponents();
         await this.buildInterfaces();
         await this.buildEvents();
         await this.buildNodes();
+
+        //ContentNode fields are a special case
+        await this.buildContentNodeFields();
 
         //include hand-written overrides that were missing from roku docs, or were wrong from roku docs.
         this.mergeOverrides();
@@ -70,8 +97,11 @@ class Runner {
 
         //this.writeTypeDefinitions();
 
-        //store the output
-        fsExtra.outputFileSync(outPath, JSON.stringify(this.result, objectKeySorter, 4));
+        //store the output (converting any old-style doc urls, such as the ones from the hand-written overrides, to the new format)
+        const output = normalizeDocUrl(JSON.stringify(this.result, objectKeySorter, 4));
+        fsExtra.outputFileSync(outPath, output);
+
+        printChangeSummary(previousData, JSON.parse(output));
     }
 
     /**
@@ -221,26 +251,46 @@ class Runner {
     public sortInternalData() {
         const nameComparer = (a: { name: string }, b: { name: string }) => (a.name.localeCompare(b.name));
         for (let component of Object.values(this.result.components)) {
+            component.constructors ??= [];
             component.constructors.sort((a, b) => b.params.length - a.params.length);
+
+            component.events ??= [];
             component.events.sort(nameComparer);
+
+            component.interfaces ??= [];
             component.interfaces.sort(nameComparer);
         }
 
         for (let evt of Object.values(this.result.events)) {
+            evt.implementers ??= [];
             evt.implementers.sort(nameComparer);
+
+            evt.properties ??= [];
             evt.properties.sort(nameComparer);
+
+            evt.methods ??= [];
             evt.methods.sort(nameComparer);
         }
 
         for (let iface of Object.values(this.result.interfaces)) {
+            iface.implementers ??= [];
             iface.implementers.sort(nameComparer);
+
+            iface.properties ??= [];
             iface.properties.sort(nameComparer);
+
+            iface.methods ??= [];
             iface.methods.sort(nameComparer);
         }
 
         for (let node of Object.values(this.result.nodes)) {
+            node.events ??= [];
             node.events.sort(nameComparer);
+
+            node.fields ??= [];
             node.fields.sort(nameComparer);
+
+            node.interfaces ??= [];
             node.interfaces.sort(nameComparer);
         }
     }
@@ -256,8 +306,7 @@ class Runner {
         for (const name in componentDocs) {
             console.log(`Processing component ${i++} of ${count}`);
             const docPath = componentDocs[name];
-            const docApiUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(docPath, name);
 
             const component = {
                 name: manager.getHeading(1)?.text,
@@ -284,7 +333,8 @@ class Runner {
                 let match;
                 while (match = regexp.exec(manager.markdown)) {
 
-                    const { statements, diagnostics } = Parser.parse(match[0]);
+                    const { ast, diagnostics } = Parser.parse(match[0]);
+                    const statements = ast.statements;
                     if (diagnostics.length === 0) {
                         const signature = {
                             params: [],
@@ -292,13 +342,13 @@ class Runner {
                         } as Signature;
                         const call = (statements[0] as ExpressionStatement).expression as CallExpression;
                         //only scan createObject calls for our own name
-                        if ((call.args[0] as LiteralExpression)?.token?.text === `"${component.name}"`) {
+                        if ((call.args[0] as LiteralExpression)?.tokens?.value.text === `"${component.name}"`) {
                             //skip the first arg because that's the name of the component
                             for (let i = 1; i < call.args.length; i++) {
                                 const arg = call.args[i];
                                 let paramName = `param${i}`;
                                 if (isVariableExpression(arg)) {
-                                    paramName = arg.getName(ParseMode.BrightScript)
+                                    paramName = arg.getName(ParseMode.BrightScript);
                                 }
                                 signature.params.push({
                                     name: paramName,
@@ -311,7 +361,7 @@ class Runner {
                             component.constructors.push(signature);
                         }
                     } else if (match[1]) {
-                        const signature = this.getConstructorSignature(name, match[1])
+                        const signature = this.getConstructorSignature(name, match[1]);
 
                         if (signature) {
                             component.constructors.push(signature);
@@ -329,10 +379,31 @@ class Runner {
 
             this.result.components[component?.name?.toLowerCase()] = component;
         }
+        if (!this.result.components['rointrinsicdouble']) {
+            this.result.components['rointrinsicdouble'] = {
+                availableSince: undefined,
+                constructors: [],
+                description: 'roIntrinsicDouble is the object equivalent for type \'Double\'.\n\nIt is a legacy object name, corresponding to the intrinsic Double object. Applications should use Double literal values and/or Double-typed variables directly.',
+                events: [],
+                methods: [],
+                interfaces: [
+                    {
+                        name: 'ifDouble',
+                        url: 'https://developer.roku.com/dev/docs/references/brightscript/interfaces/ifdouble.md'
+                    },
+                    {
+                        name: 'ifToStr',
+                        url: 'https://developer.roku.com/dev/docs/references/brightscript/interfaces/iftostr.md'
+                    }
+                ],
+                name: 'roIntrinsicDouble',
+                url: 'https://developer.roku.com/dev/docs/references/brightscript/components/rodouble.md'
+            };
+        }
     }
 
     private getConstructorSignature(componentName: string, sourceCode: string) {
-        const foundParamTexts = this.findParamTexts(sourceCode)
+        const foundParamTexts = this.findParamTexts(sourceCode);
 
         if (foundParamTexts && foundParamTexts[0].toLowerCase() === componentName.toLowerCase()) {
             const signature = {
@@ -359,24 +430,29 @@ class Runner {
     /* Gets a param based on text in the docs
      * Docs for some components do not have valid brightscript in the createObject example:
      *  - it looks like C code
-     *   Eg: CreateObject("roRegion", Object bitmap, Integer x, Integer y,Integer width, Integer height)
+     *   Eg: CreateObject("roRegion', Object bitmap, Integer x, Integer y,Integer width, Integer height)
      *  - or, they forget the "as"
-     *   Eg: CreateObject("roArray",  size As Integer, resizeAs Boolean)
+     *   Eg: CreateObject("roArray',  size As Integer, resizeAs Boolean)
      * */
     private getParamFromMarkdown(foundParam: string, defaultParamName: string) {
         // make an array of at the words in each group, removing "as" if it exists
         const words = foundParam.split(' ').filter(word => word.length > 0 && word.toLowerCase() !== 'as');
         // find the index of the word that looks like a type
-        const paramTypeIndex = words.findIndex(word => potentialTypes.includes(this.sanitizeMarkdownSymbol(word.toLowerCase())));
+        const paramTypeIndex = words.findIndex(word => potentialTypes.includes(this.sanitizeMarkdownSymbol(word.toLowerCase(), { allowSpaces: true })));
         let paramType = 'dynamic';
         let paramName = defaultParamName;
 
-        const isOptional = foundParam.endsWith(']');
+        const isOptional = foundParam.endsWith(']') || foundParam.includes('=');
 
         if (paramTypeIndex >= 0) {
             // if we found a word that looks like a type, use it for the type, and remove it from the array
-            paramType = this.sanitizeMarkdownSymbol(words[paramTypeIndex]);
+            paramType = this.sanitizeMarkdownSymbol(words[paramTypeIndex], { allowSpaces: true });
 
+            if (words[0].replaceAll('\\', '').endsWith('[]')) {
+                paramType = 'roArray';
+            } else if (words[paramTypeIndex].replaceAll('\\', '').endsWith('[]')) {
+                paramType = `roArray of ${paramType}`;
+            }
             // translate to an actual BRS type if needed
             paramType = foundTypesTranslation[paramType.toLowerCase()] || paramType;
 
@@ -404,8 +480,7 @@ class Runner {
         for (const name in interfaceDocs) {
             console.log(`Processing interface ${i++} of ${count}`);
             const docPath = interfaceDocs[name];
-            const docApiUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(docPath, name);
 
             try {
 
@@ -429,7 +504,7 @@ class Runner {
 
                 this.result.interfaces[name?.toLowerCase()] = iface as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing interface ${docPath}`, e);
             }
         }
     }
@@ -441,8 +516,7 @@ class Runner {
         for (const name in eventDocs) {
             console.log(`Processing event ${i++} of ${count}`);
             const docPath = eventDocs[name];
-            const docApiUrl = this.getDocApiUrl(docPath);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(docPath, name);
 
             try {
                 const evt = {
@@ -465,7 +539,7 @@ class Runner {
 
                 this.result.events[name?.toLowerCase()] = evt as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing event ${docPath}`, e);
             }
         }
     }
@@ -491,11 +565,6 @@ class Runner {
 
     private async buildNodes() {
         const docs = this.flatten(this.references.SceneGraph);
-        docs.push({
-            categoryName: '',
-            path: '/docs/references/scenegraph/dynamic-voice-keyboard-nodes/rsg-palette.md',
-            name: 'RSGPalette'
-        });
 
         for (let i = 0; i < docs.length; i++) {
             const doc = docs[i];
@@ -505,8 +574,7 @@ class Runner {
             }
             console.log(`Processing node ${i} of ${docs.length}`);
 
-            const docApiUrl = this.getDocApiUrl(doc.path);
-            const manager = await new TokenManager().process(docApiUrl);
+            const manager = await new TokenManager().process(doc.path, doc.name);
 
             try {
 
@@ -536,30 +604,44 @@ class Runner {
 
                 this.result.nodes[node.name?.toLowerCase()] = node as any;
             } catch (e) {
-                console.error(`Error processing interface ${docApiUrl}`, e);
+                console.error(`Error processing node ${doc.path}`, e);
             }
         }
     }
 
     private getNodeFields(manager: TokenManager) {
         const result = [] as SceneGraphNodeField[];
-        const table = manager.getTableByHeaders(['field', 'type', 'default', 'access permission', 'description']);
-        const rows = manager.tableToObjects(table);
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            let description = table.rows[i][4].text;
-            //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
-            description = turndownService.turndown(description);
-            result.push({
-                name: this.sanitizeMarkdownSymbol(row.field),
-                type: this.sanitizeMarkdownSymbol(row.type),
-                default: this.sanitizeMarkdownSymbol(row.default, true),
-                accessPermission: this.sanitizeMarkdownSymbol(row['access permission']),
-                //grab all the markdown from the 4th column (description)
-                description: description
-            });
-        }
+        const tableHeadingMatcher = (headingToken) => {
+            return (headingToken as marked.Tokens.Heading)?.text?.toLowerCase() === 'fields';
+        };
+        const tables = [
+            ...manager.getAllTablesByHeaders(['field', 'type', 'default', 'access permission', 'description']),
+            ...manager.getAllTablesByHeaders(['field', 'type', 'default', 'description'], null, null, tableHeadingMatcher),
+            ...manager.getAllTablesByHeaders(['field', 'type', 'description'], null, null, tableHeadingMatcher)
+        ];
+        for (const table of tables) {
+            const rows = manager.tableToObjects(table);
+            const descriptionIndex = getTableHeaders(table).indexOf('description');
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                let description = table.rows[i][descriptionIndex].text;
+                //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
+                description = turndownService.turndown(description);
 
+                if (!row.field) {
+                    continue;
+                }
+
+                result.push({
+                    name: this.sanitizeMarkdownSymbol(row.field),
+                    type: this.sanitizeMarkdownSymbol(row.type, { allowSquareBrackets: true, allowSpaces: true }),
+                    default: (row.default !== undefined) ? this.sanitizeMarkdownSymbol(row.default, { allowSquareBrackets: true, allowSpaces: true }) : null,
+                    accessPermission: row['access permission'] ? this.sanitizeMarkdownSymbol(row['access permission'], { allowSpaces: true }) : 'READ_WRITE',
+                    //grab all the markdown from the 4th column (description)
+                    description: description
+                });
+            }
+        }
         return result;
     }
 
@@ -595,6 +677,103 @@ class Runner {
         }
         return result;
     }
+
+    /**
+     * ContentNode fields are a special case because the fields are listed in a different markdown file:
+     * https://developer.roku.com/dev/docs/developer-program/getting-started/architecture/content-metadata.md
+     */
+    private async buildContentNodeFields() {
+        const manager = await new TokenManager().process(s`${this.docsDir}/${contentMetadataDocPath}`);
+
+        const fields: SceneGraphNodeField[] = [
+            ...this.getContentNodeFields(manager, ['attributes', 'type', 'values', 'example'], 2),
+            ...this.getContentNodeFields(manager, ['attribute', 'type', 'values', 'example'], 2),
+            ...this.getContentNodeFields(manager, ['attribute', 'type', 'values', 'description'], 3)
+
+        ];
+        this.result.nodes['contentnode'].fields = fields;
+
+        //add any missing fields
+        function addIfMissing(newFields: SceneGraphNodeField[]) {
+            for (const field of newFields) {
+                const existingField = fields.find(x => x.name === field.name);
+                if (!existingField) {
+                    fields.push(field);
+                }
+            }
+        }
+
+        addIfMissing([{
+            name: 'action',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'For upgrades/downgrades only. Set this to "Upgrade" or "Downgrade" to change the subscription plan from a previous purchase (for example, myOrder.action = "Upgrade"). The required values are case-sensitive; do not pass "upgrade" or "downgrade". See On-device upgrade and downgrade for more information.'
+        }, {
+            name: 'priceDisplay',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The original price of the product. Do not include a currency symbol (for example, set this to "3.99" instead of "$3.99").'
+        }, {
+            name: 'price',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The original price of the product. Do not include a currency symbol (for example, set this to "3.99" instead of "$3.99").'
+        }, {
+            name: 'couponCode',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'An alphanumeric string entered by the customer to receive a discounted price on the product.'
+        }, {
+            name: 'contentKey',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The publisher-specific SKU (or other unique identifier) for the product.'
+        }, {
+            name: 'orderId',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: '',
+            description: 'The orderID returned by Roku in the RequestPartnerOrderStatus content node.'
+        }, {
+            name: 'drmParams',
+            type: 'string',
+            accessPermission: 'READ_WRITE',
+            default: 'invalid',
+            description: 'The original price of the product. Do not include a currency symbol (for example, set this to "3.99" instead of "$3.99").'
+        }]);
+    }
+
+    private getContentNodeFields(manager: TokenManager, searchHeaders: string[], descriptionIndex: number, propertyMap?: { name?: string; type?: string }) {
+        const tables = manager.getAllTablesByHeaders(searchHeaders);
+        const fields = [] as SceneGraphNodeField[];
+        const nameKey = propertyMap?.name ?? searchHeaders[0];
+        const typeKey = propertyMap?.type ?? 'type';
+
+        for (const table of tables) {
+            const rows = manager.tableToObjects(table);
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                let description = table.rows[i][descriptionIndex].text;
+                //the turndown plugin doesn't convert inner html tables, so turn that into markdown too
+                description = turndownService.turndown(description);
+                fields.push({
+                    name: this.sanitizeMarkdownSymbol(row[nameKey]),
+                    type: this.sanitizeMarkdownSymbol(row[typeKey], { allowSquareBrackets: true, allowSpaces: true }).split(':')?.[0],
+                    default: 'not specified',
+                    accessPermission: 'READ_WRITE',
+                    //grab all the markdown from the 4th column (description)
+                    description: description
+                });
+            }
+        }
+        return fields;
+    }
+
 
     private isTable(element) {
         return element?.nodeName?.toLowerCase() === 'table';
@@ -676,9 +855,17 @@ class Runner {
             if (method) {
                 manager.setDeprecatedData(method, methodHeader, nextMethodHeader);
 
-                method.description = manager.getNextToken<marked.Tokens.Paragraph>(
-                    manager.find(x => !!/description/i.exec(x?.text), methodHeader, nextMethodHeader)
-                )?.text;
+                method.description = (
+                    manager.find(x => {
+                        if (x === methodHeader || /^\**description/i.exec(x?.text) || /^_?available\s*since/i.exec(x?.text)) {
+                            return false;
+                        }
+                        return x.type === 'paragraph';
+                    }, methodHeader, nextMethodHeader) as marked.Tokens.Paragraph)?.text;
+
+                if (!method.description) {
+                    method.description = manager.getNextToken<marked.Tokens.Paragraph>(methodHeader)?.text;
+                }
 
                 method.returnDescription = manager.getNextToken<marked.Tokens.Paragraph>(
                     manager.find(x => !!/return\s*value/i.exec(x?.text), methodHeader, nextMethodHeader)
@@ -705,23 +892,63 @@ class Runner {
         return result;
     }
 
-    private sanitizeMarkdownSymbol(symbolName: string, allowSquareBrackets = false) {
-        if (allowSquareBrackets) {
-            return symbolName?.replaceAll(/[\\]/g, '');
+    private sanitizeMarkdownSymbol(symbolName: string, opts?: { allowSquareBrackets?: boolean; allowSpaces?: boolean }) {
+        let result = symbolName;
+        if (opts?.allowSquareBrackets) {
+            result = result?.replaceAll(/[\\]/g, '');
+        } else {
+            result = result?.replaceAll(/[\[\]\\]/g, '');
         }
-        return symbolName?.replaceAll(/[\[\]\\]/g, '');
+        if (!opts?.allowSpaces) {
+            result = result?.split(' ')?.[0];
+        }
+        if (foundTypesTranslation[result.toLowerCase()]) {
+            result = foundTypesTranslation[result.toLowerCase()];
+        }
+        return result;
+    }
+
+
+    private fixFunctionParams(text: string): string {
+        return text.replace(/to as /ig, 'toValue as ')
+            //some docs put the default value after the type (`text as String = ""`), but brightscript wants it before (`text = "" as String`)
+            .replace(/(\w+)\s+as\s+(\w+)\s*=\s*("[^"]*"|[\w.-]+)/ig, '$1 = $3 as $2')
+            .replace(/as\s+int\s*$/ig, 'as integer')
+            .replace(/as\s+int\s*,/ig, 'as integer,')
+            .replace(/as\s+int\s*\)\s*/ig, 'as integer)')
+            .replace(/as\s+bool\s*$/ig, 'as boolean')
+            .replace(/as\s+bool\s*,/ig, 'as boolean,')
+            .replace(/as\s+bool\s*\)/ig, 'as boolean)');
     }
 
     private getMethod(text: string) {
-        // var state = new TranspileState(new BrsFile('', '', new Program({}));
-        const { statements } = Parser.parse(`function ${this.sanitizeMarkdownSymbol(text)}\nend function`);
+        // var state = new TranspileState(new BrsFile({ srcPath: '', destPath: '', program: new Program({})});
+        let functionSignatureToParse = `function ${this.fixFunctionParams(this.sanitizeMarkdownSymbol(text, { allowSpaces: true }))}\nend function`;
+        const variadicRegex = new RegExp(/,?\s*\.\.\.\s*\)/, 'g'); // looks for  " ...)"
+        const variadicMatch = functionSignatureToParse.match(variadicRegex);
+        if (variadicMatch) {
+            functionSignatureToParse = functionSignatureToParse.replace(variadicRegex, ')');
+        }
+
+        const { ast } = Parser.parse(functionSignatureToParse);
+        const statements = ast.statements;
+        let returnTypeString = 'Void';
+        const lastParenIndex = functionSignatureToParse.lastIndexOf(')');
+        const lastAsIndex = functionSignatureToParse.indexOf('as', lastParenIndex);
+        if (lastAsIndex >= 0) {
+            returnTypeString = functionSignatureToParse.substring(lastAsIndex + 2)?.split('\n')?.[0]?.trim();
+        }
         if (statements.length > 0) {
             const func = statements[0] as FunctionStatement;
             const signature = {
-                name: func.name?.text,
+                name: func.tokens.name?.text,
                 params: [],
-                returnType: func.func.returnTypeToken?.text ?? 'Void'
+                returnType: func.func.returnTypeExpression?.getType({ flags: SymbolTypeFlag.typetime })?.toTypeString() ?? returnTypeString ?? 'Void'
             } as Func;
+
+            if (variadicMatch) {
+                signature.isVariadic = true;
+            }
 
 
             const paramsRegex = /\((.*?)\)/g;
@@ -730,66 +957,1102 @@ class Runner {
                 const foundParamTexts = match[1].split(',').map(x => x.replace(/['"]+/g, '').trim());
                 for (let i = 0; i < foundParamTexts.length; i++) {
                     const foundParam = foundParamTexts[i];
+                    if (foundParam === '...') {
+                        break;
+                    }
                     signature.params.push(this.getParamFromMarkdown(foundParam, `param${i}`));
                 }
             }
             return signature;
+        } else {
+            console.error('Could not parse method', functionSignatureToParse);
         }
 
     }
 
-    private getDocApiUrl(docRelativePath: string) {
-        return `https://developer.roku.com/api/v1/get-dev-cms-doc?locale=en-us&filePath=${docRelativePath.replace(/^\/docs\//, '')}`;
-    }
+    /**
+     * Build the doc index by walking the `docs/REFERENCES` folder of the dev-doc repo.
+     * The result has the same shape as the old `left-nav/references.json` from the roku docs CMS:
+     * `{ BrightScript: { Components, Interfaces, Events }, SceneGraph: { [category]: { [name]: path } } }`
+     */
+    private loadReferences() {
+        const referencesDir = s`${this.docsDir}/${referencesDocPath}`;
+        const titles = getProperNamesFromLinks(getMarkdownFiles(referencesDir));
 
-    private async loadReferences() {
-        const response = await getJson('https://developer.roku.com/api/v1/get-dev-cms-doc?filePath=left-nav%2Freferences.json&locale=en-us');
-        this.references = JSON.parse(response.content);
+        const getDocs = (dir: string) => {
+            const result = {} as Record<string, string>;
+            for (const fileName of fsExtra.readdirSync(dir).sort()) {
+                const filePath = s`${dir}/${fileName}`;
+                if (!fileName.endsWith('.md') || fileName === 'index.md') {
+                    continue;
+                }
+                const frontmatter = parseFrontmatter(fsExtra.readFileSync(filePath).toString()).attributes;
+                if (frontmatter.hidden === 'true') {
+                    continue;
+                }
+                result[getDocTitle(filePath, frontmatter, titles)] = filePath;
+            }
+            return result;
+        };
+
+        const sceneGraph = {} as Record<string, any>;
+        const sceneGraphDir = s`${referencesDir}/scenegraph`;
+        //top-level nodes (Node, Scene)
+        Object.assign(sceneGraph, getDocs(sceneGraphDir));
+        for (const category of fsExtra.readdirSync(sceneGraphDir).sort()) {
+            //these are not nodes
+            if (['component-functions', 'xml-elements'].includes(category)) {
+                continue;
+            }
+            const categoryDir = s`${sceneGraphDir}/${category}`;
+            if (fsExtra.statSync(categoryDir).isDirectory()) {
+                sceneGraph[category] = getDocs(categoryDir);
+            }
+        }
+
+        this.references = {
+            BrightScript: {
+                Components: getDocs(s`${referencesDir}/brightscript/components`),
+                Interfaces: getDocs(s`${referencesDir}/brightscript/interfaces`),
+                Events: getDocs(s`${referencesDir}/brightscript/events`)
+            },
+            SceneGraph: sceneGraph
+        };
     }
 
     /**
      * Merge hand-written overrides to the Roku docs. This is for missing items or fixing incorrect info
      */
     private mergeOverrides() {
-        this.result = deepmerge(this.result, {
+        const docMerges = {
             nodes: {
+                rsgpalette: {
+                    availableSince: '9.4',
+                    description: 'Extends [Node](https://developer.roku.com/dev/docs/references/scenegraph/node.md\n\nThe **RSGPalette** node allows developers to specify a named set of color values that can be shared among nodes that support RSGPalette colors.\n\nNodes that support RSGPalette colors include a **palette** field, which can be set to an **RSGPalette** node to override the default colors used by the node. The specific palette values used by those nodes are defined in each node\'s documentation.\n\nIf a node that supports a palette does not set its **palette** filed, the RSGPalette is inherited from ancestor nodes in the scene graph. Specifically, the node looks up the scene graph until it finds a **PaletteGroup** node with its **palette** field set. This may be found in the **Scene** itself.\n\nIf no node in the scene graph has its **palette** field set, the keyboard uses the default palette (gray background/white text).\n\nCurrently, the **RSGPalette** node is typically used in channels that customize the colors of the dynamic keyboard nodes. In this case, the channel assigns the RSGPalette node to the **palette** field of the [DynamicKeyboardBase](https://developer.roku.com/dev/docs/references/scenegraph/dynamic-voice-keyboard-nodes/dynamic-keyboard-base.md\"DynamicKeyboardBase\") node and lets the keyboard\'s **DynamicKeyGrid** and **VoiceTextEditBox** inherit that RSGPalette.\n\n> The colors in the RSGPalette do not cascade. If a child node overrides its parent\'s RSGPalette node, that RSGPalette should specify values for all the colors used by the node. Unspecified values will use the system default colors.',
+                    events: [],
+                    extends: {
+                        name: 'Node',
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
+                    },
+                    fields: [
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'Specifies an associative array of color name/color key-value pairs. For example: \\`\\`\\` { PrimaryTextColor: 0x111111FF, FocusColor: 0x0000FFFF } \\`\\`\\` .',
+                            name: 'colors',
+                            type: 'associative array'
+                        }
+                    ],
+                    interfaces: [],
+                    name: 'RSGPalette',
+                    url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/scene.md'
+                },
+                contentnode: {
+                    fields: [
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the channel logo or for an icon that appears beside the program title. See: TimeGrid',
+                            name: 'HDSmallIconUrl',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the item poster when the screen resolution is set to HD. HDGRIDPOSTERURL is used if non-empty. HDPOSTERURL is used otherwise. See: PosterGrid',
+                            name: 'HDGridPosterUrl',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the item poster when the screen resolution is set to HD. HDGRIDPOSTERURL is used if non-empty. HDPOSTERURL is used otherwise. See: PosterGrid',
+                            name: 'HDPosterUrl',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the item poster when the screen resolution is set to HD. SDGRIDPOSTERURL is used if non-empty. SDPOSTERURL is used otherwise. See: PosterGrid',
+                            name: 'SDGridPosterUrl',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the item poster when the screen resolution is set to SD. SDGRIDPOSTERURL is used if non-empty. SDPOSTERURL is used otherwise. See: PosterGrid',
+                            name: 'SDPosterUrl',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the item poster when the screen resolution is set to SD. SDGRIDPOSTERURL is used if non-empty. SDPOSTERURL is used otherwise. See: PosterGrid',
+                            name: 'SDPosterUrl',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The text for the first grid item caption.',
+                            name: 'ShortDescriptionLine1',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The text for the second grid item caption.',
+                            name: 'ShortDescriptionLine2',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'When the fixedLayout field is set to true, this specifies the first row of the grid occupied by this item, where 0 refers to the first row. Note that there can be more rows in the data than visible rows, where the number of visible rows is specified by the numRows field.\nFor example, if the data model contains enough data to fill 12 rows, X would be set to a value from 0 to 11.',
+                            name: 'X',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'When the fixedLayout field is set to true, this specifies the first column of the grid occupied by this item, where 0 refers to the first column. Note that the number of columns is always specified by the numColumns field, regardless of how many items are in the data model.\nFor example, if the numColumns field is set to 3, Y would be set to 0, 1 or 2.',
+                            name: 'Y',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'When the fixedLayout field is set to true, this specifies how many columns the grid item occupies. If not specified, the default value of 1 is used.\nFor example, if the numColumns field were set to 3 and a grid item is to occupy the rightmost two columns, X would be set to 1 and W would be set to 2.',
+                            name: 'W',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'When the fixedLayout field is set to true, this specifies how many rows the grid item occupies. If not specified, the default value of 1 is used.\nFor example, if a grid item is to occupy the the third, fourth and fifth rows, Y would be set to 2 and H would be set to 3.',
+                            name: 'H',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'Overrides the `caption1NumLines` field for this section of the grid, allowing different sections to display different caption layouts. If not specified, the value of the `caption1NumLines` field is used.',
+                            name: 'GridCaption1NumLines',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'Overrides the `caption2NumLines` field for this section of the grid, allowing different sections to display different caption layouts. If not specified, the value of the `caption2NumLines` field is used.',
+                            name: 'GridCaption1NumLines',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the icon to be displayed to the left of the list item label when the list item is not focused',
+                            name: 'HDListItemIconURL',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'The image file for the icon to be displayed to the left of the list item label when the list item is focused',
+                            name: 'HDListItemIconSelectedURL',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'When set to true, the default, the list item displays the checkbox icon, reflecting the item\'s current selection state. When set to false, no checkbox icon is displayed, allowing the list to contain a mix of checkbox and regular list items.',
+                            name: 'HideIcon',
+                            type: 'boolean'
+                        }
+                    ]
+                },
+                bifdisplay: {
+                    description: 'Component that displays BIFs and allows navigation.',
+                    events: [],
+                    extends: {
+                        name: 'Node',
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
+                    },
+                    fields: [
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'A color to be blended with the image displayed behind individual BIF images displayed on the screen. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place.',
+                            name: 'frameBgBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'The URI of an image to be displayed behind individual frames on the screen. The actual frame image is displayed opaquely on top of this background, so only the outer edges of this image are visible. Because of that, this background image typically appears as a border around the video frame. If the frameBgBlendColor field is set to a value other than the default, that color will be blended with the background image.',
+                            name: 'frameBgImageUri',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'WRITE_ONLY',
+                            default: 'invalid',
+                            description: 'Requests the nearest BIF to the time specified. This would normally be an offset from the current playback position. The getNearestFrame request is passed to the BifCache which uses the getNearestFrame() method implemented on all BIF storage classes. Existing BifCache functionality is then used to retrieve the bitmap data and load it into the texture manager.',
+                            name: 'getNearestFrame',
+                            type: 'time'
+                        },
+                        {
+                            accessPermission: 'READ_ONLY',
+                            default: 'invalid',
+                            description: 'Contains the URI of the requested BIF. The returned URIs will be of the form `memory://BIF%d%d`. These URIs can then be used directly in the `uri` field of a Poster SGN (or similar).',
+                            name: 'nearestFrame',
+                            type: 'string'
+                        }
+                    ],
+                    interfaces: [],
+                    name: 'BifDisplay',
+                    url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/media-playback-nodes/video.md#ui-fields'
+                },
+                trickplaybar: {
+                    description: 'The visible TrickPlayBar node.',
+                    events: [],
+                    extends: {
+                        name: 'Node',
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
+                    },
+                    fields: [
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'This is blended with the marker for the current playback position. This is typically a small vertical bar displayed in the TrickPlayBar node when the user is fast-forwarding or rewinding through the video.',
+                            name: 'currentTimeMarkerBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'system default',
+                            description: 'Sets the color of the text next to the trickPlayBar node indicating the time elapsed/remaining.',
+                            name: 'textColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'Sets the blend color of the square image in the trickPlayBar node that shows the current position, with the current direction arrows or pause icon on top. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place.',
+                            name: 'thumbBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'This color will be blended with the graphical image specified in the `filledBarImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place.',
+                            name: 'filledBarBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'The color of the trickplay progress bar to be blended with the `filledBarImageUri` for live linear streams.',
+                            name: 'liveFilledBarBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'A 9-patch or ordinary PNG of the bar that represents the completed portion of the work represented by this ProgressBar node. This is typically displayed on the left side of the track. This will be blended with the color specified by the `filledBarBlendColor` field, if set to a non-default value.',
+                            name: 'filledBarImageUri',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'This color is blended with the graphical image specified by `trackImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place.',
+                            name: 'trackBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'A 9-patch or ordinary PNG of the track of the progress bar, which surrounds the filled and empty bars. This will be blended with the color specified by the `trackBlendColor` field, if set to a non-default value.',
+                            name: 'trackImageUri',
+                            type: 'uri'
+                        }
+                    ],
+                    interfaces: [],
+                    name: 'TrickPlayBar',
+                    url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/media-playback-nodes/video.md#ui-fields'
+                },
+                progressbar: {
+                    description: 'Component that shows the progress of re-buffering, after video playback has started.',
+                    events: [],
+                    extends: {
+                        name: 'Node',
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/node.md'
+                    },
+                    fields: [
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'system default',
+                            description: 'Sets a custom width for an instance of the ProgressBar node.',
+                            name: 'width',
+                            type: 'float'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'system default',
+                            description: 'Sets a custom width for an instance of the ProgressBar node.',
+                            name: 'height',
+                            type: 'float'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'A color to be blended with the graphical image specified in the `emptyBarImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place.',
+                            name: 'emptyBarBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'A 9-patch or ordinary PNG of the bar presenting the remaining work to be done. This is typically displayed on the right side of the track, and is blended with the color specified in the `emptyBarBlendColor` field, if set to a non-default value.',
+                            name: 'emptyBarImageUri',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'This color will be blended with the graphical image specified in the `filledBarImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place.',
+                            name: 'filledBarBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'A 9-patch or ordinary PNG of the bar that represents the completed portion of the work represented by this ProgressBar node. This is typically displayed on the left side of the track. This will be blended with the color specified by the `filledBarBlendColor` field, if set to a non-default value.',
+                            name: 'filledBarImageUri',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '0xFFFFFFFF',
+                            description: 'This color is blended with the graphical image specified by `trackImageUri` field. The blending is performed by multiplying this value with each pixel in the image. If not changed from the default value, no blending will take place.',
+                            name: 'trackBlendColor',
+                            type: 'color'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'A 9-patch or ordinary PNG of the track of the progress bar, which surrounds the filled and empty bars. This will be blended with the color specified by the `trackBlendColor` field, if set to a non-default value.',
+                            name: 'trackImageUri',
+                            type: 'uri'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'A 9-patch or ordinary PNG of the track of the progress bar, which surrounds the filled and empty bars. This will be blended with the color specified by the `trackBlendColor` field, if set to a non-default value.',
+                            name: 'percentage',
+                            type: 'integer'
+                        }
+                    ],
+                    interfaces: [],
+                    name: 'ProgressBar',
+                    url: 'https://developer.roku.com/en-ca/docs/references/scenegraph/media-playback-nodes/video.md#ui-fields'
+                },
+                texteditbox: {
+                    fields: [
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: 'not specified',
+                            description: 'Specifies the size of the font in points for the text shown in the box (undocumented).',
+                            name: 'fontSize',
+                            type: 'integer'
+                        },
+                        {
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'Specifies the URI of a TrueType or OpenType font file to be used for the text shown in the box (undocumented).',
+                            name: 'fontUri',
+                            type: 'string'
+                        }
+                    ]
+                },
+                dialogbase: {
+                    name: 'DialogBase',
+                    description: 'The base dialog component.',
+                    extends: {
+                        name: 'Group',
+                        url: 'https://developer.roku.com/dev/docs/references/scenegraph/layout-group-nodes/group.md'
+                    },
+                    fields: [
+                        {
+                            name: 'backExitsDialog',
+                            accessPermission: 'READ_WRITE',
+                            type: 'boolean',
+                            default: 'true',
+                            description: 'When set to `true`, dialog will close on back button press'
+                        },
+                        {
+                            name: 'buttonFocused',
+                            type: 'int',
+                            accessPermission: 'READ_ONLY',
+                            default: '0',
+                            description: 'Indicates the index of the button that gained focus when the user moved the focus onto one of the buttons in the button area.'
+                        },
+                        {
+                            name: 'buttonSelected',
+                            accessPermission: 'READ_ONLY',
+                            default: '0',
+                            description: 'Indicates the index of the selected button when the user selects one of the buttons in the button area.',
+                            type: 'int'
+                        },
+                        {
+                            name: 'close',
+                            accessPermission: 'WRITE_ONLY',
+                            default: 'false',
+                            description: 'Dismisses the dialog. The dialog is dismissed whenever the close field is set, regardless of whether the field is set to true or false.',
+                            type: 'boolean'
+                        },
+                        {
+                            name: 'homeExitsDialog',
+                            accessPermission: 'READ_WRITE',
+                            type: 'boolean',
+                            default: 'true',
+                            description: 'When set to `true`, dialog will close on back button press'
+                        },
+                        {
+                            name: 'optionsDialog',
+                            accessPermission: 'READ_WRITE',
+                            default: 'false',
+                            description: 'If set to true, the dialog is automatically dismissed when the Options key is pressed',
+                            type: 'Boolean'
+                        },
+                        {
+                            name: 'palette',
+                            accessPermission: 'READ_WRITE',
+                            default: 'not set',
+                            description: 'Sets the color palette for the dialog\'s background, text, buttons, and other elements. By default, no palette is specified; therefore, the dialog inherits the color palette from the nodes higher in the scene graph (typically, from the dialog\'s \\[Scene\\](https://developer.roku.com/dev/docs/references/scenegraph/scene.md node, which has a \\*\\*palette\\*\\* field that can be used to consistently color the standard dialogs and keyboards in the app). The RSGPalette color values used by the StandardDialog node are as follows:\n\n| Palette Color Name | Usages |\n| --- | --- |\n| DialogBackgroundColor | Blend color for dialog\'s background bitmap. |\n| DialogItemColor | Blend color for the following items:    *   [StdDlgProgressItem\'s](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-progress-item.md spinner bitmap *   [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic   |\n| DialogTextColor | Color for the text in the following items:    *   [StdDlgTextItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "normal" or "bold". *   All [content area items](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-item-base.md, except for [StdDlgTextItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md. *   [Title area](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-title-area.mdfields). Unfocused button.   |\n| DialogFocusColor | Blend color for the following:    *   The [button area](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) focus bitmap. *   The focused scrollbar thumb.   |\n| DialogFocusItemColor | Color for the text of the focused button. |\n| DialogSecondaryTextColor | Color for the text of in the following items:    *   [StdDlgTextItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-text-item.md and [StdDlgGraphicItem](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-graphic-item.md if the **namedTextStyle** field is set to "secondary". *   Disabled button.   |\n| DialogSecondaryItemColor | Color for the following items:    *   The divider displayed below the title area. *   The unfilled portion of the [StdDlgDeterminateProgressItem\'s](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-determinate-progress-item.md graphic.   |\n| DialogInputFieldColor | The blend color for the text edit box background bitmap for keyboards used inside dialogs. |\n| DialogKeyboardColor | The blend color for the keyboard background bitmap for keyboards used inside dialogs |\n| DialogFootprintColor | The blend color for the following items:    *   The button focus footprint bitmap that is displayed when the [button area](https://developer.roku.com/dev/docs/references/scenegraph/standard-dialog-framework-nodes/std-dlg-button-area.mdfields) does not have focus. *   Unfocused scrollbar thumb and scrollbar track.   |',
+                            type: 'RSGPalette node'
+                        },
+                        {
+                            name: 'title',
+                            accessPermission: 'READ_WRITE',
+                            default: '""',
+                            description: 'The title to be displayed at the top of the dialog.',
+                            type: 'string'
+                        },
+                        {
+                            name: 'wasClosed',
+                            accessPermission: 'READ_WRITE',
+                            default: 'N/A',
+                            description: 'Set when the dialog has been closed. The field is set when the dialog close field is set, when the Back or Home key has been pressed, when the Options key has been pressed if the optionsDialog field is set to true, and when the dialog is dismissed because another dialog was displayed',
+                            type: 'Event'
+                        },
+                        {
+                            name: 'width',
+                            accessPermission: 'READ_WRITE',
+                            default: '-1.0',
+                            description: 'Specifies the width of the dialog. By default, this value is pulled from the system theme',
+                            type: 'float'
+                        }
+                    ]
+                },
+                arraygrid: {
+                    fields: [
+                        {
+                            accessPermission: 'READ_ONLY',
+                            default: 'false',
+                            description: 'When the list or grid is scrolling, is set to true (undocumented).',
+                            name: 'scrollingStatus',
+                            type: 'boolean'
+                        }
+                    ]
+                },
+                dialog: {
+                    extends: {
+                        name: 'DialogBase'
+                    }
+                },
+                standarddialog: {
+                    extends: {
+                        name: 'DialogBase'
+                    }
+                }
             },
-            components: {},
+            components: {
+                rourltransfer: {
+                    name: 'roUrlTransfer',
+                    methods: [{
+                        description: 'Sets the roMessagePort to be used to receive events',
+                        isDeprecated: true,
+                        deprecatedDescription: 'Use .SetMessagePort instead. Some legacy objects still implement the older `SetPort` function, but apps should not be using it.',
+                        name: 'SetPort',
+                        params: [
+                            {
+                                'default': null,
+                                'description': 'The port to be used to receive events.',
+                                'isRequired': true,
+                                'name': 'port',
+                                'type': 'Object'
+                            }
+                        ],
+                        returnType: 'Void',
+                        returnDescription: undefined
+                    }]
+                },
+                roregion: {
+                    name: 'roRegion',
+                    interfaces: [{
+                        name: 'ifDraw2D',
+                        url: 'https://developer.roku.com/dev/docs/references/brightscript/interfaces/ifdraw2d.md'
+                    }]
+                }
+            } as Record<string, Partial<BrightScriptComponent> & { name: string }>,
             events: {},
-            interfaces: {}
+            interfaces: {
+                ifsgnodechildren: {
+                    methods: [{
+                        name: 'update',
+                        description: 'Each roAssociativeArray in the roArray is mapped to a node in the `children` field name of the calling node.',
+                        params: [{
+                            default: null,
+                            description: 'Array of key-value pairs corresponding to the node fields to be set',
+                            isRequired: true,
+                            name: 'fields',
+                            type: 'roArray'
+                        }, {
+                            default: false,
+                            description: 'optional (default = false). If true, new nodes will be added to the `children` field',
+                            isRequired: false,
+                            name: 'addFields',
+                            type: 'Boolean'
+                        }],
+                        returnType: 'Void'
+                    }]
+                },
+                ifsocketasync: {
+                    methods: [{
+
+                        description: 'Returns the message port (if any) currently associated with the object',
+                        name: 'GetMessagePort',
+                        params: [],
+                        returnDescription: 'The message port.',
+                        returnType: 'Object'
+
+                    }, {
+                        description: 'Sets the roMessagePort to be used to receive events.',
+                        name: 'SetMessagePort',
+                        params: [
+                            {
+                                default: null,
+                                description: 'The port to be used to receive events.',
+                                isRequired: true,
+                                name: 'port',
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Void'
+                    }]
+                },
+                ifsystemlog: {
+                    methods: [{
+                        description: 'Returns the message port (if any) currently associated with the object',
+                        name: 'GetMessagePort',
+                        params: [],
+                        returnDescription: 'The message port.',
+                        returnType: 'Object'
+                    }, {
+                        description: 'Sets the roMessagePort to be used to receive events.',
+                        name: 'SetMessagePort',
+                        params: [
+                            {
+                                default: null,
+                                description: 'The port to be used to receive events.',
+                                isRequired: true,
+                                name: 'port',
+                                type: 'Object'
+                            }
+                        ],
+                        returnType: 'Void'
+                    }]
+                },
+                ifarrayslice: {
+                    methods: [{
+                        description: 'Returns a new array object with a shallow copy of the specified portion of the array.\n\nThe **start_pos** and **end_pos** fields specify the 0-based indices of items in the array, where the **end_pos** field represents the position **past** the last element to be copied.',
+                        name: 'Slice',
+                        params: [
+                            {
+                                default: null,
+                                description: 'The 0-based index of first element to copy. A negative index specifies an offset from the end of the array. The default value is 0.',
+                                isRequired: false,
+                                name: 'start_pos',
+                                type: 'integer'
+                            },
+                            {
+                                default: null,
+                                description: 'The 0-based index past last element to copy. A negative index indicates an offset from the end of the array. The default value is the array length.',
+                                isRequired: false,
+                                name: 'end_pos',
+                                type: 'integer'
+                            }
+                        ],
+                        returnDescription: 'Shallow copy of specified portion of the array',
+                        returnType: 'Object'
+                    }]
+                }
+            }
+        };
+
+        const nodeChanges = Object.keys(docMerges.nodes);
+        const componentChanges = Object.keys(docMerges.components);
+        const interfaceChanges = Object.keys(docMerges.interfaces);
+        const eventChanges = Object.keys(docMerges.events);
+
+        console.log('Merging in doc changes for nodes: ', nodeChanges.join(', '));
+        console.log('Merging in doc changes for components: ', componentChanges.join(', '));
+        console.log('Merging in doc changes for interfaces: ', interfaceChanges.join(', '));
+        console.log('Merging in doc changes for events: ', eventChanges.join(', '));
+        this.result = deepmerge(this.result, docMerges);
+
+        fixFieldByName(this.result.nodes.vector2dfieldinterpolator, 'keyValue', { type: 'array of vector2d' });
+
+        // fix all overloaded methods in interfaces
+        for (const ifaceKey in this.result.interfaces) {
+            const iface = this.result.interfaces[ifaceKey];
+            const overloadedMethods = new Set<string>();
+            const methodDefs = new Set<string>();
+            for (const method of iface.methods) {
+                const lowerMethodName = method.name.toLowerCase();
+                if (methodDefs.has(lowerMethodName)) {
+                    overloadedMethods.add(lowerMethodName);
+                } else {
+                    methodDefs.add(lowerMethodName);
+                }
+            }
+
+            for (const methodName of overloadedMethods) {
+                fixOverloadedMethod(iface, methodName);
+            }
+
+        }
+
+        //fix roSGNodeContentNode overloads
+        fixOverloadedField(this.result.nodes.contentnode, 'actors');
+        fixOverloadedField(this.result.nodes.contentnode, 'categories');
+    }
+}
+
+function fixFieldByName(component: SceneGraphNode, fieldName: string, override: Partial<SceneGraphNodeField>) {
+    let fieldToChangeIndex = component.fields.findIndex((field) => {
+        return field.name.toLowerCase() === fieldName.toLowerCase();
+    });
+    if (fieldToChangeIndex >= 0) {
+        component.fields[fieldToChangeIndex] = deepmerge(component.fields[fieldToChangeIndex], override);
+    }
+}
+
+function fixOverloadedMethod(iface: RokuInterface, funcName: string) {
+    const originalOverloads = iface.methods.filter(method => method.name.toLowerCase() === funcName.toLowerCase());
+    if (originalOverloads.length === 0) {
+        console.error('Could not fix overloaded method - no methods', funcName);
+        return;
+    } else if (originalOverloads.length === 1) {
+        console.log('No need to fix overloaded method - just one method', funcName);
+        return;
+    }
+
+    const descriptions: string[] = [];
+    const returnDescriptions: string[] = [];
+    const returnTypes: string[] = [];
+    for (const originalOverload of originalOverloads) {
+        if (!descriptions.includes(originalOverload.description)) {
+            descriptions.push(originalOverload.description);
+        }
+        if (!returnDescriptions.includes(originalOverload.returnDescription)) {
+            returnDescriptions.push(originalOverload.returnDescription);
+        }
+        if (!returnTypes.map(rt => rt.toLowerCase()).includes(originalOverload.returnType.toLowerCase())) {
+            returnTypes.push(originalOverload.returnType);
+        }
+    }
+
+    const mergedFunc: Func = {
+        name: originalOverloads[0].name,
+        params: [],
+        description: `**OVERLOADED METHOD**\n\n` + descriptions.join('\n\n or \n\n'),
+        returnType: returnTypes.length > 0 ? returnTypes.join(' or ') : '',
+        returnDescription: returnDescriptions.length > 0 ? returnDescriptions.join('\n\n or \n\n') : ''
+    };
+
+    const maxParamsInAnyOverload = Math.max(...originalOverloads.map(x => x.params.length));
+    for (let i = 0; i < maxParamsInAnyOverload; i++) {
+        const paramNames: string[] = [];
+        let paramIsRequired = true;
+        const paramDescriptions: string[] = [];
+        const paramDefaults: string[] = [];
+        const paramTypes: string[] = [];
+
+        for (const originalMethod of originalOverloads) {
+            let p = originalMethod.params[i];
+            if (p) {
+                if (!paramNames.includes(p.name)) {
+                    paramNames.push(p.name);
+                }
+                if (!paramDescriptions.includes(p.description)) {
+                    paramDescriptions.push(p.description);
+                }
+                if (p.default && !paramDefaults.includes(p.default)) {
+                    paramDefaults.push(p.default);
+                }
+                const pTypes = Array.isArray(p.type) ? p.type : [p.type];
+                for (const pType of pTypes) {
+                    if (!paramTypes.includes(pType)) {
+                        paramTypes.push(pType);
+                    }
+                }
+                paramIsRequired = paramIsRequired && p.isRequired;
+            } else {
+                paramIsRequired = false;
+            }
+        }
+        // camelCase param names
+        let mergedParamName = paramNames.map((name, index) => {
+            return index === 0 ? name : name.charAt(0).toUpperCase() + name.slice(1);
+        }).join('Or');
+
+        mergedFunc.params.push({
+            name: mergedParamName,
+            description: paramDescriptions.join(' OR '),
+            default: paramDefaults.length > 0 ? paramDefaults.join(' or ') : null,
+            isRequired: paramIsRequired,
+            type: paramTypes.join(' or ')
         });
     }
+    // remove existing
+    iface.methods = iface.methods.filter(method => method.name.toLowerCase() !== funcName.toLowerCase());
+    // add to list
+    iface.methods.push(mergedFunc);
+    console.log('Fixed overloaded method', `${iface.name}.${funcName}`);
 }
 
-let cache: Record<string, string>;
-function loadCache() {
-    const cachePath = s`${__dirname}/.cache.json`;
-    if (fsExtra.pathExistsSync(cachePath)) {
-        cache = fsExtra.readJsonSync(cachePath);
+function fixOverloadedField(node: SceneGraphNode, fieldName: string) {
+    const fieldsWithName = node.fields.filter(f => f.name.toLowerCase() === fieldName.toLowerCase());
+    if (fieldsWithName.length < 2) {
+        return;
+    }
+    const filteredFields = node.fields.filter(f => f.name.toLowerCase() !== fieldName.toLowerCase());
+
+    const unionfield = fieldsWithName[0];
+
+    for (let i = 1; i < fieldsWithName.length; i++) {
+        unionfield.description += ` or ${fieldsWithName[i].description}`;
+        unionfield.type += ` or ${fieldsWithName[i].type}`;
+    }
+    filteredFields.push(unionfield);
+
+    node.fields = filteredFields;
+}
+
+
+function fixMethod(iface: RokuInterface, funcName: string, mergeData: Func) {
+    const index = iface?.methods.findIndex(method => method.name.toLowerCase() === funcName.toLowerCase());
+    if (index >= 0) {
+        iface.methods[index] = deepmerge(iface.methods[index], mergeData);
     } else {
-        cache = {};
+        console.error('Could not fix method', funcName);
     }
 }
 
-function saveCache() {
-    fsExtra.writeJsonSync(s`${__dirname}/.cache.json`, cache);
-}
-
-async function getJson(url: string) {
-    if (!cache[url]) {
-        console.log('Fetching from web', url);
-        cache[url] = (await phin(url)).body.toString();
-        saveCache();
+/**
+ * Log what was added, removed, or changed in data.json compared to the previous scrape
+ */
+function printChangeSummary(previousData: Record<string, any>, nextData: Record<string, any>) {
+    if (!previousData) {
+        return;
+    }
+    const lines = [] as string[];
+    for (const category of ['components', 'interfaces', 'events', 'nodes']) {
+        const previous = previousData[category] ?? {};
+        const next = nextData[category] ?? {};
+        const names = [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort();
+        const categoryLines = [] as string[];
+        for (const name of names) {
+            if (!previous[name]) {
+                categoryLines.push(`  + ${next[name].name ?? name}`);
+            } else if (!next[name]) {
+                categoryLines.push(`  - ${previous[name].name ?? name}`);
+            } else if (JSON.stringify(previous[name]) !== JSON.stringify(next[name])) {
+                categoryLines.push(`  ~ ${next[name].name ?? name}: ${getMemberChanges(previous[name], next[name]).join(', ')}`);
+            }
+        }
+        if (categoryLines.length > 0) {
+            lines.push(`${category}:`, ...categoryLines);
+        }
+    }
+    if (lines.length === 0) {
+        console.log('\nNo changes to data.json. If you expected changes, run `npm run rescrape-roku-docs` to fetch the latest docs.');
     } else {
-        console.log('Fetching from cache', url);
+        console.log('\nChanges to data.json:\n' + lines.join('\n'));
     }
-    return JSON.parse(cache[url]);
 }
 
-function getDocUrl(docRelativePath: string) {
-    if (docRelativePath) {
-        return `https://developer.roku.com${docRelativePath}`;
+/**
+ * Describe how a component/interface/event/node changed. Lists of named items (methods, fields, etc) report which items were added, removed or changed
+ */
+function getMemberChanges(previous: Record<string, any>, next: Record<string, any>) {
+    const result = [] as string[];
+    const keys = [...new Set([...Object.keys(previous), ...Object.keys(next)])].sort();
+    for (const key of keys) {
+        const previousValue = previous[key];
+        const nextValue = next[key];
+        if (JSON.stringify(previousValue) === JSON.stringify(nextValue)) {
+            continue;
+        }
+        const isNamedList = (value: any) => Array.isArray(value) && value.every(x => typeof x?.name === 'string');
+        if (isNamedList(previousValue ?? []) && isNamedList(nextValue ?? [])) {
+            const previousItems = new Map<string, any>((previousValue ?? []).map(x => [x.name, x]));
+            const nextItems = new Map<string, any>((nextValue ?? []).map(x => [x.name, x]));
+            for (const [name, item] of nextItems) {
+                if (!previousItems.has(name)) {
+                    result.push(`+${key}.${name}`);
+                } else if (JSON.stringify(previousItems.get(name)) !== JSON.stringify(item)) {
+                    result.push(`~${key}.${name}`);
+                }
+            }
+            for (const name of previousItems.keys()) {
+                if (!nextItems.has(name)) {
+                    result.push(`-${key}.${name}`);
+                }
+            }
+        } else {
+            result.push(`~${key}`);
+        }
     }
+    return result;
+}
+
+const devDocRepoUrl = 'https://gitlab.com/rokudev/dev-doc.git';
+const devDocBranch = 'v2.0';
+const docUrlBase = 'https://developer.roku.com/dev/docs/';
+const referencesDocPath = 'docs/REFERENCES';
+//ContentNode fields live in a separate doc outside of REFERENCES
+const contentMetadataDocPath = 'docs/DEVELOPER/getting-started/architecture/content-metadata.md';
+
+/**
+ * Get the paths the scraper needs that are missing from a dev-doc checkout
+ */
+function getMissingDocPaths(docsDir: string) {
+    return [referencesDocPath, contentMetadataDocPath].filter(x => !fsExtra.pathExistsSync(s`${docsDir}/${x}`));
+}
+
+/**
+ * Make sure there's a local copy of the roku dev-doc repo (https://gitlab.com/rokudev/dev-doc), and return its path.
+ * - `--docs-dir <path>` uses an existing checkout instead of cloning
+ * - otherwise the cached clone in `scripts/.dev-doc` is updated to the latest docs
+ * - `--refresh` throws away the cached clone and re-clones it
+ */
+function ensureDocsRepo() {
+    const args = process.argv.slice(2);
+    const docsDirIndex = args.indexOf('--docs-dir');
+    if (docsDirIndex > -1) {
+        const docsDir = path.resolve(args[docsDirIndex + 1] ?? '');
+        const missing = getMissingDocPaths(docsDir);
+        if (missing.length > 0) {
+            throw new Error(`--docs-dir "${docsDir}" is missing ${missing.join(', ')}`);
+        }
+        return docsDir;
+    }
+
+    const docsDir = s`${__dirname}/.dev-doc`;
+    if (args.includes('--refresh')) {
+        fsExtra.removeSync(docsDir);
+    }
+    if (getMissingDocPaths(docsDir).length > 0) {
+        fsExtra.removeSync(docsDir);
+        console.log(`Cloning ${devDocRepoUrl}#${devDocBranch} into ${docsDir}`);
+        try {
+            const run = (command: string) => execSync(command, { cwd: docsDir, stdio: 'inherit' });
+            fsExtra.ensureDirSync(docsDir);
+            run(`git clone --depth 1 --branch ${devDocBranch} --filter=blob:none --sparse ${devDocRepoUrl} .`);
+            run(`git sparse-checkout set ${referencesDocPath} ${path.posix.dirname(contentMetadataDocPath)}`);
+        } catch (e) {
+            fsExtra.removeSync(docsDir);
+            throw new Error(`Unable to clone ${devDocRepoUrl}. Check your network connection, or pass --docs-dir <path> to use an existing checkout of the roku dev-doc repo.\n${e?.message}`);
+        }
+    } else {
+        //pull the latest docs into the cached clone
+        console.log(`Updating cached docs in ${docsDir}`);
+        try {
+            const run = (command: string) => execSync(command, { cwd: docsDir, stdio: 'inherit' });
+            run(`git fetch --depth 1 origin ${devDocBranch}`);
+            run('git reset --hard FETCH_HEAD');
+        } catch (e) {
+            console.warn(`Unable to update the cached docs, so using them as-is (run with --refresh to re-clone).\n${e?.message}`);
+        }
+    }
+    //if these are missing now, roku probably moved them and this script needs updating
+    const missing = getMissingDocPaths(docsDir);
+    if (missing.length > 0) {
+        throw new Error(`The dev-doc repo is missing ${missing.join(', ')}. Roku may have moved these docs, so scripts/scrape-roku-docs.ts needs to be updated with their new location.`);
+    }
+    const commit = execSync('git rev-parse HEAD', { cwd: docsDir }).toString().trim();
+    console.log(`Using dev-doc commit ${commit}`);
+    return docsDir;
+}
+
+/**
+ * Parse the (very simple) yaml frontmatter at the top of a dev-doc markdown file. Only top-level scalar values are kept
+ */
+function parseFrontmatter(text: string) {
+    const attributes = {} as Record<string, string>;
+    const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+    if (!match) {
+        return { attributes: attributes, body: text };
+    }
+    for (const line of match[1].split(/\r?\n/)) {
+        const lineMatch = /^([a-z][\w-]*):\s*(.*?)\s*$/i.exec(line);
+        if (lineMatch) {
+            attributes[lineMatch[1]] = lineMatch[2].replace(/^(['"])(.*)\1$/, '$2').trim();
+        }
+    }
+    return { attributes: attributes, body: text.substring(match[0].length) };
+}
+
+/**
+ * Recursively find all markdown files in a directory
+ */
+function getMarkdownFiles(dir: string): string[] {
+    const result = [] as string[];
+    for (const entry of fsExtra.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = s`${dir}/${entry.name}`;
+        if (entry.isDirectory()) {
+            result.push(...getMarkdownFiles(entryPath));
+        } else if (entry.name.endsWith('.md')) {
+            result.push(entryPath);
+        }
+    }
+    return result;
+}
+
+/**
+ * Get the slug (i.e. `rowebsocket`) for a dev-doc file path or doc url
+ */
+function getDocSlug(docPath: string) {
+    return path.basename(docPath).replace(/\.md$/i, '').toLowerCase();
+}
+
+/**
+ * Some docs have the wrong (or a less specific) title in their frontmatter (i.e. `ifwebsocket.md` has the title `roWebSocket`).
+ * Scan every link across the docs (`[ifWebSocket](doc:ifwebsocket)`) to find the properly-cased name for each slug.
+ */
+function getProperNamesFromLinks(filePaths: string[]) {
+    //slug -> (name -> count)
+    const counts = new Map<string, Map<string, number>>();
+    for (const filePath of filePaths) {
+        const text = fsExtra.readFileSync(filePath).toString();
+        const regexp = /\[\**([\w.]+?)\**\]\(doc:([\w-]+)[^)]*\)/g;
+        let match: RegExpExecArray;
+        while (match = regexp.exec(text)) {
+            const slug = match[2].toLowerCase();
+            if (match[1].toLowerCase() === slug) {
+                const names = counts.get(slug) ?? new Map<string, number>();
+                names.set(match[1], (names.get(match[1]) ?? 0) + 1);
+                counts.set(slug, names);
+            }
+        }
+    }
+    //keep the most commonly-used spelling for each slug
+    const result = new Map<string, string>();
+    for (const [slug, names] of counts) {
+        result.set(slug, [...names].sort((a, b) => b[1] - a[1])[0][0]);
+    }
+    return result;
+}
+
+/**
+ * Get the name for a doc. Usually this is the frontmatter title, but some titles are wrong (`ifwebsocket.md` is titled `roWebSocket`)
+ * or have lost their casing (`Ifrenderthreadqueue`, `IfUtils`). In those cases, use the most common spelling from links to this doc.
+ */
+function getDocTitle(filePath: string, frontmatter: Record<string, string>, properNames: Map<string, string>) {
+    const slug = getDocSlug(filePath);
+    let title = frontmatter.title?.trim();
+    //brightscript components, interfaces and events always start with a lower case `ro` or `if`
+    const isBrightScriptDoc = /\/brightscript\//i.test(filePath.replace(/\\/g, '/'));
+    if (isBrightScriptDoc && (/^(Ro|If)[A-Z]/.test(title) || /^(Ro|If)[a-z]+$/.test(title))) {
+        title = title.charAt(0).toLowerCase() + title.substring(1);
+    }
+    const titleMatchesSlug = title?.toLowerCase().replace(/\s+/g, '') === slug.replace(/-/g, '');
+    //an all-lowercase title has lost its casing
+    if (titleMatchesSlug && title !== title.toLowerCase()) {
+        return title;
+    }
+    return properNames.get(slug) ?? title ?? slug;
+}
+
+/**
+ * Markdown html blocks end at the first blank line, so blank lines inside an html `<table>` cause the rest of the table to be parsed as markdown.
+ * Remove those blank lines so the whole table stays a single html block.
+ */
+function removeBlankLinesInsideHtmlTables(markdown: string) {
+    const result = [] as string[];
+    let depth = 0;
+    for (const line of markdown.split(/\r?\n/)) {
+        if (depth > 0 && line.trim() === '') {
+            continue;
+        }
+        result.push(line);
+        depth += (line.match(/<table\b/gi) ?? []).length - (line.match(/<\/table>/gi) ?? []).length;
+        depth = Math.max(depth, 0);
+    }
+    return result.join('\n');
+}
+
+/**
+ * Convert the readme.io/MDX flavored markdown from the dev-doc repo into plain markdown + html
+ */
+function normalizeDevDocMarkdown(markdown: string) {
+    return removeBlankLinesInsideHtmlTables(markdown)
+        //<HTMLBlock>{`...`}</HTMLBlock>
+        .replace(/<HTMLBlock>\{`([\s\S]*?)`\}<\/HTMLBlock>/g, '$1')
+        //<Anchor href="url">text</Anchor>
+        .replace(/<Anchor\b[^>]*?\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/Anchor>/g, '[$2]($1)')
+        //<Image alt="..." src="..." />
+        .replace(/<Image\b[^>]*?\balt="([^"]*)"[^>]*?\bsrc="([^"]*)"[^>]*\/>/g, '![$1]($2)')
+        .replace(/<(\/?)Table>/g, '<$1table>')
+        //jsx style attributes
+        .replace(/\s*style=\{\{[^}]*\}\}/g, '')
+        //doc links (`doc:slug`, plus the occasional `docs:slug` typo and site-relative `/dev/docs/slug`)
+        .replace(/\((?:docs?:\s*|\/dev\/docs\/)([\w-]+)/g, `(${docUrlBase}$1`)
+        .replace(/href="(?:docs?:\s*|\/dev\/docs\/)([\w-]+)/g, `href="${docUrlBase}$1`);
+}
+
+/**
+ * Get the public url for a doc. Handles dev-doc file paths, `doc:slug` links, and old `/docs/references/.../slug.md` paths
+ */
+function getDocUrl(docPath: string) {
+    if (!docPath) {
+        return undefined;
+    }
+    const relativeMatch = /^(?:docs?:\s*|\/dev\/docs\/)(.*)$/.exec(docPath);
+    if (relativeMatch) {
+        return docUrlBase + relativeMatch[1];
+    }
+    if (/^https?:/.test(docPath)) {
+        return normalizeDocUrl(docPath);
+    }
+    if (/\.md(#.*)?$/i.test(docPath)) {
+        const [filePath, hash] = docPath.split('#');
+        return docUrlBase + getDocSlug(filePath) + (hash ? `#${hash}` : '');
+    }
+    return docPath;
+}
+
+/**
+ * Convert old-style roku doc urls (`https://developer.roku.com/en-ca/docs/references/scenegraph/node.md#fields`)
+ * to the new style (`https://developer.roku.com/dev/docs/node#fields`)
+ */
+function normalizeDocUrl(url: string) {
+    return url.replace(
+        /https:\/\/developer\.roku\.com(?:\/[a-z]{2}-[a-z]{2})?(?:\/dev)?\/docs\/references\/[\w\/-]*?([\w-]+)\.md/gi,
+        (_, slug: string) => docUrlBase + slug.toLowerCase()
+    );
 }
 
 function deepSearch<T = any>(object, key, predicate): T {
@@ -797,6 +2060,7 @@ function deepSearch<T = any>(object, key, predicate): T {
         return object;
     }
 
+    // eslint-disable-next-line @typescript-eslint/prefer-for-of
     for (let i = 0; i < Object.keys(object).length; i++) {
         let value = object[Object.keys(object)[i]];
         if (typeof value === 'object' && value) {
@@ -813,19 +2077,9 @@ function repairMarkdownLinks(text: string) {
     if (typeof text !== 'string') {
         return text;
     }
-    const regexp = /\((\/docs\/references\/.*?.md)/g;
-    let match: RegExpExecArray;
-    const matches = [] as RegExpExecArray[];
-    while (match = regexp.exec(text)) {
-        matches.push(match);
-    }
-
-    //process the matches in reverse to preserve string indexes
-    for (const match of matches.reverse()) {
-        //+1 to step past the opening paren
-        text = text.substring(0, match.index + 1) + getDocUrl(match[1]) + text.substring(match.index + 1 + match[0].length);
-    }
-    return text;
+    return normalizeDocUrl(
+        text.replace(/\((\/docs\/references\/.*?\.md)/g, (_, docPath: string) => `(${getDocUrl(docPath)}`)
+    );
 }
 
 /**
@@ -853,7 +2107,7 @@ function objectKeySorter(key, value) {
  */
 function chooseMoreSpecificType(typeOne: string | string[] = 'dynamic', typeTwo: string | string[] = 'dynamic'): string | string[] {
 
-    // deals with issue where it says "roScreen or roBitmap", etc
+    // deals with issue where it says "roScreen or roBitmap', etc
     // also when there is a problematic space, eg "roAssoc Array"
     const splitRegex = /,|\sor\s/;
     if (typeof typeOne === 'string') {
@@ -884,7 +2138,7 @@ function chooseMoreSpecificType(typeOne: string | string[] = 'dynamic', typeTwo:
     } else if (typeOneArray.length === 1 && typeTwoArray.length === 1) {
         // both have one type
         if (typeOneArray[0].toLowerCase() === 'object' && typeTwoArray[0].toLowerCase().startsWith('ro')) {
-            // the first type is "Object", but is more specific in second type
+            // the first type is "Object', but is more specific in second type
             return getSingle(typeTwoArray);
         }
         if (typeTwoArray[0].toLowerCase() === 'object') {
@@ -903,6 +2157,14 @@ function convertHTMLTable(description: string): string {
 }
 
 /**
+ * Get the header names of a markdown table, lower-cased and without any markdown emphasis or code marks
+ * (some docs bold their headers, like `| **Field** | **Type** |`), so they can be compared and used as keys
+ */
+function getTableHeaders(table: marked.Tokens.Table) {
+    return table?.header?.map(x => x.text.trim().replace(/^[*_`]+|[*_`]+$/g, '').trim().toLowerCase());
+}
+
+/**
  * A class to help manage the parsed markdown tokens
  */
 class TokenManager {
@@ -910,10 +2172,29 @@ class TokenManager {
     public markdown: string;
     public tokens: marked.TokensList;
 
-    public async process(url: string) {
-        this.html = (await getJson(url)).content;
-        this.markdown = turndownService.turndown(this.html);
-        this.tokens = marked.lexer(this.markdown);
+    /**
+     * @param filePath path to the dev-doc markdown file
+     * @param title the name of the doc. Defaults to the frontmatter title
+     */
+    public async process(filePath: string, title?: string) {
+        try {
+            const { attributes, body } = parseFrontmatter(
+                (await fsExtra.readFile(filePath)).toString()
+            );
+            //the old CMS docs had the title as an h1, and the rest of this script depends on that
+            title = title ?? attributes.title?.trim() ?? getDocSlug(filePath);
+            //some docs repeat the title as an h2 at the top, which would hide the description (which is the content between the h1 and the next heading)
+            const content = normalizeDevDocMarkdown(body).replace(/^\s*##\s+(.*)\r?\n/, (match, heading: string) => {
+                return heading.trim().toLowerCase() === title.toLowerCase() ? '' : match;
+            });
+            const markdown = `# ${title}\n\n${content}`;
+            //round-trip through html so inline html tables get converted into markdown tables, just like the old CMS html docs
+            this.html = marked.parse(markdown);
+            this.markdown = turndownService.turndown(this.html);
+            this.tokens = marked.lexer(this.markdown);
+        } catch (e) {
+            console.error('Unable to process doc: ', filePath, e);
+        }
         return this;
     }
 
@@ -935,14 +2216,14 @@ class TokenManager {
     /**
      * Scan the tokens and find the first the top-level table based on the header names
      */
-    public getTableByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: EndTokenMatcher): TableEnhanced {
+    public getTableByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: TokenMatcher): TableEnhanced {
         let startIndex = this.tokens.indexOf(startAt);
         startIndex = startIndex > -1 ? startIndex : 0;
 
         for (let i = startIndex + 1; i < this.tokens.length; i++) {
             const token = this.tokens[i];
             if (token?.type === 'table') {
-                const headers = token?.header?.map(x => x.text.toLowerCase());
+                const headers = getTableHeaders(token);
                 if (
                     headers.every(x => searchHeaders.includes(x)) &&
                     searchHeaders.every(x => headers.includes(x))
@@ -957,11 +2238,45 @@ class TokenManager {
     }
 
     /**
+     * Scan the tokens and find the all top-level tables based on the header names
+     */
+    public getAllTablesByHeaders(searchHeaders: string[], startAt?: Token, endTokenMatcher?: TokenMatcher, headingMatcher?: TokenMatcher): TableEnhanced[] {
+        let startIndex = this.tokens.indexOf(startAt);
+        startIndex = startIndex > -1 ? startIndex : 0;
+        const tables = [];
+        let lastHeading: Token;
+        for (let i = startIndex + 1; i < this.tokens.length; i++) {
+            const token = this.tokens[i];
+            if (token.type === 'heading') {
+                lastHeading = token;
+            }
+            if (token?.type === 'table') {
+                if (headingMatcher) {
+                    if (!headingMatcher(lastHeading)) {
+                        continue;
+                    }
+                }
+                const headers = getTableHeaders(token);
+                if (
+                    headers.every(x => searchHeaders.includes(x)) &&
+                    searchHeaders.every(x => headers.includes(x))
+                ) {
+                    tables.push(token as TableEnhanced);
+                }
+            }
+            if (endTokenMatcher?.(token) === true) {
+                break;
+            }
+        }
+        return tables;
+    }
+
+    /**
      * Convert a markdown table token into an array of objects with the headers as keys, and the cell values as values
      */
     public tableToObjects(table: marked.Tokens.Table) {
         const result = [] as Record<string, string>[];
-        const headers = table?.header?.map(x => x.text.toLowerCase());
+        const headers = getTableHeaders(table);
         for (const row of table?.rows ?? []) {
             const data = {} as Record<string, string>;
             for (let i = 0; i < headers.length; i++) {
@@ -989,6 +2304,26 @@ class TokenManager {
                     const link = deepSearch(item, 'type', (key, value) => value === 'link');
                     result.push({
                         name: link.text,
+                        url: getDocUrl(link.href)
+                    });
+                }
+                //some docs just have a paragraph with one or more links instead of a list
+            } else if (list?.type === 'paragraph') {
+                //links can be nested inside bold/italic tokens
+                const links = [] as marked.Tokens.Link[];
+                const collectLinks = (tokens: Token[]) => {
+                    for (const token of tokens ?? []) {
+                        if (token.type === 'link') {
+                            links.push(token as marked.Tokens.Link);
+                        } else {
+                            collectLinks((token as any).tokens);
+                        }
+                    }
+                };
+                collectLinks(list.tokens);
+                for (const link of links) {
+                    result.push({
+                        name: link.text?.replace(/^[*_]+|[*_]+$/g, ''),
                         url: getDocUrl(link.href)
                     });
                 }
@@ -1041,7 +2376,7 @@ class TokenManager {
     /**
      * Get all text found between the start token and the matched end token
      */
-    public getTokensBetween(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+    public getTokensBetween(startToken: Token, endTokenMatcher: TokenMatcher) {
         let startIndex = this.tokens.indexOf(startToken);
         startIndex = startIndex > -1 ? startIndex : 0;
 
@@ -1062,32 +2397,32 @@ class TokenManager {
     /**
      * Get join all markdown between the specified items
      */
-    public getMarkdown(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+    public getMarkdown(startToken: Token, endTokenMatcher: TokenMatcher) {
         return this.getTokensBetween(startToken, endTokenMatcher).map(x => x.raw).join('')?.trim() || undefined;
     }
 
     /**
      * Find any `available since` text between the specified items
      */
-    public getAvailableSince(startToken: Token, endTokenMatcher: EndTokenMatcher) {
+    public getAvailableSince(startToken: Token, endTokenMatcher: TokenMatcher) {
         const markdown = this.getMarkdown(startToken, endTokenMatcher);
-        const match = /available\s+since\s?(?:roku\s*os\s*)?([\d\.]+)/i.exec(markdown);
+        const match = /available\s+since\s?\[?(?:roku\s*os\s*)?([\d\.]+)/i.exec(markdown);
         if (match) {
             return match[1];
         }
     }
 
     /**
-    * Find any `is deprecated` text between the specified items
-    */
+     * Find any `is deprecated` text between the specified items
+     */
     public getDeprecatedDescription(startToken: Token, endToken: Token) {
         const deprecatedDescription = this.find<marked.Tokens.Text>(x => !!/is\s*deprecated/i.exec(x?.text), startToken, endToken)?.text;
         return deprecatedDescription;
     }
 
     /**
-    * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
-    */
+     * Sets `deprecatedDescription` and `isDeprecated` on passed in entity if `deprecated` is mentioned between the two tokens
+     */
     public setDeprecatedData(entity: PossiblyDeprecated, startToken: Token, endToken: Token) {
         entity.deprecatedDescription = this.getDeprecatedDescription(startToken, endToken);
         if (entity.deprecatedDescription) {
@@ -1116,7 +2451,8 @@ class TokenManager {
     }
 }
 
-type EndTokenMatcher = (t: Token) => boolean | undefined;
+type TokenMatcher = (t: Token) => boolean | undefined;
+
 
 interface TableEnhanced extends marked.Tokens.Table {
     tokens: {
@@ -1137,6 +2473,10 @@ interface BrightScriptComponent extends PossiblyDeprecated {
     description: string;
     constructors: Array<Signature>;
     interfaces: Reference[];
+    /**
+     * Most components only get their methods from interfaces, but occasionally we need to attach one
+     */
+    methods: Func[];
     events: Reference[];
 }
 
@@ -1191,6 +2531,7 @@ interface SceneGraphNode {
     interfaces: Reference[];
     events: Reference[];
     fields: SceneGraphNodeField[];
+    methods: Func[];
 }
 
 interface SceneGraphNodeField {
@@ -1225,6 +2566,7 @@ interface Signature {
     params: Param[];
     returnType: string;
     returnDescription: string;
+    isVariadic?: boolean;
 }
 interface ElementFilter {
     id?: string;
@@ -1235,4 +2577,3 @@ interface ElementFilter {
 
 //run the builder
 new Runner().run().catch((e) => console.error(e));
-

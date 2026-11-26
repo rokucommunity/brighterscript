@@ -2,7 +2,9 @@
 import * as yargs from 'yargs';
 import * as path from 'path';
 import { ProgramBuilder } from './ProgramBuilder';
+import type { BsConfig } from './BsConfig';
 import { DiagnosticSeverity } from 'vscode-languageserver';
+import { normalizeDiagnosticReporters } from './diagnosticUtils';
 import util from './util';
 import { LanguageServer } from './LanguageServer';
 import chalk from 'chalk';
@@ -18,37 +20,43 @@ const rl = readline.createInterface({
 let options = yargs
     .usage('$0', 'BrighterScript, a superset of Roku\'s BrightScript language')
     .help('help', 'View help information about this tool.')
-    .option('create-package', { type: 'boolean', defaultDescription: 'true', description: 'Creates a zip package. This setting is ignored when deploy is enabled.' })
-    .option('source-map', { type: 'boolean', defaultDescription: 'false', description: 'Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.' })
-    .option('allow-brighterscript-in-brightscript', { alias: 'allow-brighter-script-in-bright-script', type: 'boolean', defaultDescription: 'false', description: 'Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled..' })
+    .option('sourceMap', { type: 'boolean', defaultDescription: 'false', description: 'Enables generating sourcemap files, which allow debugging tools to show the original source code while running the emitted files.' })
+    .option('allowBrighterscriptInBrightscript', { type: 'boolean', defaultDescription: 'false', description: 'Allow brighterscript features (classes, interfaces, etc...) to be included in BrightScript (`.brs`) files, and force those files to be transpiled.' })
     .option('cwd', { type: 'string', description: 'Override the current working directory.' })
-    .option('copy-to-staging', { type: 'boolean', defaultDescription: 'true', description: 'Copy project files into the staging folder, ready to be packaged.' })
-    .option('diagnostic-level', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
+    .option('noEmit', { type: 'boolean', defaultDescription: 'false', description: 'Do not generate any output files.' })
+    .option('diagnosticLevel', { type: 'string', defaultDescription: '"warn"', description: 'Specify what diagnostic types should be printed to the console. Value can be "error", "warn", "hint", "info".' })
+    .option('diagnosticReporters', {
+        type: 'array',
+        defaultDescription: '"detailed"',
+        description: 'Specify the diagnostic reporter(s). Each value can be "detailed", "github-actions", or a template string containing placeholders like {file}, {line}, {col}, {endLine}, {endCol}, {severity}, {code}, {message}, {source}. Pass the flag multiple times (or list values after a single flag) to enable multiple reporters simultaneously.'
+    })
     .option('plugins', { type: 'array', alias: 'plugin', description: 'A list of scripts or modules to add extra diagnostics or transform the AST.' })
-    .option('deploy', { type: 'boolean', defaultDescription: 'false', description: 'Deploy to a Roku device if compilation succeeds. When in watch mode, this will deploy on every change.' })
-    .option('emit-full-paths', { type: 'boolean', defaultDescription: 'false', description: 'Emit full paths to files when encountering diagnostics.' })
+    .option('emitFullPaths', { type: 'boolean', defaultDescription: 'false', description: 'Emit full paths to files when encountering diagnostics.' })
     .option('files', { type: 'array', description: 'The list of files (or globs) to include in your project. Be sure to wrap these in double quotes when using globs.' })
-    .option('host', { type: 'string', description: 'The host used when deploying to a Roku.' })
-    .option('ignore-error-codes', { type: 'array', description: 'A list of error codes that the compiler should NOT emit, even if encountered.' })
-    .option('no-project', { type: 'boolean', defaultDescription: 'false', description: 'When set, bsconfig.json loading is disabled', alias: ['noproject', 'noProject'] })
-    .option('log-level', { type: 'string', defaultDescription: '"log"', description: 'The log level. Value can be "error", "warn", "log", "info", "debug".' })
-    .option('out-file', { type: 'string', description: 'Path to the zip folder containing the bundled project. Defaults to `./out/[YOUR_ROOT_FOLDER_NAME].zip' })
-    .option('password', { type: 'string', description: 'The password for deploying to a Roku.' })
+    .option('ignoreErrorCodes', { type: 'array', description: 'A list of error codes that the compiler should NOT emit, even if encountered.' })
+    .option('noProject', { type: 'boolean', defaultDescription: 'false', description: 'When set, bsconfig.json loading is disabled', alias: ['noproject', 'noProject'] })
+    .option('logLevel', { type: 'string', defaultDescription: '"log"', description: 'The log level. Value can be "error", "warn", "log", "info", "debug".' })
     .option('project', { type: 'string', description: 'Path to a bsconfig.json project file.' })
-    .option('retain-staging-folder', { type: 'boolean', defaultDescription: 'false', description: 'Prevent the staging folder from being deleted after creating the package.' })
-    .option('root-dir', { type: 'string', description: 'Path to the root of your project files (where the manifest lives). Defaults to current directory.' })
-    .option('staging-folder-path', { type: 'string', description: 'The path where the files should be staged (right before being zipped up).' })
-    .option('username', { type: 'string', defaultDescription: '"rokudev"', description: 'The username for deploying to a Roku.' })
-    .option('source-root', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
+    .option('rootDir', { type: 'string', description: 'Path to the root of your project files (where the manifest lives). Defaults to current directory.' })
+    .option('outDir', { type: 'string', description: 'TODO Better description The path where the transpiled files should are placed.' })
+    .option('sourceRoot', { type: 'string', description: 'Override the root directory path where debugger should locate the source files. The location will be embedded in the source map to help debuggers locate the original source files. This only applies to files found within rootDir. This is useful when you want to preprocess files before passing them to BrighterScript, and want a debugger to open the original files.' })
     .option('watch', { type: 'boolean', defaultDescription: 'false', description: 'Watch input files.' })
     .option('require', { type: 'array', description: 'A list of modules to require() on startup. Useful for doing things like ts-node registration.' })
+    .option('validate', { type: 'boolean', defaultDescription: 'true', description: 'Whether to run validation during the build. Setting to false skips all validation (diagnostics), which can speed up builds when diagnostics are already surfaced elsewhere (e.g. a running language server).' })
     .option('profile', { type: 'boolean', defaultDescription: 'false', description: 'Generate a cpuprofile report during this run' })
     .option('lsp', { type: 'boolean', defaultDescription: 'false', description: 'Run brighterscript as a language server.' })
+    .option('init', { type: 'boolean', defaultDescription: 'false', description: 'Create a new bsconfig.json file with recommended defaults in the current directory. An existing bsconfig.json file will not be overwritten.' })
     .check(argv => {
         const diagnosticLevel = argv.diagnosticLevel as string;
         //if we have the diagnostic level and it's not a known value, then fail
         if (diagnosticLevel && ['error', 'warn', 'hint', 'info'].includes(diagnosticLevel) === false) {
             throw new Error(`Invalid diagnostic level "${diagnosticLevel}". Value can be "error", "warn", "hint", "info".`);
+        }
+        const diagnosticReporters = argv.diagnosticReporters as string[] | undefined;
+        if (diagnosticReporters !== undefined) {
+            //surface preset typos at startup. this never throws: bad reporters are warned about
+            //via console.warn and ignored so the build still runs with whatever's left (or the default).
+            normalizeDiagnosticReporters(diagnosticReporters);
         }
         const cwd = path.resolve(process.cwd(), argv.cwd ?? process.cwd());
         //cli-provided plugin paths should be relative to cwd
@@ -66,9 +74,20 @@ async function main() {
         if (options.lsp) {
             const server = new LanguageServer();
             server.run();
+        } else if (options.init) {
+            const cwd = path.resolve(process.cwd(), options.cwd ?? process.cwd());
+            const targetPath = path.resolve(cwd, options.project ?? 'bsconfig.json');
+            const configPath = util.createConfigFile(cwd, options.project);
+            if (configPath) {
+                console.log(`Created a new bsconfig.json file at`, chalk.green(configPath));
+                await finalize(0);
+            } else {
+                console.error(chalk.red(`A bsconfig.json file already exists at "${targetPath}". No changes were made.`));
+                await finalize(1);
+            }
         } else {
             let builder = new ProgramBuilder();
-            await builder.run(<any>options);
+            await builder.run(options as unknown as BsConfig);
             //if this is a single run (i.e. not watch mode) and there are error diagnostics, return an error code
             const hasError = !!builder.getDiagnostics().find(x => x.severity === DiagnosticSeverity.Error);
             if (builder.options.watch) {
@@ -89,7 +108,7 @@ async function main() {
     }
 }
 
-function askQuestion(question) {
+function askQuestion(question: string) {
     return new Promise((resolve, reject) => {
         rl.question(question, (answer) => {
             resolve(answer);
@@ -138,7 +157,7 @@ function finalizeProfiling() {
                 const profileResultPath = path.join(process.cwd(), `${Date.now()}-${profileTitle}.cpuprofile`);
                 console.log(`Writing profile result to:`, chalk.green(profileResultPath));
                 const profile = v8Profiler.stopProfiling(profileTitle);
-                profile.export((error, result) => {
+                profile.export((error: Error, result: string) => {
                     fsExtra.writeFileSync(profileResultPath, result);
                     profile.delete();
                     resolve();

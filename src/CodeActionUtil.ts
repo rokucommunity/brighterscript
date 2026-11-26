@@ -1,6 +1,7 @@
 import type { Diagnostic, Position, Range, WorkspaceEdit } from 'vscode-languageserver';
 import { CodeActionKind, CodeAction, TextEdit } from 'vscode-languageserver';
-import { URI } from 'vscode-uri';
+import type { BsDiagnostic } from './interfaces';
+import util from './util';
 
 export class CodeActionUtil {
 
@@ -9,7 +10,7 @@ export class CodeActionUtil {
             changes: {}
         } as WorkspaceEdit;
         for (const change of obj.changes) {
-            const uri = URI.file(change.filePath).toString();
+            const uri = util.pathToUri(change.filePath);
 
             //create the edit changes array for this uri
             if (!edit.changes![uri]) {
@@ -23,6 +24,10 @@ export class CodeActionUtil {
                 edit.changes![uri].push(
                     TextEdit.replace(change.range, change.newText)
                 );
+            } else if (change.type === 'delete') {
+                edit.changes![uri].push(
+                    TextEdit.del(change.range)
+                );
             }
         }
         const action = CodeAction.create(obj.title, edit, obj.kind);
@@ -31,9 +36,9 @@ export class CodeActionUtil {
         return action;
     }
 
-    public serializableDiagnostics(diagnostics: Diagnostic[] | undefined) {
-        return diagnostics?.map(({ range, severity, code, source, message, relatedInformation }) => ({
-            range: range,
+    public serializableDiagnostics(diagnostics: BsDiagnostic[] | undefined): Diagnostic[] {
+        return diagnostics?.map(({ location, severity, code, source, message, relatedInformation }) => ({
+            range: location?.range,
             severity: severity,
             source: source,
             code: code,
@@ -47,10 +52,28 @@ export { CodeActionKind };
 
 export interface CodeActionShorthand {
     title: string;
-    diagnostics?: Diagnostic[];
+    diagnostics?: BsDiagnostic[];
     kind?: CodeActionKind;
     isPreferred?: boolean;
-    changes: Array<InsertChange | ReplaceChange>;
+    changes: Array<InsertChange | ReplaceChange | DeleteChange>;
+}
+
+/**
+ * Represents a single named "source fix all" action that a plugin contributes.
+ * Each action becomes a separate entry in VS Code's Source Actions menu.
+ * Plugins are responsible for merging all their changes into the `changes` array.
+ */
+export interface SourceFixAllCodeAction {
+    title: string;
+    /**
+     * The LSP code action kind. Should start with `source.fixAll`.
+     * Use a sub-kind like `source.fixAll.brighterscript.imports` to create
+     * a distinct named entry in the Source Actions menu.
+     * Defaults to `source.fixAll.brighterscript`.
+     */
+    kind?: string;
+    isPreferred?: boolean;
+    changes: Array<InsertChange | ReplaceChange | DeleteChange>;
 }
 
 export interface InsertChange {
@@ -66,5 +89,12 @@ export interface ReplaceChange {
     type: 'replace';
     range: Range;
 }
+
+export interface DeleteChange {
+    filePath: string;
+    type: 'delete';
+    range: Range;
+}
+
 
 export const codeActionUtil = new CodeActionUtil();

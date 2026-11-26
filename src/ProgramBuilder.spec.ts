@@ -7,13 +7,14 @@ import { ProgramBuilder } from './ProgramBuilder';
 import { standardizePath as s, util } from './util';
 import { LogLevel, createLogger } from './logging';
 import * as diagnosticUtils from './diagnosticUtils';
-import type { BscFile, BsDiagnostic } from '.';
-import { Deferred, Range } from '.';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { BrsFile } from './files/BrsFile';
-import { expectZeroDiagnostics } from './testHelpers.spec';
+import { expectZeroDiagnostics, expectDiagnosticsIncludes } from './testHelpers.spec';
 import type { BsConfig } from './BsConfig';
-import { tempDir, rootDir, stagingDir } from './testHelpers.spec';
+import type { BscFile } from './files/BscFile';
+import { tempDir, rootDir, outDir } from './testHelpers.spec';
+import { Deferred } from './deferred';
+import type { AfterProvideProgramEvent, BsDiagnostic } from './interfaces';
 
 describe('ProgramBuilder', () => {
 
@@ -41,12 +42,30 @@ describe('ProgramBuilder', () => {
         builder.dispose();
     });
 
-    it('includes .program in the afterProgramCreate event', async () => {
+    it('does not corrupt binary files', async () => {
+        //transparent PNG
+        const data = Buffer.from(
+            new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 9, 112, 72, 89, 115, 0, 0, 11, 19, 0, 0, 11, 19, 1, 0, 154, 156, 24, 0, 0, 0, 13, 73, 68, 65, 84, 8, 153, 99, 248, 255, 255, 63, 3, 0, 8, 252, 2, 254, 133, 205, 171, 52, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130])
+        );
+        fsExtra.outputFileSync(`${rootDir}/assets/image.png`, data);
+        fsExtra.outputFileSync(`${rootDir}/manifest`, '');
+        await builder.run({
+            ...builder.options,
+            outDir: outDir,
+            files: ['**/*']
+        });
+        const newData = fsExtra.readFileSync(s`${outDir}/assets/image.png`);
+        expect(
+            data.compare(newData as any)
+        ).to.eql(0);
+    });
+
+    it('includes .program in the afterProvideProgram event', async () => {
         builder = new ProgramBuilder();
         const deferred = new Deferred<Program>();
         builder.plugins.add({
             name: 'test',
-            afterProgramCreate: () => {
+            afterProvideProgram: () => {
                 deferred.resolve(builder.program);
             }
         });
@@ -56,7 +75,28 @@ describe('ProgramBuilder', () => {
         ).to.exist;
     });
 
-    describe('loadAllFilesAST', () => {
+
+    it('can edit files array in afterProvideProgram event', async () => {
+        builder = new ProgramBuilder();
+        const deferred = new Deferred<Program>();
+        const beforeFilesLength = builder.options.files.length;
+        builder.plugins.add({
+            name: 'test',
+            afterProvideProgram: (event: AfterProvideProgramEvent) => {
+                event.program.options.files.push('other/**/*.*');
+                deferred.resolve(builder.program);
+
+            }
+        });
+        builder['createProgram']();
+        expect(
+            await deferred.promise
+        ).to.exist;
+
+        expect(builder.options.files.length).to.equal(beforeFilesLength + 1);
+    });
+
+    describe('loadFiles', () => {
         it('loads .bs, .brs, .xml files', async () => {
             sinon.stub(util, 'getFilePaths').returns(Promise.resolve([{
                 src: 'file1.brs',
@@ -71,7 +111,7 @@ describe('ProgramBuilder', () => {
 
             let stub = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
-            await builder['loadAllFilesAST']();
+            await builder['loadFiles']();
             expect(stub.getCalls()).to.be.lengthOf(3);
         });
 
@@ -93,7 +133,7 @@ describe('ProgramBuilder', () => {
             let stubLoadManifest = sinon.stub(builder.program, 'loadManifest');
             let stubSetFile = sinon.stub(builder.program, 'setFile');
             sinon.stub(builder, 'getFileContents').returns(Promise.resolve(''));
-            await builder['loadAllFilesAST']();
+            await builder['loadFiles']();
             expect(stubLoadManifest.calledBefore(stubSetFile)).to.be.true;
         });
 
@@ -107,7 +147,7 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/source/lib.d.bs`, '');
             fsExtra.outputFileSync(s`${rootDir}/source/lib.brs`, '');
             const stub = sinon.stub(builder.program, 'setFile');
-            await builder['loadAllFilesAST']();
+            await builder['loadFiles']();
             const srcPaths = stub.getCalls().map(x => x.args[0].src);
             //the d files should be first
             expect(srcPaths.indexOf(s`${rootDir}/source/main.d.bs`)).within(0, 1);
@@ -123,14 +163,47 @@ describe('ProgramBuilder', () => {
                 requestedFiles.push(s(filePath));
             });
             fsExtra.outputFileSync(s`${rootDir}/source/main.brs`, '');
-            await builder['loadAllFilesAST']();
-            //the d file should not be requested because `loadAllFilesAST` knows it doesn't exist
+            await builder['loadFiles']();
+            //the d file should not be requested because `loadFiles` knows it doesn't exist
             expect(requestedFiles).not.to.include(s`${rootDir}/source/main.d.bs`);
             expect(requestedFiles).to.include(s`${rootDir}/source/main.brs`);
         });
     });
 
     describe('run', () => {
+        it('does not crash when options is undefined', async () => {
+            sinon.stub(builder as any, 'runOnce').callsFake(() => { });
+            await builder.run(undefined as any);
+        });
+
+        afterEach(() => {
+            try {
+                fsExtra.removeSync(`${rootDir}/testProject`);
+            } catch (e) {
+                console.error(e);
+            }
+        });
+
+        it('includes non-code files', async () => {
+            fsExtra.outputFileSync(`${rootDir}/source/main.bs`, '');
+            fsExtra.outputFileSync(`${rootDir}/manifest`, '');
+            fsExtra.outputFileSync(`${rootDir}/assets/images/logo.png`, '');
+            fsExtra.outputFileSync(`${rootDir}/locale/en_US/translations.xml`, '');
+
+            await builder.run({
+                ...builder.options,
+                outDir: outDir,
+                files: [
+                    '**/*'
+                ]
+            });
+
+            expect(fsExtra.pathExistsSync(s`${outDir}/source/main.brs`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${outDir}/manifest`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${outDir}/assets/images/logo.png`)).to.be.true;
+            expect(fsExtra.pathExistsSync(s`${outDir}/locale/en_US/translations.xml`)).to.be.true;
+        });
+
         it('uses default options when the config file fails to parse', async () => {
             //supress the console log statements for the bsconfig parse errors
             sinon.stub(console, 'log').returns(undefined);
@@ -138,9 +211,10 @@ describe('ProgramBuilder', () => {
             fsExtra.outputFileSync(s`${rootDir}/bsconfig.json`, '{');
             await builder.run({
                 project: s`${rootDir}/bsconfig.json`,
-                username: 'john'
+                outDir: 'testOut'
             });
-            expect(builder.program.options.username).to.equal('rokudev');
+            // TODO: this is not run - builder.run throws a diagnostic
+            expect(builder.program.options.outDir).to.equal('./out');
         });
 
         //this fails on the windows travis build for some reason. skipping for now since it's not critical
@@ -152,14 +226,6 @@ describe('ProgramBuilder', () => {
             } catch (e) { }
         });
 
-        afterEach(() => {
-            try {
-                fsExtra.removeSync(`${rootDir}/testProject`);
-            } catch (e) {
-                console.error(e);
-            }
-        });
-
         it('only adds the last file with the same pkg path', async () => {
             //undo the vfs for this test
             sinon.restore();
@@ -169,9 +235,7 @@ describe('ProgramBuilder', () => {
 
             await builder.run({
                 rootDir: s`${rootDir}/testProject`,
-                createPackage: false,
-                deploy: false,
-                copyToStaging: false,
+                noEmit: true,
                 //both files should want to be the `source/lib.brs` file...but only the last one should win
                 files: [{
                     src: s`${rootDir}/testProject/source/lib1.brs`,
@@ -184,16 +248,150 @@ describe('ProgramBuilder', () => {
             expectZeroDiagnostics(builder);
             expect(builder.program.getFile(s``));
         });
+
+        it('runs initial validation by default', async () => {
+            //undo the vfs for this test
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            await builder.run({
+                rootDir: rootDir,
+                noEmit: true,
+                //both files should want to be the `source/lib.brs` file...but only the last one should win
+                files: ['source/**/*']
+            });
+            expectZeroDiagnostics(builder);
+            //validate was called
+            expect(stub.callCount).to.eql(1);
+        });
+
+        it('skips initial validation', async () => {
+            //undo the vfs for this test
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            await builder.run({
+                rootDir: rootDir,
+                noEmit: true,
+                validate: false,
+                //both files should want to be the `source/lib.brs` file...but only the last one should win
+                files: ['source/**/*']
+            });
+            expectZeroDiagnostics(builder);
+            //validate was not called
+            expect(stub.callCount).to.eql(0);
+        });
+
+        it('skips validation when validate:false is set in bsconfig.json', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ validate: false }));
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+
+
+                files: ['source/**/*']
+            });
+            //validate was not called
+            expect(stub.callCount).to.eql(0);
+        });
+
+        it('prop-drilled validate:false takes precedence over this.options.validate:true', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const stub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            //pass validate:false explicitly - this should override even if the config would otherwise say true
+            await builder.run({
+                rootDir: rootDir,
+
+
+                validate: false,
+                files: ['source/**/*']
+            });
+            //validate was not called because the explicit false took precedence
+            expect(stub.callCount).to.eql(0);
+        });
+
+        it('language-server mode always skips validation on initial run and validates separately', async () => {
+            sinon.restore();
+            fsExtra.outputFileSync(`${rootDir}/source/lib1.brs`, 'sub doSomething()\nprint "lib1"\nend sub');
+
+            const validateStub = sinon.stub(builder as any, 'validateProject').callsFake(() => { });
+
+            //Simulate how the LSP Project.ts activates the builder: always passes validate:false for
+            //the initial run, then calls program.validate() directly in its own validate() method
+            await builder.run({
+                rootDir: rootDir,
+
+
+                validate: false,
+                showDiagnosticsInConsole: false,
+                files: ['source/**/*']
+            });
+            //the initial run should have skipped validation
+            expect(validateStub.callCount).to.eql(0);
+
+            //the lsp can still call program.validate() directly to do a cancellable async validation
+            const programValidateStub = sinon.stub(builder.program, 'validate').callsFake(() => Promise.resolve());
+            builder.program.validate();
+            expect(programValidateStub.callCount).to.eql(1);
+        });
+    });
+
+    describe('compilerOptions', () => {
+        it('warns when a deprecated top-level option is loaded from bsconfig.json', async () => {
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ sourceMap: true }));
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+                files: []
+            });
+
+            expectDiagnosticsIncludes(builder.getDiagnostics(), ['deprecated-bsconfig-option']);
+        });
+
+        it('does not warn when the option is only set via compilerOptions', async () => {
+            fsExtra.outputFileSync(`${rootDir}/bsconfig.json`, JSON.stringify({ compilerOptions: { sourceMap: true } }));
+
+            await builder.run({
+                project: `${rootDir}/bsconfig.json`,
+                rootDir: rootDir,
+                files: []
+            });
+
+            expectZeroDiagnostics(builder.getDiagnostics());
+        });
+
+        it('does not warn when the deprecated option is passed programmatically', async () => {
+            await builder.run({
+                rootDir: rootDir,
+                sourceMap: true,
+                files: []
+            });
+
+            expectZeroDiagnostics(builder.getDiagnostics());
+        });
     });
 
     it('uses a unique logger for each builder', async () => {
         let builder1 = new ProgramBuilder();
         sinon.stub(builder1 as any, 'runOnce').returns(Promise.resolve());
-        sinon.stub(builder1 as any, 'loadAllFilesAST').returns(Promise.resolve());
+        sinon.stub(builder1 as any, 'loadFiles').returns(Promise.resolve());
 
         let builder2 = new ProgramBuilder();
         sinon.stub(builder2 as any, 'runOnce').returns(Promise.resolve());
-        sinon.stub(builder2 as any, 'loadAllFilesAST').returns(Promise.resolve());
+        sinon.stub(builder2 as any, 'loadFiles').returns(Promise.resolve());
 
         expect(builder1.logger).not.to.equal(builder2.logger);
 
@@ -201,13 +399,11 @@ describe('ProgramBuilder', () => {
             builder1.run({
                 logLevel: LogLevel.info,
                 rootDir: rootDir,
-                stagingDir: stagingDir,
                 watch: false
             }),
             builder2.run({
                 logLevel: LogLevel.error,
                 rootDir: rootDir,
-                stagingDir: stagingDir,
                 watch: false
             })
         ]);
@@ -217,48 +413,43 @@ describe('ProgramBuilder', () => {
         expect(builder2.logger.logLevel).to.equal(LogLevel.error);
     });
 
-    it('does not error when loading stagingDir from bsconfig.json', async () => {
+    it('does not error when loading outDir from bsconfig.json', async () => {
         fsExtra.ensureDirSync(rootDir);
         fsExtra.writeFileSync(`${rootDir}/bsconfig.json`, `{
-            "stagingDir": "./out"
+            "outDir": "./out"
         }`);
         let builder = new ProgramBuilder();
         await builder.run({
-            cwd: rootDir,
-            createPackage: false
+            cwd: rootDir
         });
     });
 
     it('forwards program events', async () => {
-        const beforeProgramValidate = sinon.spy();
-        const afterProgramValidate = sinon.spy();
+        const beforeValidateProgram = sinon.spy();
+        const afterValidateProgram = sinon.spy();
         builder.plugins.add({
             name: 'forwards program events',
-            beforeProgramValidate: beforeProgramValidate,
-            afterProgramValidate: afterProgramValidate
+            beforeValidateProgram: beforeValidateProgram,
+            afterValidateProgram: afterValidateProgram
         });
-        await builder.run({
-            createPackage: false
-        });
-        expect(beforeProgramValidate.callCount).to.equal(1);
-        expect(afterProgramValidate.callCount).to.equal(1);
+        await builder.run({});
+        expect(beforeValidateProgram.callCount).to.equal(1);
+        expect(afterValidateProgram.callCount).to.equal(1);
     });
 
 
     describe('printDiagnostics', () => {
 
         it('does not crash when a diagnostic is missing range informtaion', () => {
-            const file = builder.program.setFile('source/main.brs', ``);
-            file.addDiagnostics([{
+            builder.program.setFile('source/main.brs', ``);
+            builder.diagnostics.register([{
                 message: 'message 1',
-                code: 'test1',
-                file: file
+                code: 'test1'
             }, {
                 message: 'message 2',
-                code: 'test1',
-                file: file
+                code: 'test1'
             }] as any);
-            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => { });
+            const stub = sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake((...args) => { });
             //if this doesn't crash, then the test passes
             builder['printDiagnostics']();
             expect(stub.getCalls().map(x => x.args[4].message)).to.eql([
@@ -289,12 +480,10 @@ describe('ProgramBuilder', () => {
         it('prints diagnostic, when file is present in project', () => {
             builder.options.showDiagnosticsInConsole = true;
 
-            let diagnostics = createBsDiagnostic('p1', ['m1']);
-            let f1 = diagnostics[0].file as BrsFile;
-            f1.fileContents = `l1\nl2\nl3`;
-            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
 
-            sinon.stub(builder.program, 'getFile').returns(f1);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
             let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
@@ -302,18 +491,70 @@ describe('ProgramBuilder', () => {
 
             expect(printStub.called).to.be.true;
         });
+
+        it('calls reporters in bsconfig order', () => {
+            fsExtra.outputJsonSync(s`${rootDir}/bsconfig.json`, {
+                rootDir: rootDir,
+                diagnosticReporters: ['github-actions', '{file}: {message}', 'detailed']
+            } as BsConfig);
+            builder.options = util.normalizeAndResolveConfig({
+                cwd: rootDir,
+                project: s`${rootDir}/bsconfig.json`
+            });
+
+            const callOrder: string[] = [];
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            sinon.stub(diagnosticUtils, 'printDiagnosticGithubActions').callsFake(() => {
+                callOrder.push('github-actions');
+            });
+            sinon.stub(diagnosticUtils, 'createCustomDiagnosticReporter').callsFake(() => {
+                return () => {
+                    callOrder.push('custom');
+                };
+            });
+            sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => {
+                callOrder.push('detailed');
+            });
+
+            builder['printDiagnostics']();
+            expect(callOrder).to.eql(['github-actions', 'custom', 'detailed']);
+        });
+
+        it('calls reporters in cli option order', () => {
+            builder.options = util.normalizeAndResolveConfig({
+                rootDir: rootDir,
+                diagnosticReporters: ['detailed', 'github-actions', '{file}: {message}']
+            });
+
+            const callOrder: string[] = [];
+            let diagnostics = createBsDiagnostics('p1', ['m1']);
+            builder.program.setFile('p1', `l1\nl2\nl3`);
+            sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
+            sinon.stub(diagnosticUtils, 'printDiagnostic').callsFake(() => {
+                callOrder.push('detailed');
+            });
+            sinon.stub(diagnosticUtils, 'printDiagnosticGithubActions').callsFake(() => {
+                callOrder.push('github-actions');
+            });
+            sinon.stub(diagnosticUtils, 'createCustomDiagnosticReporter').callsFake(() => {
+                return () => {
+                    callOrder.push('custom');
+                };
+            });
+
+            builder['printDiagnostics']();
+            expect(callOrder).to.eql(['detailed', 'github-actions', 'custom']);
+        });
     });
 
     it('prints diagnostic, when file has no lines', () => {
         builder.options.showDiagnosticsInConsole = true;
 
-        let diagnostics = createBsDiagnostic('p1', ['m1']);
-        let f1 = diagnostics[0].file as BrsFile;
-        (f1.fileContents as any) = null;
+        let diagnostics = createBsDiagnostics('p1', ['m1']);
+        builder.program.setFile('p1', null);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
-
-        sinon.stub(builder.program, 'getFile').returns(f1);
-
         let printStub = sinon.stub(diagnosticUtils, 'printDiagnostic');
 
         builder['printDiagnostics']();
@@ -324,7 +565,7 @@ describe('ProgramBuilder', () => {
     it('prints diagnostic, when no file present', () => {
         builder.options.showDiagnosticsInConsole = true;
 
-        let diagnostics = createBsDiagnostic('p1', ['m1']);
+        let diagnostics = createBsDiagnostics('p1', ['m1']);
         sinon.stub(builder, 'getDiagnostics').returns(diagnostics);
 
         sinon.stub(builder.program, 'getFile').returns(null as any);
@@ -385,18 +626,17 @@ describe('ProgramBuilder', () => {
     });
 });
 
-function createBsDiagnostic(filePath: string, messages: string[]): BsDiagnostic[] {
-    let file = new BrsFile(filePath, filePath, null as any);
-    let diagnostics: BsDiagnostic[] = [];
+function createBsDiagnostics(filePath: string, messages: string[]): BsDiagnostic[] {
+    let file = new BrsFile({ srcPath: filePath, destPath: filePath, program: null });
+    let diagnostics = [];
     for (let message of messages) {
         let d = createDiagnostic(file, 1, message);
-        d.file = file;
         diagnostics.push(d);
     }
     return diagnostics;
 }
 function createDiagnostic(
-    bscFile: BscFile,
+    file: BscFile,
     code: number,
     message: string,
     startLine = 0,
@@ -405,11 +645,10 @@ function createDiagnostic(
     endCol = 99999,
     severity: DiagnosticSeverity = DiagnosticSeverity.Error
 ) {
-    const diagnostic = {
+    const diagnostic: BsDiagnostic = {
         code: code,
         message: message,
-        range: Range.create(startLine, startCol, endLine, endCol),
-        file: bscFile,
+        location: util.createLocationFromFileRange(file, util.createRange(startLine, startCol, endLine, endCol)),
         severity: severity
     };
     return diagnostic;

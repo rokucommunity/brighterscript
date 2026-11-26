@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="Comp2" extends="Group">
+    <script type="text/brightscript" uri="pkg:/source/shared/lib.bs" />
+    <script type="text/brightscript" uri="pkg:/components/Comp2.bs" />
+</component>

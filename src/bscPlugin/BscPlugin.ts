@@ -1,80 +1,142 @@
 import { isBrsFile, isXmlFile } from '../astUtils/reflection';
-import type { BeforeFileTranspileEvent, CompilerPlugin, OnFileValidateEvent, OnGetCodeActionsEvent, ProvideHoverEvent, OnGetSemanticTokensEvent, OnScopeValidateEvent, ProvideCompletionsEvent, ProvideDefinitionEvent, ProvideReferencesEvent, ProvideDocumentSymbolsEvent, ProvideWorkspaceSymbolsEvent } from '../interfaces';
-import type { Program } from '../Program';
+import type { Plugin, AfterProvideCodeActionsEvent, AfterProvideHoverEvent, AfterProvideSemanticTokensEvent, ValidateScopeEvent, AfterProvideCompletionsEvent, AfterProvideDefinitionEvent, AfterProvideReferencesEvent, AfterProvideDocumentSymbolsEvent, AfterProvideWorkspaceSymbolsEvent, AfterProvideFileEvent, ValidateFileEvent, AfterValidateFileEvent, AfterValidateProgramEvent, AfterSerializeFileEvent, BeforeBuildProgramEvent, AfterPrepareFileEvent, AfterWriteFileEvent, AfterProvideSourceFixAllCodeActionsEvent, AfterProvideSelectionRangesEvent, AfterProvideInlayHintsEvent } from '../interfaces';
 import { CodeActionsProcessor } from './codeActions/CodeActionsProcessor';
+import { FixAllCodeActionsProcessor } from './codeActions/FixAllCodeActionsProcessor';
 import { CompletionsProcessor } from './completions/CompletionsProcessor';
 import { DefinitionProvider } from './definition/DefinitionProvider';
 import { DocumentSymbolProcessor } from './symbols/DocumentSymbolProcessor';
 import { HoverProcessor } from './hover/HoverProcessor';
 import { ReferencesProvider } from './references/ReferencesProvider';
 import { BrsFileSemanticTokensProcessor } from './semanticTokens/BrsFileSemanticTokensProcessor';
-import { BrsFilePreTranspileProcessor } from './transpile/BrsFilePreTranspileProcessor';
 import { BrsFileValidator } from './validation/BrsFileValidator';
 import { ProgramValidator } from './validation/ProgramValidator';
 import { ScopeValidator } from './validation/ScopeValidator';
 import { XmlFileValidator } from './validation/XmlFileValidator';
 import { WorkspaceSymbolProcessor } from './symbols/WorkspaceSymbolProcessor';
+import type { BrsFile } from '../files/BrsFile';
+import type { XmlFile } from '../files/XmlFile';
+import { FileWriter } from './FileWriter';
+import { FileProvider } from './fileProviders/FileProvider';
+import { BslibManager } from './serialize/BslibManager';
+import { FileSerializer } from './serialize/FileSerializer';
+import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
+import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
+import { BrsFileLinker } from './linking/BrsFileLinker';
+import { SelectionRangesProcessor } from './selectionRanges/SelectionRangesProcessor';
+import { InlayHintProcessor } from './inlayHints/InlayHintProcessor';
 
-export class BscPlugin implements CompilerPlugin {
+/**
+ * The built-in plugin. It is registered before every other plugin and does its work in the `after*` hooks,
+ * so from a plugin author's point of view it is the last participant in each event's "during" phase.
+ */
+export class BscPlugin implements Plugin {
     public name = 'BscPlugin';
 
-    public onGetCodeActions(event: OnGetCodeActionsEvent) {
+    public afterProvideFile(event: AfterProvideFileEvent) {
+        new FileProvider(event).process();
+    }
+
+    public afterProvideCodeActions(event: AfterProvideCodeActionsEvent) {
         new CodeActionsProcessor(event).process();
     }
 
-    public provideHover(event: ProvideHoverEvent) {
+    public afterProvideSourceFixAllCodeActions(event: AfterProvideSourceFixAllCodeActionsEvent) {
+        new FixAllCodeActionsProcessor(event).process();
+    }
+
+    public afterProvideHover(event: AfterProvideHoverEvent) {
         return new HoverProcessor(event).process();
     }
 
-    public provideDocumentSymbols(event: ProvideDocumentSymbolsEvent) {
+    public afterProvideDocumentSymbols(event: AfterProvideDocumentSymbolsEvent) {
         return new DocumentSymbolProcessor(event).process();
     }
 
-    public provideWorkspaceSymbols(event: ProvideWorkspaceSymbolsEvent) {
+    public afterProvideWorkspaceSymbols(event: AfterProvideWorkspaceSymbolsEvent) {
         return new WorkspaceSymbolProcessor(event).process();
     }
 
-    public provideCompletions(event: ProvideCompletionsEvent) {
+    public afterProvideCompletions(event: AfterProvideCompletionsEvent) {
         new CompletionsProcessor(event).process();
     }
 
-    public provideDefinition(event: ProvideDefinitionEvent) {
+    public afterProvideDefinition(event: AfterProvideDefinitionEvent) {
         new DefinitionProvider(event).process();
     }
 
-    public provideReferences(event: ProvideReferencesEvent) {
+    public afterProvideReferences(event: AfterProvideReferencesEvent) {
         new ReferencesProvider(event).process();
     }
 
-    public onGetSemanticTokens(event: OnGetSemanticTokensEvent) {
+    public afterProvideSelectionRanges(event: AfterProvideSelectionRangesEvent) {
+        new SelectionRangesProcessor(event).process();
+    }
+
+    public afterProvideInlayHints(event: AfterProvideInlayHintsEvent) {
+        new InlayHintProcessor(event).process();
+    }
+
+    public afterProvideSemanticTokens(event: AfterProvideSemanticTokensEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileSemanticTokensProcessor(event as any).process();
+            return new BrsFileSemanticTokensProcessor(event as AfterProvideSemanticTokensEvent<BrsFile>).process();
         }
     }
 
-    public onFileValidate(event: OnFileValidateEvent) {
+    /**
+     * Uses `validateFile` instead of `afterValidateFile`. BscPlugin is registered before every other plugin, so it runs first in `validateFile`.
+     * Linking here ensures every other plugin's `validateFile` handler can look up the file's symbols and types
+     */
+    public validateFile(event: ValidateFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFileValidator(event as any).process();
+            new BrsFileLinker(event as ValidateFileEvent<BrsFile>).process();
+        }
+    }
+
+    public afterValidateFile(event: AfterValidateFileEvent) {
+        if (isBrsFile(event.file)) {
+            new BrsFileValidator(event as AfterValidateFileEvent<BrsFile>).process();
         } else if (isXmlFile(event.file)) {
-            return new XmlFileValidator(event as any).process();
+            new XmlFileValidator(event as AfterValidateFileEvent<XmlFile>).process();
         }
     }
 
     private scopeValidator = new ScopeValidator();
 
-    public onScopeValidate(event: OnScopeValidateEvent) {
+    /**
+     * Uses `validateScope` instead of `afterValidateScope` because the scope's symbol tables are only linked during `validateScope`
+     */
+    public validateScope(event: ValidateScopeEvent) {
         this.scopeValidator.processEvent(event);
     }
 
-    public afterProgramValidate(program: Program) {
-        new ProgramValidator(program).process();
+    public afterValidateProgram(event: AfterValidateProgramEvent) {
+        new ProgramValidator(event).process();
         //release memory once the validation cycle has finished
         this.scopeValidator.reset();
     }
 
-    public beforeFileTranspile(event: BeforeFileTranspileEvent) {
+    /**
+     * Uses `beforeBuildProgram` because bslib must be in the file list before files are prepared
+     */
+    public beforeBuildProgram(event: BeforeBuildProgramEvent) {
+        this.bslibManager.addBslibFileIfMissing(event);
+    }
+    private bslibManager = new BslibManager();
+
+    public afterPrepareFile(event: AfterPrepareFileEvent) {
         if (isBrsFile(event.file)) {
-            return new BrsFilePreTranspileProcessor(event as any).process();
+            return new BrsFilePreTranspileProcessor(event as AfterPrepareFileEvent<BrsFile>).process();
+        } else if (isXmlFile(event.file)) {
+            return new XmlFilePreTranspileProcessor(event as AfterPrepareFileEvent<XmlFile>).process();
         }
     }
+
+    public async afterSerializeFile(event: AfterSerializeFileEvent) {
+        await new FileSerializer(event).process();
+    }
+
+    public async afterWriteFile(event: AfterWriteFileEvent) {
+        await new FileWriter(event).process();
+    }
+
 }

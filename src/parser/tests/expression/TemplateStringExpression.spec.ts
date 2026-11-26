@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-for-in-array */
-/* eslint no-template-curly-in-string: 0 */
-
+/* eslint-disable no-template-curly-in-string */
 import { expect } from '../../../chai-config.spec';
 import { DiagnosticMessages } from '../../../DiagnosticMessages';
 import { Lexer } from '../../../lexer/Lexer';
@@ -22,7 +20,7 @@ describe('TemplateStringExpression', () => {
             it('generates correct locations for quasis', () => {
                 let { tokens } = Lexer.scan('print `0xAAAAAA${"0xBBBBBB"}0xCCCCCC`');
                 expect(
-                    tokens.filter(x => /"?0x/.test(x.text)).map(x => x.range)
+                    tokens.filter(x => /"?0x/.test(x.text)).map(x => util.getLocation(x)?.range)
                 ).to.eql([
                     util.createRange(0, 7, 0, 15), // 0xAAAAAA
                     util.createRange(0, 17, 0, 27), // "0xBBBBBB"
@@ -36,7 +34,7 @@ describe('TemplateStringExpression', () => {
                 tokens.shift();
                 expect(
                     //compute the length of the token char spread
-                    tokens.filter(x => x.text !== '').map(x => [x.range.end.character - x.range.start.character, x.text])
+                    tokens.filter(x => x.text !== '').map(x => [util.getLocation(x).range.end.character - util.getLocation(x).range.start.character, x.text])
                 ).to.eql([
                     '`',
                     '${',
@@ -56,16 +54,16 @@ describe('TemplateStringExpression', () => {
 
             it(`simple case`, () => {
                 let { tokens } = Lexer.scan(`a = \`hello      world\``);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
 
             it(`complex case`, () => {
                 let { tokens } = Lexer.scan(`a = \`hello \${a.text} world \${"template" + m.getChars()} test\``);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics).to.be.lengthOf(0);
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
 
             it(`complex case`, () => {
@@ -75,24 +73,24 @@ describe('TemplateStringExpression', () => {
                     the end.
                     goodnight\`
                 `);
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expect(diagnostics[0]?.message).not.to.exist;
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
 
             it(`complex case that tripped up the transpile tests`, () => {
 
                 let { tokens } = Lexer.scan('a = ["one", "two", `I am a complex example\n${a.isRunning(["a","b","c"])}`]');
-                let { statements, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
+                let { ast, diagnostics } = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
                 expectZeroDiagnostics(diagnostics);
-                expect(statements[0]).instanceof(AssignmentStatement);
+                expect(ast.statements[0]).instanceof(AssignmentStatement);
             });
         });
 
         it('catches missing closing backtick', () => {
             let { tokens } = Lexer.scan('name = `hello world');
             let parser = Parser.parse(tokens, { mode: ParseMode.BrighterScript });
-            expect(parser.diagnostics[0]?.message).to.equal(DiagnosticMessages.unterminatedTemplateStringAtEndOfFile().message);
+            expect(parser.diagnostics[0]?.message).to.equal(DiagnosticMessages.unterminatedTemplateString().message);
         });
     });
 
@@ -110,9 +108,9 @@ describe('TemplateStringExpression', () => {
             program.dispose();
         });
 
-        it('uses the proper prefix when aliased package is installed', () => {
+        it('uses the proper prefix when aliased package is installed', async () => {
             program.setFile('source/roku_modules/rokucommunity_bslib/bslib.brs', '');
-            testTranspile(`
+            await testTranspile(`
                 sub main()
                     a = \`\${LINE_NUM},\${LINE_NUM}\`
                 end sub
@@ -123,8 +121,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles simple template string with no leading text', () => {
-            testTranspile(`
+        it('properly transpiles simple template string with no leading text', async () => {
+            await testTranspile(`
                     sub main()
                         a = \`\${LINE_NUM},\${LINE_NUM}\`
                     end sub
@@ -136,8 +134,8 @@ describe('TemplateStringExpression', () => {
             );
         });
 
-        it('properly transpiles simple template string', () => {
-            testTranspile(`
+        it('properly transpiles simple template string', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`hello world\`
                 end sub
@@ -148,92 +146,92 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles one line template string with expressions', () => {
-            testTranspile(`
+        it('properly transpiles one line template string with expressions', async () => {
+            await testTranspile(`
                 sub main()
-                    a = \`hello \${LINE_NUM.text} world \${"template" + "".getChars()} test\`
+                    a = \`hello \${LINE_NUM.text} world \${"template" + "".trim()} test\`
                 end sub
             `, `
                 sub main()
-                    a = ("hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".getChars()) + " test")
+                    a = ("hello " + bslib_toString(LINE_NUM.text) + " world " + bslib_toString("template" + "".trim()) + " test")
                 end sub
             `);
         });
 
-        it('handles escaped characters', () => {
-            testTranspile(`
+        it('handles escaped characters', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\\r\\n\\\`\\$\`
                 end sub
             `, `
                 sub main()
-                    a = chr(13) + chr(10) + chr(96) + chr(36)
+                    a = (chr(13) + chr(10) + chr(96) + chr(36))
                 end sub
             `);
         });
 
-        it('handles escaped unicode char codes', () => {
-            testTranspile(`
+        it('handles escaped unicode char codes', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\\c2\\c987\`
                 end sub
             `, `
                 sub main()
-                    a = chr(2) + chr(987)
+                    a = (chr(2) + chr(987))
                 end sub
             `);
         });
 
-        it('properly transpiles simple multiline template string', () => {
-            testTranspile(`
+        it('properly transpiles simple multiline template string', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`hello world\nI am multiline\`
                 end sub
             `, `
                 sub main()
-                    a = "hello world" + chr(10) + "I am multiline"
+                    a = ("hello world" + chr(10) + "I am multiline")
                 end sub
             `);
         });
 
-        it('properly handles newlines', () => {
-            testTranspile(`
+        it('properly handles newlines', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\n\`
                 end sub
             `, `
                 sub main()
-                    a = chr(10)
+                    a = (chr(10))
                 end sub
             `);
         });
 
-        it('properly handles clrf', () => {
-            testTranspile(`
+        it('properly handles clrf', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\r\n\`
                 end sub
             `, `
                 sub main()
-                    a = chr(13) + chr(10)
+                    a = (chr(13) + chr(10))
                 end sub
             `);
         });
 
-        it('properly transpiles more complex multiline template string', () => {
-            testTranspile(`
-                sub main()
-                    a = \`I am multiline\n\${a.isRunning()}\nmore\`
+        it('properly transpiles more complex multiline template string', async () => {
+            await testTranspile(`
+                sub main(data)
+                    a = \`I am multiline\n\${data.isRunning()}\nmore\`
                 end sub
             `, `
-                sub main()
-                    a = ("I am multiline" + chr(10) + bslib_toString(a.isRunning()) + chr(10) + "more")
+                sub main(data)
+                    a = ("I am multiline" + chr(10) + bslib_toString(data.isRunning()) + chr(10) + "more")
                 end sub
             `);
         });
 
-        it('properly transpiles complex multiline template string in array def', () => {
-            testTranspile(`
+        it('properly transpiles complex multiline template string in array def', async () => {
+            await testTranspile(`
                 sub main()
                     a = [
                         "one",
@@ -256,8 +254,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles complex multiline template string in array def, with nested template', () => {
-            testTranspile(`
+        it('properly transpiles complex multiline template string in array def, with nested template', async () => {
+            await testTranspile(`
                 sub main()
                     a = [
                         "one",
@@ -286,8 +284,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('properly transpiles two expressions side-by-side', () => {
-            testTranspile(`
+        it('properly transpiles two template strings side-by-side', async () => {
+            await testTranspile(`
                 sub main()
                     a = \`\${"hello"}\${"world"}\`
                 end sub
@@ -298,8 +296,8 @@ describe('TemplateStringExpression', () => {
             `);
         });
 
-        it('skips calling toString on strings', () => {
-            testTranspile(`
+        it('skips calling toString on strings', async () => {
+            await testTranspile(`
                 sub main()
                     text = \`Hello \${"world"}\`
                 end sub
@@ -311,8 +309,8 @@ describe('TemplateStringExpression', () => {
         });
 
         describe('tagged template strings', () => {
-            it('properly transpiles with escaped characters and quasis', () => {
-                testTranspile(`
+            it('properly transpiles with escaped characters and quasis', async () => {
+                await testTranspile(`
                     function zombify(strings, values)
                     end function
                     sub main()
@@ -328,8 +326,8 @@ describe('TemplateStringExpression', () => {
                 `);
             });
 
-            it('handles multiple embedded expressions', () => {
-                testTranspile(`
+            it('handles multiple embedded expressions', async () => {
+                await testTranspile(`
                     function zombify(strings, values)
                     end function
                     sub main()
@@ -345,8 +343,58 @@ describe('TemplateStringExpression', () => {
                 `);
             });
 
-            it('can be concatenated with regular string', () => {
-                testTranspile(`
+            it('wraps result in parens when we have at least one expression', async () => {
+                await testTranspile(`
+                    sub main()
+                        print \`hello \${1}\`
+                    end sub
+                `, `
+                    sub main()
+                        print ("hello " + bslib_toString(1))
+                    end sub
+                `);
+            });
+
+            it('wraps result in parens when we have at least one escaped char', async () => {
+                await testTranspile(`
+                    sub main()
+                        print \`hello \\nworld\`
+                    end sub
+                `, `
+                    sub main()
+                        print ("hello " + chr(10) + "world")
+                    end sub
+                `);
+            });
+
+            it('wraps result in parens when we have an expression and at least one escaped char', async () => {
+                await testTranspile(`
+                    sub main()
+                        num = 1
+                        print \`hello \${num} \\nworld\`
+                    end sub
+                `, `
+                    sub main()
+                        num = 1
+                        print ("hello " + bslib_toString(num) + " " + chr(10) + "world")
+                    end sub
+                `);
+            });
+
+            it('does not wrap a plain string with parens', async () => {
+                await testTranspile(`
+                    sub main()
+                        print \`hello world\`
+                    end sub
+                `, `
+                    sub main()
+                        print "hello world"
+                    end sub
+                `);
+            });
+
+            it('can be concatenated with regular string', async () => {
+                await testTranspile(`
                     sub main()
                         thing = "this" + \`that\`
                         otherThing = \`that\` + "this"
@@ -370,6 +418,6 @@ describe('TemplateStringExpression', () => {
             end function
         `);
         const ann = parser.ast.statements[0].annotations![0];
-        expect(ann.range).to.eql(util.createRange(1, 12, 3, 14));
+        expect(util.getLocation(ann)?.range).to.eql(util.createRange(1, 12, 3, 14));
     });
 });

@@ -1,0 +1,727 @@
+import { ProgramBuilder } from '../ProgramBuilder';
+import * as EventEmitter from 'eventemitter3';
+import util, { standardizePath as s } from '../util';
+import * as path from 'path';
+import type { ProjectConfig, ActivateResponse, LspDiagnostic, LspProject, FileRenameTextEdit } from './LspProject';
+import { isBrsFile, isXmlFile } from '../astUtils/reflection';
+import type { Plugin, Hover, MaybePromise } from '../interfaces';
+import { Deferred } from '../deferred';
+import type { StandardizedFileEntry } from 'roku-deploy';
+import { rokuDeploy } from 'roku-deploy';
+import type { DocumentSymbol, Position, Range, Location, LocationLink, WorkspaceSymbol, InlayHint } from 'vscode-languageserver-protocol';
+import { CompletionList } from 'vscode-languageserver-protocol';
+import { CancellationTokenSource } from 'vscode-languageserver-protocol';
+import type { DocumentAction, DocumentActionWithStatus } from './DocumentManager';
+import type { SignatureInfoObj } from '../Program';
+import type { BsConfig } from '../BsConfig';
+import type { Logger, LogLevel } from '../logging';
+import { createLogger } from '../logging';
+import * as fsExtra from 'fs-extra';
+import type { XmlFile } from '../files/XmlFile';
+import type { BrsFile } from '../files/BrsFile';
+
+export class Project implements LspProject {
+    public constructor(
+        options?: {
+            logger?: Logger;
+        }
+    ) {
+        this.logger = options?.logger ?? createLogger({
+            //when running inside a worker thread, we don't want to use colors
+            enableColor: false
+        });
+    }
+
+    /**
+     * Activates this project. Every call to `activate` should completely reset the project, clear all used ram and start from scratch.
+     */
+    public async activate(options: ProjectConfig): Promise<ActivateResponse> {
+        this.logger.info(`Project.activate. projectKey: ${options.projectKey}`);
+
+        this.activateOptions = options;
+        this.projectKey = options.projectKey ? util.standardizePath(options.projectKey) : options.projectKey;
+        this.projectDir = options.projectDir ? util.standardizePath(options.projectDir) : options.projectDir;
+        this.workspaceFolder = options.workspaceFolder ? util.standardizePath(options.workspaceFolder) : options.workspaceFolder;
+        this.projectNumber = options.projectNumber;
+        this.bsconfigPath = await this.getConfigFilePath(options);
+
+        this.builder = new ProgramBuilder({
+            //share our logger with ProgramBuilder, which will keep our level in sync with the one in the program
+            logger: this.logger
+        });
+
+        this.builder.logger.prefix = util.getProjectLogName(this);
+        this.disposables.push(this.builder);
+
+        let cwd: string;
+        //if the config file exists, use it and its folder as cwd
+        if (this.bsconfigPath && await util.pathExists(this.bsconfigPath)) {
+            cwd = path.dirname(this.bsconfigPath);
+            //load the bsconfig file contents (used for performance optimizations externally)
+            try {
+                this.bsconfigFileContents = (await fsExtra.readFile(this.bsconfigPath)).toString();
+            } catch { }
+
+        } else {
+            cwd = this.projectDir;
+            //config file doesn't exist...let `brighterscript` resolve the default way
+            this.bsconfigPath = undefined;
+        }
+
+        const builderOptions = {
+            cwd: cwd,
+            project: this.bsconfigPath,
+            watch: false,
+            noEmit: true,
+            showDiagnosticsInConsole: false,
+            validate: false
+        } as BsConfig;
+
+        //Assign .files (mostly used for standalone projects) if available, as a dedicated assignment because `undefined` overrides the default value in the `bsconfig.json`
+        if (options.files) {
+            builderOptions.files = rokuDeploy.normalizeFilesArray(options.files);
+        }
+
+        //run the builder to initialize the program. Skip validation for now, we'll trigger it soon in a more cancellable way
+        await this.builder.run({
+            ...builderOptions,
+            validate: false,
+            //don't show diagnostics in the console since this is run via the language server, they're presented in a different way
+            showDiagnosticsInConsole: false
+        });
+
+        //flush diagnostics every time the program FINISHES validating.
+        //this plugin must be added LAST to the program to ensure we can see all diagnostics.
+        //skip cancelled validations: those fire afterValidateProgram with whatever partial
+        //state was reached, and downstream consumers (e.g. test specs awaiting
+        //onNextDiagnostics) end up reading the partial emit instead of the completed one
+        //that follows.
+        this.builder.plugins.add({
+            name: 'bsc-language-server',
+            afterValidateProgram: (event) => {
+                if (event?.wasCancelled) {
+                    return;
+                }
+                const diagnostics = this.getDiagnostics();
+                this.emit('diagnostics', {
+                    diagnostics: diagnostics
+                });
+            }
+        } as Plugin);
+
+        this.manifestSrcPath = this.builder.program.manifestPath;
+
+        //load the manifest file contents (used for change detection to trigger project reloads)
+        if (this.manifestSrcPath) {
+            try {
+                this.manifestFileContents = (await fsExtra.readFile(this.manifestSrcPath)).toString();
+            } catch { }
+        }
+
+        //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
+        void this.validate();
+
+        this.activationDeferred.resolve();
+
+        return {
+            bsconfigPath: this.bsconfigPath,
+            logLevel: this.builder.program.options.logLevel as LogLevel,
+            rootDir: this.builder.program.options.rootDir,
+            filePatterns: this.filePatterns,
+            manifestSrcPath: this.manifestSrcPath
+        };
+    }
+
+    public isStandaloneProject = false;
+
+    public logger: Logger;
+
+    /**
+     * Options used to activate this project
+     */
+    public activateOptions: ProjectConfig;
+
+    public get rootDir() {
+        return this.builder.program.options.rootDir;
+    }
+    /**
+     * The file patterns from bsconfig.json that were used to find all files for this project
+     */
+    public get filePatterns() {
+        if (!this.builder) {
+            return undefined;
+        }
+        const patterns = rokuDeploy.normalizeFilesArray(this.builder.program.options.files);
+        return patterns.map(x => {
+            return typeof x === 'string' ? x : x.src;
+        });
+    }
+
+    /**
+     * Gets resolved when the project has finished activating
+     */
+    private activationDeferred = new Deferred();
+
+    /**
+     * Promise that resolves when the project finishes activating
+     * @returns a promise that resolves when the project finishes activating
+     */
+    public whenActivated() {
+        return this.activationDeferred.promise;
+    }
+
+    private validationCancelToken: CancellationTokenSource;
+
+    /**
+     * Validate the project. This will trigger a full validation on any scopes that were changed since the last validation,
+     * and will also eventually emit a new 'diagnostics' event that includes all diagnostics for the project.
+     *
+     * This will cancel any currently running validation and then run a new one.
+     */
+    public async validate() {
+        this.logger.debug('Project.validate');
+
+        //a sync that started during a previous Phase 2 may have disposed this project before
+        //runWithConcurrencyLimit reached our slot. Skip validate() if the builder is gone.
+        if (!this.builder?.program) {
+            return;
+        }
+
+        this.cancelValidate();
+        //store
+        this.validationCancelToken = new CancellationTokenSource();
+
+        try {
+            this.emit('validate-begin', {});
+            await this.builder.program.validate({
+                async: true,
+                cancellationToken: this.validationCancelToken.token
+            });
+        } finally {
+            this.emit('validate-end', {});
+        }
+    }
+
+    /**
+     * Cancel any active running validation
+     */
+    public cancelValidate() {
+        this.validationCancelToken?.cancel();
+        delete this.validationCancelToken;
+    }
+
+    public getDiagnostics(): LspDiagnostic[] {
+        const result: LspDiagnostic[] = [];
+        for (const diagnostic of this.builder.getDiagnostics()) {
+            //skip diagnostics that have no location
+            if (!diagnostic?.location?.uri) {
+                this.logger.debug('Skipping diagnostic that has no location', diagnostic);
+                continue;
+            }
+
+            const srcPath = util.uriToPath(diagnostic.location.uri);
+            result.push({
+                ...util.toDiagnostic(diagnostic, srcPath),
+                uri: diagnostic.location.uri
+            });
+        }
+        return result;
+    }
+
+    /**
+     * Promise that resolves the next time the system is idle. If the system is already idle, it will resolve immediately
+     */
+    private async onIdle(): Promise<void> {
+        await Promise.all([
+            this.activationDeferred.promise
+        ]);
+    }
+
+    /**
+     * Add or replace the in-memory contents of the file at the specified path. This is typically called as the user is typing.
+     * This will cancel any pending validation cycles and queue a future validation cycle instead.
+     */
+    public async applyFileChanges(documentActions: DocumentAction[]): Promise<DocumentActionWithStatus[]> {
+        this.logger.debug('Project.applyFileChanges', documentActions.map(x => x.srcPath));
+
+        await this.onIdle();
+
+        let didChangeFiles = false;
+        const result = [...documentActions] as DocumentActionWithStatus[];
+        // eslint-disable-next-line @typescript-eslint/prefer-for-of
+        for (let i = 0; i < result.length; i++) {
+            const action = result[i];
+            let didChangeThisFile = false;
+            //if this is a `set` and the file matches the project's files array, set it
+            if (action.type === 'set' && Project.willAcceptFile(action.srcPath, this.builder.program.options.files, this.builder.program.options.rootDir)) {
+                //load the file contents from disk if we don't have an in memory copy
+                const fileContents = action.fileContents ?? util.readFileSync(action.srcPath)?.toString();
+
+                //if we got file contents, set the file on the program
+                if (fileContents !== undefined) {
+                    didChangeThisFile = this.setFile(action.srcPath, fileContents);
+                    //this file was accepted by the program
+                    action.status = 'accepted';
+
+                    //if we can't get file contents, apply this as a delete
+                } else {
+                    action.status = 'accepted';
+                    result.push({
+                        id: action.id,
+                        srcPath: action.srcPath,
+                        type: 'delete',
+                        status: undefined,
+                        allowStandaloneProject: false
+                    });
+                    continue;
+                }
+
+                //try to delete the file or directory
+            } else if (action.type === 'delete') {
+                didChangeThisFile = this.removeFileOrDirectory(action.srcPath);
+                //if we deleted at least one file, mark this action as accepted
+                action.status = didChangeThisFile ? 'accepted' : 'rejected';
+
+                //we did not handle this action, so reject
+            } else {
+                action.status = 'rejected';
+            }
+            didChangeFiles = didChangeFiles || didChangeThisFile;
+        }
+        if (didChangeFiles) {
+            //trigger a validation (but don't wait for it. That way we can cancel it sooner if we get new incoming data or requests)
+            this.validate().catch(e => this.logger.error(e));
+        }
+
+        this.logger.debug('project.applyFileChanges done', documentActions.map(x => x.srcPath));
+
+        return result;
+    }
+
+    /**
+     * Determine if this project will accept the file at the specified path (i.e. does it match a pattern in the project's files array)
+     */
+    public static willAcceptFile(srcPath: string, files: BsConfig['files'], rootDir: string) {
+        srcPath = util.standardizePath(srcPath);
+        if (rokuDeploy.getDestPath(srcPath, files, rootDir) !== undefined) {
+            return true;
+            //is this exact path in the `files` array? (this check is mostly for standalone projects)
+        } else if ((files as StandardizedFileEntry[]).find(x => s`${x.src}` === srcPath)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Set new contents for a file. This is safe to call any time. Changes will be queued and flushed at the correct times
+     * during the program's lifecycle flow
+     * @param srcPath absolute source path of the file
+     * @param fileContents the text contents of the file
+     * @returns true if this program accepted and added the file. false if the program didn't want the file, or if the contents didn't change
+     */
+    private setFile(srcPath: string, fileContents: string) {
+        this.logger.debug('Project.setFile', { srcPath: srcPath, fileContentsLength: fileContents.length });
+
+        const { files, rootDir } = this.builder.program.options;
+
+        //get the dest path for this file.
+        let destPath = rokuDeploy.getDestPath(srcPath, files, rootDir);
+
+        //if we have a file and the contents haven't changed
+        let file = this.builder.program.getFile<XmlFile | BrsFile>(destPath);
+        if (file && file.fileContents === fileContents) {
+            return false;
+        }
+
+        //if we got a dest path, then the program wants this file
+        if (destPath) {
+            this.builder.program.setFile(
+                {
+                    src: srcPath,
+                    dest: destPath
+                },
+                fileContents
+            );
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Remove the in-memory file at the specified path. This is typically called when the user (or file system watcher) triggers a file delete
+     * @param srcPath absolute path to the File
+     * @returns true if we found and removed at least one file, or false if no files were removed
+     */
+    private removeFileOrDirectory(srcPath: string) {
+        this.logger.debug('Project.removeFileOrDirectory', srcPath);
+
+        srcPath = util.standardizePath(srcPath);
+        //if this is a direct file match, remove the file
+        if (this.builder.program.hasFile(srcPath)) {
+            this.builder.program.removeFile(srcPath);
+            return true;
+        }
+
+        //maybe this is a directory. Remove all files that start with this path
+        let removedSomeFiles = false;
+        let lowerSrcPath = srcPath.toLowerCase();
+        for (let file of Object.values(this.builder.program.files)) {
+            //if the file path starts with the parent path and the file path does not exactly match the folder path
+            if (file.srcPath?.toLowerCase().startsWith(lowerSrcPath)) {
+                this.logger.debug('Project.removeFileOrDirectory removing file because it matches the given directory', { dir: srcPath, srcPath: file.srcPath });
+
+                this.builder.program.removeFile(file.srcPath, false);
+                removedSomeFiles = true;
+            }
+        }
+        //return true if we removed at least one file
+        return removedSomeFiles;
+    }
+
+    /**
+     * Get the full list of semantic tokens for the given file path
+     * @param options options for getting semantic tokens
+     * @param options.srcPath absolute path to the source file
+     */
+    public async getSemanticTokens(options: { srcPath: string }) {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSemanticTokens(options.srcPath);
+        }
+    }
+
+    public async transpileFile(options: { srcPath: string }) {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getTranspiledFileContents(options.srcPath);
+        }
+    }
+
+    public async getHover(options: { srcPath: string; position: Position }): Promise<Hover[]> {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getHover(options.srcPath, options.position);
+        }
+    }
+
+    public async getDefinition(options: { srcPath: string; position: Position }): Promise<Array<Location | LocationLink>> {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getDefinition(options.srcPath, options.position);
+        }
+    }
+
+    public async getSignatureHelp(options: { srcPath: string; position: Position }): Promise<SignatureInfoObj[]> {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSignatureHelp(options.srcPath, options.position);
+        }
+    }
+
+    public async getDocumentSymbol(options: { srcPath: string }): Promise<DocumentSymbol[]> {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getDocumentSymbols(options.srcPath);
+        }
+    }
+
+    public async getWorkspaceSymbol(): Promise<WorkspaceSymbol[]> {
+        await this.onIdle();
+        const result = this.builder.program.getWorkspaceSymbols();
+        return result;
+    }
+
+    public async getReferences(options: { srcPath: string; position: Position }) {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getReferences(options.srcPath, options.position);
+        }
+    }
+
+    public async getFileRenameEdits(options: { oldSrcPath: string; newSrcPath: string }): Promise<FileRenameTextEdit[]> {
+        await this.onIdle();
+
+        const oldFile = this.builder.program.getFile(options.oldSrcPath);
+        if (!oldFile) {
+            return [];
+        }
+
+        const programOptions = this.builder.program.options;
+        const newDestPath = this.computeDestPathForNewSrcPath(options.newSrcPath, programOptions);
+        if (!newDestPath) {
+            return [];
+        }
+
+        //rename comparisons happen at the source-extension level (destPath), since import
+        //statements reference source paths (e.g. "pkg:/source/lib.bs"), not the transpiled
+        //pkgPath (e.g. "source/lib.brs"). A new file at "source/lib2.bs" needs to be
+        //identified by its destPath, not its pkgPath.
+        const oldDestPath = util.standardizePath(oldFile.destPath).toLowerCase();
+
+        //if the rename doesn't change the dest path, nothing to do
+        if (oldDestPath === newDestPath.toLowerCase()) {
+            return [];
+        }
+
+        const result: FileRenameTextEdit[] = [];
+        for (const file of Object.values(this.builder.program.files)) {
+            if (isBrsFile(file)) {
+                // eslint-disable-next-line @typescript-eslint/dot-notation
+                for (const importStatement of file['_cachedLookups']?.importStatements ?? []) {
+                    if (!importStatement.tokens.path || !importStatement.filePath) {
+                        continue;
+                    }
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.destPath, importStatement.filePath);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldDestPath) {
+                        continue;
+                    }
+                    const newText = util.computeRenamedReferencePath(importStatement.filePath, file.destPath, newDestPath);
+                    if (newText === null) {
+                        continue;
+                    }
+                    result.push({
+                        uri: util.pathToUri(file.srcPath),
+                        range: util.getLocation(importStatement.tokens.path).range,
+                        newText: newText
+                    });
+                }
+            } else if (isXmlFile(file)) {
+                for (const scriptTag of file.parser?.references?.scriptTagImports ?? []) {
+                    if (!scriptTag.filePathRange || !scriptTag.text) {
+                        continue;
+                    }
+                    const resolvedPkgPath = util.getPkgPathFromTarget(file.destPath, scriptTag.text);
+                    if (!resolvedPkgPath || util.standardizePath(resolvedPkgPath).toLowerCase() !== oldDestPath) {
+                        continue;
+                    }
+                    const newText = util.computeRenamedReferencePath(scriptTag.text, file.destPath, newDestPath);
+                    if (newText === null) {
+                        continue;
+                    }
+                    result.push({
+                        uri: util.pathToUri(file.srcPath),
+                        range: scriptTag.filePathRange,
+                        newText: newText
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Determine the pkg path for a (not-yet-existing) renamed file. Tries the project's `files` glob first
+     * so custom dest mappings keep working, and falls back to a plain rootDir-relative path so renames into
+     * folders that aren't yet in the glob still get their imports rewritten.
+     * Returns undefined if the new path is outside this project's rootDir.
+     */
+    private computeDestPathForNewSrcPath(newSrcPath: string, programOptions: { files?: BsConfig['files']; rootDir?: string }): string | undefined {
+        if (!programOptions.rootDir) {
+            return undefined;
+        }
+        const destFromGlob = rokuDeploy.getDestPath(newSrcPath, programOptions.files, programOptions.rootDir);
+        if (destFromGlob) {
+            return util.standardizePath(destFromGlob);
+        }
+        const rootDir = util.standardizePath(programOptions.rootDir);
+        const newSrc = util.standardizePath(newSrcPath);
+        const rootPrefix = rootDir.endsWith(path.sep) ? rootDir : rootDir + path.sep;
+        if (!newSrc.toLowerCase().startsWith(rootPrefix.toLowerCase())) {
+            return undefined;
+        }
+        return newSrc.substring(rootPrefix.length);
+    }
+
+    public async getSelectionRanges(options: { srcPath: string; positions: Position[] }) {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSelectionRanges(options.srcPath, options.positions);
+        }
+    }
+
+    public async getInlayHints(options: { srcPath: string; range: Range }): Promise<InlayHint[]> {
+        await this.onIdle();
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getInlayHints(options.srcPath, options.range);
+        }
+    }
+
+    public async getCodeActions(options: { srcPath: string; range: Range }) {
+        await this.onIdle();
+
+        if (this.builder.program.hasFile(options.srcPath)) {
+            const codeActions = this.builder.program.getCodeActions(options.srcPath, options.range);
+            //clone each diagnostic since certain diagnostics can have circular reference properties that kill the language server if serialized
+            for (const codeAction of codeActions ?? []) {
+                if (codeAction.diagnostics) {
+                    codeAction.diagnostics = codeAction.diagnostics?.map(x => util.toDiagnostic(x, options.srcPath));
+                }
+            }
+            return codeActions;
+        }
+    }
+
+    public async getSourceFixAllCodeActions(options: { srcPath: string }) {
+        await this.onIdle();
+
+        if (this.builder.program.hasFile(options.srcPath)) {
+            return this.builder.program.getSourceFixAllCodeActions(options.srcPath);
+        }
+    }
+
+    public async getCompletions(options: { srcPath: string; position: Position }): Promise<CompletionList> {
+        await this.onIdle();
+
+        this.logger.debug('Project.getCompletions', options.srcPath, options.position);
+
+        if (this.builder.program.hasFile(options.srcPath)) {
+            const completions = this.builder.program.getCompletions(options.srcPath, options.position);
+            const result = CompletionList.create(completions);
+            result.itemDefaults = {
+                commitCharacters: ['.']
+            };
+            return result;
+        }
+        return undefined;
+    }
+
+    /**
+     * Manages the BrighterScript program. The main interface into the compiler/validator
+     */
+    private builder: ProgramBuilder;
+
+    /**
+     * A unique key to represent this project. The format of this key may change, but it will always be unique to this project and can be used for comparison purposes.
+     *
+     * For directory-only projects, this is the path to the dir. For bsconfig.json projects, this is the path to the config file (typically bsconfig.json).
+     */
+    projectKey: string;
+
+    /**
+     * The directory for the root of this project (typically where the bsconfig.json or manifest is located)
+     */
+    projectDir: string;
+
+    /**
+     * A unique number for this project, generated during this current language server session. Mostly used so we can identify which project is doing logging
+     */
+    public projectNumber: number;
+
+    /**
+     * The path to the workspace where this project resides. A workspace can have multiple projects (by adding a bsconfig.json to each folder).
+     * Defaults to `.projectPath` if not set
+     */
+    public workspaceFolder: string;
+
+    /**
+     * Path to a bsconfig.json file that will be used for this project
+     */
+    public bsconfigPath?: string;
+
+    /**
+     * The contents of the bsconfig.json file. This is used to detect when the bsconfig file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    public bsconfigFileContents?: string;
+
+    /**
+     * The contents of the manifest file. This is used to detect when the manifest file has not actually been changed (even if the fs says it did).
+     *
+     * Only available after `.activate()` has completed.
+     * @deprecated do not depend on this property. This will certainly be removed in a future release
+     */
+    public manifestFileContents?: string;
+
+    /**
+     * The absolute source path to the manifest file (the file that maps to dest 'manifest').
+     * May differ from rootDir/manifest if the project uses a custom {src; dest} mapping.
+     *
+     * Only available after `.activate()` has completed.
+     */
+    public manifestSrcPath?: string;
+
+    /**
+     * Find the path to the bsconfig.json file for this project
+     * @returns path to bsconfig.json, or undefined if unable to find it
+     */
+    private async getConfigFilePath(config: { bsconfigPath: string; projectDir: string }) {
+        let bsconfigPath: string;
+        //if there's a setting, we need to find the file or show error if it can't be found
+        if (config?.bsconfigPath) {
+            bsconfigPath = path.resolve(config.projectDir, config.bsconfigPath);
+            if (await util.pathExists(bsconfigPath)) {
+                return util.standardizePath(bsconfigPath);
+            } else {
+                this.emit('critical-failure', {
+                    message: `Cannot find config file specified in user or workspace settings at '${bsconfigPath}'`
+                });
+            }
+        }
+
+        //the rest of these require a path to a project directory, so return early if we don't have one
+        if (!config?.projectDir) {
+            return undefined;
+        }
+
+        //default to config file path found in the root of the workspace
+        bsconfigPath = s`${config.projectDir}/bsconfig.json`;
+        if (await util.pathExists(bsconfigPath)) {
+            return util.standardizePath(bsconfigPath);
+        }
+
+        //look for the deprecated `brsconfig.json` file
+        bsconfigPath = s`${config.projectDir}/brsconfig.json`;
+        if (await util.pathExists(bsconfigPath)) {
+            return util.standardizePath(bsconfigPath);
+        }
+
+        //no config file could be found
+        return undefined;
+    }
+
+    public on(eventName: 'validate-begin', handler: (data: any) => MaybePromise<void>);
+    public on(eventName: 'validate-end', handler: (data: any) => MaybePromise<void>);
+    public on(eventName: 'critical-failure', handler: (data: { message: string }) => MaybePromise<void>);
+    public on(eventName: 'diagnostics', handler: (data: { diagnostics: LspDiagnostic[] }) => MaybePromise<void>);
+    public on(eventName: 'all', handler: (eventName: string, data: any) => MaybePromise<void>);
+    public on(eventName: string, handler: (...args: any[]) => MaybePromise<void>) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        this.emitter.on(eventName, handler as any);
+        return () => {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            this.emitter.removeListener(eventName, handler as any);
+        };
+    }
+
+    private emit(eventName: 'validate-begin', data: any);
+    private emit(eventName: 'validate-end', data: any);
+    private emit(eventName: 'critical-failure', data: { message: string });
+    private emit(eventName: 'diagnostics', data: { diagnostics: LspDiagnostic[] });
+    private async emit(eventName: string, data?) {
+        //emit these events on next tick, otherwise they will be processed immediately which could cause issues
+        await util.sleep(0);
+        this.emitter.emit(eventName, data);
+        //emit the 'all' event
+        this.emitter.emit('all', eventName, data);
+    }
+    private emitter = new EventEmitter();
+
+    public disposables: LspProject['disposables'] = [];
+
+    public dispose() {
+        this.cancelValidate();
+        for (let disposable of this.disposables ?? []) {
+            disposable?.dispose?.();
+        }
+        this.disposables = [];
+
+        this.emitter?.removeAllListeners();
+        if (this.activationDeferred?.isCompleted === false) {
+            this.activationDeferred.reject(
+                new Error('Project was disposed, activation has been cancelled')
+            );
+        }
+    }
+}

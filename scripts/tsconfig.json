@@ -2,6 +2,11 @@
     "compilerOptions": {
         "module": "CommonJS",
         "target": "ES2017",
-        "resolveJsonModule": true
+        "resolveJsonModule": true,
+        "lib": [
+            "es2022",
+            "DOM",
+            "DOM.Iterable"
+        ]
     }
 }

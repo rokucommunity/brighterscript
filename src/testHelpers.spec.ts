@@ -1,34 +1,115 @@
-import type { BscFile, BsDiagnostic } from './interfaces';
+import type { BsDiagnostic, BsDiagnosticInput, DiagnosticLocationInput } from './interfaces';
 import * as assert from 'assert';
 import chalk from 'chalk';
-import type { CodeDescription, CompletionItem, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, integer, Range } from 'vscode-languageserver';
+import type { CodeDescription, CompletionItem, CompletionList, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, DiagnosticTag, Location, Range } from 'vscode-languageserver';
 import { createSandbox } from 'sinon';
 import { expect } from './chai-config.spec';
 import type { CodeActionShorthand } from './CodeActionUtil';
 import { codeActionUtil } from './CodeActionUtil';
 import type { BrsFile } from './files/BrsFile';
 import type { Program } from './Program';
-import { standardizePath as s } from './util';
-import type { CodeWithSourceMap } from 'source-map';
+import { util, standardizePath as s } from './util';
 import { getDiagnosticLine } from './diagnosticUtils';
 import { firstBy } from 'thenby';
 import undent from 'undent';
+import type { BscFile } from './files/BscFile';
+import type { BscType } from './types/BscType';
+import type { LspDiagnostic } from './lsp/LspProject';
+import { Project } from './lsp/Project';
+import { isProgram, isProject } from './astUtils/reflection';
+import type { WorkspaceConfig } from './lsp/ProjectManager';
+import type { Locatable, SourceInfo } from './lexer/Token';
 
+export const cwd = s`${__dirname}/../`;
 export const tempDir = s`${__dirname}/../.tmp`;
 export const rootDir = s`${tempDir}/rootDir`;
-export const stagingDir = s`${tempDir}/stagingDir`;
+export const outDir = s`${tempDir}/outDir`;
+export const workspaceSettings: WorkspaceConfig = {
+    workspaceFolder: rootDir,
+    languageServer: {
+        enableThreading: false,
+        enableProjectDiscovery: true
+    }
+};
 
 export const trim = undent;
 
-type DiagnosticCollection = { getDiagnostics(): Array<Diagnostic> } | { diagnostics: Diagnostic[] } | Diagnostic[];
+/**
+ * A shared source for hand-built test tokens, where every line is 1000 characters long
+ */
+const testSource: SourceInfo = { uri: undefined, linePositions: Array.from({ length: 1000 }, (x, i) => i * 1000) };
+
+/**
+ * Create a `Locatable` for a hand-built test token from line/character positions
+ */
+export function testLocatable(startLine: number, startCharacter: number, endLine: number, endCharacter: number): Locatable & { location: Location } {
+    const locatable: Locatable = { startPosition: (startLine * 1000) + startCharacter, endPosition: (endLine * 1000) + endCharacter, sourceInfo: testSource };
+    //hand-built tokens are plain objects without the deprecated `location` getter, so give them the matching value
+    return { ...locatable, location: util.getLocation(locatable) };
+}
+const sinon = createSandbox();
+
+beforeEach(() => {
+    sinon.restore();
+});
+afterEach(() => {
+    sinon.restore();
+});
+
+type DiagnosticCollection = { getDiagnostics(): Array<BsDiagnostic | LspDiagnostic>; getFile?: (path: string, normalize: boolean) => BscFile } | { diagnostics?: BsDiagnosticInput[] } | BsDiagnosticInput[] | LspDiagnostic[];
+type DiagnosticCollectionAsync = DiagnosticCollection | { getDiagnostics(): Promise<Array<Diagnostic>> };
+
+/**
+ * Is this location a `Locatable` (i.e. from `lexer.diagnostics` or `parser.diagnostics`) rather than a `Location`?
+ */
+function isLocatableLocation(location: DiagnosticLocationInput) {
+    //same check as `DiagnosticManager`: tokens and nodes always have a `startPosition` key, and may have deprecated `range`/`location` getters
+    return !!location && ('startPosition' in location || !('uri' in location));
+}
+
+/**
+ * Resolve any `Locatable` locations in the diagnostic (including `relatedInformation`) into `Location`s,
+ * the same way `DiagnosticManager.getDiagnostics()` does
+ */
+function resolveDiagnostic(diagnostic: BsDiagnosticInput): BsDiagnostic {
+    if (!isLocatableLocation(diagnostic?.location) && !diagnostic?.relatedInformation?.some(x => isLocatableLocation(x.location))) {
+        return diagnostic as BsDiagnostic;
+    }
+    const resolve = (location: DiagnosticLocationInput) => (isLocatableLocation(location) ? util.getLocation(location as Locatable) : location as Location);
+    return {
+        ...diagnostic,
+        location: resolve(diagnostic.location),
+        relatedInformation: diagnostic.relatedInformation?.map(x => ({ ...x, location: resolve(x.location) }))
+    } as BsDiagnostic;
+}
+
+/**
+ * Get the resolved range of a diagnostic whose location might be a `Locatable` (i.e. from `parser.diagnostics`)
+ */
+export function getDiagnosticRange(diagnostic: BsDiagnosticInput): Range {
+    return resolveDiagnostic(diagnostic)?.location?.range;
+}
 
 function getDiagnostics(arg: DiagnosticCollection): BsDiagnostic[] {
     if (Array.isArray(arg)) {
-        return arg as BsDiagnostic[];
+        return (arg as BsDiagnosticInput[]).map(x => resolveDiagnostic(x));
+
+        //project.getDiagnostics() returns LspDiagonstics
+    } else if (arg instanceof Project) {
+        const diagnostics = arg.getDiagnostics();
+        return diagnostics.map(diagnostic => {
+            return {
+                ...diagnostic,
+                location: {
+                    uri: diagnostic.uri,
+                    range: diagnostic.range
+                }
+            } as BsDiagnostic;
+        });
     } else if ((arg as any).getDiagnostics) {
         return (arg as any).getDiagnostics();
     } else if ((arg as any).diagnostics) {
-        return (arg as any).diagnostics;
+        return ((arg as any).diagnostics as BsDiagnosticInput[]).map(x => resolveDiagnostic(x));
     } else {
         throw new Error('Cannot derive a list of diagnostics from ' + JSON.stringify(arg));
     }
@@ -38,10 +119,10 @@ function sortDiagnostics(diagnostics: BsDiagnostic[]) {
     return diagnostics.sort(
         firstBy<BsDiagnostic>('code')
             .thenBy<BsDiagnostic>('message')
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.line ?? 0) - (b.range?.start?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.start?.character ?? 0) - (b.range?.start?.character ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.line ?? 0) - (b.range?.end?.line ?? 0))
-            .thenBy<BsDiagnostic>((a, b) => (a.range?.end?.character ?? 0) - (b.range?.end?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.line ?? 0) - (b.location?.range?.start?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.start?.character ?? 0) - (b.location?.range?.start?.character ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.line ?? 0) - (b.location?.range?.end?.line ?? 0))
+            .thenBy<BsDiagnostic>((a, b) => (a.location?.range?.end?.character ?? 0) - (b.location?.range?.end?.character ?? 0))
     );
 }
 
@@ -58,10 +139,10 @@ function cloneObject<TOriginal, TTemplate>(original: TOriginal, template: TTempl
     return clone;
 }
 
-interface PartialDiagnostic {
-    range?: Range;
+export interface PartialDiagnostic {
+    location?: Partial<Location>;
     severity?: DiagnosticSeverity;
-    code?: integer | string;
+    code?: number | string;
     codeDescription?: Partial<CodeDescription>;
     source?: string;
     message?: string;
@@ -69,17 +150,24 @@ interface PartialDiagnostic {
     relatedInformation?: Partial<DiagnosticRelatedInformation>[];
     data?: unknown;
     file?: Partial<BscFile>;
+    legacyCode?: number | string;
 }
 
 /**
  *  Helper function to clone a Diagnostic so it will give partial data that has the same properties as the expected
  */
-function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
+export function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic: BsDiagnostic) {
     const actualDiagnostic = cloneObject(
         actualDiagnosticInput,
         expectedDiagnostic,
-        ['message', 'code', 'range', 'severity', 'relatedInformation']
+        ['message', 'code', 'severity', 'relatedInformation', 'legacyCode']
     );
+    //clone Location if available
+    if (expectedDiagnostic?.location) {
+        actualDiagnostic.location = actualDiagnosticInput.location
+            ? cloneObject(actualDiagnosticInput.location, expectedDiagnostic.location, ['uri', 'range']) as any
+            : undefined;
+    }
     //deep clone relatedInformation if available
     if (actualDiagnostic.relatedInformation) {
         for (let j = 0; j < actualDiagnostic.relatedInformation.length; j++) {
@@ -90,46 +178,63 @@ function cloneDiagnostic(actualDiagnosticInput: BsDiagnostic, expectedDiagnostic
             ) as any;
         }
     }
-    //deep clone file info if available
-    if (actualDiagnostic.file) {
-        actualDiagnostic.file = cloneObject(
-            actualDiagnostic.file,
-            expectedDiagnostic?.file,
-            ['srcPath', 'pkgPath']
-        ) as any;
-    }
     return actualDiagnostic;
 }
-
 
 /**
  * Ensure the DiagnosticCollection exactly contains the data from expected list.
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
-    const actualDiagnostics = sortDiagnostics(
-        getDiagnostics(arg)
+export async function expectDiagnosticsAsync(arg: DiagnosticCollectionAsync, expected: Array<PartialDiagnostic | string | number>) {
+    expectDiagnostics(
+        await Promise.resolve(getDiagnostics(arg as any)),
+        expected
     );
-    const expectedDiagnostics = sortDiagnostics(
-        expected.map(x => {
+}
+
+/**
+ * Ensure the DiagnosticCollection exactly contains the data from expected list.
+ * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
+ * @param expectedDiagnostics an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
+ */
+export function expectDiagnostics(arg: DiagnosticCollection, expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    const [actual, expected] = normalizeDiagnostics(getDiagnostics(arg), expectedDiagnostics);
+    expect(actual).to.eql(expected);
+}
+
+/**
+ * Normalizes a collection of diagnostics for comparison
+ * @param actualDiagnostics the actual diagnostics that were found
+ * @param expectedDiagnostics the diagnostics we're expecing
+ */
+export function normalizeDiagnostics(actualDiagnostics: BsDiagnostic[], expectedDiagnostics: Array<PartialDiagnostic | string | number>) {
+    actualDiagnostics = sortDiagnostics([...actualDiagnostics]);
+
+    expectedDiagnostics = sortDiagnostics(
+        expectedDiagnostics.map(x => {
             let result = x;
             if (typeof x === 'string') {
-                result = { message: x };
+                if (!x.includes(' ') && x.toLowerCase() === x) {
+                    // it's all lowercase and there's no spaces, so probably a code
+                    result = { code: x };
+                } else {
+                    result = { message: x };
+                }
             } else if (typeof x === 'number') {
-                result = { code: x };
+                result = { legacyCode: x };
             }
             return result as unknown as BsDiagnostic;
         })
     );
 
-    const actual = [] as BsDiagnostic[];
     for (let i = 0; i < actualDiagnostics.length; i++) {
-        const expectedDiagnostic = expectedDiagnostics[i];
+        const expectedDiagnostic = expectedDiagnostics[i] as BsDiagnostic;
         const actualDiagnostic = cloneDiagnostic(actualDiagnostics[i], expectedDiagnostic);
-        actual.push(actualDiagnostic as any);
+        actualDiagnostics[i] = actualDiagnostic as any;
     }
-    expect(actual).to.eql(expectedDiagnostics);
+    const sortedActual = sortDiagnostics(actualDiagnostics);
+    return [sortedActual, expectedDiagnostics];
 }
 
 /**
@@ -137,32 +242,38 @@ export function expectDiagnostics(arg: DiagnosticCollection, expected: Array<Par
  * @param arg - any object that contains diagnostics (such as `Program`, `Scope`, or even an array of diagnostics)
  * @param expected an array of expected diagnostics. if it's a string, assume that's a diagnostic error message
  */
-export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: Array<PartialDiagnostic | string | number>) {
+export function expectDiagnosticsIncludes(arg: DiagnosticCollection, expected: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number>) {
+    let actualExpected = Array.isArray(expected) ? expected : [expected];
     const actualDiagnostics = getDiagnostics(arg);
     const expectedDiagnostics =
-        expected.map(x => {
+        actualExpected.map(x => {
             let result = x;
             if (typeof x === 'string') {
-                result = { message: x };
+                if (!x.includes(' ') && x.toLowerCase() === x) {
+                    // it's all lowercase and there's no spaces, so probably a code
+                    result = { code: x };
+                } else {
+                    result = { message: x };
+                }
             } else if (typeof x === 'number') {
-                result = { code: x };
+                result = { legacyCode: x };
             }
             return result as unknown as BsDiagnostic;
         });
 
-    let expectedFound = 0;
 
+    const foundDiagnostics: PartialDiagnostic | string | number | Array<PartialDiagnostic | string | number> = [];
     for (const expectedDiagnostic of expectedDiagnostics) {
-        const foundDiag = actualDiagnostics.find((actualDiag) => {
+        actualDiagnostics.find((actualDiag) => {
             const actualDiagnosticClone = cloneDiagnostic(actualDiag, expectedDiagnostic);
-            return JSON.stringify(actualDiagnosticClone) === JSON.stringify(expectedDiagnostic);
+            if (JSON.stringify(actualDiagnosticClone) === JSON.stringify(expectedDiagnostic)) {
+                foundDiagnostics.push(actualDiagnosticClone);
+                return true;
+            }
+            return false;
         });
-        if (foundDiag) {
-            expectedFound++;
-        }
-
     }
-    expect(expectedFound).to.eql(expectedDiagnostics.length);
+    expect(foundDiagnostics).to.eql(expectedDiagnostics);
 }
 
 /**
@@ -175,11 +286,22 @@ export function expectZeroDiagnostics(arg: DiagnosticCollection) {
         for (const diagnostic of diagnostics) {
             //escape any newlines
             diagnostic.message = diagnostic.message.replace(/\r/g, '\\r').replace(/\n/g, '\\n');
-            message += `\n        • bs${diagnostic.code} "${diagnostic.message}" at ${diagnostic.file?.srcPath ?? ''}#(${diagnostic.range?.start.line}:${diagnostic.range?.start.character})-(${diagnostic.range?.end.line}:${diagnostic.range?.end.character})`;
-            //print the line containing the error (if we can find it)srcPath
-            const line = diagnostic.file?.fileContents?.split(/\r?\n/g)?.[diagnostic.range?.start.line];
-            if (line) {
-                message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+            message += `\n        • bs:${diagnostic.code} "${diagnostic.message}" at ${diagnostic.location?.uri ?? ''}#(${diagnostic.location?.range?.start.line}:${diagnostic.location?.range?.start.character})-(${diagnostic.location?.range?.end.line}:${diagnostic.location?.range?.end.character})`;
+
+            let program: Program;
+            if (isProject(arg)) {
+                program = arg['builder'].program;
+            } else if (isProgram(arg)) {
+                program = arg;
+            }
+
+            if (program) {
+                const file = program.getFile(diagnostic.location.uri);
+                const line = (file as BrsFile)?.fileContents?.split(/\r?\n/g)?.[diagnostic.location.range?.start.line];
+                //print the line containing the error (if we can find it)
+                if (line) {
+                    message += '\n' + getDiagnosticLine(diagnostic, line, chalk.red);
+                }
             }
         }
         assert.fail(message);
@@ -207,7 +329,7 @@ export function trimMap(source: string) {
     return source.replace(/('|<!--)\/\/# sourceMappingURL=.*$/m, '').trimEnd();
 }
 
-export function expectCodeActions(test: () => any, expected: CodeActionShorthand[]) {
+export function expectCodeActions(test: () => any, expected: CodeActionShorthand[], options?: { includeDisableDirectives?: boolean }) {
     const sinon = createSandbox();
     const stub = sinon.stub(codeActionUtil, 'createCodeAction');
     try {
@@ -216,7 +338,11 @@ export function expectCodeActions(test: () => any, expected: CodeActionShorthand
         sinon.restore();
     }
 
-    const args = stub.getCalls().map(x => x.args[0]);
+    const args = stub.getCalls().map(x => x.args[0])
+        //the bs:disable-{line,file} suggestions fire for every diagnostic with a `code`
+        //(see CodeActionsProcessor.suggestDisableDiagnosticQuickFixes); the legacy specs
+        //predate that feature, so filter them out here.
+        .filter(arg => !arg.title?.startsWith('Disable '));
     //delete any `diagnostics` arrays to help with testing performance (since it's circular...causes all sorts of issues)
     for (let arg of args) {
         delete arg.diagnostics;
@@ -236,32 +362,44 @@ export function expectInstanceOf<T>(items: any[], constructors: Array<new (...ar
 
 export function getTestTranspile(scopeGetter: () => [program: Program, rootDir: string]) {
     return getTestFileAction((file) => {
-        return file.program['_getTranspiledFileContents'](file);
+        return (file as BrsFile).program.getTranspiledFileContents(file.srcPath);
     }, scopeGetter);
 }
 
 export function getTestGetTypedef(scopeGetter: () => [program: Program, rootDir: string]) {
-    return getTestFileAction((file) => {
+    return getTestFileAction(async (file) => {
+        const program = (file as BrsFile).program;
+        program.options.emitDefinitions = true;
+        const result = await program.getTranspiledFileContents(file.srcPath);
         return {
-            code: (file as BrsFile).getTypedef(),
+            code: result.typedef,
             map: undefined
-        } as any as CodeWithSourceMap;
+        };
     }, scopeGetter);
 }
 
 function getTestFileAction(
-    action: (file: BscFile) => CodeWithSourceMap,
+    action: (file: BscFile) => Promise<{ code: string; map?: string }>,
     scopeGetter: () => [program: Program, rootDir: string]
 ) {
-    return function testFileAction(source: string, expected?: string, formatType: 'trim' | 'none' = 'trim', pkgPath = 'source/main.bs', failOnDiagnostic = true) {
+    return async function testFileAction<TFile extends BscFile = BscFile>(sourceOrFile: string | TFile, expected?: string, formatType: 'trim' | 'none' = 'trim', destPath = 'source/main.bs', failOnDiagnostic = true) {
         let [program, rootDir] = scopeGetter();
-        expected = expected ? expected : source;
-        let file = program.setFile<BrsFile>({ src: s`${rootDir}/${pkgPath}`, dest: pkgPath }, source);
+        let file: TFile;
+        if (typeof sourceOrFile === 'string') {
+            expected = expected ? expected : sourceOrFile;
+            file = program.setFile<TFile>({ src: s`${rootDir}/${destPath}`, dest: destPath }, sourceOrFile);
+        } else {
+            file = sourceOrFile;
+            if (!expected) {
+                throw new Error('`expected` is required when passing a file');
+            }
+        }
         program.validate();
         if (failOnDiagnostic !== false) {
-            expectZeroDiagnostics(program);
+            //transpile tests often have inactive `#if` branches or unreachable code, whose hints only fade code and say nothing about the output
+            expectZeroDiagnostics(program.getDiagnostics().filter(diagnostic => diagnostic.code !== 'inactive-conditional-compile-branch' && diagnostic.code !== 'unreachable-code'));
         }
-        let codeWithMap = action(file);
+        let codeWithMap = await action(file);
 
         let sources = [trimMap(codeWithMap.code), expected];
 
@@ -274,7 +412,7 @@ function getTestFileAction(
         expect(sources[0]).to.equal(sources[1]);
         return {
             file: file,
-            source: source,
+            source: sourceOrFile,
             expected: expected,
             actual: codeWithMap.code,
             map: codeWithMap.map
@@ -299,7 +437,9 @@ function pick<T extends Record<string, any>>(example: T, subject: Record<string,
 /**
  * Test a set of completions includes the provided items
  */
-export function expectCompletionsIncludes(completions: CompletionItem[], expectedItems: Array<string | Partial<CompletionItem>>) {
+export function expectCompletionsIncludes(collection: CompletionItem[] | CompletionList, expectedItems: Array<string | Partial<CompletionItem>>) {
+    const completions = Array.isArray(collection) ? collection : collection.items;
+
     for (const expectedItem of expectedItems) {
         if (typeof expectedItem === 'string') {
             expect(completions.map(x => x.label)).includes(expectedItem);
@@ -347,6 +487,21 @@ export function expectThrows(callback: () => any, expectedMessage: string | unde
     }
 }
 
+export async function expectThrowsAsync(callback: () => any, expectedMessage = undefined, failedTestMessage = 'Expected to throw but did not') {
+    let wasExceptionThrown = false;
+    try {
+        await Promise.resolve(callback());
+    } catch (e) {
+        wasExceptionThrown = true;
+        if (expectedMessage) {
+            expect((e as Error)?.message).to.eql(expectedMessage);
+        }
+    }
+    if (wasExceptionThrown === false) {
+        throw new Error(failedTestMessage);
+    }
+}
+
 export function objectToMap<T>(obj: Record<string, T>) {
     const result = new Map<string, T>();
     for (let key in obj) {
@@ -363,6 +518,13 @@ export function mapToObject<T>(map: Map<any, T>) {
     return result;
 }
 
+/**
+ * Test that a type is what was expected
+ */
+export function expectTypeToBe(someType: BscType, expectedTypeClass: any) {
+    expect(someType?.constructor?.name).to.eq(expectedTypeClass.name);
+}
+
 export function stripConsoleColors(inputString) {
     // Regular expression to match ANSI escape codes for colors
     // eslint-disable-next-line no-control-regex
@@ -370,4 +532,70 @@ export function stripConsoleColors(inputString) {
 
     // Remove all occurrences of ANSI escape codes
     return inputString.replace(colorPattern, '');
+}
+
+type FunctionReturnType<T> = T extends (...args: any[]) => infer R ? R : any;
+
+/**
+ * Mock something, and get a promise when it has been called once
+ */
+export async function onCalledOnce<T, K extends keyof T>(thing: T, method: K): Promise<FunctionReturnType<T[K]>> {
+    return new Promise((resolve, reject) => {
+        const stub = sinon.stub(thing, method).callsFake(async function _(this: any, ...args: any[]) {
+            const result = await stub.wrappedMethod.apply(this, args);
+            sinon.restore();
+            resolve(result);
+            return result;
+        });
+    });
+}
+
+
+/**
+ * Create a stub that resolves a promise after the function has settled for a period of time
+ */
+export function createInactivityStub<T, K extends keyof T>(obj: T, methodName: keyof T, inactivityPeriod = 400, sinonRef = sinon) {
+    // Store reference to the original method
+    const originalMethod = obj[methodName];
+
+    // Track the timeout for inactivity
+    let inactivityTimeout;
+
+    // Create the inactivity promise
+    let inactivityPromiseResolve;
+    const inactivityPromise = new Promise((resolve) => {
+        inactivityPromiseResolve = resolve;
+    });
+
+    // Stub the method
+    const stub = sinonRef.stub(obj, methodName).callsFake(function (this: any, ...args) {
+        // Call the original method
+        const result = (originalMethod as any).apply(this, args);
+
+        // Clear previous inactivity timeout and restart the timer
+        clearTimeout(inactivityTimeout);
+        inactivityTimeout = setTimeout(() => {
+            inactivityPromiseResolve();
+        }, inactivityPeriod);
+
+        return result;
+    });
+
+    // Return the stub and inactivity promise
+    return {
+        stub: stub,
+        promise: inactivityPromise
+    };
+}
+
+export async function once<T = any>(
+    obj: { on: (event, callback) => () => void },
+    event: string
+): Promise<T[]> {
+    return new Promise<T[]>((resolve) => {
+        const off = obj.on('diagnostics', (...args) => {
+            off();
+            resolve(args);
+        });
+    });
 }

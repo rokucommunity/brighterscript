@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 import { Deferred } from './deferred';
 import { BusyStatus, BusyStatusTracker } from './BusyStatusTracker';
+import { createSandbox } from 'sinon';
+const sinon = createSandbox();
 
 describe('BusyStatusTracker', () => {
     let tracker: BusyStatusTracker;
@@ -8,6 +10,7 @@ describe('BusyStatusTracker', () => {
     let latestStatus: BusyStatus;
 
     beforeEach(() => {
+        sinon.restore();
         latestStatus = BusyStatus.idle;
         tracker = new BusyStatusTracker();
         tracker.on('change', (value) => {
@@ -16,6 +19,7 @@ describe('BusyStatusTracker', () => {
     });
 
     afterEach(() => {
+        sinon.restore();
         tracker?.destroy();
     });
 
@@ -148,5 +152,95 @@ describe('BusyStatusTracker', () => {
             expect(tracker.status).to.eql(BusyStatus.busy);
         });
         expect(tracker.status).to.eql(BusyStatus.idle);
+    });
+
+    describe('scopedTracking', () => {
+        const scope1 = {};
+
+        it('supports scoped tracking', async () => {
+            let onStatus = tracker.once('change');
+            tracker.beginScopedRun(scope1, 'run1');
+            expect(
+                await onStatus
+            ).to.eql(BusyStatus.busy);
+
+            tracker.beginScopedRun(scope1, 'run2');
+            expect(latestStatus).to.eql(BusyStatus.busy);
+
+            await tracker.endScopedRun(scope1, 'run1');
+            expect(latestStatus).to.eql(BusyStatus.busy);
+
+            onStatus = tracker.once('change');
+            await tracker.endScopedRun(scope1, 'run2');
+            expect(
+                await onStatus
+            ).to.eql(BusyStatus.idle);
+        });
+
+        it('clears runs for scope', async () => {
+            let onChange = tracker.once('change');
+            tracker.beginScopedRun(scope1, 'run1');
+            tracker.beginScopedRun(scope1, 'run1');
+            tracker.beginScopedRun(scope1, 'run1');
+
+            expect(
+                await onChange
+            ).to.eql(BusyStatus.busy);
+
+            onChange = tracker.once('change');
+
+            tracker.endAllRunsForScope(scope1);
+            expect(
+                await onChange
+            ).to.eql(BusyStatus.idle);
+        });
+
+        it('emits an active-runs-change event when any run changes', async () => {
+            let count = 0;
+            tracker.on('active-runs-change', () => {
+                count++;
+            });
+            tracker.run(() => { }, 'run1');
+            tracker.run(() => { }, 'run2');
+            await tracker.run(() => Promise.resolve(true), 'run3');
+
+            tracker.beginScopedRun(this, 'run4');
+            tracker.beginScopedRun(this, 'run4');
+            await tracker.endScopedRun(this, 'run4');
+            await tracker.endScopedRun(this, 'run4');
+
+            //we should have 10 total events (5 starts, 5 ends)
+            expect(count).to.eql(10);
+        });
+
+        it('emits active-runs-change with the correct list of remaining active runs', () => {
+            const spy = sinon.spy();
+            tracker.on('active-runs-change', spy);
+            tracker.run(() => {
+                expect(tracker.status).to.eql(BusyStatus.busy);
+            }, 'test');
+            //small timeout to allow all the events to show up
+            expect(spy.callCount).to.eql(2);
+            expect(
+                spy.getCall(0).args[0].activeRuns.map(x => ({ label: x.label }))
+            ).to.eql([
+                { label: 'test' }
+            ]);
+            expect(
+                spy.getCall(1).args[0].activeRuns
+            ).to.eql([]);
+        });
+
+        it('removes the entry for the scope when the last run is cleared', async () => {
+            expect(tracker['activeRuns']).to.be.empty;
+
+            tracker.beginScopedRun(scope1, 'run1');
+
+            expect(tracker['activeRuns'].find(x => x.scope === scope1 && x.label === 'run1')).to.exist;
+
+            await tracker.endScopedRun(scope1, 'run1');
+
+            expect(tracker['activeRuns']).to.be.empty;
+        });
     });
 });

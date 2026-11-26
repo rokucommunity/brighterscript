@@ -1,19 +1,20 @@
-import type { Location, Position } from 'vscode-languageserver';
 import { Scope } from './Scope';
-import { DiagnosticMessages } from './DiagnosticMessages';
 import type { XmlFile } from './files/XmlFile';
-import type { BscFile, CallableContainerMap, FileReference } from './interfaces';
 import type { Program } from './Program';
-import { SGFieldTypes } from './parser/SGTypes';
-import type { SGTag } from './parser/SGTypes';
-import { DefinitionProvider } from './bscPlugin/definition/DefinitionProvider';
+import util from './util';
+import { SymbolTypeFlag } from './SymbolTypeFlag';
+import type { BscFile } from './files/BscFile';
+import { DynamicType } from './types/DynamicType';
+import type { BaseFunctionType } from './types/BaseFunctionType';
+import { ComponentType } from './types/ComponentType';
+import type { ExtraSymbolData } from './interfaces';
 
 export class XmlScope extends Scope {
     constructor(
         public xmlFile: XmlFile,
         public program: Program
     ) {
-        super(xmlFile.pkgPath, program);
+        super(xmlFile.destPath, program);
     }
 
     public get dependencyGraphKey() {
@@ -39,102 +40,37 @@ export class XmlScope extends Scope {
         });
     }
 
-    protected _validate(callableContainerMap: CallableContainerMap) {
-        //validate brs files
-        super._validate(callableContainerMap);
-
-        //detect when the child imports a script that its ancestor also imports
-        this.diagnosticDetectDuplicateAncestorScriptImports();
-
-        //validate component interface
-        this.diagnosticValidateInterface(callableContainerMap);
-    }
-
-    private diagnosticValidateInterface(callableContainerMap: CallableContainerMap) {
-        if (!this.xmlFile.parser.ast?.component?.api) {
+    public getComponentType() {
+        let componentElement = this.xmlFile.ast.componentElement;
+        if (!componentElement?.name) {
             return;
         }
-        const { api } = this.xmlFile.parser.ast.component;
-        //validate functions
-        for (const fun of api.functions) {
-            const name = fun.name;
-            if (!name) {
-                this.diagnosticMissingAttribute(fun, 'name');
-            } else if (!callableContainerMap.has(name.toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlFunctionNotFound(name),
-                    range: fun.getAttribute('name')?.value.range,
-                    file: this.xmlFile
-                });
+        const parentComponentType = componentElement?.extends
+            ? this.symbolTable.getSymbolType(util.getSgNodeTypeName(componentElement?.extends), { flags: SymbolTypeFlag.typetime, fullName: componentElement?.extends, tableProvider: () => this.symbolTable })
+            : undefined;
+        const result = new ComponentType(componentElement.name, parentComponentType as ComponentType);
+        result.addBuiltInInterfaces();
+        const iface = componentElement.interfaceElement;
+        if (!iface) {
+            return result;
+        }
+        //add functions
+        for (const func of iface.functions ?? []) {
+            if (func.name) {
+                const extraData: ExtraSymbolData = {};
+                const componentFuncType = this.symbolTable.getSymbolType(func.name, { flags: SymbolTypeFlag.runtime, data: extraData, fullName: func.name, tableProvider: () => this.symbolTable });
+                result.addCallFuncMember(func.name, extraData, componentFuncType as BaseFunctionType, SymbolTypeFlag.runtime, () => this.symbolTable);
             }
         }
-        //validate fields
-        for (const field of api.fields) {
-            const { id, type, onChange } = field;
-            if (!id) {
-                this.diagnosticMissingAttribute(field, 'id');
-            }
-            if (!type) {
-                if (!field.alias) {
-                    this.diagnosticMissingAttribute(field, 'type');
-                }
-            } else if (!SGFieldTypes.includes(type.toLowerCase())) {
-                this.diagnostics.push({
-                    ...DiagnosticMessages.xmlInvalidFieldType(type),
-                    range: field.getAttribute('type')?.value.range,
-                    file: this.xmlFile
-                });
-            }
-            if (onChange) {
-                if (!callableContainerMap.has(onChange.toLowerCase())) {
-                    this.diagnostics.push({
-                        ...DiagnosticMessages.xmlFunctionNotFound(onChange),
-                        range: field.getAttribute('onchange')?.value.range,
-                        file: this.xmlFile
-                    });
-                }
+        //add fields
+        for (const field of iface.fields ?? []) {
+            if (field.id) {
+                const actualFieldType = field.type ? util.getNodeFieldType(field.type, this.symbolTable) : DynamicType.instance;
+                //TODO: add documentation - need to get previous comment from XML
+                result.addMember(field.id, {}, actualFieldType, SymbolTypeFlag.runtime);
             }
         }
-    }
-
-    private diagnosticMissingAttribute(tag: SGTag, name: string) {
-        const { text, range } = tag.tag;
-        this.diagnostics.push({
-            ...DiagnosticMessages.xmlTagMissingAttribute(text, name),
-            range: range,
-            file: this.xmlFile
-        });
-    }
-
-    /**
-     * Detect when a child has imported a script that an ancestor also imported
-     */
-    private diagnosticDetectDuplicateAncestorScriptImports() {
-        if (this.xmlFile.parentComponent) {
-            //build a lookup of pkg paths -> FileReference so we can more easily look up collisions
-            let parentScriptImports = this.xmlFile.getAncestorScriptTagImports();
-            let lookup = {} as Record<string, FileReference>;
-            for (let parentScriptImport of parentScriptImports) {
-                //keep the first occurance of a pkgPath. Parent imports are first in the array
-                if (!lookup[parentScriptImport.pkgPath]) {
-                    lookup[parentScriptImport.pkgPath] = parentScriptImport;
-                }
-            }
-
-            //add warning for every script tag that this file shares with an ancestor
-            for (let scriptImport of this.xmlFile.scriptTagImports) {
-                let ancestorScriptImport = lookup[scriptImport.pkgPath];
-                if (ancestorScriptImport) {
-                    let ancestorComponent = ancestorScriptImport.sourceFile as XmlFile;
-                    let ancestorComponentName = ancestorComponent.componentName?.text ?? ancestorComponent.pkgPath;
-                    this.diagnostics.push({
-                        file: this.xmlFile,
-                        range: scriptImport.filePathRange,
-                        ...DiagnosticMessages.unnecessaryScriptImportInChildFromParent(ancestorComponentName)
-                    });
-                }
-            }
-        }
+        return result;
     }
 
     public getAllFiles() {
@@ -154,27 +90,14 @@ export class XmlScope extends Scope {
             let result = [
                 this.xmlFile
             ] as BscFile[];
-            let scriptPkgPaths = this.xmlFile.getOwnDependencies();
-            for (let scriptPkgPath of scriptPkgPaths) {
-                let file = this.program.getFileByPkgPath(scriptPkgPath);
+            let scriptDestPaths = this.xmlFile.getOwnDependencies();
+            for (let destPath of scriptDestPaths) {
+                let file = this.program.getFile(destPath, false);
                 if (file) {
                     result.push(file);
                 }
             }
             return result;
         });
-    }
-
-    /**
-     * Get the definition (where was this thing first defined) of the symbol under the position
-     * @deprecated use `DefinitionProvider.process()`
-     */
-    public getDefinition(file: BscFile, position: Position): Location[] {
-        return new DefinitionProvider({
-            program: this.program,
-            file: file,
-            position: position,
-            definitions: []
-        }).process();
     }
 }

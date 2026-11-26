@@ -14,7 +14,7 @@ describe('Logger', () => {
         });
         sinon.restore();
         //disable chalk colors for testing
-        sinon.stub(chalk, 'grey').callsFake((arg) => arg as any);
+        chalk.level = 0;
     });
 
     it('loglevel setter converts string to enum', () => {
