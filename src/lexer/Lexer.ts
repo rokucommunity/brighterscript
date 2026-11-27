@@ -695,6 +695,27 @@ export class Lexer {
     }
 
     /**
+     * Determines whether the `.` at the current position (directly after the integer digits of a number)
+     * starts a member access (i.e. `12.toStr()`) rather than the decimal point of a float.
+     * Exponent forms like `1.e5`, `1.E-5`, and `2.d3` are still considered part of the number.
+     */
+    private isMemberAccessAfterNumber() {
+        const afterDot = this.peekNext();
+        if (!isAlpha(afterDot)) {
+            return false;
+        }
+        //`e` or `d` followed by a digit or exponent sign is an exponent, not a member name
+        const lower = afterDot.toLowerCase();
+        if (lower === 'e' || lower === 'd') {
+            const afterExponent = this.source.charAt(this.current + 2);
+            if (isDecimalDigit(afterExponent) || afterExponent === '+' || afterExponent === '-') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Reads characters within a base-10 number literal, advancing through fractional and
      * exponential portions as well as trailing type identifiers, and adds the produced token
      * to the `tokens` array. Also responsible for BrightScript's integer literal vs. float
@@ -708,8 +729,8 @@ export class Lexer {
             this.advance();
         }
 
-        // look for a fractional portion
-        if (!hasSeenDecimal && this.peek() === '.') {
+        // look for a fractional portion (but not a member access like `12.toStr()`)
+        if (!hasSeenDecimal && this.peek() === '.' && !this.isMemberAccessAfterNumber()) {
             containsDecimal = true;
 
             // consume the "." parse the fractional part
