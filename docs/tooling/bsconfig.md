@@ -30,6 +30,7 @@ Every option `bsconfig.json` supports. To set up a new project, start with [Conf
   - [`password`](#password)
   - [`plugins`](#plugins)
   - [`project`](#project)
+  - [`promisesDestinationDir`](#promisesdestinationdir)
   - [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
   - [`removeParameterTypes`](#removeparametertypes)
   - [`require`](#require)
@@ -72,6 +73,7 @@ The following options live inside `compilerOptions`:
 - `legacyCallfuncHandling`
 - `manifest`
 - [`minFirmwareVersion`](#minfirmwareversion)
+- [`promisesDestinationDir`](#promisesdestinationdir)
 - [`pruneEmptyCodeFiles`](#pruneemptycodefiles)
 - [`relativeSourceMaps`](#relativesourcemaps)
 - [`removeParameterTypes`](#removeparametertypes)
@@ -82,7 +84,7 @@ The following options live inside `compilerOptions`:
 - [`strictCallFunc`](#strictcallfunc)
 - [`strictNodeMembers`](#strictnodemembers)
 
-Each of these options used to live at the top level of `bsconfig.json`. Those top-level locations still work for backwards compatibility, but are **deprecated** — using one emits a `deprecated-bsconfig-option` warning diagnostic pointing you at the `compilerOptions` equivalent. If an option is set in both places, the value in `compilerOptions` wins.
+Except for `promisesDestinationDir` (which has only ever lived in `compilerOptions`), each of these options used to live at the top level of `bsconfig.json`. Those top-level locations still work for backwards compatibility, but are **deprecated** — using one emits a `deprecated-bsconfig-option` warning diagnostic pointing you at the `compilerOptions` equivalent. If an option is set in both places, the value in `compilerOptions` wins.
 
 `extends` deep-merges `compilerOptions` across the config chain (a child config that only sets one option under `compilerOptions` does not wipe out the other options set by a parent config it extends) — this is different from every other `bsconfig.json` option, where the child's value completely replaces the parent's.
 
@@ -617,6 +619,16 @@ If a child bsconfig extends from a parent bsconfig, and both bsconfigs specify a
 Type: `string`
 
 A path to a project file. This is really only passed in from the command line or the NodeJS API, and should not be present in `bsconfig.json` files. Prefix with a question mark (?) to prevent throwing an exception when the file does not exist (see [example under the `extends` option](#optional-extends-and-project)).
+
+## `promisesDestinationDir`
+
+Type: `string`
+
+Set this inside [`compilerOptions`](#compileroptions). Override the destination directory for the promises.brs file, the [@rokucommunity/promises](https://github.com/rokucommunity/promises) library that powers [async functions](../language-features/async-await.md). Use this if you want to customize where the promises.brs file is located in the staging directory. Note that using a location outside of `source` will break scripts inside `source` that use async functions.
+
+This only moves the copy the compiler adds. If you install the library with ropm, the compiler uses that copy where ropm put it.
+
+Defaults to `source`.
 
 ## `pruneEmptyCodeFiles`
 

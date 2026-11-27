@@ -7,7 +7,7 @@ import type { OnPrepareFileEvent } from '../../interfaces';
 import type { Identifier, Locatable, Token } from '../../lexer/Token';
 import { TokenKind } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import type { AALiteralExpression, NullCoalescingExpression, TernaryExpression } from '../../parser/Expression';
+import type { AALiteralExpression, FunctionExpression, NullCoalescingExpression, TernaryExpression } from '../../parser/Expression';
 import { ArrayLiteralExpression, BinaryExpression, DottedGetExpression, LiteralExpression, VariableExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { Block, Body, ConstStatement, NamespaceStatement } from '../../parser/Statement';
@@ -16,6 +16,7 @@ import type { Scope } from '../../Scope';
 import { SymbolTypeFlag } from '../../SymbolTypeFlag';
 import util from '../../util';
 import { BslibManager } from '../serialize/BslibManager';
+import { AsyncFunctionTranspiler } from './AsyncFunctionTranspiler';
 import { createExtraSymbolData } from '../../interfaces';
 
 /**
@@ -34,11 +35,41 @@ export class BrsFilePreTranspileProcessor {
     }
 
     public process() {
+        const asyncFunctions = this.findAsyncFunctions();
+        if (asyncFunctions.length > 0) {
+            //lowering async functions moves statements into new callbacks, which re-parents them. Undo runs in reverse order, so
+            //registering this first means it runs last: once every other edit is undone, re-link the tree so parents point at the original nodes again
+            this.event.editor.edit(() => { }, () => {
+                this.event.file.ast.link();
+            });
+        }
         this.iterateExpressions();
         //apply prefixes to bslib
         if (BslibManager.isBslibPkgPath(this.event.file.pkgPath)) {
             this.applyBslibPrefixesIfMissing(this.event.file, this.event.editor);
         }
+        //lower async functions last, so the statements they move have already been through the other rewrites above
+        const asyncTranspiler = new AsyncFunctionTranspiler(this.event.file, this.event.editor, this.event.program.promisesPrefix);
+        for (const func of asyncFunctions) {
+            asyncTranspiler.process(func);
+        }
+    }
+
+    /**
+     * Find every async function in the file, including nested ones
+     */
+    private findAsyncFunctions() {
+        const result: FunctionExpression[] = [];
+        this.event.file.ast.walk(createVisitor({
+            FunctionExpression: (func) => {
+                if (func.isAsync) {
+                    result.push(func);
+                }
+            }
+        }), {
+            walkMode: WalkMode.visitAllRecursive
+        });
+        return result;
     }
 
     public applyBslibPrefixesIfMissing(file: BrsFile, editor: Editor) {

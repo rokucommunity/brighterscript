@@ -1,11 +1,11 @@
-import { isAliasStatement, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isNamespaceStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
+import { isAliasStatement, isAssignmentStatement, isBlock, isBody, isCallExpression, isCallfuncExpression, isClassStatement, isConditionalCompileConstStatement, isConditionalCompileErrorStatement, isConditionalCompileStatement, isConstStatement, isDottedGetExpression, isDottedSetStatement, isEnumStatement, isExpressionStatement, isForEachStatement, isForStatement, isFunctionExpression, isFunctionStatement, isImportStatement, isIndexedGetExpression, isIndexedSetStatement, isInterfaceStatement, isLibraryStatement, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isNamespaceStatement, isReturnStatement, isSpreadExpression, isTryCatchStatement, isTypecastExpression, isTaggedTemplateStringExpression, isTypecastStatement, isTypedFunctionTypeExpression, isTypeStatement, isUnaryExpression, isVariableExpression, isWhileStatement } from '../../astUtils/reflection';
 import { createVisitor, WalkMode } from '../../astUtils/visitors';
 import { DiagnosticMessages } from '../../DiagnosticMessages';
 import type { BrsFile } from '../../files/BrsFile';
 import type { ValidateFileEvent } from '../../interfaces';
 import { TokenKind, UnreferencableBuiltins } from '../../lexer/TokenKind';
 import type { AstNode, Expression, Statement } from '../../parser/AstNode';
-import { CallExpression, FunctionExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression } from '../../parser/Expression';
+import { CallExpression, FunctionExpression, type AwaitedExpression, type AALiteralExpression, type FunctionParameterExpression, type ArrayLiteralExpression, type LiteralExpression, type RegexLiteralExpression, type SourceLiteralExpression } from '../../parser/Expression';
 import { ParseMode } from '../../parser/Parser';
 import type { ClassStatement, ContinueStatement, EnumMemberStatement, EnumStatement, ForEachStatement, ForStatement, FunctionStatement, ImportStatement, LibraryStatement, Body, MethodStatement, WhileStatement, TypecastStatement, Block, AliasStatement, ConditionalCompileStatement, ConditionalCompileConstStatement, SelectCaseStatement, LabelStatement, GotoStatement } from '../../parser/Statement';
 import { getExitSelectTarget, isExitSelectStatement, PrintStatement } from '../../parser/Statement';
@@ -175,6 +175,15 @@ export class BrsFileValidator {
         const visitor = createVisitor({
             MethodStatement: (node) => {
                 this.validateFunctionNameLength(node, this.getMethodRuntimeName(node));
+                if (node.func?.isAsync && node.tokens.name?.text.toLowerCase() === 'new') {
+                    this.event.program.diagnostics.register({
+                        ...DiagnosticMessages.asyncClassConstructor(),
+                        location: node.func.tokens.async
+                    });
+                }
+            },
+            AwaitedExpression: (node) => {
+                this.validateAwaitedExpression(node);
             },
             CallfuncExpression: (node) => {
                 if (node.args.length > 5) {
@@ -461,6 +470,61 @@ export class BrsFileValidator {
             return undefined;
         }
         return `__${className}_method_${methodName}`;
+    }
+
+    /**
+     * Flag an `await` that is outside of an async function, or that is somewhere async functions can't (yet) support it
+     */
+    private validateAwaitedExpression(node: AwaitedExpression) {
+        const func = node.findAncestor<FunctionExpression>(isFunctionExpression);
+        if (!func?.isAsync) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.awaitOutsideAsyncFunction(),
+                location: node.tokens.await
+            });
+            return;
+        }
+        if (!this.isSupportedAwaitPlacement(node, func)) {
+            this.event.program.diagnostics.register({
+                ...DiagnosticMessages.awaitNotSupportedHere(),
+                location: node.tokens.await
+            });
+        }
+    }
+
+    /**
+     * For now, `await` is only supported in these forms:
+     *  - `await something()`
+     *  - `x = await something()`
+     *  - `m.x = await something()`
+     *  - `m["x"] = await something()`
+     *  - `return await something()`
+     * where the statement lives directly in the async function's body, or directly in a `try` block (recursively) that does.
+     */
+    private isSupportedAwaitPlacement(node: AwaitedExpression, func: FunctionExpression) {
+        const statement = node.parent;
+        const isSupportedStatement =
+            (isExpressionStatement(statement) && statement.expression === node) ||
+            (isAssignmentStatement(statement) && statement.value === node) ||
+            (isDottedSetStatement(statement) && statement.value === node) ||
+            (isIndexedSetStatement(statement) && statement.value === node) ||
+            (isReturnStatement(statement) && statement.value === node);
+        if (!isSupportedStatement) {
+            return false;
+        }
+        let block = statement.parent;
+        while (isBlock(block)) {
+            if (block.parent === func) {
+                return true;
+            }
+            const tryCatch = block.parent;
+            if (isTryCatchStatement(tryCatch) && tryCatch.tryBranch === block) {
+                block = tryCatch.parent;
+            } else {
+                return false;
+            }
+        }
+        return false;
     }
 
     private validateFunctionNameLength(node: FunctionStatement, name: string) {

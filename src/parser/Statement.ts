@@ -579,6 +579,13 @@ export class FunctionStatement extends Statement implements TypedefProvider {
         return this.func.leadingTrivia;
     }
 
+    /**
+     * Is this an async function (i.e. `async function foo()`)?
+     */
+    public get isAsync() {
+        return this.func?.isAsync ?? false;
+    }
+
     transpile(state: BrsTranspileState): TranspileResult {
         //create a fake token using the full transpiled name
         let nameToken = {

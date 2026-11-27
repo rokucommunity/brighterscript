@@ -915,14 +915,16 @@ export class ScopeValidator {
             // `return` statement by itself in non-built-in function will actually result in `invalid`
             const valueReturnType = isVoidType(actualReturnType) ? InvalidType.instance : actualReturnType;
 
-            if (funcType.returnType.isResolvable()) {
-                if (!returnStmt?.value && isVoidType(funcType.returnType)) {
+            //an async function returns a promise, so a `return` inside of it provides the value that promise resolves to
+            const expectedReturnType = funcType.isAsync ? funcType.awaitedReturnType : funcType.returnType;
+            if (expectedReturnType?.isResolvable()) {
+                if (!returnStmt?.value && isVoidType(expectedReturnType)) {
                     // allow empty return when function is return `as void`
                     // eslint-disable-next-line no-useless-return
                     return;
-                } else if (!funcType.returnType.isTypeCompatible(valueReturnType, compatibilityData)) {
+                } else if (!expectedReturnType.isTypeCompatible(valueReturnType, compatibilityData)) {
                     this.addMultiScopeDiagnostic({
-                        ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), funcType.returnType.toString(), compatibilityData),
+                        ...DiagnosticMessages.returnTypeMismatch(actualReturnType.toString(), expectedReturnType.toString(), compatibilityData),
                         location: util.firstLocatable(returnStmt.value, returnStmt)
                     });
                 }
@@ -1592,8 +1594,8 @@ export class ScopeValidator {
             let referencedFile = this.event.scope.getFileByRelativePath(scriptImport.destPath);
             //if we can't find the file
             if (!referencedFile) {
-                //skip the default bslib file, it will exist at transpile time but should not show up in the program during validation cycle
-                if (scriptImport.destPath === this.event.program.bslibPkgPath) {
+                //skip the default bslib file (and the promises file when async functions are used), they will exist at transpile time but should not show up in the program during validation cycle
+                if (scriptImport.destPath === this.event.program.bslibPkgPath || (scriptImport.destPath === this.event.program.promisesPkgPath && this.event.program.hasAsyncFunctions)) {
                     continue;
                 }
                 let dInfo: DiagnosticInfo;

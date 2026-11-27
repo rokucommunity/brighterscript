@@ -187,6 +187,7 @@ export class Util {
             '',
             compilerOption('// "allowBrighterScriptInBrightScript": false,', 'Allow BrighterScript features (classes, interfaces, etc...) in BrightScript (`.brs`) files, and force those files to be transpiled.'),
             compilerOption('// "bslibDestinationDir": "source",', 'Override the output directory location of the bslib.brs file. Using a location outside of `source` will break scripts that depend on it.'),
+            compilerOption('// "promisesDestinationDir": "source",', 'Override the output directory location of the promises.brs file that powers async functions. Using a location outside of `source` will break scripts that depend on it.'),
             compilerOption('// "emitDefinitions": false,', 'Emit type definition files (`d.bs`) during transpile.'),
             compilerOption('// "emitFullPaths": false,', 'Emit full paths to files when printing diagnostics to the console.'),
             compilerOption('// "legacyCallfuncHandling": false,', 'Insert `invalid` as an argument to `callfunc()` calls that have no arguments, for legacy Roku OS versions.'),
@@ -466,6 +467,12 @@ export class Util {
             bslibDestinationDir = bslibDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
         }
 
+        let promisesDestinationDir = compilerOptions.promisesDestinationDir ?? (config as FinalizedBsConfig).promisesDestinationDir ?? 'source';
+        if (promisesDestinationDir !== 'source') {
+            // strip leading and trailing slashes
+            promisesDestinationDir = promisesDestinationDir.replace(/^(\/*)(.*?)(\/*)$/, '$2');
+        }
+
         let noEmit: boolean;
         if ('noEmit' in config) {
             noEmit = config.noEmit;
@@ -513,6 +520,7 @@ export class Util {
             removeParameterTypes: config.removeParameterTypes === true ? true : false,
             logLevel: logLevel,
             bslibDestinationDir: bslibDestinationDir,
+            promisesDestinationDir: promisesDestinationDir,
             legacyCallfuncHandling: config.legacyCallfuncHandling === true ? true : false,
             validate: config.validate === false ? false : true,
             strict: strictValue,

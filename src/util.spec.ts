@@ -279,7 +279,7 @@ describe('util', () => {
             for (const key of [
                 'allowBrighterScriptInBrightScript', 'bslibDestinationDir', 'cwd', 'diagnosticFilters', 'diagnosticLevel',
                 'diagnosticReporters', 'diagnosticSeverityOverrides', 'emitDefinitions', 'emitFullPaths', 'extends', 'files',
-                'legacyCallfuncHandling', 'logLevel', 'manifest', 'noEmit', 'plugins', 'pruneEmptyCodeFiles', 'removeParameterTypes', 'require',
+                'legacyCallfuncHandling', 'logLevel', 'manifest', 'noEmit', 'plugins', 'promisesDestinationDir', 'pruneEmptyCodeFiles', 'removeParameterTypes', 'require',
                 'resolveSourceRoot', 'rootDir', 'showDiagnosticsInConsole', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers',
                 'validate', 'watch'
             ]) {
@@ -307,7 +307,7 @@ describe('util', () => {
             ]);
             expect(compilerOptionKeys.sort()).to.eql([
                 'allowBrighterScriptInBrightScript', 'autoImportComponentScript', 'bslibDestinationDir', 'emitDefinitions',
-                'emitFullPaths', 'legacyCallfuncHandling', 'manifest', 'minFirmwareVersion', 'pruneEmptyCodeFiles', 'relativeSourceMaps',
+                'emitFullPaths', 'legacyCallfuncHandling', 'manifest', 'minFirmwareVersion', 'promisesDestinationDir', 'pruneEmptyCodeFiles', 'relativeSourceMaps',
                 'removeParameterTypes', 'resolveSourceRoot', 'sourceMap', 'sourceRoot', 'strict', 'strictCallFunc', 'strictNodeMembers'
             ]);
         });
@@ -810,6 +810,27 @@ describe('util', () => {
             ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
                 expect(util.normalizeConfig(<any>{ bslibDestinationDir: input }).bslibDestinationDir).to.equal('source/opt');
             });
+        });
+
+        it('sets default value for promisesDestinationDir', () => {
+            expect(util.normalizeConfig(<any>{}).promisesDestinationDir).to.equal('source');
+        });
+
+        it('reads promisesDestinationDir from compilerOptions and strips leading and/or trailing slashes', () => {
+            ['source/opt', '/source/opt', 'source/opt/', '/source/opt/'].forEach(input => {
+                expect(util.normalizeConfig({ compilerOptions: { promisesDestinationDir: input } }).promisesDestinationDir).to.equal('source/opt');
+            });
+        });
+
+        it('does not use bslibDestinationDir for promisesDestinationDir', () => {
+            const config = util.normalizeConfig({ compilerOptions: { bslibDestinationDir: 'source/opt' } });
+            expect(config.bslibDestinationDir).to.equal('source/opt');
+            expect(config.promisesDestinationDir).to.equal('source');
+        });
+
+        it('keeps promisesDestinationDir when normalizing an already normalized config', () => {
+            const config = util.normalizeConfig({ compilerOptions: { promisesDestinationDir: 'source/opt' } });
+            expect(util.normalizeConfig({ ...config, compilerOptions: undefined }).promisesDestinationDir).to.equal('source/opt');
         });
 
         it('used default noEmit value', () => {

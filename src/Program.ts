@@ -71,6 +71,8 @@ import { roFunctionType } from './types/roFunctionType';
 
 const bslibNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_bslib/bslib.brs`;
 const bslibAliasedRokuModulesPkgPath = s`source/roku_modules/bslib/bslib.brs`;
+const promisesNonAliasedRokuModulesPkgPath = s`source/roku_modules/rokucommunity_promises/promises.brs`;
+const promisesAliasedRokuModulesPkgPath = s`source/roku_modules/promises/promises.brs`;
 
 /**
  * The built-in Roku SceneGraph nodes, keyed by their lower-case name
@@ -355,6 +357,49 @@ export class Program {
             return 'rokucommunity_bslib';
         } else {
             return 'bslib';
+        }
+    }
+
+    /**
+     * Does any file in the program have an async function? The promises library is only added to the build (and imported into
+     * components) when one does
+     */
+    public get hasAsyncFunctions() {
+        for (const key in this.files) {
+            const file = this.files[key];
+            if (isBrsFile(file) && file.hasAsyncFunctions) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The path to promises.brs (the `@rokucommunity/promises` library that powers async functions)
+     */
+    public get promisesPkgPath() {
+        //if there's an aliased (preferred) version of promises from roku_modules loaded into the program, use that
+        if (this.getFile(promisesAliasedRokuModulesPkgPath)) {
+            return promisesAliasedRokuModulesPkgPath;
+
+            //if there's a non-aliased version of promises from roku_modules, use that
+        } else if (this.getFile(promisesNonAliasedRokuModulesPkgPath)) {
+            return promisesNonAliasedRokuModulesPkgPath;
+
+            //default to the embedded version
+        } else {
+            return `${this.options.promisesDestinationDir}${path.sep}promises.brs`;
+        }
+    }
+
+    /**
+     * The prefix in front of all of the promises library's functions and its `Promise` component name (i.e. `promises_chain`, `promises_Promise`)
+     */
+    public get promisesPrefix() {
+        if (this.promisesPkgPath === promisesNonAliasedRokuModulesPkgPath) {
+            return 'rokucommunity_promises';
+        } else {
+            return 'promises';
         }
     }
 

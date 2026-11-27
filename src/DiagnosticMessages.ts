@@ -1414,6 +1414,21 @@ export let DiagnosticMessages = {
         message: `Assignment has no effect: '${fieldName}' is an associative array field on a node, and reading it returns a copy. Read it into a local variable, modify it, then assign it back to the node`,
         severity: DiagnosticSeverity.Warning,
         code: 'node-field-aa-member-assignment-no-effect'
+    }),
+    awaitOutsideAsyncFunction: () => ({
+        message: `'await' can only be used inside an async function`,
+        severity: DiagnosticSeverity.Error,
+        code: 'await-outside-async-function'
+    }),
+    awaitNotSupportedHere: () => ({
+        message: `'await' is only supported as a standalone statement, the value of an assignment (to a variable, property, or index), or a return value, placed directly in the body of an async function or in a 'try' block directly in that body`,
+        severity: DiagnosticSeverity.Error,
+        code: 'await-not-supported-here'
+    }),
+    asyncClassConstructor: () => ({
+        message: `A class constructor cannot be async`,
+        severity: DiagnosticSeverity.Error,
+        code: 'async-class-constructor'
     })
 };
 export const defaultMaximumTruncationLength = 160;
