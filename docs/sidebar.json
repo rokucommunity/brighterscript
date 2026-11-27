@@ -6,12 +6,15 @@
             "label": "Getting Started",
             "items": [
                 { "file": "getting-started/installation.md" },
-                { "file": "getting-started/configuration.md" }
+                { "file": "getting-started/configuration.md" },
+                { "file": "getting-started/new-projects.md", "label": "New Projects" },
+                { "file": "getting-started/existing-projects.md", "label": "Existing Projects" }
             ]
         },
         {
             "label": "Language Features",
             "items": [
+                { "file": "language-features/types.md" },
                 { "file": "language-features/imports.md" },
                 { "file": "language-features/namespaces.md" },
                 { "file": "language-features/classes.md" },

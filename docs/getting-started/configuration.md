@@ -1,6 +1,6 @@
 # Configuration
 
-A `bsconfig.json` file in your project's root tells `bsc` how to build your project. Most projects only need a few options. Everything else is in the [bsconfig.json reference](../tooling/bsconfig.md).
+`bsc` reads its settings from a `bsconfig.json` file in the folder you run it from. Every option has a default, so a project laid out the way Roku expects (`manifest`, `source/`, `components/` and so on) at the root of the folder builds without one. Most projects only set a few options. Everything else is in the [bsconfig.json reference](../tooling/bsconfig.md).
 
 ## Create a bsconfig.json
 
@@ -8,34 +8,46 @@ A `bsconfig.json` file in your project's root tells `bsc` how to build your proj
 npx bsc --init
 ```
 
-This writes a `bsconfig.json` with recommended defaults, followed by every other option, commented out, with a short description of each. An existing `bsconfig.json` is never overwritten.
+This writes a `bsconfig.json` with recommended settings, followed by every other option, commented out, with a short description of each. An existing `bsconfig.json` is never overwritten.
 
-## A minimal config
+You can also write one by hand. The smallest useful config just tells the compiler where your app's files are:
 
-If your project's files live in a `src` folder, this is all you need:
-
-```jsonc title="bsconfig.json" showLineNumbers
+```json title="bsconfig.json"
 {
-    "rootDir": "src",
-    "stagingDir": "out/staging",
-    "retainStagingDir": true,
-    "sourceMap": true
+    "rootDir": "src"
 }
 ```
 
-It keeps the staging folder around after each build, which is handy for inspecting the transpiled output, and turns on source maps so the debugger shows your original source code.
+## Where your files are
 
-## Options you'll use most
+[`rootDir`](../tooling/bsconfig.md#rootdir) is the folder your `manifest` lives in. It defaults to the folder you run `bsc` from, so you only need it when your app is in a subfolder, like `src`.
+
+[`files`](../tooling/bsconfig.md#files) lists which files under `rootDir` are part of the app. By default, that's everything a Roku app normally contains, so you only need it to add or leave out files.
+
+## Where the build goes
+
+A build copies your app's files to a staging folder, transpiles them there, and then zips that folder. The options for each step:
+
+| Option | What it does | Default |
+|---|---|---|
+| [`stagingDir`](../tooling/bsconfig.md#stagingdir) | Where the transpiled files go | A temporary folder in `out` |
+| [`retainStagingDir`](../tooling/bsconfig.md#retainstagingdir) | Keep the staging folder after the build | `false` |
+| [`createPackage`](../tooling/bsconfig.md#createpackage) | Zip the staging folder | `true` |
+| [`outFile`](../tooling/bsconfig.md#outfile) | Where the zip goes | `out/<your project's folder name>.zip` |
+
+With the defaults, you get a zip in the `out` folder, ready to sideload through your device's Development Application Installer.
+
+`bsc --init` changes these. It sets `stagingDir` to `dist`, keeps that folder, and doesn't create a zip. That suits tools that sideload a folder for you, like the VS Code extension and roku-deploy, and makes it easy to look at the transpiled code.
+
+## BrighterScript options
 
 | Option | What it does |
 |---|---|
-| [`rootDir`](../tooling/bsconfig.md#rootdir) | The folder your `manifest` lives in |
-| [`files`](../tooling/bsconfig.md#files) | Which files are part of the project, if not everything under `rootDir` |
-| [`stagingDir`](../tooling/bsconfig.md#stagingdir) | Where the transpiled files go |
-| [`sourceMap`](../tooling/bsconfig.md#sourcemap) | Debug your original source code instead of the transpiled output |
-| [`autoImportComponentScript`](../tooling/bsconfig.md#autoimportcomponentscript) | Automatically import the `.bs` file next to each component's `.xml` file |
-| [`diagnosticFilters`](../tooling/bsconfig.md#diagnosticfilters) | Hide errors and warnings you don't care about |
-| [`host`](../tooling/bsconfig.md#host) and [`password`](../tooling/bsconfig.md#password) | The Roku device to deploy to with `--deploy` |
+| [`sourceMap`](../tooling/bsconfig.md#sourcemap) | Writes source maps, so the debugger shows your original source code instead of the transpiled code |
+| [`autoImportComponentScript`](../tooling/bsconfig.md#autoimportcomponentscript) | Each component's XML file automatically includes the `.bs` or `.brs` file with the same name, so you don't need a `<script>` tag for it |
+| [`diagnosticFilters`](../tooling/bsconfig.md#diagnosticfilters) | Hides errors and warnings you don't want to see, such as the ones in third-party code |
+
+`bsc --init` turns on `sourceMap` and `autoImportComponentScript`.
 
 ## Tips
 
@@ -50,12 +62,11 @@ It keeps the staging folder around after each build, which is handy for inspecti
     }
     ```
 
-- **Keep secrets out of the repo.** Pass your device's password on the command line (`bsc --deploy --host 192.168.1.10 --password secret`) instead of putting it in `bsconfig.json`.
 - **Share settings between configs** with [`extends`](../tooling/bsconfig.md#extends). For example, a `bsconfig.dev.json` can extend `bsconfig.json` and only override what's different, and you build with it using `bsc --project bsconfig.dev.json`.
-- **Every option also works on the command line.** Run `bsc --help` for the full list.
+- **Every option also works on the command line.** For example, `bsc --root-dir src`. Run `bsc --help` for the full list.
 
 ## All options
 
-The table above only covers the basics. There are many more options for diagnostics, source maps, plugins, deploying and more.
+There are many more options for diagnostics, source maps, plugins and more.
 
 **[View all bsconfig.json options →](../tooling/bsconfig.md)**
