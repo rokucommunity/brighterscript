@@ -24,6 +24,25 @@ describe('parser call expressions', () => {
         expect(ast.statements).to.be.length.greaterThan(0);
     });
 
+    it('supports calling methods directly on integer literals', () => {
+        const { ast, diagnostics } = Parser.parse(`
+            sub main()
+                functionName(12.toStr())
+                print 12.toStr()
+            end sub
+        `);
+        expectDiagnostics(diagnostics, []);
+        const statements = (ast.statements[0] as FunctionStatement).func.body.statements;
+        const outerCall = (statements[0] as ExpressionStatement).expression;
+        expect(isCallExpression(outerCall)).to.be.true;
+        const arg = (outerCall as any).args[0];
+        expect(isCallExpression(arg)).to.be.true;
+        expect(isDottedGetExpression(arg.callee)).to.be.true;
+        expect(arg.callee.tokens.name.text).to.eql('toStr');
+        //print should have a single expression, not `12.` and `toStr()`
+        expect((statements[1] as any).expressions).to.be.lengthOf(1);
+    });
+
     it('does not invalidate the rest of the file on incomplete statement', () => {
         const { tokens } = Lexer.scan(`
             sub DoThingOne()
