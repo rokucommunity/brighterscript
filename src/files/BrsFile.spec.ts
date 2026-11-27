@@ -5870,6 +5870,32 @@ describe('BrsFile', () => {
             `);
         });
 
+        it('rewrites imports of .bs files to .brs', () => {
+            program.setFile('source/lib.bs', ``);
+            testTypedef(`
+               import "pkg:/source/lib.bs"
+            `, trim`
+                import "pkg:/source/lib.brs"
+            `);
+        });
+
+        it('keeps the .d.bs extension on imports of typedef files', () => {
+            program.setFile('source/lib.brs', `
+                function libAdd(a, b)
+                    return a + b
+                end function
+            `);
+            program.setFile('source/lib.d.bs', `
+                function libAdd(a as integer, b as integer) as integer
+                end function
+            `);
+            testTypedef(`
+               import "lib.d.bs"
+            `, trim`
+                import "lib.d.bs"
+            `);
+        });
+
         it('includes namespace statements', () => {
             testTypedef(`
                 namespace Name
