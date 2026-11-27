@@ -2121,8 +2121,8 @@ export class ImportStatement extends Statement implements TypedefProvider {
         return [
             this.tokens.import?.text ?? 'import',
             ' ',
-            //replace any `.bs` extension with `.brs`
-            this.tokens.path.text.replace(/\.bs"?$/i, '.brs"')
+            //replace any `.bs` extension with `.brs`, but leave `.d.bs` typedef imports alone since there's no `.d.brs` file
+            /\.d\.bs"?$/i.test(this.tokens.path.text) ? this.tokens.path.text : this.tokens.path.text.replace(/\.bs"?$/i, '.brs"')
         ];
     }
 
