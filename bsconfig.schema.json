@@ -515,6 +515,11 @@
                     "type": "string",
                     "default": "source"
                 },
+                "promisesDestinationDir": {
+                    "description": "Override the destination directory for the promises.brs file (the `@rokucommunity/promises` library that powers async functions). Use this if you want to customize where the promises.brs file is located in the staging directory. Note that using a location outside of `source` will break scripts inside `source` that use async functions. Only affects the copy the compiler adds, not one installed by ropm. Defaults to `source`.",
+                    "type": "string",
+                    "default": "source"
+                },
                 "emitDefinitions": {
                     "description": "Emit type definition files (`d.bs`) during transpile",
                     "type": "boolean",

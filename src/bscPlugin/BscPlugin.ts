@@ -18,6 +18,7 @@ import type { XmlFile } from '../files/XmlFile';
 import { FileWriter } from './FileWriter';
 import { FileProvider } from './fileProviders/FileProvider';
 import { BslibManager } from './serialize/BslibManager';
+import { PromisesManager } from './serialize/PromisesManager';
 import { FileSerializer } from './serialize/FileSerializer';
 import { BrsFilePreTranspileProcessor } from './transpile/BrsFileTranspileProcessor';
 import { XmlFilePreTranspileProcessor } from './transpile/XmlFilePreTranspileProcessor';
@@ -116,12 +117,14 @@ export class BscPlugin implements Plugin {
     }
 
     /**
-     * Uses `beforeBuildProgram` because bslib must be in the file list before files are prepared
+     * Uses `beforeBuildProgram` because bslib and the promises library must be in the file list before files are prepared
      */
     public beforeBuildProgram(event: BeforeBuildProgramEvent) {
         this.bslibManager.addBslibFileIfMissing(event);
+        this.promisesManager.addPromisesFilesIfMissing(event);
     }
     private bslibManager = new BslibManager();
+    private promisesManager = new PromisesManager();
 
     public afterPrepareFile(event: AfterPrepareFileEvent) {
         if (isBrsFile(event.file)) {

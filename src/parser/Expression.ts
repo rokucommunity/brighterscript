@@ -9,7 +9,7 @@ import { ParseMode } from './Parser';
 import type { WalkOptions, WalkVisitor } from '../astUtils/visitors';
 import { WalkMode } from '../astUtils/visitors';
 import { walk, InternalWalkMode, walkArray } from '../astUtils/visitors';
-import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIndexedGetExpression, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAAIndexedMemberExpression, isAALiteralExpression, isAAMemberExpression, isArrayLiteralExpression, isArrayType, isAssociativeArrayType, isCallableType, isCallExpression, isCallfuncExpression, isClassType, isDottedGetExpression, isEnumType, isEscapedCharCodeLiteralExpression, isFunctionExpression, isFunctionStatement, isIndexedGetExpression, isIntegerType, isInterfaceMethodStatement, isInterfaceType, isInvalidType, isLiteralBoolean, isLiteralExpression, isLiteralNumber, isLiteralString, isLongIntegerType, isMethodStatement, isNamespaceStatement, isNativeType, isNewExpression, isPrimitiveType, isPrimitiveTypeLike, isReferenceType, isSpreadExpression, isStringType, isTemplateStringExpression, isTypedFunctionType, isTypedFunctionTypeExpression, isTypecastExpression, isTypeStatementType, isUnaryExpression, isVariableExpression, isVoidType, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import type { GetTypeOptions, TranspileResult, TypedefProvider, ExtraSymbolData } from '../interfaces';
 import { TypeChainEntry } from '../interfaces';
 import { VoidType } from '../types/VoidType';
@@ -274,6 +274,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     static readonly MaximumGotoLabels = 256;
 
     constructor(options: {
+        async?: Token;
         functionType?: Token;
         leftParen?: Token;
         parameters?: FunctionParameterExpression[];
@@ -285,6 +286,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     }) {
         super();
         this.tokens = {
+            async: options.async,
             functionType: options.functionType,
             leftParen: options.leftParen,
             rightParen: options.rightParen,
@@ -300,6 +302,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
         this.symbolTable = new SymbolTable('FunctionExpression', () => this.parent?.getSymbolTable());
         const signature = util.setBounds({} as Locatable,
+            this.tokens.async,
             this.tokens.functionType,
             this.tokens.leftParen,
             ...this.parameters ?? [],
@@ -318,6 +321,10 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     public readonly returnTypeExpression?: TypeExpression;
 
     readonly tokens: {
+        /**
+         * The `async` keyword, present only for async functions (i.e. `async function foo()`)
+         */
+        readonly async?: Token;
         readonly functionType?: Token;
         readonly endFunctionType?: Token;
         readonly leftParen?: Token;
@@ -326,7 +333,14 @@ export class FunctionExpression extends Expression implements TypedefProvider {
     };
 
     public get leadingTrivia(): Token[] {
-        return this.tokens.functionType?.leadingTrivia;
+        return (this.tokens.async ?? this.tokens.functionType)?.leadingTrivia;
+    }
+
+    /**
+     * Is this an async function (i.e. `async function foo()`)?
+     */
+    public get isAsync() {
+        return !!this.tokens.async;
     }
 
     public get endTrivia(): Token[] {
@@ -339,10 +353,24 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
     transpile(state: BrsTranspileState, name?: Identifier, includeBody = true) {
         let results = [] as TranspileResult;
+        //'async' is not valid BrightScript, so only keep the comments that are attached to it
+        if (this.tokens.async && !state.skipLeadingComments) {
+            results.push(
+                ...state.transpileLeadingComments(this.tokens.async)
+            );
+        }
+        //an async function returns a promise, so it's always a `function` with no declared return type
+        const isAsync = this.isAsync;
         //'function'|'sub'
-        results.push(
-            state.transpileToken(this.tokens.functionType, 'function', false, state.skipLeadingComments)
-        );
+        if (isAsync) {
+            results.push(
+                state.sourceNode(this.tokens.functionType ?? this, 'function')
+            );
+        } else {
+            results.push(
+                state.transpileToken(this.tokens.functionType, 'function', false, state.skipLeadingComments)
+            );
+        }
         //functionName?
         if (name) {
             results.push(
@@ -370,7 +398,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         );
         //as [Type]
 
-        if (this.tokens.as && this.returnTypeExpression && (this.requiresReturnType || !state.options.removeParameterTypes)) {
+        if (!isAsync && this.tokens.as && this.returnTypeExpression && (this.requiresReturnType || !state.options.removeParameterTypes)) {
             results.push(
                 ' ',
                 //as
@@ -390,15 +418,25 @@ export class FunctionExpression extends Expression implements TypedefProvider {
         }
 
         const lastLocatable = hasBody ? this.body : this.returnTypeExpression ?? this.tokens.leftParen ?? this.tokens.functionType;
-        results.push(
-            ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
-        );
+        if (isAsync) {
+            //keep the formatting of the end token, but always end a `function`
+            const endFunctionType = this.tokens.endFunctionType ? { ...this.tokens.endFunctionType, text: 'end function' } : undefined;
+            results.push(
+                ...state.transpileEndBlockToken(lastLocatable, endFunctionType, 'end function')
+            );
+        } else {
+            results.push(
+                ...state.transpileEndBlockToken(lastLocatable, this.tokens.endFunctionType, `end ${this.tokens.functionType ?? 'function'}`)
+            );
+        }
         return results;
     }
 
     getTypedef(state: BrsTranspileState): TranspileResult {
         let results = [
             new SourceNode(1, 0, null, [
+                //'async'?
+                this.tokens.async ? `${this.tokens.async.text} ` : '',
                 //'function'|'sub'
                 this.tokens.functionType?.text ?? 'function',
                 //functionName?
@@ -465,6 +503,9 @@ export class FunctionExpression extends Expression implements TypedefProvider {
 
         const resultType = new TypedFunctionType(returnType);
         resultType.isSub = isSub;
+        if (this.isAsync) {
+            resultType.setAsync(returnType);
+        }
         for (let param of this.parameters) {
             resultType.addParameter(param.tokens.name.text, param.getType(innerOptions()), !!param.defaultValue);
         }
@@ -527,6 +568,7 @@ export class FunctionExpression extends Expression implements TypedefProvider {
             new FunctionExpression({
                 parameters: this.parameters?.map(e => e?.clone()),
                 body: this.body?.clone(),
+                async: util.cloneToken(this.tokens.async),
                 functionType: util.cloneToken(this.tokens.functionType),
                 endFunctionType: util.cloneToken(this.tokens.endFunctionType),
                 leftParen: util.cloneToken(this.tokens.leftParen),
@@ -1655,6 +1697,91 @@ export class SpreadExpression extends Expression {
         return this.finalizeClone(
             new SpreadExpression({
                 dotDotDot: util.cloneToken(this.tokens.dotDotDot),
+                expression: this.expression?.clone()
+            }),
+            ['expression']
+        );
+    }
+}
+
+/**
+ * An `await` expression (i.e. `await getUserAsync()`). Only valid inside of an `async` function.
+ */
+export class AwaitedExpression extends Expression {
+    constructor(options: {
+        await: Token;
+        expression: Expression;
+    }) {
+        super();
+        this.tokens = {
+            await: options.await
+        };
+        this.expression = options.expression;
+        util.setBounds(this, this.tokens.await, this.expression);
+    }
+
+    public readonly kind = AstNodeKind.AwaitedExpression;
+
+    public readonly startPosition: number;
+    public readonly endPosition: number;
+    public readonly sourceInfo: SourceInfo | undefined;
+
+    public readonly tokens: {
+        readonly await: Token;
+    };
+
+    /**
+     * The expression being awaited
+     */
+    public readonly expression: Expression;
+
+    transpile(state: BrsTranspileState) {
+        //async functions are lowered into promise chains before transpile, which removes every await in a supported placement.
+        //An await that's left over was already flagged by validation, so just emit the awaited value
+        return this.expression.transpile(state);
+    }
+
+    walk(visitor: WalkVisitor, options: WalkOptions) {
+        if (options.walkMode & InternalWalkMode.walkExpressions) {
+            walk(this, 'expression', visitor, options);
+        }
+    }
+
+    /**
+     * The type of the value produced by awaiting the expression:
+     * - a call to an async function produces the type from that function's `as` clause
+     * - a primitive (or `invalid`) is not a promise, so awaiting it produces the value unchanged
+     * - anything else might be a promise, so the result is `dynamic`
+     */
+    getType(options: GetTypeOptions): BscType {
+        if (isCallExpression(this.expression)) {
+            let calleeType = this.expression.getType({ ...options, ignoreCall: true, typeChain: undefined });
+            while (isTypeStatementType(calleeType)) {
+                calleeType = calleeType.wrappedType;
+            }
+            if (isTypedFunctionType(calleeType)) {
+                return calleeType.awaitResultType;
+            }
+            //the function might not be known yet, so look up its await result type once it is
+            if (isReferenceType(calleeType) && !calleeType.isResolvable()) {
+                return new TypePropertyReferenceType(calleeType, 'awaitResultType');
+            }
+        }
+        const expressionType = this.expression.getType(options);
+        if (isPrimitiveTypeLike(expressionType) || isInvalidType(expressionType)) {
+            return expressionType;
+        }
+        return DynamicType.instance;
+    }
+
+    public get leadingTrivia(): Token[] {
+        return this.tokens.await.leadingTrivia;
+    }
+
+    public clone() {
+        return this.finalizeClone(
+            new AwaitedExpression({
+                await: util.cloneToken(this.tokens.await),
                 expression: this.expression?.clone()
             }),
             ['expression']

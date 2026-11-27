@@ -101,7 +101,7 @@ export class XmlFilePreTranspileProcessor {
             const uriAttributeValue = script.uri || '';
             const pkgMapPath = util.getPkgPathFromTarget(this.event.file.pkgPath, uriAttributeValue);
             let file = program.getFile(pkgMapPath);
-            if (!file && pkgMapPath.endsWith(program.bslibPkgPath)) {
+            if (!file && (pkgMapPath.endsWith(program.bslibPkgPath) || (program.hasAsyncFunctions && pkgMapPath.endsWith(program.promisesPkgPath)))) {
                 return true;
             }
             if (!file && pkgMapPath.endsWith('.brs')) {

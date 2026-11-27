@@ -25,6 +25,7 @@
                 { "file": "language-features/callfunc-operator.md" },
                 { "file": "language-features/select-case.md" },
                 { "file": "language-features/exceptions.md" },
+                { "file": "language-features/async-await.md" },
                 { "file": "language-features/regex-literals.md" },
                 { "file": "language-features/source-literals.md" },
                 { "file": "language-features/computed-property-names.md" },

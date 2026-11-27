@@ -382,6 +382,14 @@ export class BrsFile implements BscFile {
         return containingNode;
     }
 
+    /**
+     * Does this file have an async function? (These need the promises library at runtime.) Typedef files are only declarations, so they never count.
+     * Does not force the file to parse.
+     */
+    public get hasAsyncFunctions() {
+        return !this.isTypedef && (this._parser?.hasAsyncFunctions ?? false);
+    }
+
     public get parser() {
         if (!this._parser) {
             //remove the typedef file (if it exists)

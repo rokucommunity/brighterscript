@@ -1,10 +1,12 @@
-import { isDynamicType, isObjectType, isTypedFunctionType, isTypeStatementType } from '../astUtils/reflection';
+import { isDynamicType, isInvalidType, isObjectType, isPrimitiveTypeLike, isTypedFunctionType, isTypeStatementType, isVoidType } from '../astUtils/reflection';
 import { BaseFunctionType } from './BaseFunctionType';
 import type { BscType } from './BscType';
 import { BscTypeKind } from './BscTypeKind';
 import { isUnionTypeCompatible } from './helpers';
 import { BuiltInInterfaceAdder } from './BuiltInInterfaceAdder';
 import type { TypeCompatibilityData } from '../interfaces';
+import { DynamicType } from './DynamicType';
+import { InvalidType } from './InvalidType';
 
 export class TypedFunctionType extends BaseFunctionType {
     constructor(
@@ -26,6 +28,18 @@ export class TypedFunctionType extends BaseFunctionType {
     public isSub = false;
 
     /**
+     * Is this an `async` function? An async function always returns a promise, so `returnType` is `dynamic`
+     * and the type from the function's `as` clause (the value the promise resolves to) is found in `awaitedReturnType`
+     */
+    public isAsync = false;
+
+    /**
+     * For async functions, the type of the value the returned promise resolves to (i.e. the result of `await`ing a call to this function).
+     * For non-async functions, this is `undefined`
+     */
+    public awaitedReturnType: BscType;
+
+    /**
      * Does this function accept more args than just those in this.params
      */
     public isVariadic = false;
@@ -40,6 +54,36 @@ export class TypedFunctionType extends BaseFunctionType {
     public setSub(isSub: boolean) {
         this.isSub = isSub;
         return this;
+    }
+
+    /**
+     * Mark this function as async. The return type becomes `dynamic` (a promise), and the supplied type is
+     * kept as the type the promise resolves to
+     */
+    public setAsync(awaitedReturnType: BscType) {
+        this.isAsync = true;
+        this.awaitedReturnType = awaitedReturnType;
+        this.returnType = DynamicType.instance;
+        return this;
+    }
+
+    /**
+     * The type produced by `await`ing a call to this function:
+     * - async functions produce the type from their `as` clause (`invalid` for an async sub or `as void`)
+     * - other functions produce their return type when it is a primitive (or `invalid`), since that can't be a promise
+     * - anything else might be a promise, so the result is `dynamic`
+     */
+    public get awaitResultType(): BscType {
+        if (this.isAsync) {
+            if (!this.awaitedReturnType) {
+                return DynamicType.instance;
+            }
+            return isVoidType(this.awaitedReturnType) ? InvalidType.instance : this.awaitedReturnType;
+        }
+        if (isPrimitiveTypeLike(this.returnType) || isInvalidType(this.returnType)) {
+            return this.returnType;
+        }
+        return DynamicType.instance;
     }
 
     public addParameter(name: string, type: BscType, isOptional: boolean) {
@@ -87,7 +131,8 @@ export class TypedFunctionType extends BaseFunctionType {
             }
             variadicText += '...';
         }
-        return `${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${this.returnType.toString()}`;
+        const returnType = this.isAsync ? this.awaitedReturnType : this.returnType;
+        return `${this.isAsync ? 'async ' : ''}${this.isSub ? 'sub' : 'function'} ${this.name ?? ''}(${paramTexts.join(', ')}${variadicText}) as ${returnType.toString()}`;
     }
 
     public toTypeString(): string {

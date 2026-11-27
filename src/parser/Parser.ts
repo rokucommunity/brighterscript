@@ -73,6 +73,7 @@ import {
     AAMemberExpression,
     AnnotationExpression,
     ArrayLiteralExpression,
+    AwaitedExpression,
     BinaryExpression,
     CallExpression,
     CallfuncExpression,
@@ -106,7 +107,7 @@ import {
 import type { Range } from 'vscode-languageserver';
 import type { Logger } from '../logging';
 import { createLogger } from '../logging';
-import { isAnnotationExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
+import { isAnnotationExpression, isAwaitedExpression, isCallExpression, isCallfuncExpression, isDottedGetExpression, isIfStatement, isIndexedGetExpression, isConditionalCompileStatement, isTypecastExpression, isXmlAttributeGetExpression } from '../astUtils/reflection';
 import { createStringLiteral, createToken } from '../astUtils/creators';
 import type { Expression, Statement } from './AstNode';
 import type { BsDiagnosticInput, DeepWriteable } from '../interfaces';
@@ -139,6 +140,40 @@ function matchesTokenKind(kind: TokenKind, matchers: TokenKindMatcher[]) {
 const AllowedLocalIdentifiersInBrightScriptMode: ReadonlySet<TokenKind> = new Set<TokenKind>([...AllowedLocalIdentifiers, ...BrighterScriptSourceLiterals]);
 
 const NoTokenKinds: ReadonlySet<TokenKind> = new Set<TokenKind>();
+
+/**
+ * Tokens that, when found after `await`, can only mean that `await` is the start of an awaited expression (i.e. `await getUser()`).
+ * Anything else (`await = 1`, `await.name`, `print await`, etc) means `await` is being used as a regular identifier.
+ */
+const AwaitOperandStartTokenKinds: ReadonlySet<TokenKind> = new Set<TokenKind>([
+    TokenKind.Identifier,
+    //BrighterScript keywords that are also valid identifiers, excluding the ones that can follow a variable (i.e. `await as string`, `for each await in items`)
+    ...[...AllowedLocalIdentifiers].filter(kind => kind !== TokenKind.As && kind !== TokenKind.In && !BlockTerminators.has(kind)),
+    TokenKind.False,
+    TokenKind.True,
+    TokenKind.Invalid,
+    TokenKind.IntegerLiteral,
+    TokenKind.LongIntegerLiteral,
+    TokenKind.FloatLiteral,
+    TokenKind.DoubleLiteral,
+    TokenKind.StringLiteral,
+    TokenKind.LeftCurlyBrace,
+    TokenKind.Function,
+    TokenKind.Sub,
+    TokenKind.Not,
+    TokenKind.CreateObject
+]);
+
+/**
+ * Tokens that could follow either an awaited expression (`await (getUser())`) or an `await` variable (`await(1)`, `await - 1`).
+ * Inside an async function these always start an awaited expression. Outside of one, `await` is treated as an identifier
+ */
+const AwaitAmbiguousOperandStartTokenKinds: ReadonlySet<TokenKind> = new Set<TokenKind>([
+    TokenKind.LeftParen,
+    TokenKind.LeftSquareBracket,
+    TokenKind.Minus,
+    TokenKind.Plus
+]);
 
 /**
  * `CompoundAssignmentOperators` as an array, for spreading into diagnostic messages (spreading a Set goes through its iterator, which is much slower than copying an array)
@@ -216,6 +251,16 @@ export class Parser {
     private selectCaseDepth = 0;
 
     /**
+     * Is the parser currently inside the body of an `async` function? (nested non-async functions reset this)
+     */
+    private isInAsyncFunction = false;
+
+    /**
+     * Did this parse find any async function (i.e. `async function foo()`)? Async functions need the promises library at runtime.
+     */
+    public hasAsyncFunctions = false;
+
+    /**
      * A list of identifiers that are permitted to be used as local variables. We store this in a property because we augment the list in the constructor
      * based on the parse mode
      */
@@ -269,6 +314,8 @@ export class Parser {
         this.diagnostics = [];
         this.namespaceAndFunctionDepth = 0;
         this.selectCaseDepth = 0;
+        this.isInAsyncFunction = false;
+        this.hasAsyncFunctions = false;
         this.pendingAnnotations = [];
 
         this.ast = this.body();
@@ -377,7 +424,7 @@ export class Parser {
                 return this.conditionalCompileErrorStatement();
             }
 
-            if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
+            if (this.checkAny(TokenKind.Sub, TokenKind.Function) || this.checkAsyncFunction()) {
                 return this.functionDeclaration(false);
             }
 
@@ -796,7 +843,7 @@ export class Parser {
             overrideKeyword = this.advance();
         }
         //methods (function/sub keyword OR identifier followed by opening paren)
-        if (this.checkAny(TokenKind.Function, TokenKind.Sub) || (this.checkAny(TokenKind.Identifier, AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
+        if (this.checkAny(TokenKind.Function, TokenKind.Sub) || this.checkAsyncFunction() || (this.checkAny(TokenKind.Identifier, AllowedProperties) && this.checkNext(TokenKind.LeftParen))) {
             const funcDeclaration = this.functionDeclaration(false, false);
 
             //if we have an overrides keyword AND this method is called 'new', that's not allowed
@@ -954,9 +1001,16 @@ export class Parser {
     private functionDeclaration(isAnonymous: boolean, checkIdentifier = true, onlyCallableAsMember = false) {
         let previousCallExpressions = this.callExpressions;
         this.callExpressions = [];
+        const previousIsInAsyncFunction = this.isInAsyncFunction;
         try {
             //track depth to help certain statements need to know if they are contained within a function body
             this.namespaceAndFunctionDepth++;
+            let asyncToken: Token;
+            if (this.checkAsyncFunction()) {
+                this.warnIfNotBrighterScriptMode('async functions');
+                asyncToken = this.advance();
+                this.hasAsyncFunctions = true;
+            }
             let functionType: Token;
             if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
                 functionType = this.advance();
@@ -1049,6 +1103,8 @@ export class Parser {
             //a function body is its own world, so don't let an enclosing `select case` end it early on `case`
             const selectCaseDepth = this.selectCaseDepth;
             this.selectCaseDepth = 0;
+            //only the body of an async function supports `await` (a nested non-async function does not)
+            this.isInAsyncFunction = !!asyncToken;
             let body: Block;
             try {
                 body = this.block();
@@ -1075,6 +1131,7 @@ export class Parser {
             }
 
             let func = new FunctionExpression({
+                async: asyncToken,
                 parameters: params,
                 body: body,
                 functionType: functionType,
@@ -1095,6 +1152,7 @@ export class Parser {
             this.namespaceAndFunctionDepth--;
             //restore the previous CallExpression list
             this.callExpressions = previousCallExpressions;
+            this.isInAsyncFunction = previousIsInAsyncFunction;
         }
     }
 
@@ -2830,7 +2888,7 @@ export class Parser {
             return result;
         }
 
-        if (isCallExpression(expr) || isCallfuncExpression(expr)) {
+        if (isCallExpression(expr) || isCallfuncExpression(expr) || isAwaitedExpression(expr)) {
             return new ExpressionStatement({ expression: expr });
         }
 
@@ -2882,6 +2940,10 @@ export class Parser {
          * statements aren't valid expressions. They _do_ however fall under the same parsing
          * priority as standalone function calls though, so we can parse them in the same way.
          */
+        //`await someCall()` on its own line
+        if (this.checkAwait()) {
+            return this.expressionStatement(this.awaitedExpression());
+        }
         let expr = this.call();
         if (this.check(TokenKind.Equal) && !(isCallExpression(expr))) {
             let left = expr;
@@ -3155,7 +3217,7 @@ export class Parser {
     }
 
     private anonymousFunction(): Expression {
-        if (this.checkAny(TokenKind.Sub, TokenKind.Function)) {
+        if (this.checkAny(TokenKind.Sub, TokenKind.Function) || this.checkAsyncFunction()) {
             const func = this.functionDeclaration(true);
             //if there's an open paren after this, this is an IIFE
             if (this.check(TokenKind.LeftParen)) {
@@ -3260,6 +3322,9 @@ export class Parser {
     }
 
     private prefixUnary(): Expression {
+        if (this.checkAwait()) {
+            return this.awaitedExpression();
+        }
         const nextKind = this.peek().kind;
         if (nextKind === TokenKind.Not) {
             this.current++; //advance
@@ -3779,6 +3844,10 @@ export class Parser {
                 });
                 throw this.lastDiagnosticAsError();
 
+            //`async function()` (must come before the identifier check, since `async` is also a valid identifier)
+            case this.checkAsyncFunction():
+                return this.anonymousFunction();
+
             case this.matchAny(TokenKind.Identifier, this.allowedLocalIdentifiers):
                 return new VariableExpression({ name: this.previous() as Identifier });
 
@@ -4100,6 +4169,41 @@ export class Parser {
      * @param tokenKind the expected next kind
      * @returns true if the next tokenKind is the expected value
      */
+    /**
+     * Is the next token the `async` keyword of an async function (i.e. `async function` or `async sub`)?
+     */
+    private checkAsyncFunction() {
+        return this.check(TokenKind.Async) && this.checkAnyNext(TokenKind.Function, TokenKind.Sub);
+    }
+
+    /**
+     * Is the next token the start of an awaited expression (i.e. `await getUser()`)? `await` is also a valid identifier,
+     * so this looks at the token that follows it to decide.
+     */
+    private checkAwait() {
+        if (!this.check(TokenKind.Await)) {
+            return false;
+        }
+        const nextKind = this.peekNext()?.kind;
+        if (AwaitOperandStartTokenKinds.has(nextKind)) {
+            return true;
+        }
+        if (this.isInAsyncFunction && AwaitAmbiguousOperandStartTokenKinds.has(nextKind)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Parse an awaited expression (i.e. `await getUser()`). Assumes `checkAwait()` has already returned true
+     */
+    private awaitedExpression(): AwaitedExpression {
+        this.warnIfNotBrighterScriptMode('await');
+        const awaitToken = this.advance();
+        const expression = this.prefixUnary();
+        return new AwaitedExpression({ await: awaitToken, expression: expression });
+    }
+
     private check(tokenKind: TokenKind): boolean {
         const nextKind = this.peek().kind;
         if (nextKind === TokenKind.Eof) {

@@ -20,6 +20,7 @@ import type { BscFile } from './BscFile';
 import type { Editor } from '../astUtils/Editor';
 import type { FunctionScope } from '../FunctionScope';
 import { SymbolTypeFlag } from '../SymbolTypeFlag';
+import { PromisesManager } from '../bscPlugin/serialize/PromisesManager';
 
 /**
  * Names of the `@xml-tools` lexer token types we inspect for completions and hover
@@ -794,6 +795,11 @@ export class XmlFile implements BscFile {
      */
     public getMissingImportsForTranspile() {
         let ownImports = this.getAvailableScriptImports();
+        //when the project has async functions, add the promises library path to ownImports (except for the library's own `Promise` component,
+        //which never uses it), it'll get filtered down below
+        if (this.program.hasAsyncFunctions && !PromisesManager.isPromisesComponentPkgPath(this.pkgPath)) {
+            ownImports.push(this.program.promisesPkgPath);
+        }
         //add the bslib path to ownImports, it'll get filtered down below
         ownImports.push(this.program.bslibPkgPath);
 

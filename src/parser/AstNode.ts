@@ -403,6 +403,7 @@ export enum AstNodeKind {
     AAIndexedMemberExpression = 'AAIndexedMemberExpression',
     UnaryExpression = 'UnaryExpression',
     SpreadExpression = 'SpreadExpression',
+    AwaitedExpression = 'AwaitedExpression',
     VariableExpression = 'VariableExpression',
     SourceLiteralExpression = 'SourceLiteralExpression',
     NewExpression = 'NewExpression',

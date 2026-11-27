@@ -287,6 +287,14 @@ export interface BsConfigCompilerOptions {
     bslibDestinationDir?: string;
 
     /**
+     * Override the destination directory for the promises.brs file (the `@rokucommunity/promises` library that powers async functions).
+     * Use this if you want to customize where the promises.brs file is located in the staging directory. Note that using a location
+     * outside of `source` will break scripts inside `source` that use async functions. Defaults to `source`.
+     * This only affects the copy the compiler adds. A copy installed by ropm stays where ropm put it.
+     */
+    promisesDestinationDir?: string;
+
+    /**
      * Emit type definition files (`d.bs`)
      * @default false
      */
@@ -463,4 +471,10 @@ type OptionalBsConfigFields =
 
 export type FinalizedBsConfig =
     Omit<Required<BsConfig>, OptionalBsConfigFields>
-    & Pick<BsConfig, OptionalBsConfigFields>;
+    & Pick<BsConfig, OptionalBsConfigFields>
+    & {
+        /**
+         * The resolved `compilerOptions.promisesDestinationDir` (it has no deprecated top-level form, so it isn't on `BsConfig` itself)
+         */
+        promisesDestinationDir: string;
+    };
