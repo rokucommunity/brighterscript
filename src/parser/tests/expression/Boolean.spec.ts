@@ -6,6 +6,9 @@ import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
 import type { AssignmentStatement } from '../../Statement';
 import type { BinaryExpression, VariableExpression } from '../../Expression';
+import { isBinaryExpression, isLiteralExpression, isUnaryExpression } from '../../../astUtils/reflection';
+import { getTestTranspile, rootDir } from '../../../testHelpers.spec';
+import { Program } from '../../../Program';
 
 describe('parser boolean expressions', () => {
 
@@ -92,8 +95,12 @@ describe('parser boolean expressions', () => {
 
     describe('precedence', () => {
         function stringify(expr: any): string {
-            if (expr.operator) {
+            if (isBinaryExpression(expr)) {
                 return `(${stringify(expr.left)} ${expr.operator.text} ${stringify(expr.right)})`;
+            } else if (isUnaryExpression(expr)) {
+                return `(${expr.operator.text} ${stringify(expr.right)})`;
+            } else if (isLiteralExpression(expr)) {
+                return expr.token.text;
             }
             return (expr as VariableExpression).name.text;
         }
@@ -128,6 +135,35 @@ describe('parser boolean expressions', () => {
 
         it('keeps OR left-associative', () => {
             expect(stringify(parseValue('x = a or b or c'))).to.equal('((a or b) or c)');
+        });
+
+        it('handles not and relational operands', () => {
+            expect(stringify(parseValue('x = not a or b and c'))).to.equal('((not a) or (b and c))');
+            expect(stringify(parseValue('x = not a and b or c'))).to.equal('(((not a) and b) or c)');
+            expect(stringify(parseValue('x = a = 1 or b and c = 2'))).to.equal('((a = 1) or (b and (c = 2)))');
+            expect(stringify(parseValue('x = a = 1 or b < 2 and not c'))).to.equal('((a = 1) or ((b < 2) and (not c)))');
+        });
+    });
+
+    describe('transpile', () => {
+        let program: Program;
+        const testTranspile = getTestTranspile(() => [program, rootDir]);
+
+        beforeEach(() => {
+            program = new Program({ rootDir: rootDir });
+        });
+
+        afterEach(() => {
+            program.dispose();
+        });
+
+        it('keeps mixed AND/OR output unchanged', () => {
+            testTranspile(`
+                sub main(a, b, c, d)
+                    print a or b and c or d
+                    print not a and b = 1 or c < 2
+                end sub
+            `);
         });
     });
 });
