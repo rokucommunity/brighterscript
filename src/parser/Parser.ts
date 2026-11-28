@@ -2560,9 +2560,23 @@ export class Parser {
     }
 
     private boolean(): Expression {
+        let expr = this.booleanAnd();
+
+        while (this.match(TokenKind.Or)) {
+            let operator = this.previous();
+            this.consumeNewlinesIfAllowed();
+            let right = this.booleanAnd();
+            this.addExpressionsToReferences(expr, right);
+            expr = new BinaryExpression(expr, operator, right);
+        }
+
+        return expr;
+    }
+
+    private booleanAnd(): Expression {
         let expr = this.relational();
 
-        while (this.matchAny(TokenKind.And, TokenKind.Or)) {
+        while (this.match(TokenKind.And)) {
             let operator = this.previous();
             this.consumeNewlinesIfAllowed();
             let right = this.relational();

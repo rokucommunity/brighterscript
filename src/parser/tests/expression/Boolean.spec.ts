@@ -4,6 +4,11 @@ import { Parser } from '../../Parser';
 import { TokenKind } from '../../../lexer/TokenKind';
 import { EOF, identifier, token } from '../Parser.spec';
 import { Range } from 'vscode-languageserver';
+import type { AssignmentStatement } from '../../Statement';
+import type { BinaryExpression, VariableExpression } from '../../Expression';
+import { isBinaryExpression, isLiteralExpression, isUnaryExpression } from '../../../astUtils/reflection';
+import { getTestTranspile, rootDir } from '../../../testHelpers.spec';
+import { Program } from '../../../Program';
 
 describe('parser boolean expressions', () => {
 
@@ -86,5 +91,79 @@ describe('parser boolean expressions', () => {
         expect(statements[0].value.range).deep.include(
             Range.create(0, 4, 0, 18)
         );
+    });
+
+    describe('precedence', () => {
+        function stringify(expr: any): string {
+            if (isBinaryExpression(expr)) {
+                return `(${stringify(expr.left)} ${expr.operator.text} ${stringify(expr.right)})`;
+            } else if (isUnaryExpression(expr)) {
+                return `(${expr.operator.text} ${stringify(expr.right)})`;
+            } else if (isLiteralExpression(expr)) {
+                return expr.token.text;
+            }
+            return (expr as VariableExpression).name.text;
+        }
+
+        function parseValue(text: string) {
+            const { statements, diagnostics } = Parser.parse(text);
+            expect(diagnostics).to.be.lengthOf(0);
+            return (statements[0] as AssignmentStatement).value as BinaryExpression;
+        }
+
+        it('binds AND tighter than OR when OR comes first', () => {
+            const value = parseValue('x = a or b and c');
+            expect(value.operator.kind).to.equal(TokenKind.Or);
+            expect(stringify(value)).to.equal('(a or (b and c))');
+        });
+
+        it('binds AND tighter than OR when AND comes first', () => {
+            const value = parseValue('x = a and b or c');
+            expect(value.operator.kind).to.equal(TokenKind.Or);
+            expect(stringify(value)).to.equal('((a and b) or c)');
+        });
+
+        it('binds AND tighter than OR in longer chains', () => {
+            expect(
+                stringify(parseValue('x = a or b and c or d and e'))
+            ).to.equal('((a or (b and c)) or (d and e))');
+        });
+
+        it('keeps AND left-associative', () => {
+            expect(stringify(parseValue('x = a and b and c'))).to.equal('((a and b) and c)');
+        });
+
+        it('keeps OR left-associative', () => {
+            expect(stringify(parseValue('x = a or b or c'))).to.equal('((a or b) or c)');
+        });
+
+        it('handles not and relational operands', () => {
+            expect(stringify(parseValue('x = not a or b and c'))).to.equal('((not a) or (b and c))');
+            expect(stringify(parseValue('x = not a and b or c'))).to.equal('(((not a) and b) or c)');
+            expect(stringify(parseValue('x = a = 1 or b and c = 2'))).to.equal('((a = 1) or (b and (c = 2)))');
+            expect(stringify(parseValue('x = a = 1 or b < 2 and not c'))).to.equal('((a = 1) or ((b < 2) and (not c)))');
+        });
+    });
+
+    describe('transpile', () => {
+        let program: Program;
+        const testTranspile = getTestTranspile(() => [program, rootDir]);
+
+        beforeEach(() => {
+            program = new Program({ rootDir: rootDir });
+        });
+
+        afterEach(() => {
+            program.dispose();
+        });
+
+        it('keeps mixed AND/OR output unchanged', () => {
+            testTranspile(`
+                sub main(a, b, c, d)
+                    print a or b and c or d
+                    print not a and b = 1 or c < 2
+                end sub
+            `);
+        });
     });
 });
